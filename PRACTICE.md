@@ -1,6 +1,11 @@
 # SQL practice exercises
 
-Run queries with:
+**The easiest way to work through these is the GUI** — double-click
+`SQL Practice.bat`, or run `python gui.py`. It has 30 of the questions below
+built in and grades your answer against the expected result, so you get told
+whether you got it right. Progress is saved between sessions.
+
+The list below is the fuller set, for working by hand. Run queries with:
 
 ```
 python q.py "SELECT ..."
