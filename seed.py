@@ -29,6 +29,7 @@ TABLES = [
     "orders",
     "order_items",
     "reviews",
+    "payments",
 ]
 
 CATEGORIES = [
@@ -102,8 +103,8 @@ PRODUCTS = [
 # (first, last, title, department, manager_id, hire_date, salary)
 EMPLOYEES = [
     ("Dana", "Whitfield", "Chief Executive Officer", "Executive", None, "2018-03-05", 195000.0),
-    ("Marcus", "Lindqvist", "Sales Manager", "Sales", 1, "2019-06-17", 118000.0),
-    ("Priya", "Raman", "Support Manager", "Support", 1, "2019-11-04", 112000.0),
+    ("Marcus", "Lindqvist", "Sales Manager", "Sales", 1, "2021-06-01", 118000.0),
+    ("Priya", "Raman", "Support Manager", "Support", 1, "2022-01-15", 112000.0),
     ("Tomas", "Berger", "Warehouse Manager", "Warehouse", 1, "2020-02-24", 98000.0),
     ("Aisha", "Kone", "Sales Representative", "Sales", 2, "2021-01-11", 72000.0),
     ("Liam", "O'Donnell", "Sales Representative", "Sales", 2, "2021-08-30", 69500.0),
@@ -152,6 +153,8 @@ CUSTOMERS = [
     ("Sean", "Gallagher", "Dublin", "Ireland"),
 ]
 
+PAYMENT_METHODS = ["card", "paypal", "bank transfer", "gift card"]
+
 COMMENTS = [
     "Exactly what I needed, arrived quickly.",
     "Good quality for the price.",
@@ -187,14 +190,22 @@ def _random_date(rng, start, end):
 
 def seed():
     rng = random.Random(SEED)
+
+    # Drop and recreate rather than DELETE: the schema gains columns over time,
+    # and clearing rows would leave the old table shape in place.
     conn = db.connect()
     try:
         with conn:
-            # Clear in reverse dependency order. `note` is the placeholder table
-            # from the initial scaffold; drop it if it is still around.
             conn.execute("DROP TABLE IF EXISTS note")
             for table in reversed(TABLES):
-                conn.execute(f"DELETE FROM {table}")
+                conn.execute(f"DROP TABLE IF EXISTS {table}")
+    finally:
+        conn.close()
+    db.init_db()
+
+    conn = db.connect()
+    try:
+        with conn:
 
             # --- categories -------------------------------------------------
             conn.executemany(
@@ -213,23 +224,29 @@ def seed():
             product_rows = []
             for i, (name, cat, price, stock, disc) in enumerate(PRODUCTS, 1):
                 supplier = rng.randint(1, len(SUPPLIERS))
-                product_rows.append((i, name, cat_id[cat], supplier, price, stock, disc))
+                # ~1 in 6 items has never been weighed: NULL, not zero
+                weight = None if rng.random() < 0.16 else rng.randrange(50, 8000, 5)
+                product_rows.append((i, name, cat_id[cat], supplier, price, stock, disc, weight))
             conn.executemany(
                 "INSERT INTO products (product_id, name, category_id, supplier_id,"
-                " unit_price, units_in_stock, discontinued) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                " unit_price, units_in_stock, discontinued, weight_grams)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 product_rows,
             )
             product_price = {row[0]: row[4] for row in product_rows}
 
             # --- employees --------------------------------------------------
+            employee_rows = []
+            for i, (first, last, title, dept, mgr, hired, salary) in enumerate(EMPLOYEES, 1):
+                # NULL means "not on a commission scheme" -- distinct from 0.0,
+                # which would mean "on a scheme paying nothing"
+                rate = round(rng.uniform(0.02, 0.08), 3) if dept == "Sales" else None
+                employee_rows.append((i, first, last, title, dept, mgr, hired, salary, rate))
             conn.executemany(
                 "INSERT INTO employees (employee_id, first_name, last_name, title,"
-                " department, manager_id, hire_date, salary) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                [
-                    (i, first, last, title, dept, mgr, hired, salary)
-                    for i, (first, last, title, dept, mgr, hired, salary)
-                    in enumerate(EMPLOYEES, 1)
-                ],
+                " department, manager_id, hire_date, salary, commission_rate)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                employee_rows,
             )
 
             # --- customers --------------------------------------------------
@@ -317,14 +334,52 @@ def seed():
                 rating = rng.choices([1, 2, 3, 4, 5], weights=[4, 6, 14, 34, 42], k=1)[0]
                 comment = rng.choice(COMMENTS) if rng.random() < 0.62 else None
                 when = date.fromisoformat(ordered) + timedelta(days=rng.randint(5, 45))
+                # NULL = nobody has voted yet, which is not the same as zero votes
+                votes = None if rng.random() < 0.3 else rng.randint(0, 40)
                 review_rows.append(
-                    (review_id, product, customer, rating, comment, when.isoformat())
+                    (review_id, product, customer, rating, comment, when.isoformat(), votes)
                 )
 
             conn.executemany(
                 "INSERT INTO reviews (review_id, product_id, customer_id, rating,"
-                " comment, review_date) VALUES (?, ?, ?, ?, ?, ?)",
+                " comment, review_date, helpful_votes) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 review_rows,
+            )
+
+            # --- payments ---------------------------------------------------
+            # An optional child of orders: roughly one order in ten has no
+            # payment row at all, so LEFT JOIN and COUNT(*) have a trap to set.
+            totals = {}
+            for oid, product, qty, price, disc in item_rows:
+                totals[oid] = totals.get(oid, 0.0) + qty * price * (1 - disc)
+
+            payment_rows = []
+            payment_id = 0
+            for oid, _cust, _emp, ordered, _shipped, status in order_rows:
+                if rng.random() < 0.10:
+                    continue  # no payment row at all
+                payment_id += 1
+                if status == "shipped":
+                    pay_status = "REFUNDED" if rng.random() < 0.08 else "PAID"
+                elif status == "pending":
+                    pay_status = "PENDING"
+                else:
+                    pay_status = "FAILED"
+                # paid_at is set only where money actually moved
+                if pay_status in ("PAID", "REFUNDED"):
+                    settled = (date.fromisoformat(ordered)
+                               + timedelta(days=rng.randint(0, 3))).isoformat()
+                else:
+                    settled = None
+                payment_rows.append((
+                    payment_id, oid, round(totals.get(oid, 0.0), 2),
+                    pay_status, settled, rng.choice(PAYMENT_METHODS),
+                ))
+
+            conn.executemany(
+                "INSERT INTO payments (payment_id, order_id, amount, status,"
+                " paid_at, method) VALUES (?, ?, ?, ?, ?, ?)",
+                payment_rows,
             )
     finally:
         conn.close()
@@ -341,7 +396,6 @@ def _counts():
 
 
 if __name__ == "__main__":
-    db.init_db()
     for table, n in seed().items():
         print(f"{table:>12}: {n:>5}")
     print(f"\nseeded {db.DB_PATH}")
