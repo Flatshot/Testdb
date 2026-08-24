@@ -1,0 +1,152 @@
+"""Guard the question set.
+
+Structural checks (exercises.py vs QUESTIONS.md):
+  * every exercise has a ledger id that exists in the ledger, plus a concept,
+    a trap_sql and a note
+  * no ledger id or title is used twice
+  * every ledger row marked "ex N" points at an exercise that exists
+  * ledger ids are unique and contiguous
+  * any top-N question taking more than one row carries an ORDER BY tiebreak,
+    since a tie at the boundary would otherwise make the answer ambiguous
+
+Behavioural checks (against testdb.db, read-only):
+  * every solution runs and returns at least one row
+  * every trap_sql is graded WRONG -- a trap the grader accepts is a question
+    that teaches nothing, and this is what catches it
+
+    py check_questions.py
+"""
+
+import re
+import sqlite3
+import sys
+from pathlib import Path
+
+import db
+import exercises as ex
+
+LEDGER = Path(__file__).resolve().parent / "QUESTIONS.md"
+ROW = re.compile(r"^\|\s*(Q\d{3})\s*\|(.*?)\|(.*?)\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$")
+TRAILING_LIMIT = re.compile(r"\bLIMIT\s+(\d+)\s*$", re.IGNORECASE)
+ORDER_BY = re.compile(r"\bORDER\s+BY\b(.*?)\s+LIMIT\b", re.IGNORECASE | re.DOTALL)
+
+
+def parse_ledger():
+    """Return {id: {'gui': ...}} from every markdown table in the file."""
+    rows = {}
+    for line in LEDGER.read_text(encoding="utf-8").splitlines():
+        m = ROW.match(line)
+        if m:
+            qid, _concept, _question, gui, _rest = m.groups()
+            rows[qid] = {"gui": gui.strip()}
+    return rows
+
+
+def run(conn, sql):
+    """(rows, error). A trap that errors counts as rejected, not as a pass."""
+    try:
+        return conn.execute(sql).fetchall(), None
+    except sqlite3.Error as exc:
+        return None, str(exc)
+
+
+def main():
+    problems = []
+    ledger = parse_ledger()
+    if not ledger:
+        print("could not parse any rows out of QUESTIONS.md")
+        return 1
+
+    nums = sorted(int(q[1:]) for q in ledger)
+    if nums != list(range(1, len(nums) + 1)):
+        problems.append(f"ledger ids are not contiguous from Q001: {nums[:3]}...{nums[-3:]}")
+
+    seen_ids, seen_titles = {}, {}
+    for e in ex.EXERCISES:
+        qid = e.get("ledger")
+        if not qid:
+            problems.append(f"exercise {e['id']} ({e['title']}) has no ledger id")
+        else:
+            if qid not in ledger:
+                problems.append(f"exercise {e['id']} points at {qid}, not in the ledger")
+            if qid in seen_ids:
+                problems.append(f"{qid} claimed by exercises {seen_ids[qid]} and {e['id']}")
+            seen_ids[qid] = e["id"]
+        for field in ("concept", "trap_sql", "note"):
+            if not e.get(field):
+                problems.append(f"exercise {e['id']} has no {field}")
+
+        key = e["title"].strip().lower()
+        if key in seen_titles:
+            problems.append(f"duplicate title {e['title']!r} on {seen_titles[key]} and {e['id']}")
+        seen_titles[key] = e["id"]
+
+    # A top-N question ordered by a single key is ambiguous the moment two rows
+    # tie at the cut-off: the engine may return either, so there is no one right
+    # answer to grade against. LIMIT 1 is exempt -- verify those by hand.
+    for e in ex.EXERCISES:
+        sql = " ".join(e["solution"].split())
+        m = TRAILING_LIMIT.search(sql)
+        if not m or int(m.group(1)) <= 1:
+            continue
+        clause = ORDER_BY.search(sql)
+        if not clause or "," not in clause.group(1):
+            problems.append(
+                f"exercise {e['id']} takes LIMIT {m.group(1)} with a single ORDER BY key; "
+                f"a tie at the boundary would make the answer ambiguous")
+
+    by_ex = {e["id"]: e.get("ledger") for e in ex.EXERCISES}
+    for qid, row in ledger.items():
+        m = re.fullmatch(r"ex\s*(\d+)", row["gui"])
+        if not m:
+            continue
+        eid = int(m.group(1))
+        if eid not in by_ex:
+            problems.append(f"{qid} claims exercise {eid}, which does not exist")
+        elif by_ex[eid] != qid:
+            problems.append(f"{qid} claims exercise {eid}, but it points at {by_ex[eid]}")
+
+    # --- behavioural ------------------------------------------------------
+    conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
+    traps_by_error = traps_by_result = 0
+    try:
+        for e in ex.EXERCISES:
+            rows, err = run(conn, e["solution"])
+            if err:
+                problems.append(f"exercise {e['id']} solution failed: {err}")
+                continue
+            if not rows:
+                problems.append(f"exercise {e['id']} solution returns no rows")
+
+            trap_rows, trap_err = run(conn, e["trap_sql"])
+            if trap_err:
+                traps_by_error += 1
+                continue
+            passed, _ = ex.compare([tuple(r) for r in trap_rows], [tuple(r) for r in rows])
+            if passed:
+                problems.append(
+                    f"exercise {e['id']} ({e['title']}): trap_sql grades as CORRECT, "
+                    f"so the question does not actually test its concept")
+            else:
+                traps_by_result += 1
+    finally:
+        conn.close()
+
+    linked = sum(1 for r in ledger.values() if r["gui"].startswith("ex"))
+    print(f"ledger entries : {len(ledger)}")
+    print(f"exercises      : {len(ex.EXERCISES)}")
+    print(f"linked to GUI  : {linked}")
+    print(f"traps rejected : {traps_by_error + traps_by_result} / {len(ex.EXERCISES)} "
+          f"({traps_by_error} by SQL error, {traps_by_result} by wrong result)")
+
+    if problems:
+        print(f"\n{len(problems)} problem(s):")
+        for p in problems:
+            print(f"  - {p}")
+        return 1
+    print("\nall checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

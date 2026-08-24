@@ -1,11 +1,16 @@
 # SQL practice exercises
 
-**The easiest way to work through these is the GUI** — double-click
-`SQL Practice.bat`, or run `python gui.py`. It has 30 of the questions below
-built in and grades your answer against the expected result, so you get told
-whether you got it right. Progress is saved between sessions.
+These 30 questions target the nine recurring mistakes in
+`sql-concepts-review.html` -- the patterns that produced the same class of bug
+more than once. Roughly three quarters of them drill those directly; the rest
+keep general skills fresh.
 
-The list below is the fuller set, for working by hand. Run queries with:
+**Work through them in the GUI**: double-click `SQL Practice.bat`, or run
+`python gui.py`. It grades your answer against the expected result and, when you
+get it right, tells you which mistake the question was built to catch. Progress
+is saved between sessions.
+
+To run queries by hand instead:
 
 ```
 python q.py "SELECT ..."
@@ -14,76 +19,202 @@ python q.py "SELECT ..."
 or `python q.py` on its own for an interactive prompt (blank line runs, `\q` quits).
 
 The tables: `categories`, `suppliers`, `products`, `employees`, `customers`,
-`orders`, `order_items`, `reviews`. See [schema.sql](schema.sql) for columns.
+`orders`, `order_items`, `reviews`, `payments`. See [schema.sql](schema.sql).
 
-Line revenue is `quantity * unit_price * (1 - discount)` — there is no stored
-total, on purpose. Most order-level questions restrict to `status = 'shipped'`.
+Two things the data does on purpose:
 
-## Warm-up — SELECT, WHERE, ORDER BY
+- **`discount` is a rate**, not a percentage. Line revenue is
+  `quantity * unit_price * (1 - discount)`. There is no stored total.
+- **Some rows are deliberately missing or NULL**: four customers have never
+  ordered, three products have never sold, 22 orders have no payment row,
+  `helpful_votes` / `weight_grams` / `commission_rate` are NULL for a minority.
+  Anti-joins and NULL handling need something to bite on.
 
-1. All products costing more than $100, most expensive first.
-2. Customers in Norway or Sweden.
-3. Products that are discontinued, or out of stock, or both.
-4. The 5 most recently hired employees.
-5. Products whose name contains "Monitor" (case-insensitive).
 
-## Joins
+## Grain -- aggregate at the level of your answer
 
-6. Every product with its category name and supplier name.
-7. Orders placed in March 2025, with the customer's full name and the sales rep who took them.
-8. Each employee alongside their manager's name — the CEO must still appear, with no manager. *(self-join + outer join)*
-9. Customers who have never placed an order. *(anti-join)*
-10. Products that have never been ordered. There are three.
+*5 occurrences. Ask before every GROUP BY: what does one output row represent?*
 
-## Aggregation — GROUP BY, HAVING
+1. Total shipped revenue for each category.
+   *Return: category name, revenue*
 
-11. Number of products in each category, highest first.
-12. Average, minimum, and maximum salary per department.
-13. Total shipped revenue per customer, top 10.
-14. Customers with more than 8 orders. *(HAVING, not WHERE)*
-15. Categories whose average product price exceeds $75.
-16. For each supplier: how many products, and how many of those are discontinued.
+2. For each department: how many employees, and the total salary bill.
+   *Return: department, employee_count, total_salary*
 
-## NULL handling
+3. Total amount each customer has actually paid: sum the amount of their payments
+   with status 'PAID'. Only customers with at least one such payment.
+   *Return: customer_id, total_paid*
 
-17. Orders that have not shipped. Which statuses do they have?
-18. Average rating per product, counting only reviews that include a written comment.
-19. Why does `COUNT(*)` differ from `COUNT(ship_date)` on `orders`? Show both in one query.
-20. Every employee with their manager's name, substituting `'none'` where there is no manager.
+4. For each month of 2025: how many orders were placed, and how many DIFFERENT
+   customers placed them. Month as YYYY-MM.
+   *Return: month, order_count, distinct_customers*
 
-## Subqueries and CTEs
 
-21. Products priced above the average price *within their own category*. *(correlated subquery)*
-22. The single highest-value shipped order, with the customer's name.
-23. Customers whose lifetime spend is above the overall customer average. *(CTE)*
-24. For each category, the most expensive product. *(then redo it with a window function)*
-25. Orders containing at least one product from the "Electronics" category. *(EXISTS)*
+## NULL is contagious and easily destroyed
 
-## Window functions
+*Nothing equals NULL, aggregates skip it, and a WHERE on the optional side of an outer join deletes it.*
 
-26. Rank products by total shipped revenue, showing the rank number.
-27. Running monthly revenue total across the whole order window.
-28. Each order's value alongside that customer's average order value, and the difference.
-29. Per category, the top 3 products by revenue. *(ROW_NUMBER in a subquery)*
-30. Month-over-month revenue change, in dollars and percent. *(LAG)*
-31. Days between each customer's consecutive orders. *(LAG over PARTITION BY customer)*
+5. helpful_votes is NULL when nobody has voted yet, which is not the same as zero
+   votes. Return the average helpful_votes across all reviews two ways:
+   excluding the unknowns, then treating every unknown as 0.
+   *Return: avg_excluding_unknown, avg_unknown_as_zero*
 
-## Dates
+6. Every order, with the amount of its PAID payment beside it, or NULL where
+   there is no paid payment. All 165 orders must appear.
+   *Return: order_id, paid_amount*
 
-32. Orders per month for 2025. *(`strftime('%Y-%m', order_date)`)*
-33. Average days between order and shipment, per sales rep.
-34. Employees who have worked more than 4 years as of 2026-08-01.
-35. Customers who ordered within 30 days of signing up.
+7. Employees who are not anybody's manager.
+   *Return: employee_id, employee_name (first + space + last)*
 
-## Set operations and harder combinations
+8. Total annual compensation for every employee: salary, plus commission of
+   salary x commission_rate. Staff not on a commission scheme have a NULL rate
+   and simply earn their salary. All 12 employees must appear.
+   *Return: employee_name (first + space + last), total_comp*
 
-36. Countries that appear as a customer country but not as a supplier country. *(EXCEPT)*
-37. Products whose average rating is below 3 *and* which have sold more than 20 units.
-38. The sales rep with the highest revenue in each quarter of 2025.
-39. For each customer: first order date, last order date, order count, and total spend, in one row.
-40. Reviewers who rated a product 5 but never bought anything else from that product's category.
+
+## Aggregates can't live in WHERE
+
+*3 occurrences. WHERE runs one row at a time; the summary does not exist yet.*
+
+9. Payments with status 'PAID' whose amount is greater than the average amount of
+   all PAID payments.
+   *Return: payment_id, order_id, amount*
+
+10. The single sales rep who has taken the most orders.
+   *Return: rep_name (first + space + last), order_count*
+
+11. Categories whose average review rating is higher than the average rating
+   across every review in the database.
+   *Return: category name, avg_rating*
+
+
+## PARTITION BY is not GROUP BY
+
+*3 occurrences. GROUP BY collapses rows; PARTITION BY scopes a per-row calculation.*
+
+12. Every line of every shipped order, keeping one row per line, with the revenue
+   of that line and the revenue of the whole order beside it.
+   *Return: order_id, product_id, line_revenue, order_revenue*
+
+13. Every PAID payment with a running cumulative total of that customer's paid
+   amounts, ordered by paid_at then payment_id.
+   *Return: payment_id, customer_id, amount, running_total*
+
+14. Every review with the rating of the previous review OF THE SAME PRODUCT,
+   ordered by review_date then review_id. NULL where it is the first.
+   *Return: review_id, product_id, rating, prev_rating*
+
+
+## COUNT(*) vs COUNT(column)
+
+*3 occurrences. COUNT(*) counts rows; COUNT(expr) counts rows where expr is not NULL.*
+
+15. Every customer with the number of orders they have placed. The four who have
+   never ordered must appear with 0.
+   *Return: customer_id, order_count*
+
+16. For each payment method: the total number of payments, and how many of them
+   have status 'PAID'.
+   *Return: method, total_payments, paid_count*
+
+17. For each product that has at least one review: the number of reviews, how many
+   included a written comment, and how many had helpful_votes recorded.
+   *Return: product name, review_count, with_comment, with_votes*
+
+
+## Make the alias match the formula
+
+*4 occurrences. These run clean and return confidently wrong numbers.*
+
+18. For every order line: the gross value before discount, the discount amount in
+   dollars, and the net revenue. discount is a RATE (0.05 = 5%).
+   *Return: order_id, product_id, gross, discount_amount, net*
+
+19. For each country, the percentage of that country's customers who have placed
+   at least one order. A percentage of the country's own customers, 0 to 100.
+   *Return: country, pct_with_orders*
+
+20. For each month, how many payments settled (status 'PAID', bucketed by paid_at)
+   and the CHANGE in that count versus the previous month. NULL for the first
+   month. Month as YYYY-MM.
+   *Return: month, paid_count, change_vs_prev*
+
+
+## Integer division truncates
+
+*In SQLite `5/2` is `2`. The review is wrong that SQLite auto-converts.*
+
+21. What percentage of all orders have a ship_date? One row, one column, 0 to 100.
+   *Return: pct_shipped*
+
+22. For each category: the total weight in grams of its products that have a
+   recorded weight, and the mean grams per weighed product. Products with no
+   recorded weight are excluded from both. Only categories with at least one
+   weighed product.
+   *Return: category name, total_grams, mean_grams*
+
+
+## A CTE is a wall
+
+*2 occurrences. Only the columns the CTE selects exist outside it.*
+
+23. For every customer with at least two shipped orders, their SECOND most
+   valuable one. Rank each customer's shipped orders by value descending and
+   take number 2.
+   *Return: customer_id, order_id, order_date, order_value*
+
+
+## General practice
+
+*Not tied to a specific weak spot.*
+
+24. For payments with status 'PAID' only: how many per method and the total
+   amount.
+   *Return: method, paid_count, total_amount*
+
+25. Products with a recorded weight over 5000 grams.
+   *Return: name, weight_grams*
+
+26. Orders whose payment settled on the same date the order was placed.
+   *Return: order_id, order_date, amount*
+
+27. The 5 products with the most reviews.
+   *Return: product name, review_count*
+
+28. Customers who have had at least one payment refunded. One row per customer.
+   *Return: customer_id, customer_name (first + space + last)*
+
+29. Employees who were hired BEFORE the manager they report to.
+   *Return: employee_name, manager_name, employee_hire_date, manager_hire_date*
+
+30. Categories with at least 10 reviews across all their products, with the
+   average rating.
+   *Return: category name, review_count, avg_rating*
+
+
+## The one concept with no question here
+
+**Alias scope follows clause order.** Logical order is `FROM` -> `WHERE` ->
+`GROUP BY` -> `HAVING` -> window functions -> `SELECT` -> `ORDER BY` -> `LIMIT`,
+and a name only exists after the step that creates it. Postgres and SQL Server
+reject a SELECT alias in `WHERE`; SQL Server and Oracle reject one in `GROUP BY`.
+
+There is no graded question for this because **SQLite will not punish you for
+it**. It is more permissive than every engine the review names -- it happily
+accepts an alias in `WHERE`:
+
+```sql
+SELECT unit_price * 2 AS d FROM products WHERE d > 100   -- runs fine in SQLite
+```
+
+Writing a question SQLite cannot enforce would teach the wrong lesson. Keep the
+rule in mind for portability, and reach for a CTE when you want a real column to
+filter or group by.
 
 ---
 
-Stuck on one? Ask and I'll walk through the approach rather than just handing
-over the answer — unless you want the answer, in which case say so.
+Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the 41
+retired ones. New questions must not repeat anything in that ledger.
+
+Stuck? Ask and I'll walk through the approach rather than hand over the answer
+-- unless you want the answer, in which case say so.

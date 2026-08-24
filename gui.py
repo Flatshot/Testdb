@@ -178,9 +178,13 @@ class App(tk.Tk):
         res_wrap.columnconfigure(0, weight=1)
         self.results.tag_configure("odd", background="#f7f7f7")
 
-        self.status = tk.Label(self, text="Ready", anchor="w", padx=8, pady=4,
+        self.status = tk.Label(self, text="Ready", anchor="w", justify="left",
+                               padx=8, pady=4, wraplength=1100,
                                background=BG_INFO, foreground="white")
         self.status.pack(fill="x", side="bottom")
+        # keep the wrap width in step with the window
+        self.bind("<Configure>",
+                  lambda e: self.status.configure(wraplength=max(self.winfo_width() - 40, 400)))
 
         self.bind("<F5>", lambda e: (self.run_query(), "break")[1])
         self.bind("<Control-Return>", lambda e: (self.check_answer(), "break")[1])
@@ -305,6 +309,8 @@ class App(tk.Tk):
             self._refresh_progress_label()
             self._stash_sql()
             self._save_progress()
+            if e.get("note"):
+                msg = f"{msg}   {e['note']}"
         self._set_status(msg, BG_OK if passed else BG_BAD)
 
     def show_solution(self):
