@@ -1,4 +1,4 @@
--- Schema for testdb: a small retail / e-commerce dataset for practicing SQL.
+-- Schema for testdb: a small retail / fulfilment dataset for practicing SQL.
 -- Applied by db.init_db(); every statement is safe to re-run.
 --
 -- The shape is chosen to punish specific mistakes, not just to model a shop:
@@ -6,11 +6,19 @@
 --   employees --> employees (manager_id)   self-join; manager_id NULL for the CEO
 --   orders *--* products via order_items   many-to-many; revenue is per LINE
 --   orders 1--0..n payments                optional child -> LEFT JOIN traps
+--   orders 1--0..n shipments               an order can SPLIT across warehouses,
+--                                          so joining both children fans out and
+--                                          double-counts unless you aggregate
+--                                          each branch at its own grain
+--   warehouses *--* products via inventory composite key, nullable policy columns
+--   order_items 1--0..n returns            net revenue = sold minus returned
 --   nullable numeric columns               AVG skips NULLs; NULL eats arithmetic
 --   INTEGER measures                       integer division truncates in SQLite
 --
 -- Deliberate gaps: some customers never order, some products never sell, some
--- orders have no payment row. Anti-joins and outer joins need something to find.
+-- orders have no payment and no shipment, some shipments never arrive, some
+-- inventory rows have no reorder policy. Anti-joins and NULL handling need
+-- something real to find.
 
 CREATE TABLE IF NOT EXISTS categories (
     category_id INTEGER PRIMARY KEY,
@@ -22,7 +30,9 @@ CREATE TABLE IF NOT EXISTS suppliers (
     supplier_id   INTEGER PRIMARY KEY,
     name          TEXT NOT NULL,
     country       TEXT NOT NULL,
-    contact_email TEXT
+    contact_email TEXT,
+    -- NULL where no contract rating has been agreed -- not the same as zero
+    lead_time_days INTEGER CHECK (lead_time_days IS NULL OR lead_time_days > 0)
 );
 
 CREATE TABLE IF NOT EXISTS products (
@@ -31,6 +41,7 @@ CREATE TABLE IF NOT EXISTS products (
     category_id    INTEGER NOT NULL REFERENCES categories(category_id),
     supplier_id    INTEGER NOT NULL REFERENCES suppliers(supplier_id),
     unit_price     REAL    NOT NULL CHECK (unit_price >= 0),
+    unit_cost      REAL    NOT NULL CHECK (unit_cost >= 0),
     units_in_stock INTEGER NOT NULL DEFAULT 0 CHECK (units_in_stock >= 0),
     discontinued   INTEGER NOT NULL DEFAULT 0 CHECK (discontinued IN (0, 1)),
     -- nullable INTEGER measure: unweighed items are NULL, not 0
@@ -58,7 +69,10 @@ CREATE TABLE IF NOT EXISTS customers (
     email       TEXT NOT NULL UNIQUE,
     city        TEXT NOT NULL,
     country     TEXT NOT NULL,
-    signup_date TEXT NOT NULL
+    signup_date TEXT NOT NULL,
+    -- 'standard' | 'plus' | 'premier'; NULL where the customer never enrolled
+    loyalty_tier TEXT CHECK (loyalty_tier IS NULL
+                             OR loyalty_tier IN ('standard', 'plus', 'premier'))
 );
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -107,6 +121,56 @@ CREATE TABLE IF NOT EXISTS payments (
     method     TEXT    NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS warehouses (
+    warehouse_id   INTEGER PRIMARY KEY,
+    name           TEXT    NOT NULL,
+    city           TEXT    NOT NULL,
+    country        TEXT    NOT NULL,
+    capacity_units INTEGER NOT NULL CHECK (capacity_units > 0),
+    opened_on      TEXT    NOT NULL
+);
+
+-- Composite-key many-to-many. A product can be stocked in several warehouses,
+-- so SUM(quantity_on_hand) across a join is easy to double-count.
+CREATE TABLE IF NOT EXISTS inventory (
+    warehouse_id     INTEGER NOT NULL REFERENCES warehouses(warehouse_id),
+    product_id       INTEGER NOT NULL REFERENCES products(product_id),
+    quantity_on_hand INTEGER NOT NULL CHECK (quantity_on_hand >= 0),
+    -- NULL where no reorder policy has been agreed for this line
+    reorder_level    INTEGER CHECK (reorder_level IS NULL OR reorder_level >= 0),
+    -- NULL where the line has never been physically stock-counted
+    last_counted_at  TEXT,
+    PRIMARY KEY (warehouse_id, product_id)
+);
+
+-- A shipped order can be SPLIT across warehouses, so orders 1--0..n shipments.
+-- Joining orders to both order_items and shipments fans out: each line repeats
+-- once per shipment and each freight cost repeats once per line.
+CREATE TABLE IF NOT EXISTS shipments (
+    shipment_id  INTEGER PRIMARY KEY,
+    order_id     INTEGER NOT NULL REFERENCES orders(order_id),
+    warehouse_id INTEGER NOT NULL REFERENCES warehouses(warehouse_id),
+    carrier      TEXT    NOT NULL,
+    shipped_at   TEXT    NOT NULL,
+    -- NULL means still in transit -- not the same as never sent
+    delivered_at TEXT,
+    freight_cost REAL    NOT NULL CHECK (freight_cost >= 0)
+);
+
+-- Optional child of a specific order LINE, so the composite FK matters.
+CREATE TABLE IF NOT EXISTS returns (
+    return_id     INTEGER PRIMARY KEY,
+    order_id      INTEGER NOT NULL,
+    product_id    INTEGER NOT NULL,
+    quantity      INTEGER NOT NULL CHECK (quantity > 0),
+    reason        TEXT    NOT NULL CHECK (reason IN ('damaged', 'wrong item',
+                                                     'not as described',
+                                                     'changed mind', 'faulty')),
+    refund_amount REAL    NOT NULL CHECK (refund_amount >= 0),
+    returned_at   TEXT    NOT NULL,
+    FOREIGN KEY (order_id, product_id) REFERENCES order_items(order_id, product_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_category  ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_supplier  ON products(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_employees_manager  ON employees(manager_id);
@@ -116,3 +180,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_date        ON orders(order_date);
 CREATE INDEX IF NOT EXISTS idx_order_items_prod   ON order_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_product    ON reviews(product_id);
 CREATE INDEX IF NOT EXISTS idx_payments_order     ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_product  ON inventory(product_id);
+CREATE INDEX IF NOT EXISTS idx_shipments_order    ON shipments(order_id);
+CREATE INDEX IF NOT EXISTS idx_shipments_wh       ON shipments(warehouse_id);
+CREATE INDEX IF NOT EXISTS idx_returns_line       ON returns(order_id, product_id);

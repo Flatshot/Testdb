@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 7
+SEED = 23
 
 # Orders span this window. Fixed, not derived from today, so the data set does
 # not drift as time passes.
@@ -30,6 +30,10 @@ TABLES = [
     "order_items",
     "reviews",
     "payments",
+    "warehouses",
+    "inventory",
+    "shipments",
+    "returns",
 ]
 
 CATEGORIES = [
@@ -56,7 +60,7 @@ SUPPLIERS = [
 PRODUCTS = [
     ("Aurora 27\" 4K Monitor", "Electronics", 349.99, 42, 0),
     ("Aurora 24\" QHD Monitor", "Electronics", 229.50, 61, 0),
-    ("Mechanical Keyboard K87", "Electronics", 119.00, 88, 0),
+    ("Mechanical Keyboard K87", "Electronics", 134.50, 88, 0),
     ("Wireless Mouse Glide 2", "Electronics", 34.95, 210, 0),
     ("Noise-Cancelling Headphones NC7", "Electronics", 279.00, 35, 0),
     ("USB-C Hub 8-in-1", "Electronics", 59.99, 140, 0),
@@ -75,7 +79,7 @@ PRODUCTS = [
     ("SQL Performance Explained", "Books", 38.50, 27, 0),
     ("A Short History of Nearly Everything", "Books", 19.99, 133, 0),
     ("The Left Hand of Darkness", "Books", 15.75, 91, 0),
-    ("Yoga Mat Pro 6mm", "Sports & Outdoors", 48.00, 102, 0),
+    ("Yoga Mat Pro 6mm", "Sports & Outdoors", 52.25, 102, 0),
     ("Adjustable Dumbbell Pair", "Sports & Outdoors", 249.00, 22, 0),
     ("Trail Backpack 40L", "Sports & Outdoors", 134.50, 47, 0),
     ("Two-Person Tent Ridge", "Sports & Outdoors", 218.00, 18, 0),
@@ -85,7 +89,7 @@ PRODUCTS = [
     ("1000-Piece Puzzle: Harbour", "Toys & Games", 22.50, 118, 0),
     ("Wooden Building Blocks", "Toys & Games", 36.00, 84, 0),
     ("Remote Control Rover", "Toys & Games", 78.25, 39, 0),
-    ("Notebook A5 Dotted", "Office Supplies", 12.99, 312, 0),
+    ("Notebook A5 Dotted", "Office Supplies", 14.40, 312, 0),
     ("Fountain Pen Meridian", "Office Supplies", 68.00, 41, 0),
     ("Desk Organiser Oak", "Office Supplies", 45.50, 76, 0),
     ("Whiteboard 90x60cm", "Office Supplies", 82.00, 24, 0),
@@ -97,7 +101,14 @@ PRODUCTS = [
     ("Single-Origin Coffee 1kg", "Grocery", 28.50, 96, 0),
     ("Sencha Green Tea 200g", "Grocery", 18.75, 74, 0),
     ("Olive Oil Extra Virgin 1L", "Grocery", 24.00, 111, 0),
-    ("Dark Chocolate 85% (6-pack)", "Grocery", 19.50, 148, 0),
+    ("Dark Chocolate 85% (6-pack)", "Grocery", 21.75, 148, 0),
+    ("Smart Thermostat Vega", "Electronics", 189.00, 41, 0),
+    ("Espresso Machine Duo", "Home & Kitchen", 329.00, 26, 0),
+    ("Field Guide to Fungi", "Books", 27.50, 62, 0),
+    ("Climbing Rope 60m", "Sports & Outdoors", 172.00, 19, 0),
+    ("Desk Chair Ergo", "Office Supplies", 289.00, 15, 0),
+    ("Matcha Whisk Set", "Grocery", 32.00, 58, 0),
+    ("Label Printer Compact", "Office Supplies", 124.00, 0, 1),
 ]
 
 # (first, last, title, department, manager_id, hire_date, salary)
@@ -151,9 +162,29 @@ CUSTOMERS = [
     ("Tobias", "Frank", "Zurich", "Switzerland"),
     ("Priscilla", "Adeyemi", "Abuja", "Nigeria"),
     ("Sean", "Gallagher", "Dublin", "Ireland"),
+    ("Nadia", "Petrov", "Sofia", "Bulgaria"),
+    ("Emeka", "Nwosu", "Port Harcourt", "Nigeria"),
+    ("Sylvie", "Laurent", "Montreal", "Canada"),
+    ("Hiroshi", "Ito", "Osaka", "Japan"),
+    ("Elin", "Karlsson", "Gothenburg", "Sweden"),
 ]
 
 PAYMENT_METHODS = ["card", "paypal", "bank transfer", "gift card"]
+
+CARRIERS = ["DHL", "FedEx", "UPS", "Royal Mail", "DPD"]
+
+RETURN_REASONS = ["damaged", "wrong item", "not as described",
+                  "changed mind", "faulty"]
+
+LOYALTY_TIERS = ["standard", "plus", "premier"]
+
+# (name, city, country, capacity_units, opened_on)
+WAREHOUSES = [
+    ("Rotterdam DC", "Rotterdam", "Netherlands", 480000, "2019-04-01"),
+    ("Memphis Hub", "Memphis", "United States", 620000, "2018-09-15"),
+    ("Osaka Depot", "Osaka", "Japan", 310000, "2021-02-08"),
+    ("Manchester Cross", "Manchester", "United Kingdom", 275000, "2023-06-20"),
+]
 
 COMMENTS = [
     "Exactly what I needed, arrived quickly.",
@@ -215,9 +246,15 @@ def seed():
             cat_id = {name: i for i, (name, _) in enumerate(CATEGORIES, 1)}
 
             # --- suppliers --------------------------------------------------
+            supplier_rows = []
+            for i, row in enumerate(SUPPLIERS, 1):
+                # NULL where no lead time has been contractually agreed
+                lead = None if rng.random() < 0.25 else rng.choice([3, 5, 7, 10, 14, 21])
+                supplier_rows.append((i, *row, lead))
             conn.executemany(
-                "INSERT INTO suppliers (supplier_id, name, country, contact_email) VALUES (?, ?, ?, ?)",
-                [(i, *row) for i, row in enumerate(SUPPLIERS, 1)],
+                "INSERT INTO suppliers (supplier_id, name, country, contact_email,"
+                " lead_time_days) VALUES (?, ?, ?, ?, ?)",
+                supplier_rows,
             )
 
             # --- products ---------------------------------------------------
@@ -226,14 +263,18 @@ def seed():
                 supplier = rng.randint(1, len(SUPPLIERS))
                 # ~1 in 6 items has never been weighed: NULL, not zero
                 weight = None if rng.random() < 0.16 else rng.randrange(50, 8000, 5)
-                product_rows.append((i, name, cat_id[cat], supplier, price, stock, disc, weight))
+                # margin varies by line, so unit_cost is not a fixed fraction
+                cost = round(price * rng.uniform(0.42, 0.78), 2)
+                product_rows.append(
+                    (i, name, cat_id[cat], supplier, price, cost, stock, disc, weight))
             conn.executemany(
                 "INSERT INTO products (product_id, name, category_id, supplier_id,"
-                " unit_price, units_in_stock, discontinued, weight_grams)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " unit_price, unit_cost, units_in_stock, discontinued, weight_grams)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 product_rows,
             )
             product_price = {row[0]: row[4] for row in product_rows}
+            product_cost = {row[0]: row[5] for row in product_rows}
 
             # --- employees --------------------------------------------------
             employee_rows = []
@@ -253,12 +294,17 @@ def seed():
             taken, customer_rows = set(), []
             for i, (first, last, city, country) in enumerate(CUSTOMERS, 1):
                 signup = _random_date(rng, date(2024, 2, 1), date(2026, 5, 1))
+                # NULL = never enrolled in the loyalty programme
+                tier = None if rng.random() < 0.28 else rng.choices(
+                    LOYALTY_TIERS, weights=[6, 3, 1], k=1)[0]
                 customer_rows.append(
-                    (i, first, last, _email(first, last, taken), city, country, signup.isoformat())
+                    (i, first, last, _email(first, last, taken), city, country,
+                     signup.isoformat(), tier)
                 )
             conn.executemany(
                 "INSERT INTO customers (customer_id, first_name, last_name, email,"
-                " city, country, signup_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                " city, country, signup_date, loyalty_tier)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 customer_rows,
             )
 
@@ -380,6 +426,85 @@ def seed():
                 "INSERT INTO payments (payment_id, order_id, amount, status,"
                 " paid_at, method) VALUES (?, ?, ?, ?, ?, ?)",
                 payment_rows,
+            )
+
+            # --- warehouses -------------------------------------------------
+            conn.executemany(
+                "INSERT INTO warehouses (warehouse_id, name, city, country,"
+                " capacity_units, opened_on) VALUES (?, ?, ?, ?, ?, ?)",
+                [(i, *row) for i, row in enumerate(WAREHOUSES, 1)],
+            )
+
+            # --- inventory --------------------------------------------------
+            # Composite key. A product may sit in several warehouses or none,
+            # so SUM(quantity_on_hand) across a join double-counts easily.
+            inventory_rows = []
+            # The last three products are stocked in no warehouse at all, so
+            # anti-joins against inventory have something real to find.
+            stocked = range(1, len(PRODUCTS) - 2)
+            for wh in range(1, len(WAREHOUSES) + 1):
+                for pid in stocked:
+                    if rng.random() < 0.42:
+                        continue  # this warehouse does not carry the line
+                    qty = rng.randint(0, 900)
+                    # NULL = no reorder policy agreed for this line
+                    reorder = None if rng.random() < 0.22 else rng.choice([25, 50, 100, 150])
+                    # NULL = never physically stock-counted
+                    counted = (None if rng.random() < 0.26 else
+                               _random_date(rng, date(2025, 3, 1), RANGE_END).isoformat())
+                    inventory_rows.append((wh, pid, qty, reorder, counted))
+            conn.executemany(
+                "INSERT INTO inventory (warehouse_id, product_id, quantity_on_hand,"
+                " reorder_level, last_counted_at) VALUES (?, ?, ?, ?, ?)",
+                inventory_rows,
+            )
+
+            # --- shipments --------------------------------------------------
+            # A shipped order may SPLIT across warehouses, giving orders more
+            # than one shipment: the fan-out trap when joined with order_items.
+            shipment_rows = []
+            shipment_id = 0
+            for oid, _cust, _emp, ordered, shipped, status in order_rows:
+                if status != "shipped" or rng.random() < 0.07:
+                    continue  # a few shipped orders have no shipment record
+                for _ in range(1 if rng.random() < 0.72 else 2):
+                    shipment_id += 1
+                    sent = date.fromisoformat(shipped) + timedelta(days=rng.randint(0, 2))
+                    # NULL = still in transit, which is not "never sent"
+                    delivered = (None if rng.random() < 0.12 else
+                                 (sent + timedelta(days=rng.randint(1, 12))).isoformat())
+                    shipment_rows.append((
+                        shipment_id, oid, rng.randint(1, len(WAREHOUSES)),
+                        rng.choice(CARRIERS), sent.isoformat(), delivered,
+                        round(rng.uniform(4.5, 78.0), 2),
+                    ))
+            conn.executemany(
+                "INSERT INTO shipments (shipment_id, order_id, warehouse_id, carrier,"
+                " shipped_at, delivered_at, freight_cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                shipment_rows,
+            )
+
+            # --- returns ----------------------------------------------------
+            # Optional child of an order LINE, so net revenue is sold minus
+            # returned -- and the refund is not simply the line total.
+            return_rows = []
+            return_id = 0
+            for oid, product, qty, price, disc in item_rows:
+                if oid not in shipped_orders or rng.random() > 0.09:
+                    continue
+                _cust, ordered = shipped_orders[oid]
+                back = rng.randint(1, qty)
+                return_id += 1
+                return_rows.append((
+                    return_id, oid, product, back, rng.choice(RETURN_REASONS),
+                    round(back * price * (1 - disc), 2),
+                    (date.fromisoformat(ordered)
+                     + timedelta(days=rng.randint(6, 60))).isoformat(),
+                ))
+            conn.executemany(
+                "INSERT INTO returns (return_id, order_id, product_id, quantity,"
+                " reason, refund_amount, returned_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                return_rows,
             )
     finally:
         conn.close()

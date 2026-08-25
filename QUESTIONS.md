@@ -25,51 +25,81 @@ Similar questions are fine and useful. Re-asks are not.
 ## Live set
 
 Thirty questions aimed at the nine recurring mistakes in
-`sql-concepts-review.html`, weighted by how often each one occurred. `Concept`
+`sql-concepts-review.html`, weighted by how often each one occurred, and built on
+the fulfilment tables: warehouses, inventory, shipments and returns. `Concept`
 maps to that document's numbered sections. Generated from `exercises.py` -
 `check_questions.py` verifies the two agree.
 
 | ID | Concept | Question | In GUI | Drills |
 |----|---------|----------|--------|--------|
-| Q042 | C2 grain | Revenue per category | ex 1 | Grain |
-| Q043 | C2 grain | Headcount and payroll by department | ex 2 | Grain |
-| Q044 | C2 grain | Settled money per customer | ex 3 | Grain |
-| Q045 | C2 grain | Monthly orders and distinct buyers | ex 4 | Grain |
-| Q046 | C7 NULL | Two averages over a nullable column | ex 5 | NULLs |
-| Q047 | C7 NULL | Keeping the outer join | ex 6 | NULLs |
-| Q048 | C7 NULL | Employees who manage nobody | ex 7 | NULLs |
-| Q049 | C7 NULL | Total compensation | ex 8 | NULLs |
-| Q050 | C1 aggregates in WHERE | Above-average payments | ex 9 | Aggregates in WHERE |
-| Q051 | C1 aggregates in WHERE | Busiest sales rep | ex 10 | Aggregates in WHERE |
-| Q052 | C1 aggregates in WHERE | Categories rated above the overall mean | ex 11 | Aggregates in WHERE |
-| Q053 | C3 PARTITION BY | Line detail beside the order total | ex 12 | Window vs GROUP BY |
-| Q054 | C3 PARTITION BY | Running total per customer | ex 13 | Window vs GROUP BY |
-| Q055 | C3 PARTITION BY | Previous review for the same product | ex 14 | Window vs GROUP BY |
-| Q056 | C5 COUNT(*) vs COUNT(col) | Orders per customer, including none | ex 15 | COUNT |
-| Q057 | C5 COUNT(*) vs COUNT(col) | Paid payments per method | ex 16 | COUNT |
-| Q058 | C5 COUNT(*) vs COUNT(col) | How complete is each product's feedback | ex 17 | COUNT |
-| Q059 | C6 alias vs formula | Gross, discount, and net | ex 18 | Alias vs formula |
-| Q060 | C6 alias vs formula | Conversion rate by country | ex 19 | Alias vs formula |
-| Q061 | C6 alias vs formula | Change in paid volume | ex 20 | Alias vs formula |
-| Q062 | C9 integer division | Percentage of orders shipped | ex 21 | Integer division |
-| Q063 | C9 integer division | Mean weight per weighed product | ex 22 | Integer division |
-| Q064 | C4 CTE is a wall | Each customer's second-biggest order | ex 23 | CTE scope |
-| Q065 | general | Settled money by method | ex 24 | General |
-| Q066 | general | Heavy items | ex 25 | General |
-| Q067 | general | Paid on the day of order | ex 26 | General |
-| Q068 | general | Most reviewed products | ex 27 | General |
-| Q069 | general | Customers with a refund | ex 28 | General |
-| Q070 | general | Hired before their manager | ex 29 | General |
-| Q071 | general | Well-reviewed categories | ex 30 | General |
+| Q072 | C2 grain | Freight per order | ex 1 | Grain |
+| Q073 | C2 grain | Stock per product across warehouses | ex 2 | Grain |
+| Q074 | C2 grain | Revenue and freight side by side | ex 3 | Grain |
+| Q075 | C2 grain | Units sold against units returned | ex 4 | Grain |
+| Q076 | C7 NULL | Delivered or still in transit | ex 5 | NULLs |
+| Q077 | C7 NULL | Average days in transit | ex 6 | NULLs |
+| Q078 | C7 NULL | Value of counted stock | ex 7 | NULLs |
+| Q079 | C7 NULL | Quantities matching no reorder level | ex 8 | NULLs |
+| Q080 | C1 aggregates in WHERE | Pricey shipments for their carrier | ex 9 | Aggregates in WHERE |
+| Q081 | C1 aggregates in WHERE | Busier than the average warehouse | ex 10 | Aggregates in WHERE |
+| Q082 | C1 aggregates in WHERE | Categories with above-average margin | ex 11 | Aggregates in WHERE |
+| Q083 | C3 PARTITION BY | Shipment beside its order's freight | ex 12 | Window vs GROUP BY |
+| Q084 | C3 PARTITION BY | Share of a product's stock | ex 13 | Window vs GROUP BY |
+| Q085 | C3 PARTITION BY | First shipment of each order | ex 14 | Window vs GROUP BY |
+| Q086 | C5 COUNT(*) vs COUNT(col) | Warehouses stocking each product | ex 15 | COUNT |
+| Q087 | C5 COUNT(*) vs COUNT(col) | Dispatched versus delivered | ex 16 | COUNT |
+| Q088 | C5 COUNT(*) vs COUNT(col) | Warehouse activity | ex 17 | COUNT |
+| Q089 | C6 alias vs formula | Margin percentage | ex 18 | Alias vs formula |
+| Q090 | C6 alias vs formula | Freight as a share of revenue | ex 19 | Alias vs formula |
+| Q091 | C6 alias vs formula | Return rate by product | ex 20 | Alias vs formula |
+| Q092 | C9 integer division | Delivery rate by carrier | ex 21 | Integer division |
+| Q093 | C9 integer division | Capacity used | ex 22 | Integer division |
+| Q094 | C4 CTE is a wall | Orders where freight bites | ex 23 | CTE scope |
+| Q095 | general | Large established warehouses | ex 24 | General |
+| Q096 | general | Carriers by freight spend | ex 25 | General |
+| Q097 | general | Why things come back | ex 26 | General |
+| Q098 | general | Loyalty programme uptake | ex 27 | General |
+| Q099 | general | Below the reorder line | ex 28 | General |
+| Q100 | general | Split orders | ex 29 | General |
+| Q101 | general | Longest outstanding deliveries | ex 30 | General |
 
 ## Retired
 
-Asked previously, removed from the GUI and PRACTICE.md when the set was
-refocused on the nine weak concepts. **Kept so they are never regenerated** -
+Asked previously and since replaced. **Kept so they are never regenerated** -
 they still count as asked.
 
 | ID | Concept | Question | In GUI | Status |
 |----|---------|----------|--------|--------|
+| Q042 | C2 grain | Revenue per category | - | retired |
+| Q043 | C2 grain | Headcount and payroll by department | - | retired |
+| Q044 | C2 grain | Settled money per customer | - | retired |
+| Q045 | C2 grain | Monthly orders and distinct buyers | - | retired |
+| Q046 | C7 NULL | Two averages over a nullable column | - | retired |
+| Q047 | C7 NULL | Keeping the outer join | - | retired |
+| Q048 | C7 NULL | Employees who manage nobody | - | retired |
+| Q049 | C7 NULL | Total compensation | - | retired |
+| Q050 | C1 aggregates in WHERE | Above-average payments | - | retired |
+| Q051 | C1 aggregates in WHERE | Busiest sales rep | - | retired |
+| Q052 | C1 aggregates in WHERE | Categories rated above the overall mean | - | retired |
+| Q053 | C3 PARTITION BY | Line detail beside the order total | - | retired |
+| Q054 | C3 PARTITION BY | Running total per customer | - | retired |
+| Q055 | C3 PARTITION BY | Previous review for the same product | - | retired |
+| Q056 | C5 COUNT(*) vs COUNT(col) | Orders per customer, including none | - | retired |
+| Q057 | C5 COUNT(*) vs COUNT(col) | Paid payments per method | - | retired |
+| Q058 | C5 COUNT(*) vs COUNT(col) | How complete is each product's feedback | - | retired |
+| Q059 | C6 alias vs formula | Gross, discount, and net | - | retired |
+| Q060 | C6 alias vs formula | Conversion rate by country | - | retired |
+| Q061 | C6 alias vs formula | Change in paid volume | - | retired |
+| Q062 | C9 integer division | Percentage of orders shipped | - | retired |
+| Q063 | C9 integer division | Mean weight per weighed product | - | retired |
+| Q064 | C4 CTE is a wall | Each customer's second-biggest order | - | retired |
+| Q065 | general | Settled money by method | - | retired |
+| Q066 | general | Heavy items | - | retired |
+| Q067 | general | Paid on the day of order | - | retired |
+| Q068 | general | Most reviewed products | - | retired |
+| Q069 | general | Customers with a refund | - | retired |
+| Q070 | general | Hired before their manager | - | retired |
+| Q071 | general | Well-reviewed categories | - | retired |
 | Q001 | - | Products above a price threshold | - | retired |
 | Q002 | - | Customers in a set of countries | - | retired |
 | Q003 | - | Discontinued or out-of-stock products | - | retired |
@@ -114,10 +144,11 @@ they still count as asked.
 
 ## History
 
-- **Q001-Q041** seeded from the original breadth-first question set (2026-08-24),
-  retired the same day.
-- **Q042-Q071** authored against `sql-concepts-review.html`, targeting the nine
-  recurring mistakes. C8 (alias scope) has no question: SQLite accepts a SELECT
-  alias even in `WHERE`, so the engine cannot enforce the rule. It is covered as
-  prose in PRACTICE.md instead.
+- **Q001-Q041** the original breadth-first set (2026-08-24). Retired same day.
+- **Q042-Q071** first pass against `sql-concepts-review.html`, on the ordering and
+  payments tables. Retired when the schema gained the fulfilment side.
+- **Q072-Q101** current set, on warehouses, inventory, shipments and returns.
+  C8 (alias scope) still has no question: SQLite accepts a SELECT alias even in
+  `WHERE`, so the engine cannot enforce the rule. It is covered as prose in
+  PRACTICE.md instead.
 
