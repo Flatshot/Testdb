@@ -22,6 +22,7 @@ Behavioural checks (against testdb.db, read-only):
 
 import re
 import sqlite3
+import textwrap
 import sys
 from pathlib import Path
 
@@ -75,6 +76,17 @@ def main():
             if qid in seen_ids:
                 problems.append(f"{qid} claimed by exercises {seen_ids[qid]} and {e['id']}")
             seen_ids[qid] = e["id"]
+        # The GUI panel caps at QUESTION_MAX_LINES; a prompt past that would
+        # have its tail hidden, and the tail is the "Return:" line.
+        wrapped = sum(max(1, len(textwrap.wrap(line, 76)))
+                      for line in e["prompt"].split("\n"))
+        if wrapped > 14:
+            problems.append(
+                f"exercise {e['id']} prompt is {wrapped} lines wrapped at 76 cols; "
+                f"the GUI panel would hide the tail, including the Return: line")
+        if "Return:" not in e["prompt"]:
+            problems.append(f"exercise {e['id']} prompt never says what to Return")
+
         for field in ("concept", "trap_sql", "note"):
             if not e.get(field):
                 problems.append(f"exercise {e['id']} has no {field}")

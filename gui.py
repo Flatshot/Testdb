@@ -23,6 +23,7 @@ import exercises as ex
 
 PROGRESS_PATH = db.HERE / "progress.json"
 FREE = 0  # pseudo-exercise id for the scratch pad
+QUESTION_MAX_LINES = 16
 
 BG_OK = "#1a7f37"
 BG_BAD = "#b3261e"
@@ -120,11 +121,14 @@ class App(tk.Tk):
         self.schema_tree.bind("<Double-1>", self._insert_schema_name)
 
         # ---- right: question / editor / results ---------------------------
-        right = ttk.PanedWindow(outer, orient="vertical")
+        # The question is fixed-height content, so it sits ABOVE the split
+        # rather than competing with the editor for space. Only the editor and
+        # the results share what is left.
+        right = ttk.Frame(outer)
         outer.add(right, weight=1)
 
         top = ttk.Frame(right)
-        right.add(top, weight=0)
+        top.pack(fill="x", side="top")
 
         self.title_var = tk.StringVar()
         ttk.Label(top, textvariable=self.title_var, font=("Segoe UI", 12, "bold")).pack(
@@ -134,22 +138,20 @@ class App(tk.Tk):
                                 font=("Segoe UI", 10), background="#f4f4f4", padx=8, pady=6)
         self.question.pack(fill="x", padx=4)
         self.question.configure(state="disabled")
+        self.question.bind("<Configure>", lambda _e: self._fit_question())
 
-        mid = ttk.Frame(right)
-        right.add(mid, weight=1)
+        split = ttk.PanedWindow(right, orient="vertical")
+        split.pack(fill="both", expand=True, pady=(6, 0))
+
+        mid = ttk.Frame(split)
+        split.add(mid, weight=3)
 
         ttk.Label(mid, text="SQL").pack(anchor="w", padx=4)
-        editor_wrap = ttk.Frame(mid)
-        editor_wrap.pack(fill="both", expand=True, padx=4)
-        self.editor = tk.Text(editor_wrap, height=9, wrap="none", font=self.mono,
-                              undo=True, tabs=("1c",))
-        ed_y = ttk.Scrollbar(editor_wrap, orient="vertical", command=self.editor.yview)
-        self.editor.configure(yscrollcommand=ed_y.set)
-        self.editor.pack(side="left", fill="both", expand=True)
-        ed_y.pack(side="right", fill="y")
 
+        # Packed before the editor so the buttons always get their height --
+        # under a squeeze it is the editor that shrinks, never the controls.
         bar = ttk.Frame(mid)
-        bar.pack(fill="x", padx=4, pady=4)
+        bar.pack(side="bottom", fill="x", padx=4, pady=4)
         ttk.Button(bar, text="Run  (F5)", command=self.run_query).pack(side="left")
         self.check_btn = ttk.Button(bar, text="Check answer  (Ctrl+Enter)",
                                     command=self.check_answer)
@@ -162,8 +164,17 @@ class App(tk.Tk):
         self.progress_var = tk.StringVar()
         ttk.Label(bar, textvariable=self.progress_var).pack(side="right")
 
-        bottom = ttk.Frame(right)
-        right.add(bottom, weight=1)
+        editor_wrap = ttk.Frame(mid)
+        editor_wrap.pack(fill="both", expand=True, padx=4)
+        self.editor = tk.Text(editor_wrap, height=14, wrap="none", font=self.mono,
+                              undo=True, tabs=("1c",))
+        ed_y = ttk.Scrollbar(editor_wrap, orient="vertical", command=self.editor.yview)
+        self.editor.configure(yscrollcommand=ed_y.set)
+        self.editor.pack(side="left", fill="both", expand=True)
+        ed_y.pack(side="right", fill="y")
+
+        bottom = ttk.Frame(split)
+        split.add(bottom, weight=2)
 
         res_wrap = ttk.Frame(bottom)
         res_wrap.pack(fill="both", expand=True, padx=4)
@@ -279,8 +290,25 @@ class App(tk.Tk):
         self.question.delete("1.0", "end")
         self.question.insert("1.0", body)
         self.question.configure(state="disabled")
+        self._fit_question()
         self._set_status("Ready", BG_INFO)
         self.editor.focus_set()
+
+    def _fit_question(self):
+        """Grow the question panel to fit its text.
+
+        A fixed height silently truncated longer prompts, and the line that gets
+        cut is the last one -- which is the "Return: ..." line naming the columns
+        the answer needs.
+        """
+        self.question.update_idletasks()
+        try:
+            wanted = self.question.count("1.0", "end", "displaylines")[0]
+        except (tk.TclError, TypeError):
+            wanted = int(self.question.index("end-1c").split(".")[0])
+        wanted = max(3, min(wanted, QUESTION_MAX_LINES))
+        if wanted != int(self.question.cget("height")):
+            self.question.configure(height=wanted)
 
     def _sql(self):
         return self.editor.get("1.0", "end").strip().rstrip(";")
