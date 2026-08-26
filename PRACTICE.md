@@ -58,8 +58,9 @@ Other things the data does on purpose:
    *Return: order_id, revenue, freight*
 
 4. For each category: the total units sold on shipped orders, and the total units
-   returned. Categories with sales but no returns must still appear, with 0
-   returned.
+   returned.  Every line that sold counts towards units_sold whether or not it
+   later came back -- so the join to returns must not be allowed to drop
+   lines. Most lines were never returned.
    *Return: category name, units_sold, units_returned*
 
 
@@ -146,8 +147,12 @@ Other things the data does on purpose:
    as a percentage OF THE PRICE (0 to 100).
    *Return: name, unit_price, unit_cost, margin, margin_pct*
 
-19. For each shipped order that has both lines and shipments: freight as a
-   percentage OF revenue (0 to 100). Aggregate each side separately first.
+19. For every shipped order that has at least one shipment: what freight cost, as
+   a percentage of what the order sold for.  Revenue is the sum over the
+   order's LINES; freight is the sum over its SHIPMENTS. Work each out
+   separately -- one row per order each -- then divide freight by revenue.
+   Values can exceed 100%: on a cheap order, shipping can cost more than the
+   goods. The highest here is 549%.
    *Return: order_id, freight_pct_of_revenue*
 
 20. For products that have had at least one return: units sold on shipped orders,
