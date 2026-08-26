@@ -75,9 +75,19 @@ EXERCISES = [
     dict(
         id=4, ledger="Q075", concept="C2", tier="Grain",
         title="Units sold against units returned",
-        prompt="For each category: the total units sold on shipped orders, and the total "
-               "units returned. Categories with sales but no returns must still appear, "
-               "with 0 returned.\n\nReturn: category name, units_sold, units_returned",
+        prompt="For each category: the total units sold on shipped orders, and the "
+               "total units returned.\n\n"
+               "Every line that sold counts towards units_sold whether or not it later "
+               "came back -- so the join to returns must not be allowed to drop lines. "
+               "Most lines were never returned.\n\n"
+               "Return: category name, units_sold, units_returned",
+        claims=[
+            ("units_sold covers every shipped line, not just returned ones",
+             lambda rows, c: sum(r[1] for r in rows) == c.execute(
+                 "select sum(oi.quantity) from order_items oi join orders o"
+                 " on o.order_id = oi.order_id where o.status = 'shipped'").fetchone()[0]),
+            ("all 8 categories appear", lambda rows, c: len(rows) == 8),
+        ],
         solution="SELECT c.name, SUM(oi.quantity),"
                  " COALESCE(SUM(r.quantity), 0)"
                  " FROM order_items oi"
@@ -247,6 +257,10 @@ EXERCISES = [
         trap_sql="SELECT warehouse_id, product_id, quantity_on_hand,"
                  " quantity_on_hand * 1.0 / SUM(quantity_on_hand)"
                  "   OVER (PARTITION BY warehouse_id) FROM inventory",
+        claims=[("every share lies between 0 and 1",
+                 lambda rows, c: all(0 <= r[3] <= 1 for r in rows)),
+                ("each product's shares sum to 1",
+                 lambda rows, c: abs(sum(r[3] for r in rows if r[1] == rows[0][1]) - 1) < 1e-9)],
         note="Partition by the thing the share is OF. Partitioning by warehouse gives "
              "each line's share of its warehouse, which is a different question with "
              "equally plausible-looking numbers.",
@@ -284,6 +298,8 @@ EXERCISES = [
         trap_sql="SELECT p.product_id, COUNT(*) FROM products p"
                  " LEFT JOIN inventory i ON i.product_id = p.product_id"
                  " GROUP BY p.product_id",
+        claims=[("exactly 3 products are stocked nowhere and show 0",
+                 lambda rows, c: sum(1 for r in rows if r[1] == 0) == 3)],
         note="The outer join manufactures one all-NULL row for a product stocked nowhere, "
              "and COUNT(*) counts it -- reporting 1 warehouse where there are none.",
     ),
@@ -329,14 +345,21 @@ EXERCISES = [
                  " 100.0 * (unit_price - unit_cost) / unit_price FROM products",
         trap_sql="SELECT name, unit_price, unit_cost, unit_price - unit_cost,"
                  " 100.0 * (unit_price - unit_cost) / unit_cost FROM products",
+        claims=[("margin percentage stays within 0 to 100",
+                 lambda rows, c: all(0 <= r[4] <= 100 for r in rows))],
         note="Dividing by cost gives MARKUP, not margin -- it can exceed 100%, which "
              "margin never can. Read the alias and ask what the denominator should be.",
     ),
     dict(
         id=19, ledger="Q090", concept="C6", tier="Alias vs formula",
         title="Freight as a share of revenue",
-        prompt="For each shipped order that has both lines and shipments: freight as a "
-               "percentage OF revenue (0 to 100). Aggregate each side separately first.\n\n"
+        prompt="For every shipped order that has at least one shipment: what freight "
+               "cost, as a percentage of what the order sold for.\n\n"
+               "Revenue is the sum over the order's LINES; freight is the sum over its "
+               "SHIPMENTS. Work each out separately -- one row per order each -- then "
+               "divide freight by revenue.\n\n"
+               "Values can exceed 100%: on a cheap order, shipping can cost more than "
+               "the goods. The highest here is 549%.\n\n"
                "Return: order_id, freight_pct_of_revenue",
         solution="WITH rev AS (SELECT oi.order_id,"
                  "   SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS r"
@@ -354,6 +377,10 @@ EXERCISES = [
                  "   FROM shipments GROUP BY order_id)"
                  " SELECT rev.order_id, 100.0 * rev.r / frt.f"
                  " FROM rev JOIN frt USING(order_id)",
+        claims=[("some orders exceed 100%, as the prompt warns",
+                 lambda rows, c: max(r[1] for r in rows) > 100),
+                ("the stated maximum of 549% is accurate",
+                 lambda rows, c: 549 <= max(r[1] for r in rows) < 550)],
         note="'A as a share of B' puts B on the bottom. Inverting it produces numbers in "
              "the hundreds that still look like a plausible percentage at a glance.",
     ),
@@ -379,6 +406,8 @@ EXERCISES = [
                  " SELECT sold.product_id, sold.s, back.b,"
                  " 100.0 * back.b / (sold.s - back.b)"
                  " FROM sold JOIN back USING(product_id)",
+        claims=[("return rate stays within 0 to 100",
+                 lambda rows, c: all(0 <= r[3] <= 100 for r in rows))],
         note="Returned over kept is a ratio; returned over sold is the rate. They agree "
              "when returns are rare, which is exactly why the mistake survives review.",
     ),
@@ -393,6 +422,8 @@ EXERCISES = [
                  " FROM shipments GROUP BY carrier",
         trap_sql="SELECT carrier, 100 * COUNT(delivered_at) / COUNT(*)"
                  " FROM shipments GROUP BY carrier",
+        claims=[("delivery rate stays within 0 to 100",
+                 lambda rows, c: all(0 <= r[1] <= 100 for r in rows))],
         note="Two integer counts divide to an integer in SQLite, so every carrier lands "
              "on a whole number and the fraction is gone before ROUND could see it. "
              "100.0 forces the whole expression to a real.",
@@ -411,6 +442,8 @@ EXERCISES = [
                  " 100 * SUM(i.quantity_on_hand) / w.capacity_units"
                  " FROM warehouses w JOIN inventory i ON i.warehouse_id = w.warehouse_id"
                  " GROUP BY w.warehouse_id",
+        claims=[("capacity used stays within 0 to 100",
+                 lambda rows, c: all(0 <= r[3] <= 100 for r in rows))],
         note="Both quantity_on_hand and capacity_units are INTEGER, so the whole "
              "expression stays integer and every warehouse reports 0% -- a number wrong "
              "enough to notice, but only if you look.",
@@ -466,6 +499,7 @@ EXERCISES = [
                  " GROUP BY carrier ORDER BY SUM(freight_cost) DESC, carrier ASC LIMIT 2",
         trap_sql="SELECT carrier, SUM(freight_cost), COUNT(*) FROM shipments"
                  " GROUP BY carrier ORDER BY AVG(freight_cost) DESC, carrier ASC LIMIT 2",
+        claims=[("exactly 2 carriers, as asked", lambda rows, c: len(rows) == 2)],
         note="Biggest total spend is not highest cost per shipment. DPD averages more "
              "per parcel than UPS but UPS carries more of them, so the two orderings "
              "disagree. Sort by the measure the question actually names.",
@@ -534,6 +568,11 @@ EXERCISES = [
         trap_sql="SELECT shipment_id, order_id, carrier, shipped_at FROM shipments"
                  " WHERE delivered_at IS NULL"
                  " ORDER BY shipped_at DESC, shipment_id ASC LIMIT 5",
+        claims=[("exactly 5 shipments, as asked", lambda rows, c: len(rows) == 5),
+                ("all of them are still in transit",
+                 lambda rows, c: all(c.execute(
+                     "select delivered_at is null from shipments where shipment_id=?",
+                     (r[0],)).fetchone()[0] for r in rows))],
         note="Longest in transit means the OLDEST dispatch date, so ascending. Sorting "
              "descending gives you the newest shipments, which are the least worrying.",
     ),

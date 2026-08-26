@@ -13,6 +13,9 @@ Behavioural checks (against testdb.db, read-only):
   * every solution runs and returns at least one row
   * every trap_sql is graded WRONG -- a trap the grader accepts is a question
     that teaches nothing, and this is what catches it
+  * every claim a prompt makes about the data actually holds -- stated ranges,
+    row counts, "these rows appear with 0". trap_sql proves a query wrong; only
+    this catches a prompt that describes data the database does not contain
 
     py check_questions.py
 """
@@ -108,7 +111,7 @@ def main():
 
     # --- behavioural ------------------------------------------------------
     conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
-    traps_by_error = traps_by_result = 0
+    traps_by_error = traps_by_result = claims_checked = 0
     try:
         for e in ex.EXERCISES:
             rows, err = run(conn, e["solution"])
@@ -117,6 +120,23 @@ def main():
                 continue
             if not rows:
                 problems.append(f"exercise {e['id']} solution returns no rows")
+
+            # Claims assert that what the PROMPT says about the data is actually
+            # true -- a stated range, a row count, a "these appear with 0" case.
+            # trap_sql proves a query is wrong; nothing else checks whether the
+            # question describes reality, and prompts have drifted from the data
+            # twice now.
+            for says, holds in e.get("claims", ()):
+                try:
+                    if not holds(rows, conn):
+                        problems.append(
+                            f"exercise {e['id']} ({e['title']}): prompt claim is FALSE "
+                            f"-- {says}")
+                    else:
+                        claims_checked += 1
+                except Exception as exc:
+                    problems.append(
+                        f"exercise {e['id']} claim {says!r} could not be evaluated: {exc}")
 
             trap_rows, trap_err = run(conn, e["trap_sql"])
             if trap_err:
@@ -138,6 +158,7 @@ def main():
     print(f"linked to GUI  : {linked}")
     print(f"traps rejected : {traps_by_error + traps_by_result} / {len(ex.EXERCISES)} "
           f"({traps_by_error} by SQL error, {traps_by_result} by wrong result)")
+    print(f"prompt claims  : {claims_checked} verified against the data")
 
     if problems:
         print(f"\n{len(problems)} problem(s):")
