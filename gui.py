@@ -201,7 +201,7 @@ class App(tk.Tk):
                                     text=self._exercise_label(e))
 
     def _exercise_label(self, e):
-        mark = "[x]" if e["id"] in self.progress["solved"] else "[ ]"
+        mark = "[x]" if e["ledger"] in self.progress["solved"] else "[ ]"
         return f"{mark} {e['id']}. {e['title']}"
 
     def _populate_schema(self):
@@ -237,17 +237,28 @@ class App(tk.Tk):
         self._stash_sql()
         self._select_exercise(int(sel[0][2:]))
 
+    def _key(self, eid):
+        """Progress key for an exercise: its ledger id, which is unique forever.
+
+        Numeric ids restart at 1 with each new question set, so keying on them
+        made old progress attach itself to whatever question later took that
+        slot.
+        """
+        if eid == FREE:
+            return "scratch"
+        return ex.BY_ID[eid]["ledger"]
+
     def _stash_sql(self):
         text = self.editor.get("1.0", "end").strip()
         if text:
-            self.progress["sql"][str(self.current)] = text
+            self.progress["sql"][self._key(self.current)] = text
         else:
-            self.progress["sql"].pop(str(self.current), None)
+            self.progress["sql"].pop(self._key(self.current), None)
 
     def _select_exercise(self, eid):
         self.current = eid
         self.editor.delete("1.0", "end")
-        self.editor.insert("1.0", self.progress["sql"].get(str(eid), ""))
+        self.editor.insert("1.0", self.progress["sql"].get(self._key(eid), ""))
         self.editor.edit_reset()
 
         if eid == FREE:
@@ -257,7 +268,7 @@ class App(tk.Tk):
             state = "disabled"
         else:
             e = ex.BY_ID[eid]
-            done = "  [solved]" if eid in self.progress["solved"] else ""
+            done = "  [solved]" if e["ledger"] in self.progress["solved"] else ""
             self.title_var.set(f"{e['id']}. {e['title']}   ({e['tier']}){done}")
             body = e["prompt"]
             state = "normal"
@@ -303,7 +314,7 @@ class App(tk.Tk):
         expected = self.conn.execute(e["solution"]).fetchall()
         passed, msg = ex.compare([tuple(r) for r in rows], [tuple(r) for r in expected])
         if passed:
-            self.progress["solved"].add(self.current)
+            self.progress["solved"].add(self._key(self.current))
             self.ex_tree.item(f"ex{self.current}", text=self._exercise_label(e))
             self.title_var.set(f"{e['id']}. {e['title']}   ({e['tier']})  [solved]")
             self._refresh_progress_label()
@@ -356,7 +367,11 @@ class App(tk.Tk):
         self.status.configure(text=text, background=colour)
 
     def _refresh_progress_label(self):
-        self.progress_var.set(f"Solved {len(self.progress['solved'])} / {len(ex.EXERCISES)}")
+        # Count only the CURRENT set. progress.json also holds solved ledger ids
+        # from retired sets, which must not inflate the score.
+        live = {e["ledger"] for e in ex.EXERCISES}
+        done = len(live & set(self.progress["solved"]))
+        self.progress_var.set(f"Solved {done} / {len(ex.EXERCISES)}")
 
     def _on_close(self):
         self._stash_sql()
