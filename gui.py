@@ -25,9 +25,24 @@ PROGRESS_PATH = db.HERE / "progress.json"
 FREE = 0  # pseudo-exercise id for the scratch pad
 QUESTION_MAX_LINES = 16
 
+# Dark palette. Tk has no notion of a colour scheme, so every widget that is
+# not a ttk widget has to be told individually -- and the ttk widgets only obey
+# under a fully styleable theme (see _apply_theme).
+BG_APP = "#1e1e1e"      # window and panel backgrounds
+BG_SURFACE = "#252526"  # raised surfaces: notebook pages, buttons, headings
+BG_FIELD = "#1b1b1b"    # text entry areas
+BG_QUESTION = "#26292b"  # the question panel, slightly lifted off the app bg
+BG_SELECT = "#0a4a7a"    # selected row / selected text
+BG_STRIPE = "#232323"    # alternating result rows
+FG_TEXT = "#d6d6d6"
+FG_MUTED = "#9d9d9d"
+FG_HEADING = "#e8e8e8"
+BORDER = "#3a3a3a"
+CURSOR = "#d6d6d6"
+
 BG_OK = "#1a7f37"
 BG_BAD = "#b3261e"
-BG_INFO = "#444444"
+BG_INFO = "#333333"
 
 
 class App(tk.Tk):
@@ -88,12 +103,94 @@ class App(tk.Tk):
         except OSError:
             pass  # practice progress is not worth crashing over
 
+    # -------------------------------------------------------------------- theme
+    def _apply_theme(self):
+        """Paint every ttk widget class dark.
+
+        'vista' is the good-looking default on Windows but it draws natively and
+        silently ignores background/foreground, so a dark scheme is impossible
+        under it. 'clam' is fully styleable, which is the whole reason for the
+        switch -- everything below is what vista was doing for us for free.
+        """
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure(".", background=BG_APP, foreground=FG_TEXT,
+                        fieldbackground=BG_FIELD, bordercolor=BORDER,
+                        lightcolor=BG_SURFACE, darkcolor=BG_APP,
+                        troughcolor=BG_APP, focuscolor=BG_SELECT)
+        style.configure("TFrame", background=BG_APP)
+        style.configure("TLabel", background=BG_APP, foreground=FG_TEXT)
+        style.configure("TPanedwindow", background=BG_APP)
+        style.configure("Sash", sashthickness=6, gripcount=0,
+                        background=BORDER)
+
+        style.configure("TButton", background=BG_SURFACE, foreground=FG_TEXT,
+                        bordercolor=BORDER, lightcolor=BG_SURFACE,
+                        darkcolor=BG_SURFACE, focusthickness=0,
+                        padding=(10, 4))
+        style.map("TButton",
+                  background=[("pressed", BG_SELECT), ("active", "#333335"),
+                              ("disabled", BG_APP)],
+                  foreground=[("disabled", "#5f5f5f")])
+
+        # clam hard-codes a near-white lightcolor per style, which draws as a
+        # bright bevel around the notebook and its tabs. The root "." setting
+        # does not win against that, so each one has to be named explicitly.
+        style.configure("TNotebook", background=BG_APP, bordercolor=BORDER,
+                        lightcolor=BG_APP, darkcolor=BG_APP, borderwidth=0,
+                        tabmargins=(2, 4, 2, 0))
+        style.configure("TNotebook.Tab", background=BG_APP,
+                        foreground=FG_MUTED, padding=(12, 5), borderwidth=1,
+                        bordercolor=BORDER, lightcolor=BG_APP,
+                        darkcolor=BG_APP)
+        style.map("TNotebook.Tab",
+                  background=[("selected", BG_SURFACE)],
+                  foreground=[("selected", FG_HEADING)],
+                  lightcolor=[("selected", BG_SURFACE)],
+                  expand=[("selected", (0, 0, 0, 0))])
+
+        style.configure("Treeview", rowheight=22, background=BG_FIELD,
+                        fieldbackground=BG_FIELD, foreground=FG_TEXT,
+                        bordercolor=BORDER, borderwidth=0,
+                        lightcolor=BG_FIELD, darkcolor=BG_FIELD)
+        style.map("Treeview",
+                  background=[("selected", BG_SELECT)],
+                  foreground=[("selected", "#ffffff")])
+        style.configure("Treeview.Heading", background=BG_SURFACE,
+                        foreground=FG_HEADING, relief="flat", borderwidth=1,
+                        bordercolor=BORDER, lightcolor=BG_SURFACE,
+                        darkcolor=BG_SURFACE)
+        style.map("Treeview.Heading",
+                  background=[("active", "#33373a")])
+        # clam draws a dotted focus ring on the tree; kill it, it reads as noise
+        style.layout("Treeview.Item", [
+            ("Treeitem.padding", {"sticky": "nswe", "children": [
+                ("Treeitem.indicator", {"side": "left", "sticky": ""}),
+                ("Treeitem.image", {"side": "left", "sticky": ""}),
+                ("Treeitem.text", {"side": "left", "sticky": ""}),
+            ]}),
+        ])
+
+        style.configure("TScrollbar", background=BG_SURFACE, troughcolor=BG_APP,
+                        bordercolor=BG_APP, arrowcolor=FG_MUTED,
+                        borderwidth=0)
+        style.map("TScrollbar",
+                  background=[("pressed", BG_SELECT), ("active", "#3d3d3f")])
+
     # ------------------------------------------------------------------- layout
     def _build_ui(self):
-        style = ttk.Style()
-        if "vista" in style.theme_names():
-            style.theme_use("vista")
-        style.configure("Treeview", rowheight=22)
+        self.configure(background=BG_APP)
+        self._apply_theme()
+
+        # The status bar is where grading feedback appears, so it is packed
+        # FIRST and anchored to the bottom. pack allocates in order: if the
+        # expanding pane went first it would claim everything and Tk would
+        # unmap the status bar entirely at small window sizes.
+        self.status = tk.Label(self, text="Ready", anchor="w", justify="left",
+                               padx=8, pady=4, wraplength=1100,
+                               background=BG_INFO, foreground="white")
+        self.status.pack(fill="x", side="bottom")
 
         outer = ttk.PanedWindow(self, orient="horizontal")
         outer.pack(fill="both", expand=True, padx=6, pady=6)
@@ -131,11 +228,14 @@ class App(tk.Tk):
         top.pack(fill="x", side="top")
 
         self.title_var = tk.StringVar()
-        ttk.Label(top, textvariable=self.title_var, font=("Segoe UI", 12, "bold")).pack(
-            anchor="w", padx=4, pady=(0, 2)
-        )
+        ttk.Label(top, textvariable=self.title_var, font=("Segoe UI", 12, "bold"),
+                  foreground=FG_HEADING).pack(anchor="w", padx=4, pady=(0, 2))
         self.question = tk.Text(top, height=5, wrap="word", relief="flat",
-                                font=("Segoe UI", 10), background="#f4f4f4", padx=8, pady=6)
+                                font=("Segoe UI", 10), background=BG_QUESTION,
+                                foreground=FG_TEXT, insertbackground=CURSOR,
+                                selectbackground=BG_SELECT,
+                                selectforeground="#ffffff",
+                                highlightthickness=0, padx=8, pady=6)
         self.question.pack(fill="x", padx=4)
         self.question.configure(state="disabled")
         self.question.bind("<Configure>", lambda _e: self._fit_question())
@@ -146,7 +246,7 @@ class App(tk.Tk):
         mid = ttk.Frame(split)
         split.add(mid, weight=3)
 
-        ttk.Label(mid, text="SQL").pack(anchor="w", padx=4)
+        ttk.Label(mid, text="SQL", foreground=FG_MUTED).pack(anchor="w", padx=4)
 
         # Packed before the editor so the buttons always get their height --
         # under a squeeze it is the editor that shrinks, never the controls.
@@ -162,12 +262,19 @@ class App(tk.Tk):
         self.solution_btn = ttk.Button(bar, text="Show solution", command=self.show_solution)
         self.solution_btn.pack(side="left", padx=(6, 0))
         self.progress_var = tk.StringVar()
-        ttk.Label(bar, textvariable=self.progress_var).pack(side="right")
+        ttk.Label(bar, textvariable=self.progress_var,
+                  foreground=FG_MUTED).pack(side="right")
 
         editor_wrap = ttk.Frame(mid)
         editor_wrap.pack(fill="both", expand=True, padx=4)
         self.editor = tk.Text(editor_wrap, height=14, wrap="none", font=self.mono,
-                              undo=True, tabs=("1c",))
+                              undo=True, tabs=("1c",), background=BG_FIELD,
+                              foreground=FG_TEXT, insertbackground=CURSOR,
+                              selectbackground=BG_SELECT,
+                              selectforeground="#ffffff",
+                              relief="flat", highlightthickness=1,
+                              highlightbackground=BORDER,
+                              highlightcolor=BG_SELECT)
         ed_y = ttk.Scrollbar(editor_wrap, orient="vertical", command=self.editor.yview)
         self.editor.configure(yscrollcommand=ed_y.set)
         self.editor.pack(side="left", fill="both", expand=True)
@@ -187,12 +294,8 @@ class App(tk.Tk):
         res_x.grid(row=1, column=0, sticky="ew")
         res_wrap.rowconfigure(0, weight=1)
         res_wrap.columnconfigure(0, weight=1)
-        self.results.tag_configure("odd", background="#f7f7f7")
+        self.results.tag_configure("odd", background=BG_STRIPE)
 
-        self.status = tk.Label(self, text="Ready", anchor="w", justify="left",
-                               padx=8, pady=4, wraplength=1100,
-                               background=BG_INFO, foreground="white")
-        self.status.pack(fill="x", side="bottom")
         # keep the wrap width in step with the window
         self.bind("<Configure>",
                   lambda e: self.status.configure(wraplength=max(self.winfo_width() - 40, 400)))
