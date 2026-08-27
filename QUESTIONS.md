@@ -24,44 +24,45 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions aimed at the nine recurring mistakes in
-`sql-concepts-review.html`, weighted by how often each one occurred, and built on
-the fulfilment tables: warehouses, inventory, shipments and returns. `Concept`
-maps to that document's numbered sections. Generated from `exercises.py` -
-`check_questions.py` verifies the two agree.
+Thirty questions on the repair-depot schema, weighted hard toward
+**grain**: half of them punish joining two one-to-many children of the same
+parent in a single query block, which was the mistake behind every wrong answer
+in the 2026-08-26 session. `Concept` maps to the numbered sections of
+`sql-concepts-review.html`. Generated from `exercises.py` - `check_questions.py`
+verifies the two agree.
 
 | ID | Concept | Question | In GUI | Drills |
 |----|---------|----------|--------|--------|
-| Q072 | C2 grain | Freight per order | ex 1 | Grain |
-| Q073 | C2 grain | Stock per product across warehouses | ex 2 | Grain |
-| Q074 | C2 grain | Revenue and freight side by side | ex 3 | Grain |
-| Q075 | C2 grain | Units sold against units returned | ex 4 | Grain |
-| Q076 | C7 NULL | Delivered or still in transit | ex 5 | NULLs |
-| Q077 | C7 NULL | Average days in transit | ex 6 | NULLs |
-| Q078 | C7 NULL | Value of counted stock | ex 7 | NULLs |
-| Q079 | C7 NULL | Quantities matching no reorder level | ex 8 | NULLs |
-| Q080 | C1 aggregates in WHERE | Pricey shipments for their carrier | ex 9 | Aggregates in WHERE |
-| Q081 | C1 aggregates in WHERE | Busier than the average warehouse | ex 10 | Aggregates in WHERE |
-| Q082 | C1 aggregates in WHERE | Categories with above-average margin | ex 11 | Aggregates in WHERE |
-| Q083 | C3 PARTITION BY | Shipment beside its order's freight | ex 12 | Window vs GROUP BY |
-| Q084 | C3 PARTITION BY | Share of a product's stock | ex 13 | Window vs GROUP BY |
-| Q085 | C3 PARTITION BY | First shipment of each order | ex 14 | Window vs GROUP BY |
-| Q086 | C5 COUNT(*) vs COUNT(col) | Warehouses stocking each product | ex 15 | COUNT |
-| Q087 | C5 COUNT(*) vs COUNT(col) | Dispatched versus delivered | ex 16 | COUNT |
-| Q088 | C5 COUNT(*) vs COUNT(col) | Warehouse activity | ex 17 | COUNT |
-| Q089 | C6 alias vs formula | Margin percentage | ex 18 | Alias vs formula |
-| Q090 | C6 alias vs formula | Freight as a share of revenue | ex 19 | Alias vs formula |
-| Q091 | C6 alias vs formula | Return rate by product | ex 20 | Alias vs formula |
-| Q092 | C9 integer division | Delivery rate by carrier | ex 21 | Integer division |
-| Q093 | C9 integer division | Capacity used | ex 22 | Integer division |
-| Q094 | C4 CTE is a wall | Orders where freight bites | ex 23 | CTE scope |
-| Q095 | general | Large established warehouses | ex 24 | General |
-| Q096 | general | Carriers by freight spend | ex 25 | General |
-| Q097 | general | Why things come back | ex 26 | General |
-| Q098 | general | Loyalty programme uptake | ex 27 | General |
-| Q099 | general | Below the reorder line | ex 28 | General |
-| Q100 | general | Split orders | ex 29 | General |
-| Q101 | general | Longest outstanding deliveries | ex 30 | General |
+| Q102 | C2 grain | What a job actually cost | ex 1 | Grain |
+| Q103 | C2 grain | Labour's share of the bill | ex 2 | Grain |
+| Q104 | C2 grain | Parts count and hours together | ex 3 | Grain |
+| Q105 | C2 grain | Hours, and who signed the job off | ex 4 | Grain |
+| Q106 | C2 grain | The missing SUM | ex 5 | Grain |
+| Q107 | C2 grain | Do not go back to the well | ex 6 | Grain |
+| Q108 | C2 grain | Three children, one job | ex 7 | Grain |
+| Q109 | C2 grain | Contracts and callouts | ex 8 | Grain |
+| Q110 | C2 grain | Counting down a chain | ex 9 | Grain |
+| Q111 | C2 grain | Stock on hand per part | ex 10 | Grain |
+| Q112 | C2 grain | Invoice against actual cost | ex 11 | Grain |
+| Q113 | C2 grain | Technician workload | ex 12 | Grain |
+| Q114 | C2 grain | Depot stock and staff | ex 13 | Grain |
+| Q115 | C2 grain | Cost per hour on the job | ex 14 | Grain |
+| Q116 | C2 grain | Busiest machines | ex 15 | Grain |
+| Q117 | C3 window vs GROUP BY | Each visit against the job total | ex 16 | Window vs GROUP BY |
+| Q118 | C3 window vs GROUP BY | First visit to each job | ex 17 | Window vs GROUP BY |
+| Q119 | C3 window vs GROUP BY | Running spend per depot | ex 18 | Window vs GROUP BY |
+| Q120 | C1 aggregates in WHERE | Jobs that ran long | ex 19 | Aggregates in WHERE |
+| Q121 | C1 aggregates in WHERE | Customers worth chasing | ex 20 | Aggregates in WHERE |
+| Q122 | C4 CTE scope | Carry it through the wall | ex 21 | CTE scope |
+| Q123 | C5 COUNT | Inspected, or not | ex 22 | COUNT |
+| Q124 | C5 COUNT | Scored and unscored | ex 23 | COUNT |
+| Q125 | C7 NULL | Slow to answer | ex 24 | NULLs |
+| Q126 | C7 NULL | Never certified | ex 25 | NULLs |
+| Q127 | C7 NULL | Parts nobody has fitted | ex 26 | NULLs |
+| Q128 | C9 integer division | Average parts per job | ex 27 | Integer division |
+| Q129 | C9 integer division | Stock cover against reorder level | ex 28 | Integer division |
+| Q130 | general | Who reports to whom | ex 29 | General |
+| Q131 | general | How long jobs stay open | ex 30 | General |
 
 ## Retired
 
@@ -141,13 +142,50 @@ they still count as asked.
 | Q039 | - | Per-customer first/last order, count, spend | - | retired |
 | Q040 | - | 5-star reviewers who never bought elsewhere in that category | - | retired |
 | Q041 | - | Bottom 3 products per supplier by revenue | - | retired |
+| Q072 | - | Freight per order | - | retired |
+| Q073 | - | Stock per product across warehouses | - | retired |
+| Q074 | - | Revenue and freight side by side | - | retired |
+| Q075 | - | Units sold against units returned | - | retired |
+| Q076 | - | Delivered or still in transit | - | retired |
+| Q077 | - | Average days in transit | - | retired |
+| Q078 | - | Value of counted stock | - | retired |
+| Q079 | - | Quantities matching no reorder level | - | retired |
+| Q080 | - | Pricey shipments for their carrier | - | retired |
+| Q081 | - | Busier than the average warehouse | - | retired |
+| Q082 | - | Categories with above-average margin | - | retired |
+| Q083 | - | Shipment beside its order's freight | - | retired |
+| Q084 | - | Share of a product's stock | - | retired |
+| Q085 | - | First shipment of each order | - | retired |
+| Q086 | - | Warehouses stocking each product | - | retired |
+| Q087 | - | Dispatched versus delivered | - | retired |
+| Q088 | - | Warehouse activity | - | retired |
+| Q089 | - | Margin percentage | - | retired |
+| Q090 | - | Freight as a share of revenue | - | retired |
+| Q091 | - | Return rate by product | - | retired |
+| Q092 | - | Delivery rate by carrier | - | retired |
+| Q093 | - | Capacity used | - | retired |
+| Q094 | - | Orders where freight bites | - | retired |
+| Q095 | - | Large established warehouses | - | retired |
+| Q096 | - | Carriers by freight spend | - | retired |
+| Q097 | - | Why things come back | - | retired |
+| Q098 | - | Loyalty programme uptake | - | retired |
+| Q099 | - | Below the reorder line | - | retired |
+| Q100 | - | Split orders | - | retired |
+| Q101 | - | Longest outstanding deliveries | - | retired |
 
 ## History
 
 - **Q001-Q041** the original breadth-first set (2026-08-24). Retired same day.
 - **Q042-Q071** first pass against `sql-concepts-review.html`, on the ordering and
   payments tables. Retired when the schema gained the fulfilment side.
-- **Q072-Q101** current set, on warehouses, inventory, shipments and returns.
+- **Q072-Q101** second pass against the review, on warehouses, inventory,
+  shipments and returns. Retired when the schema moved to the repair depot.
+- **Q102-Q131** current set, on the repair-depot schema (work orders, parts,
+  labour, inspections). Fifteen of the thirty drill grain, because that is what
+  the 2026-08-26 session showed was actually costing answers -- in five
+  distinct disguises: joining two children at once, a bare column under
+  `GROUP BY`, a missing aggregate, re-joining a base table after a CTE had
+  collapsed it, and an inverted ratio.
   C8 (alias scope) still has no question: SQLite accepts a SELECT alias even in
   `WHERE`, so the engine cannot enforce the rule. It is covered as prose in
   PRACTICE.md instead.

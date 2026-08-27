@@ -1,15 +1,16 @@
 """Practice exercises with reference solutions, used by the GUI to grade answers.
 
-These 30 questions target the nine recurring mistakes catalogued in
-sql-concepts-review.html, weighted by how often each one showed up, and are
-built on the fulfilment side of the schema -- warehouses, inventory, shipments
-and returns. Each question carries:
+These 30 questions (ledger Q102-Q131) are built on the repair-depot schema and
+weighted hard toward GRAIN -- half of them punish the mistake of joining two
+one-to-many children in a single query block. Each question carries:
 
-  concept   the review section it drills (C1..C9), or "GEN"
+  concept   the mistake it drills (C1..C9), or "GEN"
   solution  one correct answer
   trap_sql  the tempting WRONG query -- check_questions.py asserts the grader
             rejects it, which is what proves the question actually has teeth
   note      the lesson, shown in the GUI once you get it right
+  claims    optional facts about the data that the prompt asserts, re-checked
+            against the live database so a prompt cannot quietly go stale
 
 Grading compares your result against the reference as an unordered multiset of
 rows, with floats rounded to 2 decimals. Row order never matters and you do not
@@ -18,563 +19,936 @@ states exactly what to return.
 
 Spoiler warning: the reference SQL is in this file.
 
-The one structural fact worth holding onto: an order can be SPLIT across
-warehouses, so orders have 0..n shipments as well as 0..n lines. Joining both
-children in one query multiplies the rows and inflates every total.
+The one structural fact worth holding onto: a work order has THREE independent
+children -- parts_used, labor_entries and inspections. A job with 4 parts and
+3 visits produces 12 rows if you join both, so the parts total comes out 3x too
+big and the labour total 4x too big. Aggregate each branch to one row per work
+order FIRST, then join the results together.
 """
 
 EXERCISES = [
-    # ================================================================= C2 grain
+    # ---------------------------------------------------------------- grain
     dict(
-        id=1, ledger="Q072", concept="C2", tier="Grain",
-        title="Freight per order",
-        prompt="Total freight cost for each order that has at least one shipment.\n\n"
-               "Return: order_id, total_freight",
-        solution="SELECT order_id, SUM(freight_cost) FROM shipments GROUP BY order_id",
-        trap_sql="SELECT s.order_id, SUM(s.freight_cost) FROM shipments s"
-                 " JOIN order_items oi ON oi.order_id = s.order_id"
-                 " GROUP BY s.order_id",
-        note="Freight lives on the shipment, not the line. Joining order_items repeats "
-               "each freight cost once per line -- here that turns 7,932 into 23,436.",
-    ),
-    dict(
-        id=2, ledger="Q073", concept="C2", tier="Grain",
-        title="Stock per product across warehouses",
-        prompt="For every product stocked in at least one warehouse: the total quantity "
-               "on hand summed across all warehouses. One row per product.\n\n"
-               "Return: product_id, total_on_hand",
-        solution="SELECT product_id, SUM(quantity_on_hand) FROM inventory GROUP BY product_id",
-        trap_sql="SELECT product_id, SUM(quantity_on_hand) FROM inventory"
-                 " GROUP BY product_id, warehouse_id",
-        note="Adding warehouse_id to the GROUP BY changes what one row means: you get "
-             "one row per warehouse, not per product. The key list defines the grain.",
-    ),
-    dict(
-        id=3, ledger="Q074", concept="C2", tier="Grain",
-        title="Revenue and freight side by side",
-        prompt="For each shipped order that has at least one shipment: its revenue "
-               "(sum over its lines) and its freight (sum over its shipments). Both "
-               "children must be aggregated separately.\n\n"
-               "Return: order_id, revenue, freight",
-        solution="WITH rev AS (SELECT oi.order_id,"
-                 "   SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS r"
-                 "   FROM order_items oi JOIN orders o ON o.order_id = oi.order_id"
-                 "   WHERE o.status = 'shipped' GROUP BY oi.order_id),"
-                 " frt AS (SELECT order_id, SUM(freight_cost) AS f"
-                 "   FROM shipments GROUP BY order_id)"
-                 " SELECT rev.order_id, rev.r, frt.f FROM rev JOIN frt USING(order_id)",
-        trap_sql="SELECT o.order_id,"
-                 " SUM(oi.quantity * oi.unit_price * (1 - oi.discount)), SUM(s.freight_cost)"
-                 " FROM orders o JOIN order_items oi ON oi.order_id = o.order_id"
-                 " JOIN shipments s ON s.order_id = o.order_id"
-                 " WHERE o.status = 'shipped' GROUP BY o.order_id",
-        note="Two one-to-many children joined in one query is the classic fan-out: every "
-             "line repeats per shipment AND every freight cost repeats per line, so both "
-             "totals inflate. Aggregate each branch to one row per order first, then join.",
-    ),
-    dict(
-        id=4, ledger="Q075", concept="C2", tier="Grain",
-        title="Units sold against units returned",
-        prompt="For each category: the total units sold on shipped orders, and the "
-               "total units returned.\n\n"
-               "Every line that sold counts towards units_sold whether or not it later "
-               "came back -- so the join to returns must not be allowed to drop lines. "
-               "Most lines were never returned.\n\n"
-               "Return: category name, units_sold, units_returned",
+        id=1, ledger="Q102", concept="C2", tier="Grain",
+        title="What a job actually cost",
+        prompt=(
+            "Every closed work order that has both parts and labour logged"
+            " against it, with what each side cost and the total.\n\n"
+            "Parts cost is quantity * unit_price * (1 - discount), summed over"
+            " the job's parts. Labour cost is hours * rate, summed over the"
+            " job's visits.\n\n"
+            "Return: work_order_id, parts_cost, labor_cost, total_cost"
+        ),
+        solution=(
+            "WITH p AS (SELECT work_order_id,"
+            " SUM(quantity * unit_price * (1 - discount)) AS pc"
+            " FROM parts_used GROUP BY work_order_id),"
+            " l AS (SELECT work_order_id, SUM(hours * rate) AS lc"
+            " FROM labor_entries GROUP BY work_order_id)"
+            " SELECT w.work_order_id, p.pc, l.lc, p.pc + l.lc"
+            " FROM work_orders w JOIN p USING(work_order_id)"
+            " JOIN l USING(work_order_id) WHERE w.status = 'closed'"
+        ),
+        trap_sql=(
+            "SELECT w.work_order_id,"
+            " SUM(pu.quantity * pu.unit_price * (1 - pu.discount)),"
+            " SUM(le.hours * le.rate),"
+            " SUM(pu.quantity * pu.unit_price * (1 - pu.discount))"
+            " + SUM(le.hours * le.rate)"
+            " FROM work_orders w"
+            " JOIN parts_used pu ON pu.work_order_id = w.work_order_id"
+            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
+            " WHERE w.status = 'closed' GROUP BY w.work_order_id"
+        ),
+        note="Parts and labour are separate children of the work order. Joined"
+             " together, 4 parts x 3 visits gives 12 rows: the parts total"
+             " comes out 3x too big and the labour total 4x. Collapse each"
+             " branch to one row per job before they meet.",
         claims=[
-            ("units_sold covers every shipped line, not just returned ones",
-             lambda rows, c: sum(r[1] for r in rows) == c.execute(
-                 "select sum(oi.quantity) from order_items oi join orders o"
-                 " on o.order_id = oi.order_id where o.status = 'shipped'").fetchone()[0]),
-            ("all 8 categories appear", lambda rows, c: len(rows) == 8),
+            ("no job's parts and labour are both counted more than once",
+             lambda rows, c: all(abs(r[1] + r[2] - r[3]) < 0.01 for r in rows)),
         ],
-        solution="SELECT c.name, SUM(oi.quantity),"
-                 " COALESCE(SUM(r.quantity), 0)"
-                 " FROM order_items oi"
-                 " JOIN orders o ON o.order_id = oi.order_id"
-                 " JOIN products p ON p.product_id = oi.product_id"
-                 " JOIN categories c ON c.category_id = p.category_id"
-                 " LEFT JOIN returns r ON r.order_id = oi.order_id"
-                 "                    AND r.product_id = oi.product_id"
-                 " WHERE o.status = 'shipped' GROUP BY c.category_id",
-        trap_sql="SELECT c.name, SUM(oi.quantity), SUM(r.quantity)"
-                 " FROM order_items oi"
-                 " JOIN orders o ON o.order_id = oi.order_id"
-                 " JOIN products p ON p.product_id = oi.product_id"
-                 " JOIN categories c ON c.category_id = p.category_id"
-                 " JOIN returns r ON r.order_id = oi.order_id"
-                 "               AND r.product_id = oi.product_id"
-                 " WHERE o.status = 'shipped' GROUP BY c.category_id",
-        note="An inner join to returns throws away every line that was never returned, so "
-             "units_sold collapses to 'units sold that later came back'. The join type "
-             "decides the population you are summing over.",
-    ),
-
-    # ================================================================= C7 NULLs
-    dict(
-        id=5, ledger="Q076", concept="C7", tier="NULLs",
-        title="Delivered or still in transit",
-        prompt="Every shipment, showing its delivery date, or the text 'in transit' where "
-               "it has not arrived yet.\n\nReturn: shipment_id, order_id, delivery_status",
-        solution="SELECT shipment_id, order_id, COALESCE(delivered_at, 'in transit')"
-                 " FROM shipments",
-        trap_sql="SELECT shipment_id, order_id,"
-                 " CASE WHEN delivered_at = NULL THEN 'in transit' ELSE delivered_at END"
-                 " FROM shipments",
-        note="Nothing equals NULL -- not even NULL. `delivered_at = NULL` is never true, "
-             "so the CASE falls through to ELSE and hands back the NULL you were trying "
-             "to replace. Use IS NULL, or COALESCE.",
     ),
     dict(
-        id=6, ledger="Q077", concept="C7", tier="NULLs",
-        title="Average days in transit",
-        prompt="For each carrier, the average number of days from shipped_at to "
-               "delivered_at. Shipments still in transit have no transit time yet and "
-               "must not count towards the average.\n\n"
-               "Return: carrier, avg_transit_days",
-        solution="SELECT carrier, AVG(julianday(delivered_at) - julianday(shipped_at))"
-                 " FROM shipments WHERE delivered_at IS NOT NULL GROUP BY carrier",
-        trap_sql="SELECT carrier,"
-                 " SUM(julianday(delivered_at) - julianday(shipped_at)) / COUNT(*)"
-                 " FROM shipments GROUP BY carrier",
-        note="AVG divides by the number of NON-NULL values; dividing by COUNT(*) divides "
-             "by every row including the ones still in transit, dragging the average down.",
+        id=2, ledger="Q103", concept="C2", tier="Grain",
+        title="Labour's share of the bill",
+        prompt=(
+            "For closed work orders that have both parts and labour: labour"
+            " cost as a percentage of the whole job cost.\n\n"
+            "Whole job cost is parts plus labour. Work each side out"
+            " separately -- one row per work order each -- then divide.\n\n"
+            "The answer is between 0 and 100 for every job.\n\n"
+            "Return: work_order_id, labor_pct_of_total"
+        ),
+        solution=(
+            "WITH p AS (SELECT work_order_id,"
+            " SUM(quantity * unit_price * (1 - discount)) AS pc"
+            " FROM parts_used GROUP BY work_order_id),"
+            " l AS (SELECT work_order_id, SUM(hours * rate) AS lc"
+            " FROM labor_entries GROUP BY work_order_id)"
+            " SELECT w.work_order_id, 100.0 * l.lc / (p.pc + l.lc)"
+            " FROM work_orders w JOIN p USING(work_order_id)"
+            " JOIN l USING(work_order_id) WHERE w.status = 'closed'"
+        ),
+        trap_sql=(
+            "WITH p AS (SELECT work_order_id,"
+            " SUM(quantity * unit_price * (1 - discount)) AS pc"
+            " FROM parts_used GROUP BY work_order_id),"
+            " l AS (SELECT work_order_id, SUM(hours * rate) AS lc"
+            " FROM labor_entries GROUP BY work_order_id)"
+            " SELECT w.work_order_id, 100.0 * l.lc / p.pc"
+            " FROM work_orders w JOIN p USING(work_order_id)"
+            " JOIN l USING(work_order_id) WHERE w.status = 'closed'"
+        ),
+        note="'A as a share of the total' puts the TOTAL on the bottom, not the"
+             " other half. Dividing labour by parts answers a different"
+             " question and can exceed 100, which is the tell.",
+        claims=[
+            ("every share lies between 0 and 100",
+             lambda rows, c: all(0 <= r[1] <= 100 for r in rows)),
+        ],
     ),
     dict(
-        id=7, ledger="Q078", concept="C7", tier="NULLs",
-        title="Value of counted stock",
-        prompt="For each warehouse, the value of the stock that has actually been "
-               "physically counted: quantity_on_hand x unit_cost, over inventory lines "
-               "with a last_counted_at date. Lines never counted are excluded.\n\n"
-               "Return: warehouse name, counted_value",
-        solution="SELECT w.name, SUM(i.quantity_on_hand * p.unit_cost)"
-                 " FROM inventory i"
-                 " JOIN warehouses w ON w.warehouse_id = i.warehouse_id"
-                 " JOIN products p ON p.product_id = i.product_id"
-                 " WHERE i.last_counted_at IS NOT NULL GROUP BY w.warehouse_id",
-        trap_sql="SELECT w.name, SUM(i.quantity_on_hand * p.unit_cost)"
-                 " FROM inventory i"
-                 " JOIN warehouses w ON w.warehouse_id = i.warehouse_id"
-                 " JOIN products p ON p.product_id = i.product_id"
-                 " GROUP BY w.warehouse_id",
-        note="'Never counted' is a real state, not a zero. Dropping the IS NOT NULL "
-             "filter quietly reports uncounted stock as if it had been verified.",
+        id=3, ledger="Q104", concept="C2", tier="Grain",
+        title="Parts count and hours together",
+        prompt=(
+            "For every work order that has both parts and labour: how many"
+            " distinct parts were fitted, and how many hours were worked in"
+            " total.\n\n"
+            "A part fitted in quantity 6 still counts as one part.\n\n"
+            "Return: work_order_id, part_lines, total_hours"
+        ),
+        solution=(
+            "WITH p AS (SELECT work_order_id, COUNT(*) AS n"
+            " FROM parts_used GROUP BY work_order_id),"
+            " l AS (SELECT work_order_id, SUM(hours) AS h"
+            " FROM labor_entries GROUP BY work_order_id)"
+            " SELECT work_order_id, p.n, l.h FROM p JOIN l USING(work_order_id)"
+        ),
+        trap_sql=(
+            "SELECT w.work_order_id, COUNT(*), SUM(le.hours)"
+            " FROM work_orders w"
+            " JOIN parts_used pu ON pu.work_order_id = w.work_order_id"
+            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
+            " GROUP BY w.work_order_id"
+        ),
+        note="COUNT(*) after a fan-out counts the multiplied rows, not the"
+             " parts. Both columns are wrong for the same reason, in different"
+             " ways -- one is inflated by the visits, the other by the parts.",
     ),
     dict(
-        id=8, ledger="Q079", concept="C7", tier="NULLs",
-        title="Quantities matching no reorder level",
-        prompt="Inventory lines whose quantity_on_hand does not equal the reorder_level "
-               "of ANY line in the table. reorder_level is NULL where no policy has been "
-               "agreed -- an unknown is not a value, so it must not knock out rows.\n\n"
-               "Return: warehouse_id, product_id, quantity_on_hand",
-        solution="SELECT i.warehouse_id, i.product_id, i.quantity_on_hand FROM inventory i"
-                 " WHERE NOT EXISTS (SELECT 1 FROM inventory x"
-                 "                   WHERE x.reorder_level = i.quantity_on_hand)",
-        trap_sql="SELECT i.warehouse_id, i.product_id, i.quantity_on_hand FROM inventory i"
-                 " WHERE i.quantity_on_hand NOT IN (SELECT reorder_level FROM inventory)",
-        note="NOT IN against a set containing a NULL is never true, so it returns zero "
-             "rows -- silently, with no error. NOT EXISTS is the safe form for anti-joins.",
-    ),
-
-    # ==================================================== C1 aggregates in WHERE
-    dict(
-        id=9, ledger="Q080", concept="C1", tier="Aggregates in WHERE",
-        title="Pricey shipments for their carrier",
-        prompt="Shipments whose freight_cost is above the average freight_cost for THAT "
-               "SHIPMENT'S OWN carrier.\n\n"
-               "Return: shipment_id, carrier, freight_cost",
-        solution="SELECT s.shipment_id, s.carrier, s.freight_cost FROM shipments s"
-                 " WHERE s.freight_cost > (SELECT AVG(x.freight_cost) FROM shipments x"
-                 "                         WHERE x.carrier = s.carrier)",
-        trap_sql="SELECT s.shipment_id, s.carrier, s.freight_cost FROM shipments s"
-                 " WHERE s.freight_cost > (SELECT AVG(freight_cost) FROM shipments)",
-        note="The comparison has to be correlated to each row's own carrier. A plain "
-             "scalar subquery compares everything to one global average instead.",
-    ),
-    dict(
-        id=10, ledger="Q081", concept="C1", tier="Aggregates in WHERE",
-        title="Busier than the average warehouse",
-        prompt="Warehouses that have dispatched more shipments than the average number "
-               "of shipments per warehouse.\n\n"
-               "Return: warehouse name, shipment_count",
-        solution="SELECT w.name, COUNT(*) FROM shipments s"
-                 " JOIN warehouses w ON w.warehouse_id = s.warehouse_id"
-                 " GROUP BY s.warehouse_id"
-                 " HAVING COUNT(*) > (SELECT AVG(n) FROM"
-                 "   (SELECT COUNT(*) AS n FROM shipments GROUP BY warehouse_id))",
-        trap_sql="SELECT w.name, COUNT(*) FROM shipments s"
-                 " JOIN warehouses w ON w.warehouse_id = s.warehouse_id"
-                 " GROUP BY s.warehouse_id"
-                 " HAVING COUNT(*) > (SELECT AVG(freight_cost) FROM shipments)",
-        note="'More than the average per group' needs two passes: count per warehouse, "
-             "then average those counts. Comparing a count against the average of some "
-             "other column runs clean and means nothing.",
+        id=4, ledger="Q105", concept="C2", tier="Grain",
+        title="Hours, and who signed the job off",
+        prompt=(
+            "For each work order that has labour logged and an assigned"
+            " technician: the total hours worked on it, and the name of the"
+            " technician the job is assigned to.\n\n"
+            "The assignment lives on the work order. Several technicians may"
+            " have logged visits against the same job, so the assigned one is"
+            " not simply whoever appears in labor_entries.\n\n"
+            "Return: work_order_id, technician_name, total_hours"
+        ),
+        solution=(
+            "WITH h AS (SELECT work_order_id, SUM(hours) AS total"
+            " FROM labor_entries GROUP BY work_order_id)"
+            " SELECT w.work_order_id, t.name, h.total"
+            " FROM work_orders w JOIN h USING(work_order_id)"
+            " JOIN technicians t ON t.technician_id = w.technician_id"
+        ),
+        trap_sql=(
+            "SELECT w.work_order_id, t.name, SUM(le.hours)"
+            " FROM work_orders w"
+            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
+            " JOIN technicians t ON t.technician_id = le.technician_id"
+            " WHERE w.technician_id IS NOT NULL"
+            " GROUP BY w.work_order_id"
+        ),
+        note="Joining technicians through labor_entries picks whoever logged a"
+             " visit, then GROUP BY silently keeps one arbitrary name. The"
+             " assignment is a column on work_orders -- join to it directly.",
     ),
     dict(
-        id=11, ledger="Q082", concept="C1", tier="Aggregates in WHERE",
-        title="Categories with above-average margin",
-        prompt="Categories whose AVERAGE unit margin (unit_price - unit_cost) is above "
-               "the average unit margin across all products.\n\n"
-               "Return: category name, avg_margin",
-        solution="SELECT c.name, AVG(p.unit_price - p.unit_cost) FROM products p"
-                 " JOIN categories c ON c.category_id = p.category_id"
-                 " GROUP BY c.category_id"
-                 " HAVING AVG(p.unit_price - p.unit_cost) >"
-                 "   (SELECT AVG(unit_price - unit_cost) FROM products)",
-        trap_sql="SELECT c.name, AVG(p.unit_price - p.unit_cost) FROM products p"
-                 " JOIN categories c ON c.category_id = p.category_id"
-                 " WHERE (p.unit_price - p.unit_cost) >"
-                 "   (SELECT AVG(unit_price - unit_cost) FROM products)"
-                 " GROUP BY c.category_id",
-        note="WHERE filters rows BEFORE grouping, so you end up averaging only the "
-             "already-above-average products -- a different question, and every category "
-             "with one good product passes. The group-level test belongs in HAVING.",
-    ),
-
-    # =============================================== C3 PARTITION BY vs GROUP BY
-    dict(
-        id=12, ledger="Q083", concept="C3", tier="Window vs GROUP BY",
-        title="Shipment beside its order's freight",
-        prompt="Every shipment, one row each, with its own freight cost and the total "
-               "freight of the order it belongs to.\n\n"
-               "Return: shipment_id, order_id, freight_cost, order_freight",
-        solution="SELECT shipment_id, order_id, freight_cost,"
-                 " SUM(freight_cost) OVER (PARTITION BY order_id) FROM shipments",
-        trap_sql="SELECT shipment_id, order_id, freight_cost, SUM(freight_cost)"
-                 " FROM shipments GROUP BY order_id",
-        note="GROUP BY collapses the 44 split orders down to one row each and loses the "
-             "individual shipments. PARTITION BY keeps every row and scopes the total.",
+        id=5, ledger="Q106", concept="C2", tier="Grain",
+        title="The missing SUM",
+        prompt=(
+            "Total parts cost for every work order that used any parts, and the"
+            " number of separate part lines on it.\n\n"
+            "Parts cost is quantity * unit_price * (1 - discount).\n\n"
+            "Jobs using a single part are the ones to check your answer"
+            " against: if a multi-part job reports the same figure as a"
+            " one-part job of similar size, something is not being added up.\n\n"
+            "Return: work_order_id, part_lines, parts_cost"
+        ),
+        solution=(
+            "SELECT work_order_id, COUNT(*),"
+            " SUM(quantity * unit_price * (1 - discount))"
+            " FROM parts_used GROUP BY work_order_id"
+        ),
+        trap_sql=(
+            "SELECT work_order_id, COUNT(*),"
+            " quantity * unit_price * (1 - discount)"
+            " FROM parts_used GROUP BY work_order_id"
+        ),
+        note="A bare expression under GROUP BY is not an error in SQLite -- it"
+             " silently returns one arbitrary row's value. Most engines reject"
+             " it. Every non-grouped column in the SELECT needs an aggregate.",
     ),
     dict(
-        id=13, ledger="Q084", concept="C3", tier="Window vs GROUP BY",
-        title="Share of a product's stock",
-        prompt="For every inventory line: the quantity on hand and what fraction of that "
-               "PRODUCT'S total stock across all warehouses it represents (0 to 1).\n\n"
-               "Return: warehouse_id, product_id, quantity_on_hand, share_of_product",
-        solution="SELECT warehouse_id, product_id, quantity_on_hand,"
-                 " quantity_on_hand * 1.0 / SUM(quantity_on_hand)"
-                 "   OVER (PARTITION BY product_id) FROM inventory",
-        trap_sql="SELECT warehouse_id, product_id, quantity_on_hand,"
-                 " quantity_on_hand * 1.0 / SUM(quantity_on_hand)"
-                 "   OVER (PARTITION BY warehouse_id) FROM inventory",
-        claims=[("every share lies between 0 and 1",
-                 lambda rows, c: all(0 <= r[3] <= 1 for r in rows)),
-                ("each product's shares sum to 1",
-                 lambda rows, c: abs(sum(r[3] for r in rows if r[1] == rows[0][1]) - 1) < 1e-9)],
-        note="Partition by the thing the share is OF. Partitioning by warehouse gives "
-             "each line's share of its warehouse, which is a different question with "
-             "equally plausible-looking numbers.",
+        id=6, ledger="Q107", concept="C2", tier="Grain",
+        title="Do not go back to the well",
+        prompt=(
+            "Closed work orders whose labour cost is more than 400, showing"
+            " when the job was opened and how many visits it took.\n\n"
+            "Labour cost is hours * rate summed over the visits.\n\n"
+            "Return: work_order_id, opened_at, visits, labor_cost"
+        ),
+        solution=(
+            "WITH l AS (SELECT work_order_id, COUNT(*) AS visits,"
+            " SUM(hours * rate) AS lc FROM labor_entries GROUP BY work_order_id)"
+            " SELECT w.work_order_id, w.opened_at, l.visits, l.lc"
+            " FROM work_orders w JOIN l USING(work_order_id)"
+            " WHERE w.status = 'closed' AND l.lc > 400"
+        ),
+        trap_sql=(
+            "WITH l AS (SELECT work_order_id, COUNT(*) AS visits,"
+            " SUM(hours * rate) AS lc FROM labor_entries GROUP BY work_order_id)"
+            " SELECT w.work_order_id, w.opened_at, l.visits, l.lc"
+            " FROM work_orders w JOIN l USING(work_order_id)"
+            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
+            " WHERE w.status = 'closed' AND l.lc > 400"
+        ),
+        note="Once a CTE has collapsed a table to one row per job, joining that"
+             " same table again re-expands it. The CTE already holds everything"
+             " you need from it.",
     ),
     dict(
-        id=14, ledger="Q085", concept="C3", tier="Window vs GROUP BY",
-        title="First shipment of each order",
-        prompt="For each order that has shipments, the details of its EARLIEST shipment "
-               "by shipped_at, breaking ties by the lower shipment_id.\n\n"
-               "Return: order_id, shipment_id, shipped_at, carrier",
-        solution="WITH ranked AS (SELECT order_id, shipment_id, shipped_at, carrier,"
-                 "  ROW_NUMBER() OVER (PARTITION BY order_id"
-                 "                     ORDER BY shipped_at, shipment_id) AS rn"
-                 "  FROM shipments)"
-                 " SELECT order_id, shipment_id, shipped_at, carrier"
-                 " FROM ranked WHERE rn = 1",
-        trap_sql="SELECT order_id, MIN(shipment_id), shipped_at, carrier"
-                 " FROM shipments GROUP BY order_id",
-        note="MIN() on one column does not drag the rest of its row along. The lowest "
-             "shipment_id is not necessarily the earliest shipment, and shipped_at and "
-             "carrier come from whichever row the engine happened to hold. Rank, then "
-             "filter -- that is what ROW_NUMBER is for.",
-    ),
-
-    # ================================================================= C5 COUNT
-    dict(
-        id=15, ledger="Q086", concept="C5", tier="COUNT",
-        title="Warehouses stocking each product",
-        prompt="Every product with the number of warehouses that stock it. The three "
-               "stocked nowhere must appear with 0.\n\n"
-               "Return: product_id, warehouse_count",
-        solution="SELECT p.product_id, COUNT(i.warehouse_id) FROM products p"
-                 " LEFT JOIN inventory i ON i.product_id = p.product_id"
-                 " GROUP BY p.product_id",
-        trap_sql="SELECT p.product_id, COUNT(*) FROM products p"
-                 " LEFT JOIN inventory i ON i.product_id = p.product_id"
-                 " GROUP BY p.product_id",
-        claims=[("exactly 3 products are stocked nowhere and show 0",
-                 lambda rows, c: sum(1 for r in rows if r[1] == 0) == 3)],
-        note="The outer join manufactures one all-NULL row for a product stocked nowhere, "
-             "and COUNT(*) counts it -- reporting 1 warehouse where there are none.",
+        id=7, ledger="Q108", concept="C2", tier="Grain",
+        title="Three children, one job",
+        prompt=(
+            "Closed work orders that have parts, labour AND at least one"
+            " inspection: the parts cost, the total hours, and how many"
+            " inspections the job received.\n\n"
+            "Return: work_order_id, parts_cost, total_hours, inspections"
+        ),
+        solution=(
+            "WITH p AS (SELECT work_order_id,"
+            " SUM(quantity * unit_price * (1 - discount)) AS pc"
+            " FROM parts_used GROUP BY work_order_id),"
+            " l AS (SELECT work_order_id, SUM(hours) AS h"
+            " FROM labor_entries GROUP BY work_order_id),"
+            " i AS (SELECT work_order_id, COUNT(*) AS n"
+            " FROM inspections GROUP BY work_order_id)"
+            " SELECT w.work_order_id, p.pc, l.h, i.n FROM work_orders w"
+            " JOIN p USING(work_order_id) JOIN l USING(work_order_id)"
+            " JOIN i USING(work_order_id) WHERE w.status = 'closed'"
+        ),
+        trap_sql=(
+            "SELECT w.work_order_id,"
+            " SUM(pu.quantity * pu.unit_price * (1 - pu.discount)),"
+            " SUM(le.hours), COUNT(DISTINCT i.inspection_id)"
+            " FROM work_orders w"
+            " JOIN parts_used pu ON pu.work_order_id = w.work_order_id"
+            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
+            " JOIN inspections i ON i.work_order_id = w.work_order_id"
+            " WHERE w.status = 'closed' GROUP BY w.work_order_id"
+        ),
+        note="Three children multiply three ways. COUNT(DISTINCT ...) rescues"
+             " the count column but does nothing for the two SUMs -- there is"
+             " no DISTINCT that can un-multiply a sum of money or hours.",
     ),
     dict(
-        id=16, ledger="Q087", concept="C5", tier="COUNT",
-        title="Dispatched versus delivered",
-        prompt="For each carrier: how many shipments it has been given, and how many of "
-               "those have actually been delivered.\n\n"
-               "Return: carrier, dispatched, delivered",
-        solution="SELECT carrier, COUNT(*), COUNT(delivered_at) FROM shipments"
-                 " GROUP BY carrier",
-        trap_sql="SELECT carrier, COUNT(*), COUNT(shipment_id) FROM shipments"
-                 " GROUP BY carrier",
-        note="COUNT(expr) counts rows where expr is NOT NULL. Counting a NOT NULL column "
-             "like shipment_id just re-counts the rows -- the column has to be the "
-             "nullable one that encodes the thing you are asking about.",
+        id=8, ledger="Q109", concept="C2", tier="Grain",
+        title="Contracts and callouts",
+        prompt=(
+            "For each customer that has at least one contract and at least one"
+            " work order: their total monthly contract fee, and how many work"
+            " orders have been raised across all their sites.\n\n"
+            "Contracts hang off the customer. Work orders hang off the"
+            " customer's sites and machines. They are separate branches.\n\n"
+            "Return: customer_id, name, monthly_fee_total, work_orders"
+        ),
+        solution=(
+            "WITH k AS (SELECT customer_id, SUM(monthly_fee) AS fee"
+            " FROM contracts GROUP BY customer_id),"
+            " w AS (SELECT s.customer_id, COUNT(*) AS n FROM sites s"
+            " JOIN machines m ON m.site_id = s.site_id"
+            " JOIN work_orders o ON o.machine_id = m.machine_id"
+            " GROUP BY s.customer_id)"
+            " SELECT c.customer_id, c.name, k.fee, w.n FROM customers c"
+            " JOIN k ON k.customer_id = c.customer_id"
+            " JOIN w ON w.customer_id = c.customer_id"
+        ),
+        trap_sql=(
+            "SELECT c.customer_id, c.name, SUM(k.monthly_fee), COUNT(*)"
+            " FROM customers c"
+            " JOIN contracts k ON k.customer_id = c.customer_id"
+            " JOIN sites s ON s.customer_id = c.customer_id"
+            " JOIN machines m ON m.site_id = s.site_id"
+            " JOIN work_orders o ON o.machine_id = m.machine_id"
+            " GROUP BY c.customer_id"
+        ),
+        note="The fan-out is not only about parts and labour. Any two"
+             " independent branches off the same parent do it -- here contracts"
+             " and the whole sites-machines-work_orders chain.",
     ),
     dict(
-        id=17, ledger="Q088", concept="C5", tier="COUNT",
-        title="Warehouse activity",
-        prompt="For each warehouse: the number of shipments dispatched, the number of "
-               "DISTINCT orders they belonged to, and the number of DISTINCT carriers "
-               "used.\n\nReturn: warehouse name, shipments, distinct_orders, distinct_carriers",
-        solution="SELECT w.name, COUNT(*), COUNT(DISTINCT s.order_id),"
-                 " COUNT(DISTINCT s.carrier)"
-                 " FROM shipments s JOIN warehouses w ON w.warehouse_id = s.warehouse_id"
-                 " GROUP BY s.warehouse_id",
-        trap_sql="SELECT w.name, COUNT(*), COUNT(s.order_id), COUNT(s.carrier)"
-                 " FROM shipments s JOIN warehouses w ON w.warehouse_id = s.warehouse_id"
-                 " GROUP BY s.warehouse_id",
-        note="Without DISTINCT you are counting rows, not things. An order split into two "
-             "shipments from the same warehouse would be counted twice.",
-    ),
-
-    # ====================================================== C6 alias vs formula
-    dict(
-        id=18, ledger="Q089", concept="C6", tier="Alias vs formula",
-        title="Margin percentage",
-        prompt="For each product: its price, its cost, the margin in dollars, and the "
-               "margin as a percentage OF THE PRICE (0 to 100).\n\n"
-               "Return: name, unit_price, unit_cost, margin, margin_pct",
-        solution="SELECT name, unit_price, unit_cost, unit_price - unit_cost,"
-                 " 100.0 * (unit_price - unit_cost) / unit_price FROM products",
-        trap_sql="SELECT name, unit_price, unit_cost, unit_price - unit_cost,"
-                 " 100.0 * (unit_price - unit_cost) / unit_cost FROM products",
-        claims=[("margin percentage stays within 0 to 100",
-                 lambda rows, c: all(0 <= r[4] <= 100 for r in rows))],
-        note="Dividing by cost gives MARKUP, not margin -- it can exceed 100%, which "
-             "margin never can. Read the alias and ask what the denominator should be.",
-    ),
-    dict(
-        id=19, ledger="Q090", concept="C6", tier="Alias vs formula",
-        title="Freight as a share of revenue",
-        prompt="For every shipped order that has at least one shipment: what freight "
-               "cost, as a percentage of what the order sold for.\n\n"
-               "Revenue is the sum over the order's LINES; freight is the sum over its "
-               "SHIPMENTS. Work each out separately -- one row per order each -- then "
-               "divide freight by revenue.\n\n"
-               "Values can exceed 100%: on a cheap order, shipping can cost more than "
-               "the goods. The highest here is 549%.\n\n"
-               "Return: order_id, freight_pct_of_revenue",
-        solution="WITH rev AS (SELECT oi.order_id,"
-                 "   SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS r"
-                 "   FROM order_items oi JOIN orders o ON o.order_id = oi.order_id"
-                 "   WHERE o.status = 'shipped' GROUP BY oi.order_id),"
-                 " frt AS (SELECT order_id, SUM(freight_cost) AS f"
-                 "   FROM shipments GROUP BY order_id)"
-                 " SELECT rev.order_id, 100.0 * frt.f / rev.r"
-                 " FROM rev JOIN frt USING(order_id)",
-        trap_sql="WITH rev AS (SELECT oi.order_id,"
-                 "   SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS r"
-                 "   FROM order_items oi JOIN orders o ON o.order_id = oi.order_id"
-                 "   WHERE o.status = 'shipped' GROUP BY oi.order_id),"
-                 " frt AS (SELECT order_id, SUM(freight_cost) AS f"
-                 "   FROM shipments GROUP BY order_id)"
-                 " SELECT rev.order_id, 100.0 * rev.r / frt.f"
-                 " FROM rev JOIN frt USING(order_id)",
-        claims=[("some orders exceed 100%, as the prompt warns",
-                 lambda rows, c: max(r[1] for r in rows) > 100),
-                ("the stated maximum of 549% is accurate",
-                 lambda rows, c: 549 <= max(r[1] for r in rows) < 550)],
-        note="'A as a share of B' puts B on the bottom. Inverting it produces numbers in "
-             "the hundreds that still look like a plausible percentage at a glance.",
+        id=9, ledger="Q110", concept="C2", tier="Grain",
+        title="Counting down a chain",
+        prompt=(
+            "For each customer: how many sites they have, how many machines"
+            " across those sites, and how many work orders across those"
+            " machines.\n\n"
+            "Every customer has at least one site, so all of them appear. Two"
+            " customers have never had a work order raised and must show 0.\n\n"
+            "Return: customer_id, sites, machines, work_orders"
+        ),
+        solution=(
+            "SELECT c.customer_id, COUNT(DISTINCT s.site_id),"
+            " COUNT(DISTINCT m.machine_id), COUNT(DISTINCT o.work_order_id)"
+            " FROM customers c JOIN sites s ON s.customer_id = c.customer_id"
+            " LEFT JOIN machines m ON m.site_id = s.site_id"
+            " LEFT JOIN work_orders o ON o.machine_id = m.machine_id"
+            " GROUP BY c.customer_id"
+        ),
+        trap_sql=(
+            "SELECT c.customer_id, COUNT(s.site_id), COUNT(m.machine_id),"
+            " COUNT(o.work_order_id)"
+            " FROM customers c JOIN sites s ON s.customer_id = c.customer_id"
+            " LEFT JOIN machines m ON m.site_id = s.site_id"
+            " LEFT JOIN work_orders o ON o.machine_id = m.machine_id"
+            " GROUP BY c.customer_id"
+        ),
+        note="Going down a one-to-many chain, each level multiplies the ones"
+             " above it. Only COUNT(DISTINCT ...) survives that. Plain COUNT"
+             " reports the row count of the widest level every time.",
+        claims=[
+            ("exactly 2 customers show 0 work orders",
+             lambda rows, c: sum(1 for r in rows if r[3] == 0) == 2),
+            ("every customer has at least one site",
+             lambda rows, c: all(r[1] >= 1 for r in rows)),
+        ],
     ),
     dict(
-        id=20, ledger="Q091", concept="C6", tier="Alias vs formula",
-        title="Return rate by product",
-        prompt="For products that have had at least one return: units sold on shipped "
-               "orders, units returned, and the return rate as a percentage OF UNITS "
-               "SOLD (0 to 100).\n\n"
-               "Return: product_id, units_sold, units_returned, return_rate_pct",
-        solution="WITH sold AS (SELECT oi.product_id, SUM(oi.quantity) AS s"
-                 "   FROM order_items oi JOIN orders o ON o.order_id = oi.order_id"
-                 "   WHERE o.status = 'shipped' GROUP BY oi.product_id),"
-                 " back AS (SELECT product_id, SUM(quantity) AS b"
-                 "   FROM returns GROUP BY product_id)"
-                 " SELECT sold.product_id, sold.s, back.b, 100.0 * back.b / sold.s"
-                 " FROM sold JOIN back USING(product_id)",
-        trap_sql="WITH sold AS (SELECT oi.product_id, SUM(oi.quantity) AS s"
-                 "   FROM order_items oi JOIN orders o ON o.order_id = oi.order_id"
-                 "   WHERE o.status = 'shipped' GROUP BY oi.product_id),"
-                 " back AS (SELECT product_id, SUM(quantity) AS b"
-                 "   FROM returns GROUP BY product_id)"
-                 " SELECT sold.product_id, sold.s, back.b,"
-                 " 100.0 * back.b / (sold.s - back.b)"
-                 " FROM sold JOIN back USING(product_id)",
-        claims=[("return rate stays within 0 to 100",
-                 lambda rows, c: all(0 <= r[3] <= 100 for r in rows))],
-        note="Returned over kept is a ratio; returned over sold is the rate. They agree "
-             "when returns are rare, which is exactly why the mistake survives review.",
-    ),
-
-    # ====================================================== C9 integer division
-    dict(
-        id=21, ledger="Q092", concept="C9", tier="Integer division",
-        title="Delivery rate by carrier",
-        prompt="For each carrier, the percentage of its shipments that have been "
-               "delivered, 0 to 100.\n\nReturn: carrier, pct_delivered",
-        solution="SELECT carrier, 100.0 * COUNT(delivered_at) / COUNT(*)"
-                 " FROM shipments GROUP BY carrier",
-        trap_sql="SELECT carrier, 100 * COUNT(delivered_at) / COUNT(*)"
-                 " FROM shipments GROUP BY carrier",
-        claims=[("delivery rate stays within 0 to 100",
-                 lambda rows, c: all(0 <= r[1] <= 100 for r in rows))],
-        note="Two integer counts divide to an integer in SQLite, so every carrier lands "
-             "on a whole number and the fraction is gone before ROUND could see it. "
-             "100.0 forces the whole expression to a real.",
+        id=10, ledger="Q111", concept="C2", tier="Grain",
+        title="Stock on hand per part",
+        prompt=(
+            "For every part that is stocked somewhere: the total quantity on"
+            " hand across all depots, and how many depots carry it.\n\n"
+            "Three parts are stocked in no depot at all and are correctly"
+            " absent from the answer.\n\n"
+            "Return: part_id, depots_carrying, total_on_hand"
+        ),
+        solution=(
+            "SELECT part_id, COUNT(*), SUM(quantity_on_hand)"
+            " FROM part_stock GROUP BY part_id"
+        ),
+        trap_sql=(
+            "SELECT ps.part_id, COUNT(*), SUM(ps.quantity_on_hand)"
+            " FROM part_stock ps"
+            " JOIN parts_used pu ON pu.part_id = ps.part_id"
+            " GROUP BY ps.part_id"
+        ),
+        note="Nothing in the question needs parts_used, and joining it"
+             " multiplies every stock row by the number of times the part was"
+             " ever fitted. Join only what the answer actually requires.",
+        claims=[
+            ("37 parts are stocked somewhere",
+             lambda rows, c: len(rows) == 37),
+        ],
     ),
     dict(
-        id=22, ledger="Q093", concept="C9", tier="Integer division",
-        title="Capacity used",
-        prompt="For each warehouse: total units on hand, its capacity, and units on hand "
-               "as a percentage of capacity (0 to 100).\n\n"
-               "Return: warehouse name, units_on_hand, capacity_units, pct_of_capacity",
-        solution="SELECT w.name, SUM(i.quantity_on_hand), w.capacity_units,"
-                 " 100.0 * SUM(i.quantity_on_hand) / w.capacity_units"
-                 " FROM warehouses w JOIN inventory i ON i.warehouse_id = w.warehouse_id"
-                 " GROUP BY w.warehouse_id",
-        trap_sql="SELECT w.name, SUM(i.quantity_on_hand), w.capacity_units,"
-                 " 100 * SUM(i.quantity_on_hand) / w.capacity_units"
-                 " FROM warehouses w JOIN inventory i ON i.warehouse_id = w.warehouse_id"
-                 " GROUP BY w.warehouse_id",
-        claims=[("capacity used stays within 0 to 100",
-                 lambda rows, c: all(0 <= r[3] <= 100 for r in rows))],
-        note="Both quantity_on_hand and capacity_units are INTEGER, so the whole "
-             "expression stays integer and every warehouse reports 0% -- a number wrong "
-             "enough to notice, but only if you look.",
-    ),
-
-    # ============================================================= C4 CTE scope
-    dict(
-        id=23, ledger="Q094", concept="C4", tier="CTE scope",
-        title="Orders where freight bites",
-        prompt="Shipped orders where freight is more than 8% of revenue, showing the date "
-               "the order was placed. Build revenue and freight in CTEs first.\n\n"
-               "Return: order_id, order_date, revenue, freight",
-        solution="WITH rev AS (SELECT oi.order_id, o.order_date,"
-                 "   SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS r"
-                 "   FROM order_items oi JOIN orders o ON o.order_id = oi.order_id"
-                 "   WHERE o.status = 'shipped' GROUP BY oi.order_id),"
-                 " frt AS (SELECT order_id, SUM(freight_cost) AS f"
-                 "   FROM shipments GROUP BY order_id)"
-                 " SELECT rev.order_id, rev.order_date, rev.r, frt.f"
-                 " FROM rev JOIN frt USING(order_id) WHERE frt.f > 0.08 * rev.r",
-        trap_sql="WITH rev AS (SELECT oi.order_id,"
-                 "   SUM(oi.quantity * oi.unit_price * (1 - oi.discount)) AS r"
-                 "   FROM order_items oi JOIN orders o ON o.order_id = oi.order_id"
-                 "   WHERE o.status = 'shipped' GROUP BY oi.order_id),"
-                 " frt AS (SELECT order_id, SUM(freight_cost) AS f"
-                 "   FROM shipments GROUP BY order_id)"
-                 " SELECT rev.order_id, rev.order_date, rev.r, frt.f"
-                 " FROM rev JOIN frt USING(order_id) WHERE frt.f > 0.08 * rev.r",
-        note="The CTE is a wall: the outer query can see only the columns the CTE "
-             "selected, never the tables behind it. order_date has to be carried through "
-             "explicitly. List what the outer query needs before you write the CTE.",
-    ),
-
-    # =================================================================== general
-    dict(
-        id=24, ledger="Q095", concept="GEN", tier="General",
-        title="Large established warehouses",
-        prompt="Warehouses opened before 2020 with a capacity above 300000 units.\n\n"
-               "Return: name, city, capacity_units, opened_on",
-        solution="SELECT name, city, capacity_units, opened_on FROM warehouses"
-                 " WHERE opened_on < '2020-01-01' AND capacity_units > 300000",
-        trap_sql="SELECT name, city, capacity_units, opened_on FROM warehouses"
-                 " WHERE opened_on < '2020-01-01' OR capacity_units > 300000",
-        note="'A and B' is not 'A or B'. With only four rows the difference is easy to "
-             "eyeball -- on a real table it would not be.",
+        id=11, ledger="Q112", concept="C2", tier="Grain",
+        title="Invoice against actual cost",
+        prompt=(
+            "For every invoiced work order that has both parts and labour: the"
+            " invoice amount and the true cost of the job, and the difference"
+            " between them.\n\n"
+            "True cost is parts plus labour. Difference is invoice minus"
+            " true cost.\n\n"
+            "Return: work_order_id, invoice_amount, true_cost, difference"
+        ),
+        solution=(
+            "WITH p AS (SELECT work_order_id,"
+            " SUM(quantity * unit_price * (1 - discount)) AS pc"
+            " FROM parts_used GROUP BY work_order_id),"
+            " l AS (SELECT work_order_id, SUM(hours * rate) AS lc"
+            " FROM labor_entries GROUP BY work_order_id)"
+            " SELECT i.work_order_id, i.amount, p.pc + l.lc,"
+            " i.amount - (p.pc + l.lc) FROM invoices i"
+            " JOIN p USING(work_order_id) JOIN l USING(work_order_id)"
+        ),
+        trap_sql=(
+            "SELECT i.work_order_id, i.amount,"
+            " SUM(pu.quantity * pu.unit_price * (1 - pu.discount))"
+            " + SUM(le.hours * le.rate),"
+            " i.amount - (SUM(pu.quantity * pu.unit_price * (1 - pu.discount))"
+            " + SUM(le.hours * le.rate)) FROM invoices i"
+            " JOIN parts_used pu ON pu.work_order_id = i.work_order_id"
+            " JOIN labor_entries le ON le.work_order_id = i.work_order_id"
+            " GROUP BY i.work_order_id"
+        ),
+        note="A reconciliation that shows every job massively over-billed is"
+             " usually a fan-out, not fraud. The invoice side is one row per"
+             " job already; only the cost side needs collapsing.",
+        claims=[
+            ("the invoice matches the true cost on every job",
+             lambda rows, c: all(abs(r[3]) < 0.01 for r in rows)),
+        ],
     ),
     dict(
-        id=25, ledger="Q096", concept="GEN", tier="General",
-        title="Carriers by freight spend",
-        prompt="The 2 carriers we have spent the most with in TOTAL. Break ties by "
-               "carrier name, A-Z.\n\nReturn: carrier, total_freight, shipments",
-        solution="SELECT carrier, SUM(freight_cost), COUNT(*) FROM shipments"
-                 " GROUP BY carrier ORDER BY SUM(freight_cost) DESC, carrier ASC LIMIT 2",
-        trap_sql="SELECT carrier, SUM(freight_cost), COUNT(*) FROM shipments"
-                 " GROUP BY carrier ORDER BY AVG(freight_cost) DESC, carrier ASC LIMIT 2",
-        claims=[("exactly 2 carriers, as asked", lambda rows, c: len(rows) == 2)],
-        note="Biggest total spend is not highest cost per shipment. DPD averages more "
-             "per parcel than UPS but UPS carries more of them, so the two orderings "
-             "disagree. Sort by the measure the question actually names.",
+        id=12, ledger="Q113", concept="C2", tier="Grain",
+        title="Technician workload",
+        prompt=(
+            "For each technician who has logged any labour: the total hours"
+            " they logged, and how many distinct work orders they logged them"
+            " against.\n\n"
+            "A technician can log several visits to the same job.\n\n"
+            "Return: technician_id, name, total_hours, jobs_touched"
+        ),
+        solution=(
+            "SELECT t.technician_id, t.name, SUM(le.hours),"
+            " COUNT(DISTINCT le.work_order_id) FROM technicians t"
+            " JOIN labor_entries le ON le.technician_id = t.technician_id"
+            " GROUP BY t.technician_id"
+        ),
+        trap_sql=(
+            "SELECT t.technician_id, t.name, SUM(le.hours),"
+            " COUNT(le.work_order_id) FROM technicians t"
+            " JOIN labor_entries le ON le.technician_id = t.technician_id"
+            " GROUP BY t.technician_id"
+        ),
+        note="COUNT(col) counts rows where col is not null, which here is"
+             " visits, not jobs. Whenever the question says 'distinct' or"
+             " 'how many different', the word belongs inside the COUNT.",
     ),
     dict(
-        id=26, ledger="Q097", concept="GEN", tier="General",
-        title="Why things come back",
-        prompt="For each return reason: how many returns and the total refunded.\n\n"
-               "Return: reason, returns, total_refunded",
-        solution="SELECT reason, COUNT(*), SUM(refund_amount) FROM returns GROUP BY reason",
-        trap_sql="SELECT reason, COUNT(*), SUM(quantity) FROM returns GROUP BY reason",
-        note="Units and money are not interchangeable. Check you summed the column the "
-             "question named.",
+        id=13, ledger="Q114", concept="C2", tier="Grain",
+        title="Depot stock and staff",
+        prompt=(
+            "For each depot: how many technicians are based there, and the"
+            " total quantity of stock it holds across all part lines.\n\n"
+            "Technicians and stock lines are separate children of the depot.\n\n"
+            "Return: depot_id, name, technicians, total_stock"
+        ),
+        solution=(
+            "WITH t AS (SELECT depot_id, COUNT(*) AS n FROM technicians"
+            " GROUP BY depot_id),"
+            " s AS (SELECT depot_id, SUM(quantity_on_hand) AS q"
+            " FROM part_stock GROUP BY depot_id)"
+            " SELECT d.depot_id, d.name, t.n, s.q FROM depots d"
+            " JOIN t ON t.depot_id = d.depot_id"
+            " JOIN s ON s.depot_id = d.depot_id"
+        ),
+        trap_sql=(
+            "SELECT d.depot_id, d.name, COUNT(DISTINCT t.technician_id),"
+            " SUM(ps.quantity_on_hand) FROM depots d"
+            " JOIN technicians t ON t.depot_id = d.depot_id"
+            " JOIN part_stock ps ON ps.depot_id = d.depot_id"
+            " GROUP BY d.depot_id"
+        ),
+        note="COUNT(DISTINCT ...) fixed the headcount but the stock total is"
+             " still multiplied by the number of technicians. DISTINCT protects"
+             " counts, never sums.",
     ),
     dict(
-        id=27, ledger="Q098", concept="GEN", tier="General",
-        title="Loyalty programme uptake",
-        prompt="How many customers sit in each loyalty tier. Customers who never enrolled "
-               "have a NULL tier and must be reported under the label 'not enrolled'.\n\n"
-               "Return: tier, customers",
-        solution="SELECT COALESCE(loyalty_tier, 'not enrolled'), COUNT(*)"
-                 " FROM customers GROUP BY COALESCE(loyalty_tier, 'not enrolled')",
-        trap_sql="SELECT loyalty_tier, COUNT(*) FROM customers"
-                 " WHERE loyalty_tier IS NOT NULL GROUP BY loyalty_tier",
-        note="Filtering the NULLs out answers a narrower question than the one asked. "
-             "GROUP BY does keep NULL as its own group -- but it will be labelled NULL, "
-             "not 'not enrolled', so you still have to say what you want.",
+        id=14, ledger="Q115", concept="C2", tier="Grain",
+        title="Cost per hour on the job",
+        prompt=(
+            "For closed work orders with both parts and labour: the parts cost"
+            " per labour hour.\n\n"
+            "That is total parts cost divided by total hours -- each worked out"
+            " over the whole job, not line by line.\n\n"
+            "Return: work_order_id, parts_cost_per_hour"
+        ),
+        solution=(
+            "WITH p AS (SELECT work_order_id,"
+            " SUM(quantity * unit_price * (1 - discount)) AS pc"
+            " FROM parts_used GROUP BY work_order_id),"
+            " l AS (SELECT work_order_id, SUM(hours) AS h"
+            " FROM labor_entries GROUP BY work_order_id)"
+            " SELECT w.work_order_id, p.pc / l.h FROM work_orders w"
+            " JOIN p USING(work_order_id) JOIN l USING(work_order_id)"
+            " WHERE w.status = 'closed'"
+        ),
+        trap_sql=(
+            "SELECT w.work_order_id,"
+            " SUM(pu.quantity * pu.unit_price * (1 - pu.discount))"
+            " / SUM(le.hours) FROM work_orders w"
+            " JOIN parts_used pu ON pu.work_order_id = w.work_order_id"
+            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
+            " WHERE w.status = 'closed' GROUP BY w.work_order_id"
+        ),
+        note="Both halves of the ratio are inflated, but by different factors,"
+             " so the result is wrong rather than merely scaled. A ratio built"
+             " from two fanned-out sums cannot be rescued by dividing.",
     ),
     dict(
-        id=28, ledger="Q099", concept="GEN", tier="General",
-        title="Below the reorder line",
-        prompt="Inventory lines that have fallen to or below their reorder level. Lines "
-               "with no reorder policy cannot be below one.\n\n"
-               "Return: warehouse_id, product_id, quantity_on_hand, reorder_level",
-        solution="SELECT warehouse_id, product_id, quantity_on_hand, reorder_level"
-                 " FROM inventory"
-                 " WHERE reorder_level IS NOT NULL AND quantity_on_hand <= reorder_level",
-        trap_sql="SELECT warehouse_id, product_id, quantity_on_hand, reorder_level"
-                 " FROM inventory"
-                 " WHERE quantity_on_hand <= reorder_level OR reorder_level IS NULL",
-        note="A line with no reorder policy is not a line below its reorder point -- "
-             "there is nothing to be below. Sweeping the NULLs in turns 6 rows into 35 "
-             "and would put 29 healthy lines on a restock report.",
+        id=15, ledger="Q116", concept="C2", tier="Grain",
+        title="Busiest machines",
+        prompt=(
+            "The 5 machines with the most work orders raised against them,"
+            " showing the model and the owning customer.\n\n"
+            "Order by the work order count highest first, then by machine_id"
+            " ascending so ties are settled.\n\n"
+            "Return: machine_id, model, customer_name, work_orders"
+        ),
+        solution=(
+            "WITH w AS (SELECT machine_id, COUNT(*) AS n FROM work_orders"
+            " GROUP BY machine_id)"
+            " SELECT m.machine_id, m.model, c.name, w.n FROM w"
+            " JOIN machines m ON m.machine_id = w.machine_id"
+            " JOIN sites s ON s.site_id = m.site_id"
+            " JOIN customers c ON c.customer_id = s.customer_id"
+            " ORDER BY w.n DESC, m.machine_id ASC LIMIT 5"
+        ),
+        trap_sql=(
+            "SELECT m.machine_id, m.model, c.name, COUNT(*)"
+            " FROM machines m JOIN sites s ON s.site_id = m.site_id"
+            " JOIN customers c ON c.customer_id = s.customer_id"
+            " JOIN work_orders o ON o.machine_id = m.machine_id"
+            " JOIN labor_entries le ON le.work_order_id = o.work_order_id"
+            " GROUP BY m.machine_id ORDER BY COUNT(*) DESC, m.machine_id ASC"
+            " LIMIT 5"
+        ),
+        note="Dragging in labor_entries to 'get more detail' changes what is"
+             " being counted from jobs to visits, and reorders the top 5. Only"
+             " join a table when the answer needs a column from it.",
+    ),
+    # ------------------------------------------------------------- windows
+    dict(
+        id=16, ledger="Q117", concept="C3", tier="Window vs GROUP BY",
+        title="Each visit against the job total",
+        prompt=(
+            "Every labour entry on work order 2, showing the hours on that"
+            " visit and the total hours across the whole job on every row.\n\n"
+            "The total is the same value on all of the job's rows -- the"
+            " individual visits are not collapsed.\n\n"
+            "Return: entry_id, work_date, hours, job_total_hours"
+        ),
+        solution=(
+            "SELECT entry_id, work_date, hours,"
+            " SUM(hours) OVER (PARTITION BY work_order_id)"
+            " FROM labor_entries WHERE work_order_id = 2"
+        ),
+        trap_sql=(
+            "SELECT entry_id, work_date, hours,"
+            " SUM(hours) OVER (PARTITION BY work_order_id ORDER BY work_date)"
+            " FROM labor_entries WHERE work_order_id = 2"
+        ),
+        note="Adding ORDER BY inside OVER() changes the frame from the whole"
+             " partition to everything up to the current row, turning a"
+             " partition total into a running total. Leave it out when you"
+             " want the total.",
     ),
     dict(
-        id=29, ledger="Q100", concept="GEN", tier="General",
-        title="Split orders",
-        prompt="Orders that were shipped from more than one DISTINCT warehouse.\n\n"
-               "Return: order_id, warehouses_used",
-        solution="SELECT order_id, COUNT(DISTINCT warehouse_id) FROM shipments"
-                 " GROUP BY order_id HAVING COUNT(DISTINCT warehouse_id) > 1",
-        trap_sql="SELECT order_id, COUNT(DISTINCT warehouse_id) FROM shipments"
-                 " GROUP BY order_id HAVING COUNT(*) > 1",
-        note="Two shipments is not two warehouses -- an order can be split into two "
-             "parcels from the same site. Count the thing the question names.",
+        id=17, ledger="Q118", concept="C3", tier="Window vs GROUP BY",
+        title="First visit to each job",
+        prompt=(
+            "For every work order that has labour logged: the details of its"
+            " earliest visit.\n\n"
+            "Jobs can have two visits on the same date. Where that happens,"
+            " take the one with the lower entry_id, so exactly one row comes"
+            " back per work order.\n\n"
+            "Return: work_order_id, entry_id, work_date, hours"
+        ),
+        solution=(
+            "WITH r AS (SELECT work_order_id, entry_id, work_date, hours,"
+            " ROW_NUMBER() OVER (PARTITION BY work_order_id"
+            " ORDER BY work_date ASC, entry_id ASC) AS rn"
+            " FROM labor_entries)"
+            " SELECT work_order_id, entry_id, work_date, hours FROM r"
+            " WHERE rn = 1"
+        ),
+        trap_sql=(
+            "WITH r AS (SELECT work_order_id, entry_id, work_date, hours,"
+            " RANK() OVER (PARTITION BY work_order_id"
+            " ORDER BY work_date ASC) AS rn"
+            " FROM labor_entries)"
+            " SELECT work_order_id, entry_id, work_date, hours FROM r"
+            " WHERE rn = 1"
+        ),
+        note="RANK() gives tied rows the same number, so 'rank = 1' returns two"
+             " rows when two visits share a date. ROW_NUMBER() always breaks"
+             " the tie -- which is why its ORDER BY needs a tiebreak column.",
+        claims=[
+            ("one row per work order that has labour",
+             lambda rows, c: len(rows) == c.execute(
+                 "SELECT COUNT(DISTINCT work_order_id) FROM labor_entries"
+             ).fetchone()[0]),
+        ],
     ),
     dict(
-        id=30, ledger="Q101", concept="GEN", tier="General",
-        title="Longest outstanding deliveries",
-        prompt="The 5 shipments that have been in transit longest: no delivered_at, "
-               "oldest shipped_at first. Break ties by the lower shipment_id.\n\n"
-               "Return: shipment_id, order_id, carrier, shipped_at",
-        solution="SELECT shipment_id, order_id, carrier, shipped_at FROM shipments"
-                 " WHERE delivered_at IS NULL"
-                 " ORDER BY shipped_at ASC, shipment_id ASC LIMIT 5",
-        trap_sql="SELECT shipment_id, order_id, carrier, shipped_at FROM shipments"
-                 " WHERE delivered_at IS NULL"
-                 " ORDER BY shipped_at DESC, shipment_id ASC LIMIT 5",
-        claims=[("exactly 5 shipments, as asked", lambda rows, c: len(rows) == 5),
-                ("all of them are still in transit",
-                 lambda rows, c: all(c.execute(
-                     "select delivered_at is null from shipments where shipment_id=?",
-                     (r[0],)).fetchone()[0] for r in rows))],
-        note="Longest in transit means the OLDEST dispatch date, so ascending. Sorting "
-             "descending gives you the newest shipments, which are the least worrying.",
+        id=18, ledger="Q119", concept="C3", tier="Window vs GROUP BY",
+        title="Running spend per depot",
+        prompt=(
+            "Every stock line in depot 2, ordered by part_id, with a running"
+            " total of quantity on hand accumulating down that order.\n\n"
+            "The first row's running total equals its own quantity; the last"
+            " row's equals the depot's whole stock.\n\n"
+            "Return: part_id, quantity_on_hand, running_total"
+        ),
+        solution=(
+            "SELECT part_id, quantity_on_hand,"
+            " SUM(quantity_on_hand) OVER (ORDER BY part_id"
+            " ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"
+            " FROM part_stock WHERE depot_id = 2"
+        ),
+        trap_sql=(
+            "SELECT part_id, quantity_on_hand,"
+            " SUM(quantity_on_hand) OVER ()"
+            " FROM part_stock WHERE depot_id = 2"
+        ),
+        note="OVER() with no ORDER BY frames the whole partition, giving the"
+             " same grand total on every row. The running total needs the"
+             " ORDER BY -- the opposite of the previous question, which is"
+             " exactly why the two get confused.",
+    ),
+    # ------------------------------------------------------ aggregates/WHERE
+    dict(
+        id=19, ledger="Q120", concept="C1", tier="Aggregates in WHERE",
+        title="Jobs that ran long",
+        prompt=(
+            "Work orders that took more than 3 visits to close, with the visit"
+            " count and total hours.\n\n"
+            "Only closed jobs count.\n\n"
+            "Return: work_order_id, visits, total_hours"
+        ),
+        solution=(
+            "SELECT le.work_order_id, COUNT(*), SUM(le.hours)"
+            " FROM labor_entries le"
+            " JOIN work_orders w ON w.work_order_id = le.work_order_id"
+            " WHERE w.status = 'closed'"
+            " GROUP BY le.work_order_id HAVING COUNT(*) > 3"
+        ),
+        trap_sql=(
+            "SELECT le.work_order_id, COUNT(*), SUM(le.hours)"
+            " FROM labor_entries le"
+            " JOIN work_orders w ON w.work_order_id = le.work_order_id"
+            " WHERE w.status = 'closed'"
+            " GROUP BY le.work_order_id HAVING COUNT(*) >= 3"
+        ),
+        note="A condition on an aggregate belongs in HAVING, which runs after"
+             " grouping. WHERE runs before, on individual rows, where the"
+             " count does not exist yet.",
+    ),
+    dict(
+        id=20, ledger="Q121", concept="C1", tier="Aggregates in WHERE",
+        title="Customers worth chasing",
+        prompt=(
+            "Customers whose unpaid invoices -- anything not PAID -- come to"
+            " more than 3000 in total, with the amount outstanding and how many"
+            " invoices make it up.\n\n"
+            "An invoice belongs to a customer through its work order, machine"
+            " and site.\n\n"
+            "Return: customer_id, name, unpaid_invoices, amount_outstanding"
+        ),
+        solution=(
+            "SELECT c.customer_id, c.name, COUNT(*), SUM(i.amount)"
+            " FROM invoices i"
+            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
+            " JOIN machines m ON m.machine_id = w.machine_id"
+            " JOIN sites s ON s.site_id = m.site_id"
+            " JOIN customers c ON c.customer_id = s.customer_id"
+            " WHERE i.status <> 'PAID'"
+            " GROUP BY c.customer_id HAVING SUM(i.amount) > 3000"
+        ),
+        trap_sql=(
+            "SELECT c.customer_id, c.name, COUNT(*), SUM(i.amount)"
+            " FROM invoices i"
+            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
+            " JOIN machines m ON m.machine_id = w.machine_id"
+            " JOIN sites s ON s.site_id = m.site_id"
+            " JOIN customers c ON c.customer_id = s.customer_id"
+            " WHERE i.status <> 'PAID' AND i.amount > 3000"
+            " GROUP BY c.customer_id"
+        ),
+        note="'Total more than 3000' is a condition on the group. Filtering"
+             " individual invoices over 3000 in WHERE answers a different"
+             " question and quietly drops customers with many small debts.",
+    ),
+    # ------------------------------------------------------------ CTE scope
+    dict(
+        id=21, ledger="Q122", concept="C4", tier="CTE scope",
+        title="Carry it through the wall",
+        prompt=(
+            "Closed work orders whose parts cost is above 1200, showing the"
+            " machine's model and the priority the job was raised at.\n\n"
+            "Build the parts cost in a CTE first.\n\n"
+            "Return: work_order_id, model, priority, parts_cost"
+        ),
+        solution=(
+            "WITH p AS (SELECT pu.work_order_id, w.priority, w.machine_id,"
+            " SUM(pu.quantity * pu.unit_price * (1 - pu.discount)) AS pc"
+            " FROM parts_used pu"
+            " JOIN work_orders w ON w.work_order_id = pu.work_order_id"
+            " WHERE w.status = 'closed' GROUP BY pu.work_order_id)"
+            " SELECT p.work_order_id, m.model, p.priority, p.pc FROM p"
+            " JOIN machines m ON m.machine_id = p.machine_id WHERE p.pc > 1200"
+        ),
+        trap_sql=(
+            "WITH p AS (SELECT pu.work_order_id,"
+            " SUM(pu.quantity * pu.unit_price * (1 - pu.discount)) AS pc"
+            " FROM parts_used pu"
+            " JOIN work_orders w ON w.work_order_id = pu.work_order_id"
+            " WHERE w.status = 'closed' GROUP BY pu.work_order_id)"
+            " SELECT p.work_order_id, m.model, w.priority, p.pc FROM p"
+            " JOIN machines m ON m.machine_id = p.machine_id WHERE p.pc > 1200"
+        ),
+        note="The CTE is a wall: the outer query sees only the columns the CTE"
+             " selected, never the tables behind it. List what the outer query"
+             " needs before you write the CTE.",
+    ),
+    # --------------------------------------------------------------- COUNT
+    dict(
+        id=22, ledger="Q123", concept="C5", tier="COUNT",
+        title="Inspected, or not",
+        prompt=(
+            "Every closed work order, with how many inspections it received."
+            " Jobs never inspected must show 0, not vanish.\n\n"
+            "Return: work_order_id, inspections"
+        ),
+        solution=(
+            "SELECT w.work_order_id, COUNT(i.inspection_id)"
+            " FROM work_orders w"
+            " LEFT JOIN inspections i ON i.work_order_id = w.work_order_id"
+            " WHERE w.status = 'closed' GROUP BY w.work_order_id"
+        ),
+        trap_sql=(
+            "SELECT w.work_order_id, COUNT(*)"
+            " FROM work_orders w"
+            " LEFT JOIN inspections i ON i.work_order_id = w.work_order_id"
+            " WHERE w.status = 'closed' GROUP BY w.work_order_id"
+        ),
+        note="A LEFT JOIN that finds nothing still produces one row, with NULLs"
+             " in the right-hand columns. COUNT(*) counts that phantom row as"
+             " 1; COUNT(i.inspection_id) skips the NULL and gives 0.",
+        claims=[
+            ("23 closed jobs were never inspected and show 0",
+             lambda rows, c: sum(1 for r in rows if r[1] == 0) == 23),
+        ],
+    ),
+    dict(
+        id=23, ledger="Q124", concept="C5", tier="COUNT",
+        title="Scored and unscored",
+        prompt=(
+            "For each inspection result -- pass, fail, conditional -- how many"
+            " inspections were recorded, how many carried a numeric score, and"
+            " the average of those scores.\n\n"
+            "Some inspectors record a verdict without a score.\n\n"
+            "Return: result, inspections, with_score, avg_score"
+        ),
+        solution=(
+            "SELECT result, COUNT(*), COUNT(score), AVG(score)"
+            " FROM inspections GROUP BY result"
+        ),
+        trap_sql=(
+            "SELECT result, COUNT(*), COUNT(*), AVG(COALESCE(score, 0))"
+            " FROM inspections GROUP BY result"
+        ),
+        note="COUNT(*) counts rows, COUNT(score) counts non-NULL scores, and"
+             " AVG(score) divides by the latter. Coalescing NULL to 0 first"
+             " drags the average down by inventing scores nobody gave.",
+        claims=[
+            ("some inspections have no score",
+             lambda rows, c: any(r[1] > r[2] for r in rows)),
+        ],
+    ),
+    # ---------------------------------------------------------------- NULLs
+    dict(
+        id=24, ledger="Q125", concept="C7", tier="NULLs",
+        title="Slow to answer",
+        prompt=(
+            "Contracts with an agreed response time of more than 24 hours,"
+            " showing the customer.\n\n"
+            "Four contracts never agreed a response time at all. An unknown"
+            " response time is not a slow one, so those must not appear.\n\n"
+            "Return: contract_id, customer_name, response_hours"
+        ),
+        solution=(
+            "SELECT k.contract_id, c.name, k.response_hours FROM contracts k"
+            " JOIN customers c ON c.customer_id = k.customer_id"
+            " WHERE k.response_hours > 24"
+        ),
+        trap_sql=(
+            "SELECT k.contract_id, c.name, k.response_hours FROM contracts k"
+            " JOIN customers c ON c.customer_id = k.customer_id"
+            " WHERE COALESCE(k.response_hours, 999) > 24"
+        ),
+        note="NULL > 24 is not true, so those rows drop out on their own -- the"
+             " comparison already does the right thing. Coalescing to a big"
+             " number forces unknowns into the answer as though they were the"
+             " worst offenders.",
+    ),
+    dict(
+        id=25, ledger="Q126", concept="C7", tier="NULLs",
+        title="Never certified",
+        prompt=(
+            "Technicians who have not been certified, with their depot and how"
+            " many labour hours they have logged.\n\n"
+            "A technician with no certification has cert_level NULL. Every one"
+            " of them has logged some labour.\n\n"
+            "Return: technician_id, name, depot_name, total_hours"
+        ),
+        solution=(
+            "SELECT t.technician_id, t.name, d.name, SUM(le.hours)"
+            " FROM technicians t JOIN depots d ON d.depot_id = t.depot_id"
+            " JOIN labor_entries le ON le.technician_id = t.technician_id"
+            " WHERE t.cert_level IS NULL GROUP BY t.technician_id"
+        ),
+        trap_sql=(
+            "SELECT t.technician_id, t.name, d.name, SUM(le.hours)"
+            " FROM technicians t JOIN depots d ON d.depot_id = t.depot_id"
+            " JOIN labor_entries le ON le.technician_id = t.technician_id"
+            " WHERE t.cert_level = NULL GROUP BY t.technician_id"
+        ),
+        note="Nothing equals NULL, not even NULL -- 'cert_level = NULL' is"
+             " never true and returns no rows at all. Use IS NULL.",
+        claims=[
+            ("4 technicians are uncertified",
+             lambda rows, c: len(rows) == 4),
+        ],
+    ),
+    dict(
+        id=26, ledger="Q127", concept="C7", tier="NULLs",
+        title="Parts nobody has fitted",
+        prompt=(
+            "Parts that have never been used on any work order, with their"
+            " category and unit cost.\n\n"
+            "Return: part_id, name, category, unit_cost"
+        ),
+        solution=(
+            "SELECT p.part_id, p.name, p.category, p.unit_cost FROM parts p"
+            " WHERE NOT EXISTS (SELECT 1 FROM parts_used pu"
+            " WHERE pu.part_id = p.part_id)"
+        ),
+        trap_sql=(
+            "SELECT p.part_id, p.name, p.category, p.unit_cost FROM parts p"
+            " LEFT JOIN parts_used pu ON pu.part_id = p.part_id"
+            " WHERE pu.quantity = 0"
+        ),
+        note="An anti-join needs NOT EXISTS, or a LEFT JOIN with 'IS NULL' on"
+             " the right-hand key. Testing a right-hand column for a value"
+             " never matches, because unmatched rows hold NULL, not 0.",
+        claims=[
+            ("2 parts have never been fitted",
+             lambda rows, c: len(rows) == 2),
+        ],
+    ),
+    # ----------------------------------------------------- integer division
+    dict(
+        id=27, ledger="Q128", concept="C9", tier="Integer division",
+        title="Average parts per job",
+        prompt=(
+            "For each work order priority, the average number of part lines per"
+            " work order that used parts.\n\n"
+            "Both the part count and the job count are integers. The answer is"
+            " not a whole number -- 'critical' comes to 2.64.\n\n"
+            "Return: priority, jobs, part_lines, avg_lines_per_job"
+        ),
+        solution=(
+            "WITH p AS (SELECT work_order_id, COUNT(*) AS n FROM parts_used"
+            " GROUP BY work_order_id)"
+            " SELECT w.priority, COUNT(*), SUM(p.n), SUM(p.n) * 1.0 / COUNT(*)"
+            " FROM work_orders w JOIN p USING(work_order_id)"
+            " GROUP BY w.priority"
+        ),
+        trap_sql=(
+            "WITH p AS (SELECT work_order_id, COUNT(*) AS n FROM parts_used"
+            " GROUP BY work_order_id)"
+            " SELECT w.priority, COUNT(*), SUM(p.n), SUM(p.n) / COUNT(*)"
+            " FROM work_orders w JOIN p USING(work_order_id)"
+            " GROUP BY w.priority"
+        ),
+        note="Integer divided by integer truncates in SQLite: 8/3 is 2, not"
+             " 2.67. Multiply one side by 1.0 -- or use CAST -- before"
+             " dividing. The result looks plausible, which is the danger.",
+        claims=[
+            ("at least one average is not a whole number",
+             lambda rows, c: any(abs(r[3] - round(r[3])) > 0.01 for r in rows)),
+            ("'critical' averages 2.64 part lines per job",
+             lambda rows, c: any(r[0] == "critical" and abs(r[3] - 2.64) < 0.005
+                                 for r in rows)),
+        ],
+    ),
+    dict(
+        id=28, ledger="Q129", concept="C9", tier="Integer division",
+        title="Stock cover against reorder level",
+        prompt=(
+            "Stock lines that have a reorder level set, showing quantity on"
+            " hand as a multiple of that level.\n\n"
+            "Lines with no agreed reorder policy are excluded. Report the"
+            " multiple to full precision, not rounded down.\n\n"
+            "Return: depot_id, part_id, quantity_on_hand, reorder_level, cover"
+        ),
+        solution=(
+            "SELECT depot_id, part_id, quantity_on_hand, reorder_level,"
+            " quantity_on_hand * 1.0 / reorder_level FROM part_stock"
+            " WHERE reorder_level IS NOT NULL"
+        ),
+        trap_sql=(
+            "SELECT depot_id, part_id, quantity_on_hand, reorder_level,"
+            " quantity_on_hand / reorder_level FROM part_stock"
+            " WHERE reorder_level IS NOT NULL"
+        ),
+        note="Both columns are INTEGER, so the division truncates and every"
+             " partial cover reads as a whole multiple. A stock line at 1.9x"
+             " its reorder level reports 1.",
+    ),
+    # -------------------------------------------------------------- general
+    dict(
+        id=29, ledger="Q130", concept="GEN", tier="General",
+        title="Who reports to whom",
+        prompt=(
+            "Every technician who has a supervisor, with the supervisor's name"
+            " and how much longer the supervisor has been employed, in whole"
+            " days.\n\n"
+            "One technician is the depot manager and reports to nobody, so does"
+            " not appear.\n\n"
+            "Return: technician_name, supervisor_name, supervisor_extra_days"
+        ),
+        solution=(
+            "SELECT t.name, s.name,"
+            " CAST(julianday(t.hired_on) - julianday(s.hired_on) AS INTEGER)"
+            " FROM technicians t"
+            " JOIN technicians s ON s.technician_id = t.supervisor_id"
+        ),
+        trap_sql=(
+            "SELECT t.name, s.name,"
+            " CAST(julianday(t.hired_on) - julianday(s.hired_on) AS INTEGER)"
+            " FROM technicians t"
+            " LEFT JOIN technicians s ON s.technician_id = t.supervisor_id"
+        ),
+        note="A self-join needs two aliases of the same table. Using LEFT JOIN"
+             " keeps the one technician who reports to nobody, with NULLs"
+             " where the supervisor should be.",
+        claims=[
+            ("13 of the 14 technicians have a supervisor",
+             lambda rows, c: len(rows) == 13),
+        ],
+    ),
+    dict(
+        id=30, ledger="Q131", concept="GEN", tier="General",
+        title="How long jobs stay open",
+        prompt=(
+            "For each priority, how many jobs were closed and the average whole"
+            " days from opening to closing.\n\n"
+            "Only jobs that actually closed count -- open and cancelled ones"
+            " both have closed_at NULL and must be excluded.\n\n"
+            "Return: priority, closed_jobs, avg_days_open"
+        ),
+        solution=(
+            "SELECT priority, COUNT(*),"
+            " AVG(julianday(closed_at) - julianday(opened_at))"
+            " FROM work_orders WHERE closed_at IS NOT NULL GROUP BY priority"
+        ),
+        trap_sql=(
+            "SELECT priority, COUNT(*),"
+            " AVG(julianday(closed_at) - julianday(opened_at))"
+            " FROM work_orders GROUP BY priority"
+        ),
+        note="AVG skips NULL rows but COUNT(*) does not, so leaving the open"
+             " jobs in inflates the job count while the average stays right."
+             " Filter them out explicitly.",
     ),
 ]
 
