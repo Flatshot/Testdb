@@ -24,45 +24,47 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the repair-depot schema, weighted hard toward
-**grain**: half of them punish joining two one-to-many children of the same
-parent in a single query block, which was the mistake behind every wrong answer
-in the 2026-08-26 session. `Concept` maps to the numbered sections of
-`sql-concepts-review.html`. Generated from `exercises.py` - `check_questions.py`
-verifies the two agree.
+Thirty questions on the repair-depot schema, re-seeded with fresh data. Where
+the previous set was weighted 15/30 toward **grain**, this one moves into ground
+the earlier sets never touched: set operations, recursive CTEs, correlated
+subqueries, conditional aggregation, date arithmetic and gap analysis, and the
+window frames past a plain running total. Grain drops to two. Three questions
+carry over the one mistake still costing answers -- the bare column under
+`GROUP BY`, where SQLite samples an arbitrary row rather than raising an error.
+Generated from `exercises.py` - `check_questions.py` verifies the two agree.
 
 | ID | Concept | Question | In GUI | Drills |
 |----|---------|----------|--------|--------|
-| Q102 | C2 grain | What a job actually cost | ex 1 | Grain |
-| Q103 | C2 grain | Labour's share of the bill | ex 2 | Grain |
-| Q104 | C2 grain | Parts count and hours together | ex 3 | Grain |
-| Q105 | C2 grain | Hours, and who signed the job off | ex 4 | Grain |
-| Q106 | C2 grain | The missing SUM | ex 5 | Grain |
-| Q107 | C2 grain | Do not go back to the well | ex 6 | Grain |
-| Q108 | C2 grain | Three children, one job | ex 7 | Grain |
-| Q109 | C2 grain | Contracts and callouts | ex 8 | Grain |
-| Q110 | C2 grain | Counting down a chain | ex 9 | Grain |
-| Q111 | C2 grain | Stock on hand per part | ex 10 | Grain |
-| Q112 | C2 grain | Invoice against actual cost | ex 11 | Grain |
-| Q113 | C2 grain | Technician workload | ex 12 | Grain |
-| Q114 | C2 grain | Depot stock and staff | ex 13 | Grain |
-| Q115 | C2 grain | Cost per hour on the job | ex 14 | Grain |
-| Q116 | C2 grain | Busiest machines | ex 15 | Grain |
-| Q117 | C3 window vs GROUP BY | Each visit against the job total | ex 16 | Window vs GROUP BY |
-| Q118 | C3 window vs GROUP BY | First visit to each job | ex 17 | Window vs GROUP BY |
-| Q119 | C3 window vs GROUP BY | Running spend per depot | ex 18 | Window vs GROUP BY |
-| Q120 | C1 aggregates in WHERE | Jobs that ran long | ex 19 | Aggregates in WHERE |
-| Q121 | C1 aggregates in WHERE | Customers worth chasing | ex 20 | Aggregates in WHERE |
-| Q122 | C4 CTE scope | Carry it through the wall | ex 21 | CTE scope |
-| Q123 | C5 COUNT | Inspected, or not | ex 22 | COUNT |
-| Q124 | C5 COUNT | Scored and unscored | ex 23 | COUNT |
-| Q125 | C7 NULL | Slow to answer | ex 24 | NULLs |
-| Q126 | C7 NULL | Never certified | ex 25 | NULLs |
-| Q127 | C7 NULL | Parts nobody has fitted | ex 26 | NULLs |
-| Q128 | C9 integer division | Average parts per job | ex 27 | Integer division |
-| Q129 | C9 integer division | Stock cover against reorder level | ex 28 | Integer division |
-| Q130 | general | Who reports to whom | ex 29 | General |
-| Q131 | general | How long jobs stay open | ex 30 | General |
+| Q132 | S1 set operations | Parts only the urgent jobs need | ex 1 | Set operations |
+| Q133 | S1 set operations | Two kinds of orphan | ex 2 | Set operations |
+| Q134 | S1 set operations | Everything that happened, by month | ex 3 | Set operations |
+| Q135 | R1 recursive CTE | How deep in the chain | ex 4 | Recursive CTEs |
+| Q136 | R1 recursive CTE | Who is at the top of your chain | ex 5 | Recursive CTEs |
+| Q137 | X1 subqueries/EXISTS | Nobody reports to them | ex 6 | Subqueries & EXISTS |
+| Q138 | X1 subqueries/EXISTS | Above your own priority's average | ex 7 | Subqueries & EXISTS |
+| Q139 | X1 subqueries/EXISTS | Customers with something overdue | ex 8 | Subqueries & EXISTS |
+| Q140 | A1 conditional aggregation | Stock policy at a glance | ex 9 | Conditional aggregation |
+| Q141 | A1 conditional aggregation | Job status by priority, side by side | ex 10 | Conditional aggregation |
+| Q142 | A1 conditional aggregation | Critical hours versus the rest | ex 11 | Conditional aggregation |
+| Q143 | D1 dates & gaps | Work opened by month | ex 12 | Dates & gaps |
+| Q144 | D1 dates & gaps | Days between callouts | ex 13 | Dates & gaps |
+| Q145 | D1 dates & gaps | Slow payers | ex 14 | Dates & gaps |
+| Q146 | D1 dates & gaps | Month on month | ex 15 | Dates & gaps |
+| Q147 | W1 window frames | Quartiles of workload | ex 16 | Window frames |
+| Q148 | W1 window frames | Three-month rolling average | ex 17 | Window frames |
+| Q149 | W1 window frames | The latest job on each machine | ex 18 | Window frames |
+| Q150 | W1 window frames | Top two parts in each category | ex 19 | Window frames |
+| Q151 | B1 silent sampling | High scores per verdict | ex 20 | Silent sampling |
+| Q152 | B1 silent sampling | The newest site of each customer | ex 21 | Silent sampling |
+| Q153 | B1 silent sampling | Longest-serving technician per depot | ex 22 | Silent sampling |
+| Q154 | J1 self-joins | Depot colleagues | ex 23 | Self-joins |
+| Q155 | J1 self-joins | Rival sites in one city | ex 24 | Self-joins |
+| Q156 | C2 grain | Parts and inspections on one job | ex 25 | Grain |
+| Q157 | C2 grain | Regions, customers and depots | ex 26 | Grain |
+| Q158 | C7 NULL | Expired, not merely unknown | ex 27 | NULLs |
+| Q159 | C7 NULL | Response times by account tier | ex 28 | NULLs |
+| Q160 | general | Stock value by region | ex 29 | General |
+| Q161 | general | Oldest jobs still open | ex 30 | General |
 
 ## Retired
 
@@ -172,6 +174,36 @@ they still count as asked.
 | Q099 | - | Below the reorder line | - | retired |
 | Q100 | - | Split orders | - | retired |
 | Q101 | - | Longest outstanding deliveries | - | retired |
+| Q102 | - | What a job actually cost | - | retired |
+| Q103 | - | Labour's share of the bill | - | retired |
+| Q104 | - | Parts count and hours together | - | retired |
+| Q105 | - | Hours, and who signed the job off | - | retired |
+| Q106 | - | The missing SUM | - | retired |
+| Q107 | - | Do not go back to the well | - | retired |
+| Q108 | - | Three children, one job | - | retired |
+| Q109 | - | Contracts and callouts | - | retired |
+| Q110 | - | Counting down a chain | - | retired |
+| Q111 | - | Stock on hand per part | - | retired |
+| Q112 | - | Invoice against actual cost | - | retired |
+| Q113 | - | Technician workload | - | retired |
+| Q114 | - | Depot stock and staff | - | retired |
+| Q115 | - | Cost per hour on the job | - | retired |
+| Q116 | - | Busiest machines | - | retired |
+| Q117 | - | Each visit against the job total | - | retired |
+| Q118 | - | First visit to each job | - | retired |
+| Q119 | - | Running spend per depot | - | retired |
+| Q120 | - | Jobs that ran long | - | retired |
+| Q121 | - | Customers worth chasing | - | retired |
+| Q122 | - | Carry it through the wall | - | retired |
+| Q123 | - | Inspected, or not | - | retired |
+| Q124 | - | Scored and unscored | - | retired |
+| Q125 | - | Slow to answer | - | retired |
+| Q126 | - | Never certified | - | retired |
+| Q127 | - | Parts nobody has fitted | - | retired |
+| Q128 | - | Average parts per job | - | retired |
+| Q129 | - | Stock cover against reorder level | - | retired |
+| Q130 | - | Who reports to whom | - | retired |
+| Q131 | - | How long jobs stay open | - | retired |
 
 ## History
 
@@ -180,12 +212,13 @@ they still count as asked.
   payments tables. Retired when the schema gained the fulfilment side.
 - **Q072-Q101** second pass against the review, on warehouses, inventory,
   shipments and returns. Retired when the schema moved to the repair depot.
-- **Q102-Q131** current set, on the repair-depot schema (work orders, parts,
-  labour, inspections). Fifteen of the thirty drill grain, because that is what
-  the 2026-08-26 session showed was actually costing answers -- in five
-  distinct disguises: joining two children at once, a bare column under
-  `GROUP BY`, a missing aggregate, re-joining a base table after a CTE had
-  collapsed it, and an inverted ratio.
+- **Q102-Q131** grain-focused set on the repair-depot schema; all 30 solved,
+  then retired. Fifteen of them drilled fan-out in five disguises.
+- **Q132-Q161** current set, same schema re-seeded (SEED 41 -> 77) so no answer
+  value carries over. Deliberately broad rather than deep: 3 set operations,
+  2 recursive CTEs, 3 subquery/EXISTS, 3 conditional aggregation, 4 dates and
+  gaps, 4 window frames, 3 silent sampling, 2 self-joins, 2 grain, 2 NULLs,
+  2 general.
   C8 (alias scope) still has no question: SQLite accepts a SELECT alias even in
   `WHERE`, so the engine cannot enforce the rule. It is covered as prose in
   PRACTICE.md instead.

@@ -23,7 +23,7 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 41
+SEED = 77
 
 # Work orders span this window. Fixed, not derived from today, so the data set
 # does not drift as time passes.
@@ -328,8 +328,13 @@ def seed():
             )
 
             # ------------------------------------------------------- parts_used
-            # Parts 39 and 40 are never fitted, so an anti-join finds them.
-            usable_parts = list(range(1, len(PART_NAMES) - 1))
+            # Parts 39 and 40 are never fitted AND stocked nowhere, so an
+            # anti-join finds them. Parts 12 and 25 are stocked but never
+            # fitted, and 7, 19 and 38 are fitted but stocked nowhere -- that
+            # asymmetry is what gives the set-difference questions two
+            # non-empty sides instead of one.
+            usable_parts = [p for p in range(1, len(PART_NAMES) - 1)
+                            if p not in (12, 25)]
             parts_used_rows = []
             for wid, _m, _t, _o, _c, _p, status in wo_rows:
                 if status == "cancelled" or rng.random() < 0.14:
@@ -410,8 +415,10 @@ def seed():
             )
 
             # ------------------------------------------------------- part_stock
-            # The last three parts are stocked in no depot at all.
-            stocked = list(range(1, len(PART_NAMES) - 2))
+            # The last three parts are stocked in no depot at all, and so are
+            # parts 7 and 19 -- which unlike 38-40 do get fitted on jobs.
+            stocked = [p for p in range(1, len(PART_NAMES) - 2)
+                       if p not in (7, 19)]
             stock_rows = []
             for pid in stocked:
                 for did in range(1, len(DEPOTS) + 1):
