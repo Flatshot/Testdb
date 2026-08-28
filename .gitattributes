@@ -1,0 +1,7 @@
+# Shell launchers must keep LF endings. A CRLF shebang makes macOS and Linux
+# report "bad interpreter" on a file that looks perfectly fine in an editor.
+*.command text eol=lf
+*.sh      text eol=lf
+
+# The Windows launcher wants CRLF for the same reason in reverse.
+*.bat     text eol=crlf
