@@ -25,6 +25,29 @@ PROGRESS_PATH = db.HERE / "progress.json"
 FREE = 0  # pseudo-exercise id for the scratch pad
 QUESTION_MAX_LINES = 16
 
+# Font families in order of preference, Windows first then macOS then Linux.
+# Tk does not error on a missing family -- it silently substitutes, which for
+# the editor can mean a PROPORTIONAL face, and SQL is unreadable in one. So the
+# family is resolved against what is actually installed, and the last resort is
+# Tk's own named fonts, which every platform guarantees.
+MONO_FAMILIES = ("Consolas", "Menlo", "SF Mono", "DejaVu Sans Mono",
+                 "Liberation Mono", "Courier New")
+UI_FAMILIES = ("Segoe UI", "SF Pro Text", "Helvetica Neue", "Cantarell",
+               "DejaVu Sans")
+
+
+def _pick_family(candidates, named_fallback):
+    """First installed family from candidates, else Tk's own named font.
+
+    Must be called with a Tk root already created -- font.families() needs an
+    interpreter to ask.
+    """
+    installed = {f.lower() for f in tkfont.families()}
+    for name in candidates:
+        if name.lower() in installed:
+            return name
+    return tkfont.nametofont(named_fallback).actual("family")
+
 # Dark palette. Tk has no notion of a colour scheme, so every widget that is
 # not a ttk widget has to be told individually -- and the ttk widgets only obey
 # under a fully styleable theme (see _apply_theme).
@@ -63,7 +86,9 @@ class App(tk.Tk):
         self.conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
         self.conn.row_factory = sqlite3.Row
 
-        self.mono = tkfont.Font(family="Consolas", size=11)
+        self.mono_family = _pick_family(MONO_FAMILIES, "TkFixedFont")
+        self.ui_family = _pick_family(UI_FAMILIES, "TkDefaultFont")
+        self.mono = tkfont.Font(family=self.mono_family, size=11)
         self.current = FREE
         self.progress = self._load_progress()
 
@@ -228,10 +253,11 @@ class App(tk.Tk):
         top.pack(fill="x", side="top")
 
         self.title_var = tk.StringVar()
-        ttk.Label(top, textvariable=self.title_var, font=("Segoe UI", 12, "bold"),
+        ttk.Label(top, textvariable=self.title_var,
+                  font=(self.ui_family, 12, "bold"),
                   foreground=FG_HEADING).pack(anchor="w", padx=4, pady=(0, 2))
         self.question = tk.Text(top, height=5, wrap="word", relief="flat",
-                                font=("Segoe UI", 10), background=BG_QUESTION,
+                                font=(self.ui_family, 10), background=BG_QUESTION,
                                 foreground=FG_TEXT, insertbackground=CURSOR,
                                 selectbackground=BG_SELECT,
                                 selectforeground="#ffffff",

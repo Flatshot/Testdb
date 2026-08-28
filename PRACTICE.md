@@ -14,8 +14,8 @@ instead of raising an error. It is worth knowing that 'arbitrary' in practice
 means *the first row scanned*, which is right often enough to survive a spot
 check and wrong exactly when it matters.
 
-**Work through them in the GUI**: double-click `SQL Practice.bat`, or run
-`python gui.py`. It grades your answer against the expected result and, when
+**Work through them in the GUI**: double-click `SQL Practice.bat` on Windows or
+`sql-practice.command` on macOS/Linux, or run `python gui.py`. It grades your answer against the expected result and, when
 you get it right, tells you which mistake the question was built to catch.
 Progress is saved between sessions.
 
