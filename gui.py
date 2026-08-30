@@ -25,6 +25,13 @@ PROGRESS_PATH = db.HERE / "progress.json"
 FREE = 0  # pseudo-exercise id for the scratch pad
 QUESTION_MAX_LINES = 16
 
+# Tk resolves point sizes against the display DPI, and macOS reports 72 where
+# Windows reports 96 -- the same number draws about a quarter smaller here.
+# Every explicit size below derives from this one. It is a FLOOR, not an
+# assignment: Tk's own named fonts are 13 on macOS and 9 on Windows, so raising
+# a platform's larger default to match this would shrink the UI, not grow it.
+BASE_FONT_SIZE = 14
+
 # Font families in order of preference, Windows first then macOS then Linux.
 # Tk does not error on a missing family -- it silently substitutes, which for
 # the editor can mean a PROPORTIONAL face, and SQL is unreadable in one. So the
@@ -88,7 +95,8 @@ class App(tk.Tk):
 
         self.mono_family = _pick_family(MONO_FAMILIES, "TkFixedFont")
         self.ui_family = _pick_family(UI_FAMILIES, "TkDefaultFont")
-        self.mono = tkfont.Font(family=self.mono_family, size=11)
+        self.mono = tkfont.Font(family=self.mono_family, size=BASE_FONT_SIZE)
+        self._scale_named_fonts()
         self.current = FREE
         self.progress = self._load_progress()
 
@@ -129,6 +137,25 @@ class App(tk.Tk):
             pass  # practice progress is not worth crashing over
 
     # -------------------------------------------------------------------- theme
+    def _scale_named_fonts(self):
+        """Lift Tk's named fonts to BASE_FONT_SIZE, which is what ttk inherits.
+
+        The ttk widgets here take no font= argument: the trees, buttons, tabs
+        and status bar all draw in TkDefaultFont/TkTextFont/TkHeadingFont.
+        Setting those once is what makes a size change reach the whole window
+        instead of just the two Text widgets. max() keeps it a floor so a
+        platform whose default is already larger is left alone.
+        """
+        for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont",
+                     "TkHeadingFont", "TkTooltipFont", "TkIconFont"):
+            try:
+                f = tkfont.nametofont(name)
+            except tk.TclError:
+                continue          # not every named font exists on every platform
+            f.configure(size=max(f.actual("size"), BASE_FONT_SIZE))
+        tkfont.nametofont("TkFixedFont").configure(
+            family=self.mono_family, size=BASE_FONT_SIZE)
+
     def _apply_theme(self):
         """Paint every ttk widget class dark.
 
@@ -175,7 +202,10 @@ class App(tk.Tk):
                   lightcolor=[("selected", BG_SURFACE)],
                   expand=[("selected", (0, 0, 0, 0))])
 
-        style.configure("Treeview", rowheight=22, background=BG_FIELD,
+        # Derived, not fixed: at a larger font a hard-coded row height
+        # crops the text instead of growing with it.
+        row_h = tkfont.nametofont("TkDefaultFont").metrics("linespace") + 6
+        style.configure("Treeview", rowheight=row_h, background=BG_FIELD,
                         fieldbackground=BG_FIELD, foreground=FG_TEXT,
                         bordercolor=BORDER, borderwidth=0,
                         lightcolor=BG_FIELD, darkcolor=BG_FIELD)
@@ -254,10 +284,11 @@ class App(tk.Tk):
 
         self.title_var = tk.StringVar()
         ttk.Label(top, textvariable=self.title_var,
-                  font=(self.ui_family, 12, "bold"),
+                  font=(self.ui_family, BASE_FONT_SIZE + 1, "bold"),
                   foreground=FG_HEADING).pack(anchor="w", padx=4, pady=(0, 2))
         self.question = tk.Text(top, height=5, wrap="word", relief="flat",
-                                font=(self.ui_family, 10), background=BG_QUESTION,
+                                font=(self.ui_family, BASE_FONT_SIZE),
+                                background=BG_QUESTION,
                                 foreground=FG_TEXT, insertbackground=CURSOR,
                                 selectbackground=BG_SELECT,
                                 selectforeground="#ffffff",
@@ -448,14 +479,21 @@ class App(tk.Tk):
             self._set_status("Nothing to run.", BG_INFO)
             return None
         try:
-            cur = self.conn.execute(sql)
-            if cur.description is None:
-                self._set_status("Statement returned no result set.", BG_INFO)
-                return None
-            rows = cur.fetchall()
+            # fetchall() is inside the limit too: a runaway recursive CTE does
+            # not hang on execute(), it hangs while the rows pile up.
+            with db.time_limit(self.conn):
+                cur = self.conn.execute(sql)
+                if cur.description is None:
+                    self._set_status("Statement returned no result set.", BG_INFO)
+                    return None
+                rows = db.fetch_capped(cur)
             self._show_rows(rows, [d[0] for d in cur.description])
             self._set_status(f"{len(rows)} row(s).", BG_INFO)
             return rows
+        except (db.QueryTimeout, db.TooManyRows) as exc:
+            self._clear_results()
+            self._set_status(str(exc), BG_BAD)
+            return None
         except sqlite3.Error as exc:
             self._clear_results()
             self._set_status(f"SQL error: {exc}", BG_BAD)
@@ -503,10 +541,14 @@ class App(tk.Tk):
         self._clear_results()
         self.results["columns"] = headers
         sample = rows[:120]
+        # Measured rather than assumed -- the old 8px/char was tied to the
+        # previous font size and clips once the cells draw wider.
+        char_w = tkfont.nametofont("TkDefaultFont").measure("0")
         for i, h in enumerate(headers):
             width = max([len(str(h))] + [len(self._fmt(r[i])) for r in sample] or [0])
             self.results.heading(h, text=h)
-            self.results.column(h, width=min(max(width * 8 + 24, 70), 340), anchor="w")
+            self.results.column(h, width=min(max(width * char_w + 24, 70), 340),
+                                anchor="w")
         for n, row in enumerate(rows):
             self.results.insert("", "end",
                                 values=[self._fmt(v) for v in row],
