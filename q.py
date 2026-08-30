@@ -35,12 +35,13 @@ def run(sql, allow_write=False):
             return f"refusing to run a {first.upper()} without --write"
     conn = db.connect()
     try:
-        with conn:
+        with conn, db.time_limit(conn):
             cur = conn.execute(sql)
             if cur.description is None:
                 return f"ok ({cur.rowcount} row(s) affected)"
-            return render(cur.fetchall(), [d[0] for d in cur.description])
+            return render(db.fetch_capped(cur), [d[0] for d in cur.description])
     except Exception as exc:
+        # QueryTimeout lands here too, carrying its own explanation.
         return f"error: {exc}"
     finally:
         conn.close()

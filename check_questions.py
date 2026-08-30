@@ -47,9 +47,16 @@ def parse_ledger():
 
 
 def run(conn, sql):
-    """(rows, error). A trap that errors counts as rejected, not as a pass."""
+    """(rows, error). A trap that errors counts as rejected, not as a pass.
+
+    Time-limited: an authoring slip in a recursive step would otherwise hang
+    the checker instead of reporting a broken question.
+    """
     try:
-        return conn.execute(sql).fetchall(), None
+        with db.time_limit(conn):
+            return db.fetch_capped(conn.execute(sql)), None
+    except (db.QueryTimeout, db.TooManyRows) as exc:
+        return None, str(exc)
     except sqlite3.Error as exc:
         return None, str(exc)
 
