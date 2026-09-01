@@ -23,7 +23,7 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 113
+SEED = 149
 
 # Work orders span this window. Fixed, not derived from today, so the data set
 # does not drift as time passes.

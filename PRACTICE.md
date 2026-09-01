@@ -3,31 +3,37 @@
 Thirty questions on the repair-depot schema, re-seeded again so no answer from
 the previous set carries over.
 
-The last set gave **recursive CTEs** two questions, and recursion was the tier
-that hurt. This one spends **six** on it, ordered so the mechanism builds
-rather than arriving all at once:
+This set was built from the mistakes made working through the last one. It is
+weighted half toward what actually went wrong and half toward keeping breadth.
 
-1. carry a value down the chain (a path string)
-2. walk the chain *upward* instead of down
-3. close the whole hierarchy into every ancestor/descendant pair
-4. roll a subtree up into a count
-5. generate rows that exist in no table -- score bands, including empty ones
-6. generate a month series, so a report can show the months where nothing
-   happened
+**What went wrong last time, and what drills it here:**
 
-The last two are the half of recursion that is not a hierarchy at all, and the
-half a `GROUP BY` cannot reach: it can only return groups the data already
-contains, so the empty bands and the quiet months silently do not exist.
+| The mistake | Questions |
+|---|---|
+| Aggregating at the wrong level, or not at all | 7, 8, 9 |
+| `SUM(a) * b` where `SUM(a * b)` was meant | 11, 26, 27 |
+| A `LEFT JOIN` filtered in `WHERE`, and `AVG` over missing values | 12, 13 |
+| Answering "at least one" when the question said "every" | 14, 23 |
+| An `EXISTS` that forgot to correlate | 15 |
+| `PARTITION BY` missing, or present when it should not be | 16, 18 |
+| The frame default on a window function | 17 |
 
-The rest holds the breadth of the last set: set operations, correlated
-subqueries, conditional aggregation, date arithmetic, window frames,
-self-joins, grain and NULLs.
+The six **recursion** questions deliberately vary the *anchor*, which is where
+the mechanism is easiest to get wrong:
 
-One thread carries over, in the form that actually cost answers. Two questions
-drill the **bare column under `GROUP BY`** in its arithmetic disguise --
-`SUM(hours) * rate` instead of `SUM(hours * rate)`. The two agree whenever the
-rate is constant across the group and diverge silently the moment it is not,
-which is the hardest kind of wrong to spot: most rows are right.
+1. the root's **direct reports** -- not the root itself (branch labels)
+2. every row **paired with itself** (how deep the tree goes)
+3. walking **upward**, collecting ancestors to sum over
+4. a bare **literal**, generating a month spine for two measures at once
+5. **one row per parent row**, each expanding into its own series
+6. a spine **CROSS JOINed** to a real dimension, for the full grid
+
+The last three are the half of recursion that is not a hierarchy at all, and
+the half a `GROUP BY` cannot reach: it can only return groups the data already
+contains, so quiet months and empty depot-months silently do not exist.
+
+The rest keeps the breadth: set operations, window frames, date arithmetic,
+self-joins and silent sampling.
 
 **Work through them in the GUI**: double-click `SQL Practice.bat` on Windows or
 `sql-practice.command` on macOS/Linux, or run `python gui.py`. It grades your
