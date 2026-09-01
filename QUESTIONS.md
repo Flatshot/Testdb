@@ -24,51 +24,51 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the repair-depot schema, re-seeded again (SEED 77 -> 113) so
-no answer value from the last set carries over. The previous set gave recursion
-two questions and it was the tier that hurt; this one spends **six** on it,
-ordered so the mechanism builds -- carry a value down, walk the chain upward,
-close the hierarchy into pairs, roll a subtree up into a count, and then the
-half of recursion that is not a hierarchy at all: generating rows that exist in
-no table, so a report can show the bands and months where nothing happened.
+Thirty questions on the repair-depot schema, re-seeded again (SEED 113 -> 149)
+so no answer value from the last set carries over.
 
-The rest holds the breadth of the last set. Two questions still drill the bare
-column under `GROUP BY`, now in its arithmetic form -- `SUM(h) * rate` rather
-than `SUM(h * rate)` -- which is where it actually cost answers.
-Generated from `exercises.py` - `check_questions.py` verifies the two agree.
+This set was built from the mistakes made working through Q162-Q191. It is
+weighted half toward what actually went wrong -- grain, arithmetic inside vs
+outside the aggregate, NULL handling, proving something about every row, and
+recursion -- and half toward keeping breadth across window frames, dates, set
+operations, silent sampling and self-joins.
 
-| ID | Concept | Question | In GUI | Drills |
-|----|---------|----------|--------|--------|
-| Q162 | R1 recursive CTE | The whole chain, written out | ex 1 | Recursive CTEs |
-| Q163 | R1 recursive CTE | Everyone above Nadia Kaur | ex 2 | Recursive CTEs |
-| Q164 | R1 recursive CTE | Every manager, everyone under them | ex 3 | Recursive CTEs |
-| Q165 | R1 recursive CTE | How many people are under you | ex 4 | Recursive CTEs |
-| Q166 | R2 recursive series | Score bands, including the empty ones | ex 5 | Recursive CTEs |
-| Q167 | R2 recursive series | Critical months, including the quiet ones | ex 6 | Recursive CTEs |
-| Q168 | S1 set operations | Stocked in Leeds, not in Coventry | ex 7 | Set operations |
-| Q169 | S1 set operations | Both kinds of contract | ex 8 | Set operations |
-| Q170 | X1 subqueries/EXISTS | Machines nobody has touched | ex 9 | Subqueries & EXISTS |
-| Q171 | X1 subqueries/EXISTS | Never failed an inspection | ex 10 | Subqueries & EXISTS |
-| Q172 | X2 correlated subquery | Costlier than its category average | ex 11 | Subqueries & EXISTS |
-| Q173 | A1 conditional aggregation | Counted and uncounted stock | ex 12 | Conditional aggregation |
-| Q174 | C9 integer division | Close rate by priority | ex 13 | Conditional aggregation |
-| Q175 | A1 conditional aggregation | Every status in one row | ex 14 | Conditional aggregation |
-| Q176 | D1 dates & gaps | The jobs that dragged | ex 15 | Dates & gaps |
-| Q177 | D2 dates & NULL | Out of warranty when it broke | ex 16 | Dates & gaps |
-| Q178 | D1 dates & gaps | How long invoices take to pay | ex 17 | Dates & gaps |
-| Q179 | W1 window frames | Invoiced so far this year | ex 18 | Window frames |
-| Q180 | C3 PARTITION BY | Ranked inside your own depot | ex 19 | Window frames |
-| Q181 | C3 PARTITION BY | Share of the category | ex 20 | Window frames |
-| Q182 | W1 window frames | Against the best in the depot | ex 21 | Window frames |
-| Q183 | B1 silent sampling | What the labour cost each depot | ex 22 | Silent sampling |
-| Q184 | B1 silent sampling | Spend by category, after discount | ex 23 | Silent sampling |
-| Q185 | J1 self-joins | Same region, same tier | ex 24 | Self-joins |
-| Q186 | J1 self-joins | Same depot, same certification | ex 25 | Self-joins |
-| Q187 | C2 grain | Parts and labour on one job | ex 26 | Grain |
-| Q188 | C2 grain | Contracts and sites per customer | ex 27 | Grain |
-| Q189 | C7 NULL | Still running, or merely undated | ex 28 | NULLs |
-| Q190 | C7 NULL | Certified, uncertified, unknown | ex 29 | NULLs |
-| Q191 | general | Money still owed, by region | ex 30 | General |
+The six recursion questions deliberately vary the **anchor**, which is where the
+mechanism is easiest to get wrong: the root, the root's direct reports, every row
+paired with itself, a bare literal, and one row per parent row.
+
+| ID | Concept | Question | In GUI | Tier |
+|----|---------|----------|--------|------|
+| Q192 | R1 recursive CTE | Which branch of the company | ex 1 | Recursive CTEs |
+| Q193 | R1 recursive CTE | How deep does your tree go | ex 2 | Recursive CTEs |
+| Q194 | R1 recursive CTE | What the people above you cost | ex 3 | Recursive CTEs |
+| Q195 | R2 recursive series | Jobs and invoices, month by month | ex 4 | Recursive CTEs |
+| Q196 | R2 recursive series | One row per month a contract ran | ex 5 | Recursive CTEs |
+| Q197 | R2 recursive series | Every depot, every month | ex 6 | Recursive CTEs |
+| Q198 | C2 grain | Machines and contracts per customer | ex 7 | Grain |
+| Q199 | C2 grain | Average hours a job takes, by priority | ex 8 | Grain |
+| Q200 | C2 grain | How many customers has each technician served | ex 9 | Grain |
+| Q201 | A1 conditional aggregation | Billed against collected, by region | ex 10 | Conditional aggregation |
+| Q202 | A1 conditional aggregation | What the discount cost, by category | ex 11 | Conditional aggregation |
+| Q203 | C7 NULL | Parts below reorder level, all parts listed | ex 12 | NULLs |
+| Q204 | C7 NULL | Average response time by tier | ex 13 | NULLs |
+| Q205 | X1 subqueries/EXISTS | Customers who have paid everything | ex 14 | Subqueries & EXISTS |
+| Q206 | X2 correlated subquery | Longer than that technician usually takes | ex 15 | Subqueries & EXISTS |
+| Q207 | C3 PARTITION BY | The first invoice each customer got | ex 16 | Window frames |
+| Q208 | W1 window frames | Smoothed either side | ex 17 | Window frames |
+| Q209 | C3 PARTITION BY | How long until the machine came back | ex 18 | Window frames |
+| Q210 | W1 window frames | The most-fitted part in each category | ex 19 | Window frames |
+| Q211 | D1 dates & gaps | How long before anyone turned up | ex 20 | Dates & gaps |
+| Q212 | D1 dates & gaps | The longest quiet spell | ex 21 | Dates & gaps |
+| Q213 | D1 dates & gaps | By quarter, not by month | ex 22 | Dates & gaps |
+| Q214 | S1 set operations | Under contract, never called out | ex 23 | Set operations |
+| Q215 | S1 set operations | Running low on the expensive ones | ex 24 | Set operations |
+| Q216 | S1 set operations | Everything that happened to machine 38 | ex 25 | Set operations |
+| Q217 | B1 silent sampling | Average line value by category | ex 26 | Silent sampling |
+| Q218 | B1 silent sampling | What the stock on hand is worth | ex 27 | Silent sampling |
+| Q219 | J1 self-joins | Parts fitted on the same job | ex 28 | Self-joins |
+| Q220 | J1 self-joins | Hired around the same time | ex 29 | Self-joins |
+| Q221 | general | Depot scorecard | ex 30 | General |
 
 ## Retired
 
@@ -78,6 +78,36 @@ they still count as asked.
 | ID | Concept | Question | In GUI | Status |
 |----|---------|----------|--------|--------|
 | Q042 | C2 grain | Revenue per category | - | retired |
+| Q162 | R1 recursive CTE | The whole chain, written out | - | retired |
+| Q163 | R1 recursive CTE | Everyone above Nadia Kaur | - | retired |
+| Q164 | R1 recursive CTE | Every manager, everyone under them | - | retired |
+| Q165 | R1 recursive CTE | How many people are under you | - | retired |
+| Q166 | R2 recursive series | Score bands, including the empty ones | - | retired |
+| Q167 | R2 recursive series | Critical months, including the quiet ones | - | retired |
+| Q168 | S1 set operations | Stocked in Leeds, not in Coventry | - | retired |
+| Q169 | S1 set operations | Both kinds of contract | - | retired |
+| Q170 | X1 subqueries/EXISTS | Machines nobody has touched | - | retired |
+| Q171 | X1 subqueries/EXISTS | Never failed an inspection | - | retired |
+| Q172 | X2 correlated subquery | Costlier than its category average | - | retired |
+| Q173 | A1 conditional aggregation | Counted and uncounted stock | - | retired |
+| Q174 | C9 integer division | Close rate by priority | - | retired |
+| Q175 | A1 conditional aggregation | Every status in one row | - | retired |
+| Q176 | D1 dates & gaps | The jobs that dragged | - | retired |
+| Q177 | D2 dates & NULL | Out of warranty when it broke | - | retired |
+| Q178 | D1 dates & gaps | How long invoices take to pay | - | retired |
+| Q179 | W1 window frames | Invoiced so far this year | - | retired |
+| Q180 | C3 PARTITION BY | Ranked inside your own depot | - | retired |
+| Q181 | C3 PARTITION BY | Share of the category | - | retired |
+| Q182 | W1 window frames | Against the best in the depot | - | retired |
+| Q183 | B1 silent sampling | What the labour cost each depot | - | retired |
+| Q184 | B1 silent sampling | Spend by category, after discount | - | retired |
+| Q185 | J1 self-joins | Same region, same tier | - | retired |
+| Q186 | J1 self-joins | Same depot, same certification | - | retired |
+| Q187 | C2 grain | Parts and labour on one job | - | retired |
+| Q188 | C2 grain | Contracts and sites per customer | - | retired |
+| Q189 | C7 NULL | Still running, or merely undated | - | retired |
+| Q190 | C7 NULL | Certified, uncertified, unknown | - | retired |
+| Q191 | general | Money still owed, by region | - | retired |
 | Q043 | C2 grain | Headcount and payroll by department | - | retired |
 | Q044 | C2 grain | Settled money per customer | - | retired |
 | Q045 | C2 grain | Monthly orders and distinct buyers | - | retired |
