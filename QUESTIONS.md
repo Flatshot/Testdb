@@ -24,51 +24,51 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the repair-depot schema, re-seeded again (SEED 113 -> 149)
+Thirty questions on the repair-depot schema, re-seeded again (SEED 149 -> 185)
 so no answer value from the last set carries over.
 
-This set was built from the mistakes made working through Q162-Q191. It is
-weighted half toward what actually went wrong -- grain, arithmetic inside vs
-outside the aggregate, NULL handling, proving something about every row, and
-recursion -- and half toward keeping breadth across window frames, dates, set
-operations, silent sampling and self-joins.
+Deliberately easier than Q192-Q221, and with **no recursion at all** -- that
+mechanism has had two sets in a row. Two rules shaped every question: one
+concept each, so nothing stacks a window function on a self-join on a date
+trick; and the prompt states the grain, so no time goes on decoding what one
+row is meant to be.
 
-The six recursion questions deliberately vary the **anchor**, which is where the
-mechanism is easiest to get wrong: the root, the root's direct reports, every row
-paired with itself, a bare literal, and one row per parent row.
+The weighting follows where the questions have been going: nine on window
+functions, then four on aggregation, four on joins, three on subqueries and
+EXISTS, three on dates, and two each on set operations, NULLs and grain.
 
 | ID | Concept | Question | In GUI | Tier |
 |----|---------|----------|--------|------|
-| Q192 | R1 recursive CTE | Which branch of the company | ex 1 | Recursive CTEs |
-| Q193 | R1 recursive CTE | How deep does your tree go | ex 2 | Recursive CTEs |
-| Q194 | R1 recursive CTE | What the people above you cost | ex 3 | Recursive CTEs |
-| Q195 | R2 recursive series | Jobs and invoices, month by month | ex 4 | Recursive CTEs |
-| Q196 | R2 recursive series | One row per month a contract ran | ex 5 | Recursive CTEs |
-| Q197 | R2 recursive series | Every depot, every month | ex 6 | Recursive CTEs |
-| Q198 | C2 grain | Machines and contracts per customer | ex 7 | Grain |
-| Q199 | C2 grain | Average hours a job takes, by priority | ex 8 | Grain |
-| Q200 | C2 grain | How many customers has each technician served | ex 9 | Grain |
-| Q201 | A1 conditional aggregation | Billed against collected, by region | ex 10 | Conditional aggregation |
-| Q202 | A1 conditional aggregation | What the discount cost, by category | ex 11 | Conditional aggregation |
-| Q203 | C7 NULL | Parts below reorder level, all parts listed | ex 12 | NULLs |
-| Q204 | C7 NULL | Average response time by tier | ex 13 | NULLs |
-| Q205 | X1 subqueries/EXISTS | Customers who have paid everything | ex 14 | Subqueries & EXISTS |
-| Q206 | X2 correlated subquery | Longer than that technician usually takes | ex 15 | Subqueries & EXISTS |
-| Q207 | C3 PARTITION BY | The first invoice each customer got | ex 16 | Window frames |
-| Q208 | W1 window frames | Smoothed either side | ex 17 | Window frames |
-| Q209 | C3 PARTITION BY | How long until the machine came back | ex 18 | Window frames |
-| Q210 | W1 window frames | The most-fitted part in each category | ex 19 | Window frames |
-| Q211 | D1 dates & gaps | How long before anyone turned up | ex 20 | Dates & gaps |
-| Q212 | D1 dates & gaps | The longest quiet spell | ex 21 | Dates & gaps |
-| Q213 | D1 dates & gaps | By quarter, not by month | ex 22 | Dates & gaps |
-| Q214 | S1 set operations | Under contract, never called out | ex 23 | Set operations |
-| Q215 | S1 set operations | Running low on the expensive ones | ex 24 | Set operations |
-| Q216 | S1 set operations | Everything that happened to machine 38 | ex 25 | Set operations |
-| Q217 | B1 silent sampling | Average line value by category | ex 26 | Silent sampling |
-| Q218 | B1 silent sampling | What the stock on hand is worth | ex 27 | Silent sampling |
-| Q219 | J1 self-joins | Parts fitted on the same job | ex 28 | Self-joins |
-| Q220 | J1 self-joins | Hired around the same time | ex 29 | Self-joins |
-| Q221 | general | Depot scorecard | ex 30 | General |
+| Q222 | W1 window frames | Invoicing, month by month and so far | ex 1 | Window functions |
+| Q223 | W1 window frames | Month on month | ex 2 | Window functions |
+| Q224 | W2 window ranking | The latest job on each machine | ex 3 | Window functions |
+| Q225 | W2 window ranking | Busiest at each depot, ties and all | ex 4 | Window functions |
+| Q226 | W1 window frames | Three-month rolling average | ex 5 | Window functions |
+| Q227 | W2 window ranking | Quartiles of workload | ex 6 | Window functions |
+| Q228 | W3 window vs GROUP BY | Share of the invoiced total | ex 7 | Window functions |
+| Q229 | W3 window vs GROUP BY | How long until the machine is seen again | ex 8 | Window functions |
+| Q230 | W3 window vs GROUP BY | Each entry against its technician's average | ex 9 | Window functions |
+| Q231 | A2 COUNT and AVG | Certified and not | ex 10 | Aggregation |
+| Q232 | A3 WHERE vs HAVING | Which priorities were busy in 2026 | ex 11 | Aggregation |
+| Q233 | A1 conditional aggregation | Invoice status by priority | ex 12 | Aggregation |
+| Q234 | A2 COUNT and AVG | Average score, where there is one | ex 13 | Aggregation |
+| Q235 | J2 outer joins | Every part, used or not | ex 14 | Joins |
+| Q236 | J2 outer joins | Critical jobs per technician | ex 15 | Joins |
+| Q237 | J1 self-joins | Hired the same year, same depot | ex 16 | Joins |
+| Q238 | J2 outer joins | Machines nobody has touched | ex 17 | Joins |
+| Q239 | E1 EXISTS | Customers still under warranty somewhere | ex 18 | Subqueries & EXISTS |
+| Q240 | E1 EXISTS | Never on a critical job | ex 19 | Subqueries & EXISTS |
+| Q241 | E2 correlated subqueries | Dear for its own category | ex 20 | Subqueries & EXISTS |
+| Q242 | C7 NULL | Ended, running, or open-ended | ex 21 | NULLs |
+| Q243 | C7 NULL | Everyone who is not level 5 | ex 22 | NULLs |
+| Q244 | D1 dates & gaps | The five slowest jobs to close | ex 23 | Dates |
+| Q245 | D1 dates & gaps | Which day of the week is busiest | ex 24 | Dates |
+| Q246 | D1 dates & gaps | Inspections by month, across two years | ex 25 | Dates |
+| Q247 | S1 set operations | Invoiced in a month nothing opened | ex 26 | Set operations |
+| Q248 | S1 set operations | Low on stock and needed for critical work | ex 27 | Set operations |
+| Q249 | C2 grain | Parts and labour on the critical jobs | ex 28 | Grain |
+| Q250 | C2 grain | Spend by part category | ex 29 | Grain |
+| Q251 | general | Machines by age band | ex 30 | General |
 
 ## Retired
 
@@ -268,6 +268,36 @@ they still count as asked.
 | Q159 | C7 NULL | Response times by account tier | - | retired |
 | Q160 | general | Stock value by region | - | retired |
 | Q161 | general | Oldest jobs still open | - | retired |
+| Q192 | R1 recursive CTE | Which branch of the company | - | retired |
+| Q193 | R1 recursive CTE | How deep does your tree go | - | retired |
+| Q194 | R1 recursive CTE | What the people above you cost | - | retired |
+| Q195 | R2 recursive series | Jobs and invoices, month by month | - | retired |
+| Q196 | R2 recursive series | One row per month a contract ran | - | retired |
+| Q197 | R2 recursive series | Every depot, every month | - | retired |
+| Q198 | C2 grain | Machines and contracts per customer | - | retired |
+| Q199 | C2 grain | Average hours a job takes, by priority | - | retired |
+| Q200 | C2 grain | How many customers has each technician served | - | retired |
+| Q201 | A1 conditional aggregation | Billed against collected, by region | - | retired |
+| Q202 | A1 conditional aggregation | What the discount cost, by category | - | retired |
+| Q203 | C7 NULL | Parts below reorder level, all parts listed | - | retired |
+| Q204 | C7 NULL | Average response time by tier | - | retired |
+| Q205 | X1 subqueries/EXISTS | Customers who have paid everything | - | retired |
+| Q206 | X2 correlated subquery | Longer than that technician usually takes | - | retired |
+| Q207 | C3 PARTITION BY | The first invoice each customer got | - | retired |
+| Q208 | W1 window frames | Smoothed either side | - | retired |
+| Q209 | C3 PARTITION BY | How long until the machine came back | - | retired |
+| Q210 | W1 window frames | The most-fitted part in each category | - | retired |
+| Q211 | D1 dates & gaps | How long before anyone turned up | - | retired |
+| Q212 | D1 dates & gaps | The longest quiet spell | - | retired |
+| Q213 | D1 dates & gaps | By quarter, not by month | - | retired |
+| Q214 | S1 set operations | Under contract, never called out | - | retired |
+| Q215 | S1 set operations | Running low on the expensive ones | - | retired |
+| Q216 | S1 set operations | Everything that happened to machine 38 | - | retired |
+| Q217 | B1 silent sampling | Average line value by category | - | retired |
+| Q218 | B1 silent sampling | What the stock on hand is worth | - | retired |
+| Q219 | J1 self-joins | Parts fitted on the same job | - | retired |
+| Q220 | J1 self-joins | Hired around the same time | - | retired |
+| Q221 | general | Depot scorecard | - | retired |
 
 ## History
 
@@ -278,7 +308,7 @@ they still count as asked.
   shipments and returns. Retired when the schema moved to the repair depot.
 - **Q102-Q131** grain-focused set on the repair-depot schema; all 30 solved,
   then retired. Fifteen of them drilled fan-out in five disguises.
-- **Q132-Q161** current set, same schema re-seeded (SEED 41 -> 77) so no answer
+- **Q132-Q161** breadth set, same schema re-seeded (SEED 41 -> 77) so no answer
   value carries over. Deliberately broad rather than deep: 3 set operations,
   2 recursive CTEs, 3 subquery/EXISTS, 3 conditional aggregation, 4 dates and
   gaps, 4 window frames, 3 silent sampling, 2 self-joins, 2 grain, 2 NULLs,
@@ -286,3 +316,12 @@ they still count as asked.
   C8 (alias scope) still has no question: SQLite accepts a SELECT alias even in
   `WHERE`, so the engine cannot enforce the rule. It is covered as prose in
   PRACTICE.md instead.
+- **Q162-Q191** breadth set on the repair-depot schema re-seeded (SEED 77 ->
+  113). Retired after all 30 were solved.
+- **Q192-Q221** set built from observed mistakes, re-seeded again (SEED 113 ->
+  149). Six recursion questions varying the anchor. Retired after all 30 were
+  solved.
+- **Q222-Q251** current set, re-seeded (SEED 149 -> 185). Deliberately easier
+  and recursion-free, weighted toward window functions: 9 window, 4
+  aggregation, 4 joins, 3 subqueries/EXISTS, 3 dates, 2 set operations, 2
+  NULLs, 2 grain, 1 general.
