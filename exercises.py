@@ -1,26 +1,29 @@
 """Practice exercises with reference solutions, used by the GUI to grade answers.
 
-These 30 questions (ledger Q192-Q221) run on the repair-depot schema, re-seeded
-again (SEED 113 -> 149) so every row, name, date and amount differs from the
+These 30 questions (ledger Q222-Q251) run on the repair-depot schema, re-seeded
+again (SEED 149 -> 185) so every row, name, date and amount differs from the
 last set and no remembered answer value carries over.
 
-This set was built from the mistakes made working through Q162-Q191, so it is
-weighted half toward the things that actually went wrong and half toward
-keeping breadth:
+This set is deliberately easier than Q192-Q221, and there is no recursion in it
+at all. Two rules shaped every question:
 
-  grain               3  aggregating at the wrong level, or not at all
-  inside the aggregate 2  SUM(a * b) rather than SUM(a) * b
-  NULLs               2  a LEFT JOIN filtered in WHERE, AVG over missing values
-  every vs any        2  proving something about ALL rows, and correlation
-  recursion           6  branch labels, depth, ancestors, and three shapes of
-                         generated row -- a spine, a per-row expansion, a grid
+  * one concept each. No question stacks a window function on top of a
+    self-join on top of a date trick. If you know the one idea being drilled,
+    the query is short -- no reference solution here runs past six lines.
+  * the prompt states the grain. Where the last set left you to work out what
+    one row meant, these say it: "one row per depot", "one row per month".
 
-The other fifteen keep coverage across window frames, dates, set operations,
-silent sampling and self-joins.
+The weighting follows where the questions have been going lately:
 
-The six recursion questions deliberately vary the ANCHOR, which is where the
-mechanism is easiest to get wrong: the root, the root's direct reports, every
-row paired with itself, a literal, and one row per parent row.
+  window functions    9  ranking, frames, LAG/LEAD, share of total, NTILE
+  aggregation         4  COUNT(*) vs COUNT(col), WHERE vs HAVING, pivots
+  joins               4  outer joins that keep zeroes, self-joins, anti-joins
+  subqueries/EXISTS   3  EXISTS, NOT EXISTS vs NOT IN, correlation
+  dates               3  julianday arithmetic, strftime, %m versus %Y-%m
+  set operations      2  EXCEPT is directional, INTERSECT is not UNION
+  NULLs               2  = NULL never matches, <> silently drops rows
+  grain               2  two child tables fan out; SUM(a*b) is not SUM(a)*b
+  general             1  CASE is first-match-wins
 
 Each question carries:
 
@@ -40,1208 +43,1054 @@ states exactly what to return.
 Spoiler warning: the reference SQL is in this file.
 """
 
-ROOT = "(SELECT technician_id FROM technicians WHERE supervisor_id IS NULL)"
-
-# The month spine every generated-row question reuses: 2025-02 to 2026-07, the
-# full span of opened_at. Written once so a date change cannot drift between
-# questions.
-SPINE = ("WITH RECURSIVE m(mth) AS (SELECT '2025-02' UNION ALL"
-         " SELECT strftime('%Y-%m', date(mth || '-01', '+1 month'))"
-         " FROM m WHERE mth < '2026-07')")
+# The two cut-off dates the questions compare against. Fixed rather than taken
+# from the clock: a question about which contracts have ended has to mean the
+# same thing next month as it does today. The data ends on 2026-07-20.
+CUTOFF = "2026-08-01"
+WARRANTY_FROM = "2026-01-01"
 
 EXERCISES = [
-    # ------------------------------------------------------- recursive CTEs
+    # ---------------------------------------------------- window functions
     dict(
-        id=1, ledger="Q192", concept="R1", tier="Recursive CTEs",
-        title="Which branch of the company",
+        id=1, ledger="Q222", concept="W1", tier="Window functions",
+        title="Invoicing, month by month and so far",
         prompt=(
-            "Every technician except the one at the very top, with the name of"
-            " the top-level manager whose branch they sit in.\n\n"
-            "A top-level manager reports directly to the person at the top and"
-            " heads their own branch, so they appear with their own name.\n\n"
-            "Return: technician_id, name, branch_head"
+            "One row per calendar month in which any invoice was issued: the"
+            " month, what was invoiced in it, and the running total of"
+            " everything invoiced up to and including that month.\n\n"
+            "Months are 'YYYY-MM'. The running total on the last month equals"
+            " the total of every invoice in the table.\n\n"
+            "Return: month, month_total, running_total"
         ),
         solution=(
-            "WITH RECURSIVE br AS ("
-            " SELECT technician_id, name, name AS branch FROM technicians"
-            " WHERE supervisor_id = " + ROOT +
-            " UNION ALL"
-            " SELECT t.technician_id, t.name, b.branch FROM technicians t"
-            " JOIN br b ON t.supervisor_id = b.technician_id)"
-            " SELECT technician_id, name, branch FROM br"
+            "WITH m AS (SELECT strftime('%Y-%m', issued_on) AS mth,"
+            " SUM(amount) AS total FROM invoices GROUP BY 1)"
+            " SELECT mth, ROUND(total, 2),"
+            " ROUND(SUM(total) OVER (ORDER BY mth), 2) FROM m"
         ),
         trap_sql=(
-            "SELECT t.technician_id, t.name, s.name FROM technicians t"
-            " JOIN technicians s ON s.technician_id = t.supervisor_id"
-            " WHERE t.supervisor_id IS NOT NULL"
+            "WITH m AS (SELECT strftime('%Y-%m', issued_on) AS mth,"
+            " SUM(amount) AS total FROM invoices GROUP BY 1)"
+            " SELECT mth, ROUND(total, 2), ROUND(SUM(total) OVER (), 2) FROM m"
         ),
-        note="The anchor is NOT the root here -- it is the root's direct"
-             " reports, each seeded with their own name, and everyone below"
-             " inherits b.branch unchanged. A single self-join gives the"
-             " immediate supervisor, which is right for the second level and"
-             " wrong for everyone under it.",
+        note="ORDER BY inside OVER() is the whole difference. SUM(x) OVER ()"
+             " with no ORDER BY sees every row at once and gives the same grand"
+             " total on every line; SUM(x) OVER (ORDER BY mth) sees only rows up"
+             " to the current one, which is what makes it accumulate.",
         claims=[
-            ("the root is excluded, leaving 13",
-             lambda rows, c: len(rows) == 13),
-            ("the three branch heads appear with their own name",
-             lambda rows, c: sum(1 for r in rows if r[1] == r[2]) == 3),
-        ],
-    ),
-    dict(
-        id=2, ledger="Q193", concept="R1", tier="Recursive CTEs",
-        title="How deep does your tree go",
-        prompt=(
-            "For every technician, how many levels of people sit below them --"
-            " 1 if their deepest report is a direct one, 2 if someone reports"
-            " to a direct report, and so on.\n\n"
-            "Technicians who supervise nobody show 0.\n\n"
-            "Return: technician_id, name, levels_below"
-        ),
-        solution=(
-            "WITH RECURSIVE d AS ("
-            " SELECT technician_id AS boss, technician_id AS sub, 0 AS lvl"
-            " FROM technicians"
-            " UNION ALL"
-            " SELECT d.boss, t.technician_id, d.lvl + 1 FROM technicians t"
-            " JOIN d ON t.supervisor_id = d.sub)"
-            " SELECT t.technician_id, t.name, MAX(d.lvl) FROM technicians t"
-            " JOIN d ON d.boss = t.technician_id"
-            " GROUP BY t.technician_id, t.name"
-        ),
-        trap_sql=(
-            "SELECT t.technician_id, t.name, COUNT(s.technician_id)"
-            " FROM technicians t LEFT JOIN technicians s"
-            " ON s.supervisor_id = t.technician_id"
-            " GROUP BY t.technician_id, t.name"
-        ),
-        note="Recursion ENUMERATES, aggregation SUMMARISES. The CTE produces"
-             " one row per boss-and-subordinate pair carrying its distance;"
-             " MAX over those rows answers 'how deep'. Counting direct reports"
-             " answers a different question and cannot see past level 1.",
-        claims=[
-            ("the ten technicians who supervise nobody come out at 0",
-             lambda rows, c: sum(1 for r in rows if r[2] == 0) == 10),
-            ("the chain runs three levels, so the deepest value is 2",
-             lambda rows, c: max(r[2] for r in rows) == 2),
-        ],
-    ),
-    dict(
-        id=3, ledger="Q194", concept="R1", tier="Recursive CTEs",
-        title="What the people above you cost",
-        prompt=(
-            "For every technician, the total hourly rate of everyone above them"
-            " in the reporting chain -- their supervisor, their supervisor's"
-            " supervisor, and so on to the top.\n\n"
-            "The technician at the top has nobody above them and shows 0.\n\n"
-            "Return: technician_id, name, rate_above"
-        ),
-        solution=(
-            "WITH RECURSIVE anc AS ("
-            " SELECT technician_id AS who, supervisor_id AS aid FROM technicians"
-            " WHERE supervisor_id IS NOT NULL"
-            " UNION ALL"
-            " SELECT a.who, t.supervisor_id FROM anc a"
-            " JOIN technicians t ON t.technician_id = a.aid"
-            " WHERE t.supervisor_id IS NOT NULL)"
-            " SELECT t.technician_id, t.name, COALESCE(SUM(s.hourly_rate), 0)"
-            " FROM technicians t LEFT JOIN anc a ON a.who = t.technician_id"
-            " LEFT JOIN technicians s ON s.technician_id = a.aid"
-            " GROUP BY t.technician_id, t.name"
-        ),
-        trap_sql=(
-            "SELECT t.technician_id, t.name, COALESCE(s.hourly_rate, 0)"
-            " FROM technicians t"
-            " LEFT JOIN technicians s ON s.technician_id = t.supervisor_id"
-        ),
-        note="Walking up collects a SET of ancestors, and the money is summed"
-             " over that set afterwards -- the recursion enumerates, the SUM"
-             " totals. One self-join reaches the immediate supervisor only,"
-             " which is the whole answer at level 2 and short at level 3.",
-        claims=[
-            ("only the root has nobody above it",
-             lambda rows, c: sum(1 for r in rows if r[2] == 0) == 1),
-            ("the other thirteen all have someone above them",
-             lambda rows, c: sum(1 for r in rows if r[2] > 0) == 13),
-        ],
-    ),
-    dict(
-        id=4, ledger="Q195", concept="R2", tier="Recursive CTEs",
-        title="Jobs and invoices, month by month",
-        prompt=(
-            "For every calendar month from 2025-02 to 2026-07 inclusive, how"
-            " many work orders were opened in it and how many invoices were"
-            " issued in it.\n\n"
-            "Every month in the window appears, including any where one or"
-            " both counts are 0.\n\n"
-            "Return: month, work_orders, invoices"
-        ),
-        solution=(
-            SPINE +
-            " SELECT m.mth,"
-            " (SELECT COUNT(*) FROM work_orders w"
-            "  WHERE strftime('%Y-%m', w.opened_at) = m.mth),"
-            " (SELECT COUNT(*) FROM invoices i"
-            "  WHERE strftime('%Y-%m', i.issued_on) = m.mth)"
-            " FROM m"
-        ),
-        trap_sql=(
-            SPINE +
-            " SELECT m.mth, COUNT(w.work_order_id), COUNT(i.invoice_id) FROM m"
-            " LEFT JOIN work_orders w ON strftime('%Y-%m', w.opened_at) = m.mth"
-            " LEFT JOIN invoices i ON strftime('%Y-%m', i.issued_on) = m.mth"
-            " GROUP BY m.mth"
-        ),
-        note="Two independent child tables joined to the same spine multiply"
-             " each other -- a month with 12 jobs and 3 invoices produces 36"
-             " rows and both counts come back inflated. Count each measure in"
-             " its own subquery, or aggregate each one before joining.",
-        claims=[
-            ("every month in the window appears",
-             lambda rows, c: len(rows) == 18),
-            ("the job counts add up to every work order",
-             lambda rows, c: sum(r[1] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM work_orders").fetchone()[0]),
-            ("the invoice counts add up to every invoice",
-             lambda rows, c: sum(r[2] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM invoices").fetchone()[0]),
-        ],
-    ),
-    dict(
-        id=5, ledger="Q196", concept="R2", tier="Recursive CTEs",
-        title="One row per month a contract ran",
-        prompt=(
-            "For every contract that has an end date, one row for each calendar"
-            " month it was active -- from the month it started to the month it"
-            " ended, inclusive.\n\n"
-            "A contract that started and ended in the same month gets one row.\n\n"
-            "Return: contract_id, month"
-        ),
-        solution=(
-            "WITH RECURSIVE cm AS ("
-            " SELECT contract_id, strftime('%Y-%m', start_date) AS mth,"
-            " strftime('%Y-%m', end_date) AS last_m FROM contracts"
-            " WHERE end_date IS NOT NULL"
-            " UNION ALL"
-            " SELECT contract_id,"
-            " strftime('%Y-%m', date(mth || '-01', '+1 month')), last_m"
-            " FROM cm WHERE mth < last_m)"
-            " SELECT contract_id, mth FROM cm"
-        ),
-        trap_sql=(
-            "SELECT contract_id, strftime('%Y-%m', start_date)"
-            " FROM contracts WHERE end_date IS NOT NULL"
-        ),
-        note="The anchor here is not one row but one row PER CONTRACT, and each"
-             " expands into its own series. The stop condition is per-row too:"
-             " mth < last_m compares against a value the anchor carried in, so"
-             " every contract halts at its own end date rather than a shared"
-             " one.",
-        claims=[
-            ("every dated contract contributes at least one month",
-             lambda rows, c: len({r[0] for r in rows}) == c.execute(
-                 "SELECT COUNT(*) FROM contracts WHERE end_date IS NOT NULL"
-             ).fetchone()[0]),
-            ("contracts expand into many months, not one each",
-             lambda rows, c: len(rows) > 2 * len({r[0] for r in rows})),
-        ],
-    ),
-    dict(
-        id=6, ledger="Q197", concept="R2", tier="Recursive CTEs",
-        title="Every depot, every month",
-        prompt=(
-            "A full grid of depot and month: for each of the four depots and"
-            " each calendar month from 2025-02 to 2026-07 inclusive, the labour"
-            " hours logged by that depot's technicians.\n\n"
-            "Every depot-and-month combination appears, including those with no"
-            " hours at all -- those show 0.\n\n"
-            "Return: depot_name, month, hours"
-        ),
-        solution=(
-            SPINE +
-            " SELECT d.name, m.mth, COALESCE(SUM(le.hours), 0) FROM m"
-            " CROSS JOIN depots d"
-            " LEFT JOIN technicians t ON t.depot_id = d.depot_id"
-            " LEFT JOIN labor_entries le ON le.technician_id = t.technician_id"
-            " AND strftime('%Y-%m', le.work_date) = m.mth"
-            " GROUP BY d.name, m.mth"
-        ),
-        trap_sql=(
-            "SELECT d.name, strftime('%Y-%m', le.work_date) mth, SUM(le.hours)"
-            " FROM depots d JOIN technicians t ON t.depot_id = d.depot_id"
-            " JOIN labor_entries le ON le.technician_id = t.technician_id"
-            " GROUP BY d.name, mth"
-        ),
-        note="A generated series CROSS JOINed to a real dimension builds the"
-             " whole grid before any data is attached. Grouping the labour"
-             " table instead can only return combinations that already have"
-             " hours, so the empty ones -- the reason to run the report -- are"
-             " exactly what goes missing.",
-        claims=[
-            ("four depots times eighteen months",
-             lambda rows, c: len(rows) == 72),
-            ("some depot-months have no hours at all",
-             lambda rows, c: sum(1 for r in rows if r[2] == 0) > 0),
-            ("the hours add up to every labour entry",
-             lambda rows, c: abs(sum(r[2] for r in rows) - c.execute(
-                 "SELECT SUM(hours) FROM labor_entries").fetchone()[0]) < 0.01),
-        ],
-    ),
-    # --------------------------------------------------------------- grain
-    dict(
-        id=7, ledger="Q198", concept="C2", tier="Grain",
-        title="Machines and contracts per customer",
-        prompt=(
-            "For every customer: how many machines they have across all their"
-            " sites, and how many contracts they hold.\n\n"
-            "Customers with no machines or no contracts still appear, with 0.\n\n"
-            "Return: customer_id, name, machines, contracts"
-        ),
-        solution=(
-            "SELECT c.customer_id, c.name,"
-            " (SELECT COUNT(*) FROM sites s JOIN machines mm ON mm.site_id = s.site_id"
-            "  WHERE s.customer_id = c.customer_id),"
-            " (SELECT COUNT(*) FROM contracts k WHERE k.customer_id = c.customer_id)"
-            " FROM customers c"
-        ),
-        trap_sql=(
-            "SELECT c.customer_id, c.name, COUNT(DISTINCT mm.machine_id),"
-            " COUNT(k.contract_id)"
-            " FROM customers c LEFT JOIN sites s ON s.customer_id = c.customer_id"
-            " LEFT JOIN machines mm ON mm.site_id = s.site_id"
-            " LEFT JOIN contracts k ON k.customer_id = c.customer_id"
-            " GROUP BY c.customer_id, c.name"
-        ),
-        note="Machines hang off sites and contracts hang off the customer, so"
-             " joining both fans one out by the other. DISTINCT rescues the"
-             " machine count and quietly leaves the contract count multiplied"
-             " by the number of machines -- half-fixing it is worse than not,"
-             " because the surviving error looks deliberate.",
-        claims=[
-            ("every customer appears",
-             lambda rows, c: len(rows) == 28),
-            ("the machine counts total every machine on a customer site",
-             lambda rows, c: sum(r[2] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM machines mm JOIN sites s"
-                 " ON s.site_id = mm.site_id").fetchone()[0]),
-            ("the contract counts total every contract",
-             lambda rows, c: sum(r[3] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM contracts").fetchone()[0]),
-        ],
-    ),
-    dict(
-        id=8, ledger="Q199", concept="C2", tier="Grain",
-        title="Average hours a job takes, by priority",
-        prompt=(
-            "For each priority, the average number of labour hours a work order"
-            " takes -- total hours on the job, averaged across the jobs.\n\n"
-            "Only jobs that have logged labour count.\n\n"
-            "Return: priority, avg_hours"
-        ),
-        solution=(
-            "WITH per_job AS (SELECT w.work_order_id, w.priority,"
-            " SUM(le.hours) AS h FROM work_orders w"
-            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
-            " GROUP BY w.work_order_id, w.priority)"
-            " SELECT priority, AVG(h) FROM per_job GROUP BY priority"
-        ),
-        trap_sql=(
-            "SELECT w.priority, AVG(le.hours) FROM work_orders w"
-            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
-            " GROUP BY w.priority"
-        ),
-        note="Averaging labor_entries averages VISITS, not jobs -- a job with"
-             " four visits pulls the mean four times and the answer comes back"
-             " near the size of one visit. Roll up to one row per job first,"
-             " then average those. The grain you average over decides what the"
-             " number means.",
-        claims=[
-            ("all four priorities appear",
-             lambda rows, c: len(rows) == 4),
-            ("a job averages more hours than a single visit",
-             lambda rows, c: min(r[1] for r in rows) > c.execute(
-                 "SELECT AVG(hours) FROM labor_entries").fetchone()[0]),
-        ],
-    ),
-    dict(
-        id=9, ledger="Q200", concept="C2", tier="Grain",
-        title="How many customers has each technician served",
-        prompt=(
-            "For every technician who has been assigned work, how many"
-            " DIFFERENT customers they have worked for.\n\n"
-            "A technician who did ten jobs for one customer has served one"
-            " customer, not ten.\n\n"
-            "Return: technician_id, name, customers"
-        ),
-        solution=(
-            "SELECT t.technician_id, t.name, COUNT(DISTINCT s.customer_id)"
-            " FROM technicians t"
-            " JOIN work_orders w ON w.technician_id = t.technician_id"
-            " JOIN machines mm ON mm.machine_id = w.machine_id"
-            " JOIN sites s ON s.site_id = mm.site_id"
-            " GROUP BY t.technician_id, t.name"
-        ),
-        trap_sql=(
-            "SELECT t.technician_id, t.name, COUNT(*) FROM technicians t"
-            " JOIN work_orders w ON w.technician_id = t.technician_id"
-            " JOIN machines mm ON mm.machine_id = w.machine_id"
-            " JOIN sites s ON s.site_id = mm.site_id"
-            " GROUP BY t.technician_id, t.name"
-        ),
-        note="After the joins one row is one WORK ORDER, not one customer, so"
-             " COUNT(*) counts jobs. The question asks how many distinct things"
-             " sit at the far end of the chain, which is COUNT(DISTINCT) on"
-             " that column -- the row count and the answer are different"
-             " numbers whenever anyone was visited twice.",
-        claims=[
-            ("every technician has been assigned work",
-             lambda rows, c: len(rows) == 14),
-            ("technicians serve fewer customers than they do jobs",
-             lambda rows, c: sum(r[2] for r in rows) < c.execute(
-                 "SELECT COUNT(*) FROM work_orders").fetchone()[0]),
-        ],
-    ),
-    # ------------------------------------------- conditional aggregation
-    dict(
-        id=10, ledger="Q201", concept="A1", tier="Conditional aggregation",
-        title="Billed against collected, by region",
-        prompt=(
-            "For each region: the total value of every invoice raised against"
-            " its customers' machines, and the total value of just the ones"
-            " that have been paid.\n\n"
-            "An invoice counts as paid when it has a paid date. A region whose"
-            " customers have never been invoiced does not appear.\n\n"
-            "Return: region_name, billed, collected"
-        ),
-        solution=(
-            "SELECT r.name, SUM(i.amount),"
-            " SUM(CASE WHEN i.paid_on IS NOT NULL THEN i.amount ELSE 0 END)"
-            " FROM invoices i"
-            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            " JOIN machines mm ON mm.machine_id = w.machine_id"
-            " JOIN sites s ON s.site_id = mm.site_id"
-            " JOIN regions r ON r.region_id = s.region_id GROUP BY r.name"
-        ),
-        trap_sql=(
-            "SELECT r.name, SUM(i.amount),"
-            " CASE WHEN i.paid_on IS NOT NULL THEN SUM(i.amount) ELSE 0 END"
-            " FROM invoices i"
-            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            " JOIN machines mm ON mm.machine_id = w.machine_id"
-            " JOIN sites s ON s.site_id = mm.site_id"
-            " JOIN regions r ON r.region_id = s.region_id GROUP BY r.name"
-        ),
-        note="The aggregate in the THEN branch does not protect the WHEN test."
-             " SUM runs over the group; paid_on IS NOT NULL is evaluated"
-             " against one arbitrary row SQLite happened to scan, so the whole"
-             " region is billed or written off on the strength of a single"
-             " invoice. The condition belongs INSIDE the aggregate.",
-        claims=[
-            ("the four regions with invoices appear; Scotland has none",
-             lambda rows, c: len(rows) == 4),
-            ("collected never exceeds billed",
-             lambda rows, c: all(r[2] <= r[1] + 0.01 for r in rows)),
-            ("billed totals every invoice",
-             lambda rows, c: abs(sum(r[1] for r in rows) - c.execute(
+            ("one row per month invoiced, 19 of them",
+             lambda rows, c: len(rows) == 19),
+            ("the last running total equals every invoice added up",
+             lambda rows, c: abs(max(r[2] for r in rows) - c.execute(
                  "SELECT SUM(amount) FROM invoices").fetchone()[0]) < 0.01),
         ],
     ),
     dict(
-        id=11, ledger="Q202", concept="A1", tier="Conditional aggregation",
-        title="What the discount cost, by category",
+        id=2, ledger="Q223", concept="W1", tier="Window functions",
+        title="Month on month",
         prompt=(
-            "For each part category: the total value of the parts fitted at"
-            " list price, and the total actually charged after the discount on"
-            " each line.\n\n"
-            "A line is worth quantity * unit_price at list, and"
-            " quantity * unit_price * (1 - discount) after discount.\n\n"
-            "Return: category, at_list, after_discount"
+            "One row per month in which any work order was opened: the month,"
+            " how many were opened, and the change from the month before.\n\n"
+            "The earliest month has no month before it, so its change is"
+            " NULL -- leave it NULL rather than turning it into 0.\n\n"
+            "Return: month, work_orders, change"
         ),
         solution=(
-            "SELECT p.category, SUM(pu.quantity * pu.unit_price),"
-            " SUM(pu.quantity * pu.unit_price * (1 - pu.discount))"
-            " FROM parts p JOIN parts_used pu ON pu.part_id = p.part_id"
-            " GROUP BY p.category"
+            "WITH m AS (SELECT strftime('%Y-%m', opened_at) AS mth,"
+            " COUNT(*) AS n FROM work_orders GROUP BY 1)"
+            " SELECT mth, n, n - LAG(n) OVER (ORDER BY mth) FROM m"
         ),
         trap_sql=(
-            "SELECT p.category, SUM(pu.quantity * pu.unit_price),"
-            " SUM(pu.quantity * pu.unit_price) * (1 - pu.discount)"
-            " FROM parts p JOIN parts_used pu ON pu.part_id = p.part_id"
-            " GROUP BY p.category"
+            "WITH m AS (SELECT strftime('%Y-%m', opened_at) AS mth,"
+            " COUNT(*) AS n FROM work_orders GROUP BY 1)"
+            " SELECT mth, n, n - LAG(n) OVER (PARTITION BY mth ORDER BY mth)"
+            " FROM m"
         ),
-        note="SUM(a * b) and SUM(a) * b agree only while b is constant across"
-             " the group. There are four discount rates in this data, so the"
-             " second form totals the category at list and then applies ONE"
-             " arbitrary line's discount to all of it. Per-row arithmetic goes"
-             " inside the aggregate.",
+        note="PARTITION BY mth puts every month in a window of its own, so LAG"
+             " looks for a previous row inside a one-row window and finds"
+             " nothing: every change comes back NULL. You partition by what the"
+             " rows have in COMMON, and order by what separates them. Here"
+             " nothing is in common -- there is one series -- so no PARTITION.",
         claims=[
-            ("all nine categories appear",
-             lambda rows, c: len(rows) == 9),
-            ("the discount always reduces the total",
-             lambda rows, c: all(r[2] < r[1] for r in rows)),
-            ("more than one discount rate is in use, so the two forms differ",
-             lambda rows, c: c.execute(
-                 "SELECT COUNT(DISTINCT discount) FROM parts_used").fetchone()[0] > 1),
-        ],
-    ),
-    # --------------------------------------------------------------- NULLs
-    dict(
-        id=12, ledger="Q203", concept="C7", tier="NULLs",
-        title="Parts below reorder level, all parts listed",
-        prompt=(
-            "Every part in the catalogue, with how many depots hold it below"
-            " its reorder level.\n\n"
-            "All 40 parts appear. A part nobody stocks, or one whose stock"
-            " lines have no reorder level set, shows 0.\n\n"
-            "Return: part_id, name, depots_below"
-        ),
-        solution=(
-            "SELECT p.part_id, p.name, COUNT(ps.depot_id)"
-            " FROM parts p LEFT JOIN part_stock ps ON ps.part_id = p.part_id"
-            " AND ps.reorder_level IS NOT NULL"
-            " AND ps.quantity_on_hand < ps.reorder_level"
-            " GROUP BY p.part_id, p.name"
-        ),
-        trap_sql=(
-            "SELECT p.part_id, p.name, COUNT(ps.depot_id)"
-            " FROM parts p LEFT JOIN part_stock ps ON ps.part_id = p.part_id"
-            " WHERE ps.reorder_level IS NOT NULL"
-            " AND ps.quantity_on_hand < ps.reorder_level"
-            " GROUP BY p.part_id, p.name"
-        ),
-        note="On a LEFT JOIN a condition about the RIGHT table belongs in ON,"
-             " not WHERE. Unmatched rows carry NULL on the right, every WHERE"
-             " test against NULL fails, and the rows the LEFT JOIN just"
-             " preserved are thrown straight back out -- an inner join wearing"
-             " a LEFT JOIN costume. COUNT(ps.depot_id) rather than COUNT(*) is"
-             " what makes the survivors read 0.",
-        claims=[
-            ("all forty parts appear",
-             lambda rows, c: len(rows) == 40),
-            ("most parts are not below reorder anywhere",
-             lambda rows, c: sum(1 for r in rows if r[2] == 0) > 20),
+            ("18 months, and exactly one NULL change",
+             lambda rows, c: len(rows) == 18
+             and sum(1 for r in rows if r[2] is None) == 1),
         ],
     ),
     dict(
-        id=13, ledger="Q204", concept="C7", tier="NULLs",
-        title="Average response time by tier",
+        id=3, ledger="Q224", concept="W2", tier="Window functions",
+        title="The latest job on each machine",
         prompt=(
-            "For each account tier: how many contracts those customers hold,"
-            " and the average agreed response time across them.\n\n"
-            "Contracts that agreed no response time still count toward the"
-            " contract number, but must not drag the average down. Customers"
-            " with no tier recorded are a tier of their own.\n\n"
-            "Return: account_tier, contracts, avg_response_hours"
+            "For every machine that has ever had a work order, its most recent"
+            " one. One row per machine -- machines with no work orders at all"
+            " do not appear.\n\n"
+            "No machine has two work orders opened on the same date, so 'most"
+            " recent' is never a tie.\n\n"
+            "Return: machine_id, work_order_id, opened_at"
         ),
         solution=(
-            "SELECT c.account_tier, COUNT(*), AVG(k.response_hours)"
-            " FROM customers c JOIN contracts k ON k.customer_id = c.customer_id"
-            " GROUP BY c.account_tier"
+            "WITH r AS (SELECT machine_id, work_order_id, opened_at,"
+            " ROW_NUMBER() OVER (PARTITION BY machine_id"
+            " ORDER BY opened_at DESC) AS rn FROM work_orders)"
+            " SELECT machine_id, work_order_id, opened_at FROM r WHERE rn = 1"
         ),
         trap_sql=(
-            "SELECT c.account_tier, COUNT(*),"
-            " SUM(k.response_hours) * 1.0 / COUNT(*)"
-            " FROM customers c JOIN contracts k ON k.customer_id = c.customer_id"
-            " GROUP BY c.account_tier"
+            "WITH r AS (SELECT machine_id, work_order_id, opened_at,"
+            " ROW_NUMBER() OVER (ORDER BY opened_at DESC) AS rn"
+            " FROM work_orders)"
+            " SELECT machine_id, work_order_id, opened_at FROM r WHERE rn = 1"
         ),
-        note="AVG ignores NULLs in the divisor as well as the sum, so it"
-             " averages over the contracts that actually agreed a time."
-             " SUM/COUNT(*) divides by every contract including the ones with"
-             " no time at all, which quietly understates every tier. The"
-             " NULL tier is kept by GROUP BY, the one place SQL treats NULLs"
-             " as equal to each other.",
+        note="Without PARTITION BY the numbering runs straight through the"
+             " whole table, so rn = 1 is the single latest work order anywhere"
+             " and you get one row back instead of one per machine. PARTITION BY"
+             " restarts the count for each machine -- it is the GROUP BY of the"
+             " window world, except the detail rows survive.",
         claims=[
-            ("the untiered customers get their own row",
-             lambda rows, c: any(r[0] is None for r in rows)),
-            ("the contract counts total every contract held by a customer",
-             lambda rows, c: sum(r[1] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM contracts").fetchone()[0]),
-            ("some contracts agreed no response time",
-             lambda rows, c: c.execute(
-                 "SELECT COUNT(*) FROM contracts WHERE response_hours IS NULL"
-             ).fetchone()[0] > 0),
+            ("one row per machine that has any work order, 71 of them",
+             lambda rows, c: len(rows) == 71
+             and len({r[0] for r in rows}) == len(rows)),
+        ],
+    ),
+    dict(
+        id=4, ledger="Q225", concept="W2", tier="Window functions",
+        title="Busiest at each depot, ties and all",
+        prompt=(
+            "The busiest technician at each depot, counting work orders they"
+            " are the assigned technician on.\n\n"
+            "One depot has two technicians tied on the same count. Both of them"
+            " must appear -- five rows in total, not four.\n\n"
+            "Return: depot_id, technician_id, name, work_orders"
+        ),
+        solution=(
+            "WITH c AS (SELECT t.depot_id, t.technician_id, t.name,"
+            " COUNT(w.work_order_id) AS n FROM technicians t"
+            " LEFT JOIN work_orders w ON w.technician_id = t.technician_id"
+            " GROUP BY 1, 2, 3),"
+            " r AS (SELECT *, RANK() OVER (PARTITION BY depot_id"
+            " ORDER BY n DESC) AS rk FROM c)"
+            " SELECT depot_id, technician_id, name, n FROM r WHERE rk = 1"
+        ),
+        trap_sql=(
+            "WITH c AS (SELECT t.depot_id, t.technician_id, t.name,"
+            " COUNT(w.work_order_id) AS n FROM technicians t"
+            " LEFT JOIN work_orders w ON w.technician_id = t.technician_id"
+            " GROUP BY 1, 2, 3),"
+            " r AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY depot_id"
+            " ORDER BY n DESC) AS rk FROM c)"
+            " SELECT depot_id, technician_id, name, n FROM r WHERE rk = 1"
+        ),
+        note="ROW_NUMBER always hands out 1, 2, 3 with no repeats, so when two"
+             " technicians tie it picks one of them arbitrarily and you silently"
+             " lose the other. RANK gives tied rows the same number. Rule of"
+             " thumb: ROW_NUMBER when you want exactly one row, RANK when you"
+             " want everyone who earned the position.",
+        claims=[
+            ("five rows across four depots -- one depot is tied",
+             lambda rows, c: len(rows) == 5 and len({r[0] for r in rows}) == 4),
+        ],
+    ),
+    dict(
+        id=5, ledger="Q226", concept="W1", tier="Window functions",
+        title="Three-month rolling average",
+        prompt=(
+            "One row per month in which any work order was opened: the month,"
+            " how many were opened, and the average over that month and the two"
+            " months before it.\n\n"
+            "The first month averages just itself, the second averages two"
+            " months, and every month after that averages three.\n\n"
+            "Return: month, work_orders, rolling_avg"
+        ),
+        solution=(
+            "WITH m AS (SELECT strftime('%Y-%m', opened_at) AS mth,"
+            " COUNT(*) AS n FROM work_orders GROUP BY 1)"
+            " SELECT mth, n, ROUND(AVG(n) OVER (ORDER BY mth"
+            " ROWS BETWEEN 2 PRECEDING AND CURRENT ROW), 2) FROM m"
+        ),
+        trap_sql=(
+            "WITH m AS (SELECT strftime('%Y-%m', opened_at) AS mth,"
+            " COUNT(*) AS n FROM work_orders GROUP BY 1)"
+            " SELECT mth, n, ROUND(AVG(n) OVER (ORDER BY mth), 2) FROM m"
+        ),
+        note="An OVER() with ORDER BY and no ROWS clause does not mean 'no"
+             " frame' -- it means the default frame, everything from the start"
+             " up to the current row. That is a running average over all history,"
+             " not a rolling one. ROWS BETWEEN 2 PRECEDING AND CURRENT ROW is"
+             " what pins the window to three rows.",
+        claims=[
+            ("18 months, and the first rolling average is just that month",
+             lambda rows, c: len(rows) == 18
+             and abs(min(rows, key=lambda r: r[0])[2]
+                     - min(rows, key=lambda r: r[0])[1]) < 0.01),
+        ],
+    ),
+    dict(
+        id=6, ledger="Q227", concept="W2", tier="Window functions",
+        title="Quartiles of workload",
+        prompt=(
+            "Every technician who has logged any labour, with their total hours"
+            " and which quarter of the workforce they fall into by hours:"
+            " 1 for the busiest quarter, 4 for the quietest.\n\n"
+            "Fourteen technicians split into four groups, so the first two"
+            " groups get four each and the last two get three.\n\n"
+            "Return: technician_id, total_hours, quartile"
+        ),
+        solution=(
+            "SELECT technician_id, ROUND(SUM(hours), 2),"
+            " NTILE(4) OVER (ORDER BY SUM(hours) DESC)"
+            " FROM labor_entries GROUP BY technician_id"
+        ),
+        trap_sql=(
+            "SELECT technician_id, ROUND(SUM(hours), 2),"
+            " NTILE(4) OVER (ORDER BY SUM(hours))"
+            " FROM labor_entries GROUP BY technician_id"
+        ),
+        note="NTILE(4) deals the rows into four groups in the order you give"
+             " it, so the ORDER BY direction decides which end gets bucket 1."
+             " Ascending puts the QUIETEST technician in bucket 1. Whenever a"
+             " question says 'top' or 'busiest', say DESC out loud and check it"
+             " is actually in the OVER clause.",
+        claims=[
+            ("14 technicians, bucketed 4/4/3/3",
+             lambda rows, c: len(rows) == 14
+             and sorted(sum(1 for r in rows if r[2] == q) for q in (1, 2, 3, 4))
+             == [3, 3, 4, 4]),
+            ("bucket 1 holds more hours than bucket 4",
+             lambda rows, c: min(r[1] for r in rows if r[2] == 1)
+             > max(r[1] for r in rows if r[2] == 4)),
+        ],
+    ),
+    dict(
+        id=7, ledger="Q228", concept="W3", tier="Window functions",
+        title="Share of the invoiced total",
+        prompt=(
+            "One row per work-order priority: the priority, the total invoiced"
+            " on work orders of that priority, and that total as a percentage"
+            " of everything invoiced.\n\n"
+            "Only work orders that actually have an invoice count. The four"
+            " percentages add up to 100.\n\n"
+            "Return: priority, invoiced, pct_of_total"
+        ),
+        solution=(
+            "WITH p AS (SELECT w.priority, SUM(i.amount) AS amt FROM invoices i"
+            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
+            " GROUP BY 1)"
+            " SELECT priority, ROUND(amt, 2),"
+            " ROUND(100.0 * amt / SUM(amt) OVER (), 2) FROM p"
+        ),
+        trap_sql=(
+            "WITH p AS (SELECT w.priority, SUM(i.amount) AS amt FROM invoices i"
+            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
+            " GROUP BY 1)"
+            " SELECT priority, ROUND(amt, 2),"
+            " ROUND(100.0 * amt / SUM(amt) OVER (PARTITION BY priority), 2)"
+            " FROM p"
+        ),
+        note="This is the mirror image of question 1. There you needed the"
+             " window narrowed and here you need it wide open: OVER () with"
+             " nothing in it is every row, which is exactly the denominator a"
+             " share needs. PARTITION BY priority shrinks the window to the row"
+             " itself, so every share comes out as 100%.",
+        claims=[
+            ("four priorities, and the percentages sum to 100",
+             lambda rows, c: len(rows) == 4
+             and abs(sum(r[2] for r in rows) - 100) < 0.05),
+        ],
+    ),
+    dict(
+        id=8, ledger="Q229", concept="W3", tier="Window functions",
+        title="How long until the machine is seen again",
+        prompt=(
+            "Every work order, with the number of whole days until the NEXT"
+            " work order opened on the same machine.\n\n"
+            "The most recent work order on each machine has nothing after it,"
+            " so its gap is NULL. One row per work order -- all 180.\n\n"
+            "Return: machine_id, work_order_id, opened_at, days_to_next"
+        ),
+        solution=(
+            "SELECT machine_id, work_order_id, opened_at,"
+            " CAST(julianday(LEAD(opened_at) OVER (PARTITION BY machine_id"
+            " ORDER BY opened_at)) - julianday(opened_at) AS INTEGER)"
+            " FROM work_orders"
+        ),
+        trap_sql=(
+            "SELECT machine_id, work_order_id, opened_at,"
+            " CAST(julianday(LEAD(opened_at) OVER (ORDER BY opened_at))"
+            " - julianday(opened_at) AS INTEGER) FROM work_orders"
+        ),
+        note="LEAD without PARTITION BY hands you the next work order in the"
+             " whole company, not the next one on that machine, and because the"
+             " company is busy those gaps are almost all 0 or 1. The partition"
+             " is what makes 'next' mean next-within-this-machine. Same idea as"
+             " LAG in question 2, pointing forwards instead of back.",
+        claims=[
+            ("all 180 work orders, and 71 of them end a machine's history",
+             lambda rows, c: len(rows) == 180
+             and sum(1 for r in rows if r[3] is None) == 71),
+        ],
+    ),
+    dict(
+        id=9, ledger="Q230", concept="W3", tier="Window functions",
+        title="Each entry against its technician's average",
+        prompt=(
+            "Every labour entry dated in January 2026, with the average hours"
+            " of the January entries belonging to that same technician.\n\n"
+            "One row per entry, not one per technician: the same average"
+            " repeats down each technician's entries.\n\n"
+            "Return: entry_id, technician_id, hours, tech_avg"
+        ),
+        solution=(
+            "SELECT entry_id, technician_id, hours,"
+            " ROUND(AVG(hours) OVER (PARTITION BY technician_id), 2)"
+            " FROM labor_entries"
+            " WHERE work_date >= '2026-01-01' AND work_date < '2026-02-01'"
+        ),
+        trap_sql=(
+            "SELECT MIN(entry_id), technician_id, SUM(hours),"
+            " ROUND(AVG(hours), 2) FROM labor_entries"
+            " WHERE work_date >= '2026-01-01' AND work_date < '2026-02-01'"
+            " GROUP BY technician_id"
+        ),
+        note="This is the difference between the two in one query. GROUP BY"
+             " collapses the entries and you can never see an individual one"
+             " again; the window function computes the same average but leaves"
+             " every row standing beside it. When a question wants detail AND a"
+             " summary in the same row, that is the signal for a window.",
+        claims=[
+            ("one row per January entry, and each technician's average repeats",
+             lambda rows, c: len(rows) == c.execute(
+                 "SELECT COUNT(*) FROM labor_entries WHERE work_date >="
+                 " '2026-01-01' AND work_date < '2026-02-01'").fetchone()[0]
+             and len({r[1] for r in rows}) < len(rows)),
+        ],
+    ),
+    # -------------------------------------------------------- aggregation
+    dict(
+        id=10, ledger="Q231", concept="A2", tier="Aggregation",
+        title="Certified and not",
+        prompt=(
+            "One row per depot: how many technicians it has, and how many of"
+            " them have a certification level recorded.\n\n"
+            "Four technicians company-wide have no cert_level, so the two"
+            " counts differ at the depots those technicians work from.\n\n"
+            "Return: depot_id, depot_name, technicians, certified"
+        ),
+        solution=(
+            "SELECT d.depot_id, d.name, COUNT(*), COUNT(t.cert_level)"
+            " FROM depots d JOIN technicians t ON t.depot_id = d.depot_id"
+            " GROUP BY 1, 2"
+        ),
+        trap_sql=(
+            "SELECT d.depot_id, d.name, COUNT(*), COUNT(*)"
+            " FROM depots d JOIN technicians t ON t.depot_id = d.depot_id"
+            " GROUP BY 1, 2"
+        ),
+        note="COUNT(*) counts rows. COUNT(column) counts rows where that column"
+             " is not NULL. That single difference is the cheapest way to count"
+             " 'how many of these have a value' -- no CASE, no subquery. It also"
+             " means COUNT(some_column) after a LEFT JOIN is how you get a"
+             " genuine zero instead of a phantom 1.",
+        claims=[
+            ("four depots, 14 technicians, 10 of them certified",
+             lambda rows, c: len(rows) == 4
+             and sum(r[2] for r in rows) == 14
+             and sum(r[3] for r in rows) == 10),
+        ],
+    ),
+    dict(
+        id=11, ledger="Q232", concept="A3", tier="Aggregation",
+        title="Which priorities were busy in 2026",
+        prompt=(
+            "Counting only work orders opened on or after 2026-01-01, one row"
+            " per priority, keeping the priorities with at least 15 of them.\n\n"
+            "Two of the four priorities clear the bar.\n\n"
+            "Return: priority, work_orders"
+        ),
+        solution=(
+            "SELECT priority, COUNT(*) FROM work_orders"
+            " WHERE opened_at >= '2026-01-01'"
+            " GROUP BY priority HAVING COUNT(*) >= 15"
+        ),
+        trap_sql=(
+            "SELECT priority, COUNT(*) FROM work_orders"
+            " GROUP BY priority"
+            " HAVING opened_at >= '2026-01-01' AND COUNT(*) >= 15"
+        ),
+        note="WHERE throws away ROWS before grouping; HAVING throws away GROUPS"
+             " after. The date test is about a row, so it belongs in WHERE."
+             " Put it in HAVING and SQLite does not complain -- it just picks"
+             " one arbitrary row's opened_at to test, and every count you get"
+             " back is over all history rather than 2026.",
+        claims=[
+            ("two priorities clear 15 in 2026",
+             lambda rows, c: len(rows) == 2 and all(r[1] >= 15 for r in rows)),
+        ],
+    ),
+    dict(
+        id=12, ledger="Q233", concept="A1", tier="Aggregation",
+        title="Invoice status by priority",
+        prompt=(
+            "One row per work-order priority, with the number of its invoices"
+            " in each of three statuses side by side as columns.\n\n"
+            "Every priority has at least one PAID invoice; some have zero"
+            " PENDING or zero OVERDUE, and those must show as 0.\n\n"
+            "Return: priority, paid, pending, overdue"
+        ),
+        solution=(
+            "SELECT w.priority,"
+            " SUM(CASE WHEN i.status = 'PAID' THEN 1 ELSE 0 END),"
+            " SUM(CASE WHEN i.status = 'PENDING' THEN 1 ELSE 0 END),"
+            " SUM(CASE WHEN i.status = 'OVERDUE' THEN 1 ELSE 0 END)"
+            " FROM work_orders w"
+            " JOIN invoices i ON i.work_order_id = w.work_order_id"
+            " GROUP BY 1"
+        ),
+        trap_sql=(
+            "SELECT w.priority,"
+            " COUNT(CASE WHEN i.status = 'PAID' THEN 1 ELSE 0 END),"
+            " COUNT(CASE WHEN i.status = 'PENDING' THEN 1 ELSE 0 END),"
+            " COUNT(CASE WHEN i.status = 'OVERDUE' THEN 1 ELSE 0 END)"
+            " FROM work_orders w"
+            " JOIN invoices i ON i.work_order_id = w.work_order_id"
+            " GROUP BY 1"
+        ),
+        note="Pick ONE of two shapes and stick to it: SUM(CASE WHEN c THEN 1"
+             " ELSE 0 END) or COUNT(CASE WHEN c THEN 1 END). The mixture in the"
+             " trap -- COUNT over an ELSE 0 -- counts every row, because 0 is a"
+             " value and COUNT only skips NULL. All three columns come back"
+             " identical to the row count, which is the tell.",
+        claims=[
+            ("four priorities, and the three columns total every invoice"
+             " that is not VOID",
+             lambda rows, c: len(rows) == 4
+             and sum(r[1] + r[2] + r[3] for r in rows) == c.execute(
+                 "SELECT COUNT(*) FROM invoices WHERE status <> 'VOID'"
+             ).fetchone()[0]),
+        ],
+    ),
+    dict(
+        id=13, ledger="Q234", concept="A2", tier="Aggregation",
+        title="Average score, where there is one",
+        prompt=(
+            "One row per inspection result: how many inspections had that"
+            " result, how many of them carry a score, and the average of the"
+            " scores that exist.\n\n"
+            "Plenty of inspections have no score at all. The average must be"
+            " over the scored ones only.\n\n"
+            "Return: result, inspections, scored, avg_score"
+        ),
+        solution=(
+            "SELECT result, COUNT(*), COUNT(score), ROUND(AVG(score), 2)"
+            " FROM inspections GROUP BY result"
+        ),
+        trap_sql=(
+            "SELECT result, COUNT(*), COUNT(score),"
+            " ROUND(SUM(score) * 1.0 / COUNT(*), 2)"
+            " FROM inspections GROUP BY result"
+        ),
+        note="AVG already ignores NULLs -- it divides by the number of non-NULL"
+             " values, not by the number of rows. Rebuilding it as SUM/COUNT(*)"
+             " quietly puts the unscored inspections into the denominator and"
+             " drags every average down. If you ever do need SUM over rows"
+             " rather than values, that is SUM(COALESCE(score, 0)) and say so.",
+        claims=[
+            ("three results, and fewer scored than inspected in each",
+             lambda rows, c: len(rows) == 3 and all(r[2] < r[1] for r in rows)),
+        ],
+    ),
+    # -------------------------------------------------------------- joins
+    dict(
+        id=14, ledger="Q235", concept="J2", tier="Joins",
+        title="Every part, used or not",
+        prompt=(
+            "One row for every part in the catalogue: its id, its name, and the"
+            " number of DISTINCT work orders it has been used on.\n\n"
+            "Four parts have never been used on anything. They must appear"
+            " with 0, so all 40 parts come back.\n\n"
+            "Return: part_id, name, work_orders"
+        ),
+        solution=(
+            "SELECT p.part_id, p.name, COUNT(DISTINCT pu.work_order_id)"
+            " FROM parts p LEFT JOIN parts_used pu ON pu.part_id = p.part_id"
+            " GROUP BY 1, 2"
+        ),
+        trap_sql=(
+            "SELECT p.part_id, p.name, COUNT(DISTINCT pu.work_order_id)"
+            " FROM parts p JOIN parts_used pu ON pu.part_id = p.part_id"
+            " GROUP BY 1, 2"
+        ),
+        note="An inner join can only ever return parts that matched, so the"
+             " four unused parts vanish rather than showing 0 -- and 'the ones"
+             " with none' is usually exactly what the question is about. Note"
+             " the pairing: LEFT JOIN plus COUNT(a column from the right side)."
+             " COUNT(*) there would give the unused parts a 1.",
+        claims=[
+            ("all 40 parts, four of them unused",
+             lambda rows, c: len(rows) == 40
+             and sum(1 for r in rows if r[2] == 0) == 4),
+        ],
+    ),
+    dict(
+        id=15, ledger="Q236", concept="J2", tier="Joins",
+        title="Critical jobs per technician",
+        prompt=(
+            "One row for every technician: id, name, and how many CRITICAL work"
+            " orders they are the assigned technician on.\n\n"
+            "Five technicians have never been assigned one. They must appear"
+            " with 0, so all 14 technicians come back.\n\n"
+            "Return: technician_id, name, critical_jobs"
+        ),
+        solution=(
+            "SELECT t.technician_id, t.name, COUNT(w.work_order_id)"
+            " FROM technicians t LEFT JOIN work_orders w"
+            " ON w.technician_id = t.technician_id AND w.priority = 'critical'"
+            " GROUP BY 1, 2"
+        ),
+        trap_sql=(
+            "SELECT t.technician_id, t.name, COUNT(w.work_order_id)"
+            " FROM technicians t LEFT JOIN work_orders w"
+            " ON w.technician_id = t.technician_id"
+            " WHERE w.priority = 'critical' GROUP BY 1, 2"
+        ),
+        note="A condition on the right-hand table has to go in the ON clause of"
+             " a LEFT JOIN. In WHERE it runs AFTER the join has already padded"
+             " the unmatched technicians with NULLs, and NULL = 'critical' is"
+             " not true, so those rows are filtered straight back out and the"
+             " outer join silently becomes an inner one.",
+        claims=[
+            ("all 14 technicians, five with none",
+             lambda rows, c: len(rows) == 14
+             and sum(1 for r in rows if r[2] == 0) == 5),
+        ],
+    ),
+    dict(
+        id=16, ledger="Q237", concept="J1", tier="Joins",
+        title="Hired the same year, same depot",
+        prompt=(
+            "Pairs of technicians who work from the same depot and were hired"
+            " in the same calendar year.\n\n"
+            "Each pair once, not twice: Ann with Bob, never also Bob with Ann,"
+            " and nobody paired with themselves. Three pairs exist.\n\n"
+            "Return: depot_id, name_a, name_b"
+        ),
+        solution=(
+            "SELECT a.depot_id, a.name, b.name FROM technicians a"
+            " JOIN technicians b ON b.depot_id = a.depot_id"
+            " AND strftime('%Y', b.hired_on) = strftime('%Y', a.hired_on)"
+            " AND b.technician_id > a.technician_id"
+        ),
+        trap_sql=(
+            "SELECT a.depot_id, a.name, b.name FROM technicians a"
+            " JOIN technicians b ON b.depot_id = a.depot_id"
+            " AND strftime('%Y', b.hired_on) = strftime('%Y', a.hired_on)"
+            " AND b.technician_id <> a.technician_id"
+        ),
+        note="<> only stops a row pairing with itself; it still lets each pair"
+             " through in both directions, so you get exactly twice as many"
+             " rows as there are pairs. Use > (or <) on the id instead: it"
+             " excludes the self-match AND fixes an order, so only one of the"
+             " two directions survives.",
+        claims=[
+            ("three pairs, none of them a mirror of another",
+             lambda rows, c: len(rows) == 3
+             and len({frozenset((r[1], r[2])) for r in rows}) == 3),
+        ],
+    ),
+    dict(
+        id=17, ledger="Q238", concept="J2", tier="Joins",
+        title="Machines nobody has touched",
+        prompt=(
+            "Every machine that has never had a single work order raised"
+            " against it.\n\n"
+            "Write it as an outer join that keeps the non-matches, rather than"
+            " with NOT IN. There are 27 such machines.\n\n"
+            "Return: machine_id, serial"
+        ),
+        solution=(
+            "SELECT m.machine_id, m.serial FROM machines m"
+            " LEFT JOIN work_orders w ON w.machine_id = m.machine_id"
+            " WHERE w.work_order_id IS NULL"
+        ),
+        trap_sql=(
+            "SELECT m.machine_id, m.serial FROM machines m"
+            " LEFT JOIN work_orders w ON w.machine_id = m.machine_id"
+            " AND w.work_order_id IS NULL"
+        ),
+        note="The anti-join is two halves and both matter: LEFT JOIN to keep"
+             " the unmatched machines, then WHERE <right column> IS NULL to"
+             " keep ONLY those. Moving that test into ON changes its meaning"
+             " entirely -- it becomes part of what counts as a match, matches"
+             " nothing, and hands back all 98 machines.",
+        claims=[
+            ("27 machines, and none of them appears in work_orders",
+             lambda rows, c: len(rows) == 27
+             and not {r[0] for r in rows} & {
+                 x[0] for x in c.execute(
+                     "SELECT DISTINCT machine_id FROM work_orders")}),
         ],
     ),
     # ------------------------------------------------- subqueries & EXISTS
     dict(
-        id=14, ledger="Q205", concept="X1", tier="Subqueries & EXISTS",
-        title="Customers who have paid everything",
+        id=18, ledger="Q239", concept="E1", tier="Subqueries & EXISTS",
+        title="Customers still under warranty somewhere",
         prompt=(
-            "Customers who have been invoiced at least once and have paid every"
-            " invoice raised against them.\n\n"
-            "One unpaid invoice disqualifies a customer. Customers never"
-            " invoiced at all do not qualify.\n\n"
+            "Every customer who owns at least one machine whose warranty runs"
+            " beyond " + WARRANTY_FROM + ".\n\n"
+            "Machines belong to sites and sites belong to customers. One row"
+            " per customer, however many qualifying machines they own --"
+            " three customers own two apiece.\n\n"
             "Return: customer_id, name"
         ),
         solution=(
             "SELECT c.customer_id, c.name FROM customers c"
-            " WHERE EXISTS (SELECT 1 FROM invoices i"
-            "   JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            "   JOIN machines mm ON mm.machine_id = w.machine_id"
-            "   JOIN sites s ON s.site_id = mm.site_id"
-            "   WHERE s.customer_id = c.customer_id)"
-            " AND NOT EXISTS (SELECT 1 FROM invoices i"
-            "   JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            "   JOIN machines mm ON mm.machine_id = w.machine_id"
-            "   JOIN sites s ON s.site_id = mm.site_id"
-            "   WHERE s.customer_id = c.customer_id AND i.paid_on IS NULL)"
+            " WHERE EXISTS (SELECT 1 FROM sites s"
+            " JOIN machines m ON m.site_id = s.site_id"
+            " WHERE s.customer_id = c.customer_id"
+            " AND m.warranty_until > '" + WARRANTY_FROM + "')"
         ),
         trap_sql=(
-            "SELECT DISTINCT c.customer_id, c.name FROM customers c"
+            "SELECT c.customer_id, c.name FROM customers c"
             " JOIN sites s ON s.customer_id = c.customer_id"
-            " JOIN machines mm ON mm.site_id = s.site_id"
-            " JOIN work_orders w ON w.machine_id = mm.machine_id"
-            " JOIN invoices i ON i.work_order_id = w.work_order_id"
-            " WHERE i.paid_on IS NOT NULL"
+            " JOIN machines m ON m.site_id = s.site_id"
+            " WHERE m.warranty_until > '" + WARRANTY_FROM + "'"
         ),
-        note="A WHERE clause can only say 'at least one row looks like this',"
-             " because the rows that would disprove it are already gone."
-             " Proving something about EVERY row means hunting a counterexample"
-             " and finding none. The first EXISTS is not optional: without it"
-             " the customers with no invoices at all qualify vacuously.",
+        note="Joining down to machines to answer a question ABOUT customers"
+             " changes the grain: you get one row per qualifying machine, so a"
+             " customer with two of them appears twice. EXISTS asks the"
+             " question without changing what a row is -- it returns yes or no"
+             " and stops at the first hit. SELECT DISTINCT would patch the join,"
+             " but EXISTS says what you meant.",
         claims=[
-            ("far fewer customers qualify than have paid something",
-             lambda rows, c: len(rows) < 20),
-            ("every customer returned really has no unpaid invoice",
-             lambda rows, c: all(c.execute(
-                 "SELECT COUNT(*) FROM invoices i"
-                 " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-                 " JOIN machines mm ON mm.machine_id = w.machine_id"
-                 " JOIN sites s ON s.site_id = mm.site_id"
-                 " WHERE s.customer_id = ? AND i.paid_on IS NULL",
-                 (r[0],)).fetchone()[0] == 0 for r in rows)),
-        ],
-    ),
-    dict(
-        id=15, ledger="Q206", concept="X2", tier="Subqueries & EXISTS",
-        title="Longer than that technician usually takes",
-        prompt=(
-            "Work orders whose total labour hours are above the average total"
-            " for the technician assigned to them.\n\n"
-            "Each job is compared against its OWN technician's average, not the"
-            " average across everybody.\n\n"
-            "Return: work_order_id, technician_id, hours"
-        ),
-        solution=(
-            "WITH j AS (SELECT w.work_order_id, w.technician_id,"
-            " SUM(le.hours) AS h FROM work_orders w"
-            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
-            " GROUP BY w.work_order_id, w.technician_id)"
-            " SELECT j.work_order_id, j.technician_id, j.h FROM j"
-            " WHERE j.h > (SELECT AVG(j2.h) FROM j j2"
-            "              WHERE j2.technician_id = j.technician_id)"
-        ),
-        trap_sql=(
-            "WITH j AS (SELECT w.work_order_id, w.technician_id,"
-            " SUM(le.hours) AS h FROM work_orders w"
-            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
-            " GROUP BY w.work_order_id, w.technician_id)"
-            " SELECT j.work_order_id, j.technician_id, j.h FROM j"
-            " WHERE j.h > (SELECT AVG(j2.h) FROM j j2)"
-        ),
-        note="The correlation is the whole question. Drop the WHERE inside the"
-             " subquery and it stops asking about this technician and starts"
-             " asking about the company -- one number compared against every"
-             " row. An uncorrelated subquery returns the same verdict for"
-             " everyone, which is a filter that is not really filtering.",
-        claims=[
-            ("some jobs beat their own technician's average",
-             lambda rows, c: len(rows) > 0),
-            ("fewer than half the jobs qualify",
-             lambda rows, c: len(rows) < c.execute(
-                 "SELECT COUNT(DISTINCT work_order_id) FROM labor_entries"
-             ).fetchone()[0]),
-        ],
-    ),
-    # -------------------------------------------------------- window frames
-    dict(
-        id=16, ledger="Q207", concept="C3", tier="Window frames",
-        title="The first invoice each customer got",
-        prompt=(
-            "For every customer who has been invoiced, their earliest invoice --"
-            " its id, the date it was issued and the amount.\n\n"
-            "Order by issue date, then invoice_id, so the earliest is"
-            " unambiguous.\n\n"
-            "Return: customer_id, invoice_id, issued_on, amount"
-        ),
-        solution=(
-            "WITH inv AS (SELECT s.customer_id, i.invoice_id, i.issued_on,"
-            " i.amount, ROW_NUMBER() OVER (PARTITION BY s.customer_id"
-            "   ORDER BY i.issued_on, i.invoice_id) AS rn"
-            " FROM invoices i"
-            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            " JOIN machines mm ON mm.machine_id = w.machine_id"
-            " JOIN sites s ON s.site_id = mm.site_id)"
-            " SELECT customer_id, invoice_id, issued_on, amount FROM inv"
-            " WHERE rn = 1"
-        ),
-        trap_sql=(
-            "WITH inv AS (SELECT s.customer_id, i.invoice_id, i.issued_on,"
-            " i.amount, ROW_NUMBER() OVER (ORDER BY i.issued_on, i.invoice_id)"
-            " AS rn FROM invoices i"
-            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            " JOIN machines mm ON mm.machine_id = w.machine_id"
-            " JOIN sites s ON s.site_id = mm.site_id)"
-            " SELECT customer_id, invoice_id, issued_on, amount FROM inv"
-            " WHERE rn = 1"
-        ),
-        note="PARTITION BY is what restarts the numbering per customer. Without"
-             " it the whole result is one sequence, rn = 1 picks the single"
-             " earliest invoice in the company, and you get one row back"
-             " instead of one per customer.",
-        claims=[
-            ("one row per invoiced customer",
-             lambda rows, c: len(rows) == c.execute(
-                 "SELECT COUNT(DISTINCT s.customer_id) FROM invoices i"
-                 " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-                 " JOIN machines mm ON mm.machine_id = w.machine_id"
-                 " JOIN sites s ON s.site_id = mm.site_id").fetchone()[0]),
-            ("every customer appears exactly once",
+            ("no customer is listed twice",
              lambda rows, c: len({r[0] for r in rows}) == len(rows)),
+            ("at least one customer owns two such machines, so a plain join"
+             " would double up",
+             lambda rows, c: c.execute(
+                 "SELECT MAX(n) FROM (SELECT COUNT(*) n FROM sites s JOIN"
+                 " machines m ON m.site_id = s.site_id WHERE m.warranty_until"
+                 " > '" + WARRANTY_FROM + "' GROUP BY s.customer_id)").fetchone()[0] > 1),
         ],
     ),
     dict(
-        id=17, ledger="Q208", concept="W1", tier="Window frames",
-        title="Smoothed either side",
+        id=19, ledger="Q240", concept="E1", tier="Subqueries & EXISTS",
+        title="Never on a critical job",
         prompt=(
-            "Work orders opened per calendar month, with a three-month average"
-            " CENTRED on each month -- the month before, the month itself and"
-            " the month after.\n\n"
-            "The first and last months have only two months to average.\n\n"
-            "Return: month, work_orders, centred_avg"
+            "Every technician who has never been the assigned technician on a"
+            " critical work order. Five of the fourteen qualify.\n\n"
+            "Watch out: three critical work orders have no technician assigned"
+            " at all, which is what makes the obvious answer wrong.\n\n"
+            "Return: technician_id, name"
         ),
         solution=(
-            "WITH m AS (SELECT strftime('%Y-%m', opened_at) AS mth, COUNT(*) AS n"
-            " FROM work_orders GROUP BY mth)"
-            " SELECT mth, n, AVG(n) OVER (ORDER BY mth"
-            " ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM m"
+            "SELECT t.technician_id, t.name FROM technicians t"
+            " WHERE NOT EXISTS (SELECT 1 FROM work_orders w"
+            " WHERE w.technician_id = t.technician_id"
+            " AND w.priority = 'critical')"
         ),
         trap_sql=(
-            "WITH m AS (SELECT strftime('%Y-%m', opened_at) AS mth, COUNT(*) AS n"
-            " FROM work_orders GROUP BY mth)"
-            " SELECT mth, n, AVG(n) OVER (ORDER BY mth) FROM m"
+            "SELECT t.technician_id, t.name FROM technicians t"
+            " WHERE t.technician_id NOT IN"
+            " (SELECT technician_id FROM work_orders WHERE priority ="
+            " 'critical')"
         ),
-        note="ORDER BY with no frame does not mean 'just this row'. It defaults"
-             " to everything from the start up to the current row, which is a"
-             " running average -- right for the first month or two and drifting"
-             " ever further afterwards. A window that looks FORWARD needs"
-             " FOLLOWING, which no default will ever give you.",
+        note="NOT IN over a list containing even one NULL returns no rows at"
+             " all. 'Is 7 not in (3, 5, NULL)?' -- SQL cannot say no, because"
+             " NULL might have been 7, so the answer is NULL and nothing"
+             " passes. NOT EXISTS has no such hole. Either use NOT EXISTS, or"
+             " add WHERE technician_id IS NOT NULL inside the subquery.",
         claims=[
-            ("every month appears",
-             lambda rows, c: len(rows) == 18),
-            ("the centred average differs from a running one",
-             lambda rows, c: any(abs(r[2] - r[1]) > 0.01 for r in rows)),
+            ("five technicians, and some critical work orders are unassigned",
+             lambda rows, c: len(rows) == 5 and c.execute(
+                 "SELECT COUNT(*) FROM work_orders WHERE priority = 'critical'"
+                 " AND technician_id IS NULL").fetchone()[0] == 3),
         ],
     ),
     dict(
-        id=18, ledger="Q209", concept="C3", tier="Window frames",
-        title="How long until the machine came back",
+        id=20, ledger="Q241", concept="E2", tier="Subqueries & EXISTS",
+        title="Dear for its own category",
         prompt=(
-            "For every work order that was followed by another on the SAME"
-            " machine, the number of days until that next job was opened.\n\n"
-            "Order within a machine by opened_at, then work_order_id. Each"
-            " machine's most recent job has no next job and does not appear.\n\n"
-            "Return: machine_id, work_order_id, opened_at, days_until_next"
+            "Every part costing more than the average unit_cost of the parts in"
+            " ITS OWN category -- not more than the average across the whole"
+            " catalogue.\n\n"
+            "One row per part.\n\n"
+            "Return: part_id, name, category, unit_cost"
         ),
         solution=(
-            "WITH w AS (SELECT machine_id, work_order_id, opened_at,"
-            " LEAD(opened_at) OVER (PARTITION BY machine_id"
-            "   ORDER BY opened_at, work_order_id) AS nxt FROM work_orders)"
-            " SELECT machine_id, work_order_id, opened_at,"
-            " CAST(julianday(nxt) - julianday(opened_at) AS INT)"
-            " FROM w WHERE nxt IS NOT NULL"
+            "SELECT p.part_id, p.name, p.category, p.unit_cost FROM parts p"
+            " WHERE p.unit_cost > (SELECT AVG(p2.unit_cost) FROM parts p2"
+            " WHERE p2.category = p.category)"
         ),
         trap_sql=(
-            "WITH w AS (SELECT machine_id, work_order_id, opened_at,"
-            " LEAD(opened_at) OVER (ORDER BY opened_at, work_order_id) AS nxt"
-            " FROM work_orders)"
-            " SELECT machine_id, work_order_id, opened_at,"
-            " CAST(julianday(nxt) - julianday(opened_at) AS INT)"
-            " FROM w WHERE nxt IS NOT NULL"
+            "SELECT p.part_id, p.name, p.category, p.unit_cost FROM parts p"
+            " WHERE p.unit_cost > (SELECT AVG(unit_cost) FROM parts)"
         ),
-        note="LEAD is LAG facing the other way -- it reaches the NEXT row"
-             " rather than the previous one. Without PARTITION BY the 'next'"
-             " row is whatever job sorts after this one across the whole"
-             " company, so the gaps are measured between unrelated machines"
-             " and nearly every row survives instead of one per machine"
-             " dropping out.",
+        note="The correlation is the single line WHERE p2.category ="
+             " p.category. Without it the subquery runs once and every part is"
+             " compared with the same number; with it the subquery is"
+             " re-evaluated per row against that row's own category. A cheap"
+             " part in a cheap category can beat its own average and lose to"
+             " the global one, which is why the two answers differ.",
         claims=[
-            ("each machine's last job drops out",
-             lambda rows, c: len(rows) == c.execute(
-                 "SELECT COUNT(*) - COUNT(DISTINCT machine_id) FROM work_orders"
-             ).fetchone()[0]),
-            ("no gap is negative",
-             lambda rows, c: all(r[3] >= 0 for r in rows)),
+            ("every category with more than one part contributes at least one",
+             lambda rows, c: len({r[2] for r in rows}) == 9),
+        ],
+    ),
+    # -------------------------------------------------------------- NULLs
+    dict(
+        id=21, ledger="Q242", concept="C7", tier="NULLs",
+        title="Ended, running, or open-ended",
+        prompt=(
+            "Classify every contract into one of three states as of "
+            + CUTOFF + ", and count them:\n"
+            "  'open-ended' if end_date is missing entirely\n"
+            "  'ended'      if end_date is before " + CUTOFF + "\n"
+            "  'active'     otherwise\n\n"
+            "All 34 contracts land in exactly one state.\n\n"
+            "Return: state, contracts"
+        ),
+        solution=(
+            "SELECT CASE WHEN end_date IS NULL THEN 'open-ended'"
+            " WHEN end_date < '" + CUTOFF + "' THEN 'ended'"
+            " ELSE 'active' END, COUNT(*) FROM contracts GROUP BY 1"
+        ),
+        trap_sql=(
+            "SELECT CASE WHEN end_date = NULL THEN 'open-ended'"
+            " WHEN end_date < '" + CUTOFF + "' THEN 'ended'"
+            " ELSE 'active' END, COUNT(*) FROM contracts GROUP BY 1"
+        ),
+        note="= NULL is never true -- not even for a NULL. It evaluates to"
+             " NULL, which CASE treats as not-matched, so that branch can never"
+             " fire. Worse, the next branch is also NULL for those rows, so all"
+             " eleven open-ended contracts fall through to ELSE and get"
+             " mislabelled 'active'. The only test is IS NULL.",
+        claims=[
+            ("three states covering all 34 contracts",
+             lambda rows, c: len(rows) == 3 and sum(r[1] for r in rows) == 34),
+            ("eleven contracts are open-ended",
+             lambda rows, c: dict(rows)["open-ended"] == 11),
         ],
     ),
     dict(
-        id=19, ledger="Q210", concept="W1", tier="Window frames",
-        title="The most-fitted part in each category",
+        id=22, ledger="Q243", concept="C7", tier="NULLs",
+        title="Everyone who is not level 5",
         prompt=(
-            "In each part category, the part fitted on the most work order"
-            " lines, with that count.\n\n"
-            "Where two parts in a category tie for the most, BOTH appear.\n\n"
-            "Return: category, part_id, name, times_fitted"
+            "Count technicians by certification level, excluding level 5, and"
+            " counting the ones with NO certification level as 'none'.\n\n"
+            "Twelve of the fourteen technicians are not level 5 -- four of them"
+            " because they have no level at all.\n\n"
+            "Return: level, technicians  (level is text: '1'..'4' or 'none')"
         ),
         solution=(
-            "WITH t AS (SELECT p.category, p.part_id, p.name, COUNT(*) AS fits"
-            " FROM parts p JOIN parts_used pu ON pu.part_id = p.part_id"
-            " GROUP BY p.part_id, p.category, p.name)"
-            " SELECT category, part_id, name, fits FROM ("
-            " SELECT t.*, RANK() OVER (PARTITION BY category"
-            "   ORDER BY fits DESC) AS rk FROM t) WHERE rk = 1"
+            "SELECT COALESCE(CAST(cert_level AS TEXT), 'none'), COUNT(*)"
+            " FROM technicians WHERE cert_level IS NOT 5 GROUP BY 1"
         ),
         trap_sql=(
-            "WITH t AS (SELECT p.category, p.part_id, p.name, COUNT(*) AS fits"
-            " FROM parts p JOIN parts_used pu ON pu.part_id = p.part_id"
-            " GROUP BY p.part_id, p.category, p.name)"
-            " SELECT category, part_id, name, fits FROM ("
-            " SELECT t.*, ROW_NUMBER() OVER (PARTITION BY category"
-            "   ORDER BY fits DESC) AS rk FROM t) WHERE rk = 1"
+            "SELECT COALESCE(CAST(cert_level AS TEXT), 'none'), COUNT(*)"
+            " FROM technicians WHERE cert_level <> 5 GROUP BY 1"
         ),
-        note="RANK gives tied rows the SAME number; ROW_NUMBER breaks ties"
-             " arbitrarily and keeps exactly one. When the question says both"
-             " tied rows should appear, ROW_NUMBER silently drops one of them"
-             " and there is nothing in the output to show it happened. Use"
-             " ROW_NUMBER when you want exactly one, RANK when ties are real.",
+        note="cert_level <> 5 drops the uncertified technicians without a"
+             " word, because NULL <> 5 is NULL rather than true. Any comparison"
+             " on a nullable column silently excludes the NULLs. SQLite's IS"
+             " NOT is null-safe and reads the way you meant it; the portable"
+             " spelling is (cert_level IS NULL OR cert_level <> 5).",
         claims=[
-            ("at least one category has a tie for the top",
-             lambda rows, c: len(rows) > 9),
-            ("every category is represented",
-             lambda rows, c: len({r[0] for r in rows}) == 9),
+            ("twelve technicians in five buckets, four of them uncertified",
+             lambda rows, c: sum(r[1] for r in rows) == 12
+             and len(rows) == 5 and dict(rows)["none"] == 4),
         ],
     ),
-    # --------------------------------------------------------- dates & gaps
+    # -------------------------------------------------------------- dates
     dict(
-        id=20, ledger="Q211", concept="D1", tier="Dates & gaps",
-        title="How long before anyone turned up",
+        id=23, ledger="Q244", concept="D1", tier="Dates",
+        title="The five slowest jobs to close",
         prompt=(
-            "For every work order that has logged labour, the date of its FIRST"
-            " labour visit and how many days after the job was opened that"
-            " visit happened.\n\n"
-            "Return: work_order_id, opened_at, first_visit, days_to_first_visit"
+            "The five closed work orders that took the longest from opening to"
+            " closing, longest first.\n\n"
+            "Days must be a whole number. Break ties on days by work_order_id"
+            " ascending, so the five are unambiguous.\n\n"
+            "Return: work_order_id, opened_at, closed_at, days"
         ),
         solution=(
-            "SELECT w.work_order_id, w.opened_at, MIN(le.work_date),"
-            " CAST(julianday(MIN(le.work_date)) - julianday(w.opened_at) AS INT)"
-            " FROM work_orders w"
-            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
-            " GROUP BY w.work_order_id, w.opened_at"
+            "SELECT work_order_id, opened_at, closed_at,"
+            " CAST(julianday(closed_at) - julianday(opened_at) AS INTEGER)"
+            " AS days FROM work_orders WHERE closed_at IS NOT NULL"
+            " ORDER BY days DESC, work_order_id LIMIT 5"
         ),
         trap_sql=(
-            "SELECT w.work_order_id, w.opened_at, le.work_date,"
-            " CAST(julianday(le.work_date) - julianday(w.opened_at) AS INT)"
-            " FROM work_orders w"
-            " JOIN labor_entries le ON le.work_order_id = w.work_order_id"
+            "SELECT work_order_id, opened_at, closed_at,"
+            " closed_at - opened_at AS days FROM work_orders"
+            " WHERE closed_at IS NOT NULL"
+            " ORDER BY days DESC, work_order_id LIMIT 5"
         ),
-        note="Without the GROUP BY this returns one row per VISIT, not per job"
-             " -- every later visit comes back too, each with its own gap. The"
-             " question asks for one row per work order, so the many visits"
-             " have to collapse to their MIN before the arithmetic means"
-             " anything.",
+        note="Dates in SQLite are text. Subtracting one from another does not"
+             " subtract dates -- SQLite coerces each string to a number, which"
+             " reads '2026-07-20' as 2026 and stops at the dash, so the answer"
+             " is the difference in YEARS, usually 0. julianday() turns a date"
+             " into a day number, and the difference between two of those is"
+             " days.",
         claims=[
-            ("one row per job that has labour",
-             lambda rows, c: len(rows) == c.execute(
-                 "SELECT COUNT(DISTINCT work_order_id) FROM labor_entries"
-             ).fetchone()[0]),
-            ("no first visit predates the job being opened",
-             lambda rows, c: all(r[3] >= 0 for r in rows)),
+            ("five rows, all with a positive whole number of days",
+             lambda rows, c: len(rows) == 5
+             and all(isinstance(r[3], int) and r[3] > 0 for r in rows)),
         ],
     ),
     dict(
-        id=21, ledger="Q212", concept="D1", tier="Dates & gaps",
-        title="The longest quiet spell",
+        id=24, ledger="Q245", concept="D1", tier="Dates",
+        title="Which day of the week is busiest",
         prompt=(
-            "For every customer with more than one invoice, the longest gap in"
-            " days between two consecutive invoices.\n\n"
-            "Consecutive means ordered by issue date, then invoice_id. The gap"
-            " is between neighbours, not between the first and the last.\n\n"
-            "Return: customer_id, longest_gap_days"
+            "How many work orders were opened on each day of the week, across"
+            " the whole data set. Seven rows, Sunday first.\n\n"
+            "Name the day rather than numbering it.\n\n"
+            "Return: day_name, work_orders"
         ),
         solution=(
-            "WITH g AS (SELECT s.customer_id, i.issued_on,"
-            " LAG(i.issued_on) OVER (PARTITION BY s.customer_id"
-            "   ORDER BY i.issued_on, i.invoice_id) AS prev"
-            " FROM invoices i"
-            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            " JOIN machines mm ON mm.machine_id = w.machine_id"
-            " JOIN sites s ON s.site_id = mm.site_id)"
-            " SELECT customer_id,"
-            " CAST(MAX(julianday(issued_on) - julianday(prev)) AS INT)"
-            " FROM g WHERE prev IS NOT NULL GROUP BY customer_id"
+            "SELECT CASE strftime('%w', opened_at)"
+            " WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday'"
+            " WHEN '2' THEN 'Tuesday' WHEN '3' THEN 'Wednesday'"
+            " WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday'"
+            " ELSE 'Saturday' END, COUNT(*) FROM work_orders"
+            " GROUP BY strftime('%w', opened_at)"
         ),
         trap_sql=(
-            "SELECT s.customer_id,"
-            " CAST(julianday(MAX(i.issued_on)) - julianday(MIN(i.issued_on)) AS INT)"
-            " FROM invoices i"
-            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            " JOIN machines mm ON mm.machine_id = w.machine_id"
-            " JOIN sites s ON s.site_id = mm.site_id"
-            " GROUP BY s.customer_id"
+            "SELECT CASE strftime('%W', opened_at)"
+            " WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday'"
+            " WHEN '2' THEN 'Tuesday' WHEN '3' THEN 'Wednesday'"
+            " WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday'"
+            " ELSE 'Saturday' END, COUNT(*) FROM work_orders"
+            " GROUP BY strftime('%W', opened_at)"
         ),
-        note="First to last is the total SPAN, not the longest gap inside it --"
-             " they agree only for a customer with exactly two invoices, which"
-             " is enough to make the wrong answer look right on a spot check."
-             " The gap is a property of neighbouring rows, so LAG first, then"
-             " take the MAX of those differences.",
+        note="strftime's format letters are case-sensitive and %w and %W are"
+             " unrelated: lowercase is day of week 0-6, uppercase is week of"
+             " year 00-53. The uppercase version groups the year into 50-odd"
+             " buckets and labels the first six of them with day names, which"
+             " looks plausible until you count the rows. Worth knowing too:"
+             " %j day of year, %d day of month.",
         claims=[
-            ("customers with a single invoice are excluded",
-             lambda rows, c: len(rows) < c.execute(
-                 "SELECT COUNT(DISTINCT s.customer_id) FROM invoices i"
-                 " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-                 " JOIN machines mm ON mm.machine_id = w.machine_id"
-                 " JOIN sites s ON s.site_id = mm.site_id").fetchone()[0]),
-            ("every gap is positive",
-             lambda rows, c: all(r[1] > 0 for r in rows)),
+            ("seven days covering all 180 work orders",
+             lambda rows, c: len(rows) == 7
+             and sum(r[1] for r in rows) == 180),
         ],
     ),
     dict(
-        id=22, ledger="Q213", concept="D1", tier="Dates & gaps",
-        title="By quarter, not by month",
+        id=25, ledger="Q246", concept="D1", tier="Dates",
+        title="Inspections by month, across two years",
         prompt=(
-            "Work orders opened per calendar quarter, labelled like 2025-Q1.\n\n"
-            "Q1 is January to March, Q2 April to June, and so on.\n\n"
-            "Return: quarter, work_orders"
+            "One row per calendar month in which any inspection happened: the"
+            " month as 'YYYY-MM', and how many inspections it held.\n\n"
+            "The data spans two calendar years, so February 2025 and February"
+            " 2026 are different months and must not be added together.\n\n"
+            "Return: month, inspections"
         ),
         solution=(
-            "SELECT strftime('%Y', opened_at) || '-Q' ||"
-            " ((CAST(strftime('%m', opened_at) AS INT) + 2) / 3) AS q, COUNT(*)"
-            " FROM work_orders GROUP BY q"
+            "SELECT strftime('%Y-%m', inspected_at), COUNT(*)"
+            " FROM inspections GROUP BY 1"
         ),
         trap_sql=(
-            "SELECT strftime('%Y', opened_at) || '-Q' ||"
-            " (CAST(strftime('%m', opened_at) AS INT) / 3) AS q, COUNT(*)"
-            " FROM work_orders GROUP BY q"
+            "SELECT strftime('%m', inspected_at), COUNT(*)"
+            " FROM inspections GROUP BY 1"
         ),
-        note="SQLite has no quarter format code, so the month has to become a"
-             " quarter by arithmetic: (month + 2) / 3 on integers gives 1 for"
-             " January to March and 4 for October to December. Plain month / 3"
-             " is off by one at every boundary -- March lands in Q1 but June"
-             " lands in Q2 and December in Q4, which produces a phantom Q0.",
+        note="%m alone is the month number with no year attached, so the two"
+             " Februaries collapse into one row and you get at most twelve rows"
+             " out of a data set that covers eighteen months. Grouping by a"
+             " date always needs every component down to the level you want."
+             " The quickest sanity check is the row count.",
         claims=[
-            ("quarters are labelled 1 to 4, never 0",
-             lambda rows, c: all(r[0][-1] in "1234" for r in rows)),
-            ("the counts total every work order",
+            ("more than twelve months, so the two years really do overlap",
+             lambda rows, c: len(rows) > 12),
+            ("the counts total every inspection",
              lambda rows, c: sum(r[1] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM work_orders").fetchone()[0]),
+                 "SELECT COUNT(*) FROM inspections").fetchone()[0]),
         ],
     ),
-    # ------------------------------------------------------ set operations
+    # ----------------------------------------------------- set operations
     dict(
-        id=23, ledger="Q214", concept="S1", tier="Set operations",
-        title="Under contract, never called out",
+        id=26, ledger="Q247", concept="S1", tier="Set operations",
+        title="Invoiced in a month nothing opened",
         prompt=(
-            "Customers who hold at least one contract but have never had a work"
-            " order raised against any of their machines.\n\n"
-            "This compares two SETS of customer ids.\n\n"
-            "Return: customer_id"
+            "Months in which at least one invoice was issued but NO work order"
+            " was opened. Months are 'YYYY-MM'.\n\n"
+            "Invoices trail the work that produced them, so this catches the"
+            " tail end of the data set. Exactly one month qualifies.\n\n"
+            "Return: month"
         ),
         solution=(
-            "SELECT customer_id FROM contracts"
+            "SELECT DISTINCT strftime('%Y-%m', issued_on) FROM invoices"
             " EXCEPT"
-            " SELECT s.customer_id FROM sites s"
-            " JOIN machines mm ON mm.site_id = s.site_id"
-            " JOIN work_orders w ON w.machine_id = mm.machine_id"
+            " SELECT DISTINCT strftime('%Y-%m', opened_at) FROM work_orders"
         ),
         trap_sql=(
-            "SELECT DISTINCT k.customer_id FROM contracts k"
-            " JOIN sites s ON s.customer_id = k.customer_id"
-            " LEFT JOIN machines mm ON mm.site_id = s.site_id"
-            " LEFT JOIN work_orders w ON w.machine_id = mm.machine_id"
-            " WHERE w.work_order_id IS NULL"
+            "SELECT DISTINCT strftime('%Y-%m', opened_at) FROM work_orders"
+            " EXCEPT"
+            " SELECT DISTINCT strftime('%Y-%m', issued_on) FROM invoices"
         ),
-        note="An anti-join tests one ROW at a time, so a customer with one"
-             " quiet machine and ten busy ones still produces a matching quiet"
-             " row and slips into the answer. 'Never' is a property of the"
-             " whole customer, which is a set difference -- EXCEPT, or"
-             " NOT EXISTS over every one of their machines.",
+        note="EXCEPT is directional: A EXCEPT B is what is in A and not in B,"
+             " and swapping the two asks the opposite question. Here the swap"
+             " asks which months opened work but issued no invoice, and the"
+             " answer is none -- an empty result, which is easy to mistake for"
+             " 'my query is broken' rather than 'I asked it backwards'.",
         claims=[
-            ("only a couple of customers qualify",
-             lambda rows, c: 0 < len(rows) < 6),
-            ("every customer returned really has no work orders",
-             lambda rows, c: all(c.execute(
-                 "SELECT COUNT(*) FROM sites s"
-                 " JOIN machines mm ON mm.site_id = s.site_id"
-                 " JOIN work_orders w ON w.machine_id = mm.machine_id"
-                 " WHERE s.customer_id = ?", (r[0],)).fetchone()[0] == 0
-                 for r in rows)),
+            ("exactly one month, and it is later than every work order",
+             lambda rows, c: len(rows) == 1
+             and rows[0][0] > c.execute(
+                 "SELECT MAX(strftime('%Y-%m', opened_at))"
+                 " FROM work_orders").fetchone()[0]),
         ],
     ),
     dict(
-        id=24, ledger="Q215", concept="S1", tier="Set operations",
-        title="Running low on the expensive ones",
+        id=27, ledger="Q248", concept="S1", tier="Set operations",
+        title="Low on stock and needed for critical work",
         prompt=(
-            "Parts that are below their reorder level in at least one depot AND"
-            " have cost more than 1000 in total across every line they were"
-            " fitted on.\n\n"
-            "Line spend is quantity * unit_price * (1 - discount). The two"
-            " conditions are about the part, not about any single row.\n\n"
-            "Return: part_id"
+            "Parts that are BOTH below their reorder level in at least one"
+            " depot AND have been used on at least one critical work order.\n\n"
+            "Only stock lines that actually have a reorder_level count. Three"
+            " parts satisfy both conditions.\n\n"
+            "Return: part_id, name"
         ),
         solution=(
-            "SELECT part_id FROM part_stock"
-            " WHERE reorder_level IS NOT NULL"
+            "SELECT p.part_id, p.name FROM parts p WHERE p.part_id IN ("
+            " SELECT part_id FROM part_stock WHERE reorder_level IS NOT NULL"
             " AND quantity_on_hand < reorder_level"
             " INTERSECT"
-            " SELECT part_id FROM parts_used GROUP BY part_id"
-            " HAVING SUM(quantity * unit_price * (1 - discount)) > 1000"
+            " SELECT pu.part_id FROM parts_used pu JOIN work_orders w"
+            " ON w.work_order_id = pu.work_order_id"
+            " WHERE w.priority = 'critical')"
         ),
         trap_sql=(
-            "SELECT DISTINCT ps.part_id FROM part_stock ps"
-            " JOIN parts_used pu ON pu.part_id = ps.part_id"
-            " WHERE ps.reorder_level IS NOT NULL"
-            " AND ps.quantity_on_hand < ps.reorder_level"
-            " AND pu.quantity * pu.unit_price * (1 - pu.discount) > 1000"
-        ),
-        note="The spend test is about the part's TOTAL, so it cannot be applied"
-             " to individual lines. Joining the two tables tests one stock row"
-             " against one usage row and asks whether that single line cleared"
-             " 1000, which is a different and much harder bar. Build each set"
-             " at its own grain, then INTERSECT.",
-        claims=[
-            ("a handful of parts qualify",
-             lambda rows, c: 0 < len(rows) < 15),
-            ("no single line reaches the threshold in most cases, so the"
-             " per-line test is genuinely different",
-             lambda rows, c: c.execute(
-                 "SELECT COUNT(DISTINCT part_id) FROM parts_used"
-                 " WHERE quantity * unit_price * (1 - discount) > 1000"
-             ).fetchone()[0] < c.execute(
-                 "SELECT COUNT(*) FROM (SELECT part_id FROM parts_used"
-                 " GROUP BY part_id HAVING"
-                 " SUM(quantity * unit_price * (1 - discount)) > 1000)"
-             ).fetchone()[0]),
-        ],
-    ),
-    dict(
-        id=25, ledger="Q216", concept="S1", tier="Set operations",
-        title="Everything that happened to machine 38",
-        prompt=(
-            "A single dated event log for machine 38: every work order opened on"
-            " it, every inspection of those work orders, and every invoice"
-            " raised for them.\n\n"
-            "Label each row 'opened', 'inspected' or 'invoiced'. Two events of"
-            " the same kind on the same date are two events, not one.\n\n"
-            "Return: event, event_date"
-        ),
-        solution=(
-            "SELECT 'opened' AS k, opened_at AS d FROM work_orders"
-            " WHERE machine_id = 38"
-            " UNION ALL"
-            " SELECT 'inspected', i.inspected_at FROM inspections i"
-            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            " WHERE w.machine_id = 38"
-            " UNION ALL"
-            " SELECT 'invoiced', v.issued_on FROM invoices v"
-            " JOIN work_orders w ON w.work_order_id = v.work_order_id"
-            " WHERE w.machine_id = 38"
-        ),
-        trap_sql=(
-            "SELECT 'opened' AS k, opened_at AS d FROM work_orders"
-            " WHERE machine_id = 38"
+            "SELECT p.part_id, p.name FROM parts p WHERE p.part_id IN ("
+            " SELECT part_id FROM part_stock WHERE reorder_level IS NOT NULL"
+            " AND quantity_on_hand < reorder_level"
             " UNION"
-            " SELECT 'inspected', i.inspected_at FROM inspections i"
-            " JOIN work_orders w ON w.work_order_id = i.work_order_id"
-            " WHERE w.machine_id = 38"
-            " UNION"
-            " SELECT 'invoiced', v.issued_on FROM invoices v"
-            " JOIN work_orders w ON w.work_order_id = v.work_order_id"
-            " WHERE w.machine_id = 38"
+            " SELECT pu.part_id FROM parts_used pu JOIN work_orders w"
+            " ON w.work_order_id = pu.work_order_id"
+            " WHERE w.priority = 'critical')"
         ),
-        note="UNION removes duplicate rows; UNION ALL keeps them. This machine"
-             " has two events of the same kind on the same day, so UNION"
-             " collapses them into one and the log quietly loses an event."
-             " UNION ALL is also the cheaper operator, since it never has to"
-             " sort to find the duplicates.",
+        note="INTERSECT keeps rows present in BOTH sides; UNION keeps rows"
+             " present in EITHER. 'And' in English means INTERSECT here even"
+             " though the sentence has an 'and' in it, which is the usual place"
+             " this goes wrong. Both operators dedupe, so neither needs a"
+             " DISTINCT of its own.",
         claims=[
-            ("the log has a same-kind, same-day pair that UNION would lose",
-             lambda rows, c: len(rows) > len({(r[0], r[1]) for r in rows})),
+            ("three parts, and each is genuinely low somewhere",
+             lambda rows, c: len(rows) == 3 and all(
+                 c.execute("SELECT COUNT(*) FROM part_stock WHERE part_id = ?"
+                           " AND reorder_level IS NOT NULL AND"
+                           " quantity_on_hand < reorder_level",
+                           (r[0],)).fetchone()[0] > 0 for r in rows)),
         ],
     ),
-    # ------------------------------------------------------ silent sampling
+    # -------------------------------------------------------------- grain
     dict(
-        id=26, ledger="Q217", concept="B1", tier="Silent sampling",
-        title="Average line value by category",
+        id=28, ledger="Q249", concept="C2", tier="Grain",
+        title="Parts and labour on the critical jobs",
         prompt=(
-            "For each part category, the average value of a single parts line --"
-            " quantity times unit price, averaged across the lines.\n\n"
-            "Return: category, avg_line_value"
+            "One row per CRITICAL work order, with what was spent on parts and"
+            " what was spent on labour.\n\n"
+            "Parts spend is quantity * unit_price * (1 - discount) summed;"
+            " labour is hours * rate summed. A job with none of one or the"
+            " other shows 0, not NULL. All 21 critical work orders appear.\n\n"
+            "Return: work_order_id, parts_cost, labour_cost"
         ),
         solution=(
-            "SELECT p.category, AVG(pu.quantity * pu.unit_price)"
-            " FROM parts p JOIN parts_used pu ON pu.part_id = p.part_id"
-            " GROUP BY p.category"
+            "SELECT w.work_order_id,"
+            " ROUND(COALESCE((SELECT SUM(quantity * unit_price *"
+            " (1 - discount)) FROM parts_used pu"
+            " WHERE pu.work_order_id = w.work_order_id), 0), 2),"
+            " ROUND(COALESCE((SELECT SUM(hours * rate) FROM labor_entries le"
+            " WHERE le.work_order_id = w.work_order_id), 0), 2)"
+            " FROM work_orders w WHERE w.priority = 'critical'"
         ),
         trap_sql=(
-            "SELECT p.category, AVG(pu.quantity) * pu.unit_price"
-            " FROM parts p JOIN parts_used pu ON pu.part_id = p.part_id"
-            " GROUP BY p.category"
+            "SELECT w.work_order_id,"
+            " ROUND(SUM(pu.quantity * pu.unit_price * (1 - pu.discount)), 2),"
+            " ROUND(SUM(le.hours * le.rate), 2) FROM work_orders w"
+            " LEFT JOIN parts_used pu ON pu.work_order_id = w.work_order_id"
+            " LEFT JOIN labor_entries le ON le.work_order_id = w.work_order_id"
+            " WHERE w.priority = 'critical' GROUP BY 1"
         ),
-        note="AVG(a * b) is not AVG(a) * b. The second averages the quantities"
-             " and then multiplies by ONE arbitrary row's unit price -- a bare"
-             " column under GROUP BY, which SQLite samples rather than"
-             " rejecting. Every unit price in this data is distinct, so the"
-             " sampled one is almost never representative.",
+        note="Joining two child tables to the same parent multiplies them: a"
+             " job with 3 part lines and 4 labour entries produces 12 rows, and"
+             " both sums are inflated fourfold and threefold respectively. Two"
+             " independent measures want two independent subqueries (or two"
+             " separate CTEs joined back), never one join with both.",
         claims=[
-            ("all nine categories appear",
-             lambda rows, c: len(rows) == 9),
-            ("unit prices vary within a category, so sampling one is wrong",
-             lambda rows, c: c.execute(
-                 "SELECT COUNT(*) FROM (SELECT p.category FROM parts p"
-                 " JOIN parts_used pu ON pu.part_id = p.part_id"
-                 " GROUP BY p.category"
-                 " HAVING COUNT(DISTINCT pu.unit_price) > 1)").fetchone()[0] == 9),
-        ],
-    ),
-    dict(
-        id=27, ledger="Q218", concept="B1", tier="Silent sampling",
-        title="What the stock on hand is worth",
-        prompt=(
-            "For each depot, the value of the stock it holds -- every stock"
-            " line's quantity on hand multiplied by that part's unit cost,"
-            " totalled.\n\n"
-            "Return: depot_name, stock_value"
-        ),
-        solution=(
-            "SELECT d.name, SUM(ps.quantity_on_hand * p.unit_cost)"
-            " FROM depots d JOIN part_stock ps ON ps.depot_id = d.depot_id"
-            " JOIN parts p ON p.part_id = ps.part_id GROUP BY d.name"
-        ),
-        trap_sql=(
-            "SELECT d.name, SUM(ps.quantity_on_hand) * p.unit_cost"
-            " FROM depots d JOIN part_stock ps ON ps.depot_id = d.depot_id"
-            " JOIN parts p ON p.part_id = ps.part_id GROUP BY d.name"
-        ),
-        note="Each line has its own part and therefore its own unit cost, so"
-             " the multiply belongs inside the SUM. Totalling the quantities"
-             " first and multiplying by one sampled cost values a depot's"
-             " entire shelf at whatever part happened to be scanned first --"
-             " and the result is still a plausible-looking number.",
-        claims=[
-            ("all four depots appear",
-             lambda rows, c: len(rows) == 4),
-            ("unit costs vary within a depot",
-             lambda rows, c: c.execute(
-                 "SELECT MIN(n) FROM (SELECT COUNT(DISTINCT p.unit_cost) n"
-                 " FROM part_stock ps JOIN parts p ON p.part_id = ps.part_id"
-                 " GROUP BY ps.depot_id)").fetchone()[0] > 1),
-        ],
-    ),
-    # ----------------------------------------------------------- self-joins
-    dict(
-        id=28, ledger="Q219", concept="J1", tier="Self-joins",
-        title="Parts fitted on the same job",
-        prompt=(
-            "Every pair of DIFFERENT parts that have been fitted on the same"
-            " work order at least once.\n\n"
-            "Each pair once, not twice, and no part paired with itself. List"
-            " the lower part_id first.\n\n"
-            "Return: part_a, part_b"
-        ),
-        solution=(
-            "SELECT DISTINCT a.part_id, b.part_id FROM parts_used a"
-            " JOIN parts_used b ON b.work_order_id = a.work_order_id"
-            " AND b.part_id > a.part_id"
-        ),
-        trap_sql=(
-            "SELECT DISTINCT a.part_id, b.part_id FROM parts_used a"
-            " JOIN parts_used b ON b.work_order_id = a.work_order_id"
-            " AND b.part_id <> a.part_id"
-        ),
-        note="'<>' keeps both (A, B) and (B, A), so every pair comes back"
-             " twice. '>' picks one ordering and drops the mirror image, and"
-             " rules out self-pairs for free since nothing is greater than"
-             " itself. DISTINCT is still needed here: the same two parts can"
-             " share more than one work order.",
-        claims=[
-            ("the lower id always comes first",
-             lambda rows, c: all(r[0] < r[1] for r in rows)),
-            ("pairs really do repeat across jobs, so DISTINCT matters",
-             lambda rows, c: len(rows) < c.execute(
-                 "SELECT COUNT(*) FROM parts_used a JOIN parts_used b"
-                 " ON b.work_order_id = a.work_order_id"
-                 " AND b.part_id > a.part_id").fetchone()[0]),
+            ("all 21 critical work orders, none NULL",
+             lambda rows, c: len(rows) == 21
+             and all(r[1] is not None and r[2] is not None for r in rows)),
+            ("the parts total matches a straight sum over the critical jobs",
+             lambda rows, c: abs(sum(r[1] for r in rows) - c.execute(
+                 "SELECT COALESCE(SUM(pu.quantity * pu.unit_price *"
+                 " (1 - pu.discount)), 0) FROM parts_used pu JOIN work_orders w"
+                 " ON w.work_order_id = pu.work_order_id"
+                 " WHERE w.priority = 'critical'").fetchone()[0]) < 0.5),
         ],
     ),
     dict(
-        id=29, ledger="Q220", concept="J1", tier="Self-joins",
-        title="Hired around the same time",
+        id=29, ledger="Q250", concept="C2", tier="Grain",
+        title="Spend by part category",
         prompt=(
-            "Every pair of technicians working out of the same depot who were"
-            " hired within a year of each other, with the depot name.\n\n"
-            "Each pair once. List the lower technician_id first.\n\n"
-            "Return: depot_name, technician_a, technician_b"
+            "One row per part category that has ever been used, with the total"
+            " spent on it.\n\n"
+            "Each parts_used line is worth quantity * unit_price *"
+            " (1 - discount), and every line must be priced on its own"
+            " quantity, price and discount.\n\n"
+            "Return: category, spend"
         ),
         solution=(
-            "SELECT d.name, a.name, b.name FROM technicians a"
-            " JOIN technicians b ON b.depot_id = a.depot_id"
-            " AND b.technician_id > a.technician_id"
-            " AND ABS(julianday(b.hired_on) - julianday(a.hired_on)) <= 365"
-            " JOIN depots d ON d.depot_id = a.depot_id"
+            "SELECT p.category, ROUND(SUM(pu.quantity * pu.unit_price *"
+            " (1 - pu.discount)), 2) FROM parts_used pu"
+            " JOIN parts p ON p.part_id = pu.part_id GROUP BY 1"
         ),
         trap_sql=(
-            "SELECT d.name, a.name, b.name FROM technicians a"
-            " JOIN technicians b ON b.depot_id = a.depot_id"
-            " AND b.technician_id <> a.technician_id"
-            " AND ABS(julianday(b.hired_on) - julianday(a.hired_on)) <= 365"
-            " JOIN depots d ON d.depot_id = a.depot_id"
+            "SELECT p.category, ROUND(SUM(pu.quantity) * AVG(pu.unit_price) *"
+            " (1 - AVG(pu.discount)), 2) FROM parts_used pu"
+            " JOIN parts p ON p.part_id = pu.part_id GROUP BY 1"
         ),
-        note="The same '>' rule as any pairing question, with a date window"
-             " added. ABS is what makes the window symmetric -- without it the"
-             " test only catches pairs in one hiring order, which the '>' on"
-             " technician_id has already fixed to id order rather than date"
-             " order, so half the genuine pairs would go missing.",
+        note="Do the arithmetic inside the aggregate, one row at a time, then"
+             " add up: SUM(a * b), not SUM(a) * AVG(b). The two only agree if"
+             " every row has the same price and discount, which is never true"
+             " here -- an expensive part bought once and a cheap one bought"
+             " fifty times get averaged into a price neither of them has.",
         claims=[
-            ("every pair is within a year",
-             lambda rows, c: True),
-            ("some pairs qualify",
-             lambda rows, c: len(rows) > 0),
+            ("nine categories, and the total matches the whole table",
+             lambda rows, c: len(rows) == 9 and abs(
+                 sum(r[1] for r in rows) - c.execute(
+                     "SELECT SUM(quantity * unit_price * (1 - discount))"
+                     " FROM parts_used").fetchone()[0]) < 0.5),
         ],
     ),
-    # -------------------------------------------------------------- general
+    # ------------------------------------------------------------ general
     dict(
-        id=30, ledger="Q221", concept="general", tier="General",
-        title="Depot scorecard",
+        id=30, ledger="Q251", concept="general", tier="General",
+        title="Machines by age band",
         prompt=(
-            "One row per depot: how many technicians work out of it, how many"
-            " stock lines it holds, and the total labour hours its technicians"
-            " have logged.\n\n"
-            "All four depots appear even if a number is 0.\n\n"
-            "Return: depot_id, name, technicians, stock_lines, hours"
+            "Put every machine into one of three bands by installed_on and"
+            " count them:\n"
+            "  '2024 or later'  installed on or after 2024-01-01\n"
+            "  '2021 to 2023'   installed on or after 2021-01-01\n"
+            "  'before 2021'    everything else\n\n"
+            "All 98 machines land in exactly one band.\n\n"
+            "Return: band, machines"
         ),
         solution=(
-            "SELECT d.depot_id, d.name,"
-            " (SELECT COUNT(*) FROM technicians t WHERE t.depot_id = d.depot_id),"
-            " (SELECT COUNT(*) FROM part_stock ps WHERE ps.depot_id = d.depot_id),"
-            " (SELECT COALESCE(SUM(le.hours), 0) FROM labor_entries le"
-            "  JOIN technicians t ON t.technician_id = le.technician_id"
-            "  WHERE t.depot_id = d.depot_id)"
-            " FROM depots d"
+            "SELECT CASE WHEN installed_on >= '2024-01-01' THEN '2024 or later'"
+            " WHEN installed_on >= '2021-01-01' THEN '2021 to 2023'"
+            " ELSE 'before 2021' END, COUNT(*) FROM machines GROUP BY 1"
         ),
         trap_sql=(
-            "SELECT d.depot_id, d.name, COUNT(DISTINCT t.technician_id),"
-            " COUNT(DISTINCT ps.part_id), COALESCE(SUM(le.hours), 0)"
-            " FROM depots d LEFT JOIN technicians t ON t.depot_id = d.depot_id"
-            " LEFT JOIN part_stock ps ON ps.depot_id = d.depot_id"
-            " LEFT JOIN labor_entries le ON le.technician_id = t.technician_id"
-            " GROUP BY d.depot_id, d.name"
+            "SELECT CASE WHEN installed_on >= '2021-01-01' THEN '2021 to 2023'"
+            " WHEN installed_on >= '2024-01-01' THEN '2024 or later'"
+            " ELSE 'before 2021' END, COUNT(*) FROM machines GROUP BY 1"
         ),
-        note="Three measures at three different grains. Joining all of them"
-             " into one query multiplies each by the others -- the hours get"
-             " repeated once per stock line, and DISTINCT patches the two"
-             " counts while leaving the SUM inflated. Independent measures"
-             " belong in independent subqueries.",
+        note="CASE is first-match-wins, so the order of the WHEN branches is"
+             " part of the logic, not a matter of taste. Test the narrowest"
+             " band first. Put the 2021 test ahead of the 2024 test and every"
+             " recent machine matches it on the way past -- the '2024 or later'"
+             " branch is unreachable and never appears at all.",
         claims=[
-            ("all four depots appear",
-             lambda rows, c: len(rows) == 4),
-            ("the technician counts total the workforce",
-             lambda rows, c: sum(r[2] for r in rows) == 14),
-            ("the hours total every labour entry",
-             lambda rows, c: abs(sum(r[4] for r in rows) - c.execute(
-                 "SELECT SUM(hours) FROM labor_entries").fetchone()[0]) < 0.01),
+            ("three bands covering all 98 machines",
+             lambda rows, c: len(rows) == 3 and sum(r[1] for r in rows) == 98),
         ],
     ),
 ]
-
 
 BY_ID = {ex["id"]: ex for ex in EXERCISES}
 TIERS = list(dict.fromkeys(ex["tier"] for ex in EXERCISES))

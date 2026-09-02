@@ -3,37 +3,33 @@
 Thirty questions on the repair-depot schema, re-seeded again so no answer from
 the previous set carries over.
 
-This set was built from the mistakes made working through the last one. It is
-weighted half toward what actually went wrong and half toward keeping breadth.
+This set is deliberately **easier** than the last one, and there is **no
+recursion in it at all** -- that mechanism has had two sets in a row. Two rules
+shaped every question:
 
-**What went wrong last time, and what drills it here:**
+- **one concept each.** Nothing stacks a window function on top of a self-join
+  on top of a date trick. If you know the one idea being drilled, the query is
+  short -- no reference solution in the set is longer than six lines.
+- **the prompt states the grain.** Where the last set left you to work out what
+  one row meant, these say it outright: "one row per depot", "one row per
+  month", "all 14 technicians come back".
 
-| The mistake | Questions |
+**Nine of the thirty are window functions**, the area that has come up most:
+
+| The idea | Questions |
 |---|---|
-| Aggregating at the wrong level, or not at all | 7, 8, 9 |
-| `SUM(a) * b` where `SUM(a * b)` was meant | 11, 26, 27 |
-| A `LEFT JOIN` filtered in `WHERE`, and `AVG` over missing values | 12, 13 |
-| Answering "at least one" when the question said "every" | 14, 23 |
-| An `EXISTS` that forgot to correlate | 15 |
-| `PARTITION BY` missing, or present when it should not be | 16, 18 |
-| The frame default on a window function | 17 |
+| `PARTITION BY` -- present, absent, or wrong | 3, 8 |
+| The frame: running vs rolling vs whole-table | 1, 5, 7 |
+| Ranking, and what happens on a tie | 4, 6 |
+| `LAG` and `LEAD` along a series | 2, 8 |
+| A window instead of a `GROUP BY`, keeping the detail rows | 9 |
 
-The six **recursion** questions deliberately vary the *anchor*, which is where
-the mechanism is easiest to get wrong:
-
-1. the root's **direct reports** -- not the root itself (branch labels)
-2. every row **paired with itself** (how deep the tree goes)
-3. walking **upward**, collecting ancestors to sum over
-4. a bare **literal**, generating a month spine for two measures at once
-5. **one row per parent row**, each expanding into its own series
-6. a spine **CROSS JOINed** to a real dimension, for the full grid
-
-The last three are the half of recursion that is not a hierarchy at all, and
-the half a `GROUP BY` cannot reach: it can only return groups the data already
-contains, so quiet months and empty depot-months silently do not exist.
-
-The rest keeps the breadth: set operations, window frames, date arithmetic,
-self-joins and silent sampling.
+The other twenty-one keep the breadth, one idea at a time: `COUNT(*)` vs
+`COUNT(col)`, `WHERE` vs `HAVING`, conditional aggregation, outer joins that
+keep the zeroes, self-joins, anti-joins, `EXISTS` and `NOT EXISTS`,
+correlation, `= NULL` and `<>` against nullable columns, `julianday` and
+`strftime`, `EXCEPT` and `INTERSECT`, fan-out from two child tables,
+`SUM(a * b)`, and the order of `CASE` branches.
 
 **Work through them in the GUI**: double-click `SQL Practice.bat` on Windows or
 `sql-practice.command` on macOS/Linux, or run `python gui.py`. It grades your
@@ -60,12 +56,14 @@ The tables: `regions`, `customers`, `sites`, `machines`, `depots`,
   (`supervisor_id` NULL); 10 supervise nobody. Deep enough that a single
   self-join cannot reach the bottom, and that only the person at the top has
   anyone *indirectly* beneath them.
-- **`NOT IN` is a trap here.** `supervisor_id` contains a NULL, so
-  `x NOT IN (SELECT supervisor_id ...)` returns nothing at all.
-- **Only 7 of the 18 months have a critical work order.** The other 11 exist
-  in no table, which is what makes generating a month series necessary rather
-  than decorative.
-- **Only 6 of the 10 score bands are populated.** Same lesson, without dates.
+- **`NOT IN` is a trap here.** `supervisor_id` contains a NULL, and so does
+  `work_orders.technician_id` -- 15 work orders have nobody assigned. Any
+  `x NOT IN (SELECT that_column ...)` returns nothing at all.
+- **Invoices run one month past the work.** 19 months have an invoice issued
+  and only 18 have a work order opened, so the two calendars are not the same
+  set -- which is what `EXCEPT` is for.
+- **Only 6 of the 10 score bands are populated.** A `GROUP BY` can only return
+  groups the data already contains; the empty bands do not appear at all.
 - **Dates are TEXT.** `closed_at - opened_at` does not error -- it coerces to
   numbers and returns nonsense. Use `julianday()` for arithmetic; `<` and `>`
   on ISO dates are fine as strings.
@@ -74,363 +72,380 @@ The tables: `regions`, `customers`, `sites`, `machines`, `depots`,
 - **`closed_at` is NULL for cancelled jobs as well as open ones.** It tells
   you a job has no end date, not why.
 - **Invoice `status` is UPPERCASE** (`PAID`, `PENDING`, `OVERDUE`, `VOID`),
-  and 7 invoices are VOID -- so `status <> 'PAID'` is wider than "unpaid".
+  and 2 invoices are VOID -- so `status <> 'PAID'` is wider than "unpaid".
 - **14 distinct labour rates and 4 distinct discounts**, so `SUM(h) * rate`
   and `SUM(h * rate)` genuinely disagree.
 - **Some parts are stocked but never fitted (2), some fitted but stocked
-  nowhere (4), and two are neither** -- three different sets, on purpose.
+  nowhere (3), and two are neither** -- three different sets, on purpose.
+  Four parts have never been fitted at all.
 - **`discount` is a rate**, not a percentage: `quantity * unit_price *
   (1 - discount)`.
-- **Nullable on purpose**: `cert_level` (4), `response_hours`,
-  `reorder_level`, `last_counted_at`, `warranty_until` (24), `score` (24),
-  `weight_grams`, `account_tier` (9), `paid_on`, `technician_id` on work
-  orders.
+- **Nullable on purpose**: `cert_level` (4), `response_hours` (10),
+  `reorder_level` (19), `last_counted_at`, `warranty_until` (21), `score` (29),
+  `weight_grams` (2), `account_tier` (3), `end_date` (11), `paid_on`, and
+  `technician_id` on work orders (15).
 
-## Recursive CTEs (6)
+## Window functions (9)
 
-An anchor row, then a step that joins back to the CTE itself, run over and
-over until a pass returns nothing. Six questions, easiest first -- the last
-two generate rows rather than walking a hierarchy.
+A calculation that sees a set of rows around each row without collapsing
+them. PARTITION BY says which rows it may see, ORDER BY orders them inside
+that set, and a ROWS clause narrows it further. Nine questions, each
+isolating one of those three.
 
-1. **The whole chain, written out** (Q162)
+1. **Invoicing, month by month and so far** (Q222)
 
-   For every technician, their reporting path from the very top down to
-   them, as one string joined with ' > '.
+   One row per calendar month in which any invoice was issued: the
+   month, what was invoiced in it, and the running total of everything
+   invoiced up to and including that month.
 
-   The technician at the top is just their own name. Everyone else is
-   their supervisor's path with their own name on the end -- so a third-
-   level technician shows all three names.
+   Months are 'YYYY-MM'. The running total on the last month equals the
+   total of every invoice in the table.
 
-   *Return: technician_id, name, path*
+   *Return: month, month_total, running_total*
 
-2. **Everyone above Nadia Kaur** (Q163)
+2. **Month on month** (Q223)
 
-   Nadia Kaur and every technician above her in the reporting chain, up
-   to the one who reports to nobody, with how many steps up each one is.
+   One row per month in which any work order was opened: the month, how
+   many were opened, and the change from the month before.
 
-   Nadia herself is 0 steps, her supervisor is 1, and so on.
+   The earliest month has no month before it, so its change is NULL --
+   leave it NULL rather than turning it into 0.
 
-   *Return: technician_id, name, steps_up*
+   *Return: month, work_orders, change*
 
-3. **Every manager, everyone under them** (Q164)
+3. **The latest job on each machine** (Q224)
 
-   Every pair of technicians where the first supervises the second,
-   directly or through any number of levels, with how many levels apart
-   they are.
+   For every machine that has ever had a work order, its most recent
+   one. One row per machine -- machines with no work orders at all do
+   not appear.
 
-   A direct report is 1 level. Nobody is paired with themselves.
+   No machine has two work orders opened on the same date, so 'most
+   recent' is never a tie.
 
-   *Return: supervisor_id, subordinate_id, levels*
+   *Return: machine_id, work_order_id, opened_at*
 
-4. **How many people are under you** (Q165)
+4. **Busiest at each depot, ties and all** (Q225)
 
-   For every technician, how many people sit below them in the chain at
-   any depth -- their direct reports, plus those people's reports, and so
-   on.
+   The busiest technician at each depot, counting work orders they are
+   the assigned technician on.
 
-   Technicians who supervise nobody appear with 0.
+   One depot has two technicians tied on the same count. Both of them
+   must appear -- five rows in total, not four.
 
-   *Return: technician_id, name, headcount_below*
+   *Return: depot_id, technician_id, name, work_orders*
 
-5. **Score bands, including the empty ones** (Q166)
+5. **Three-month rolling average** (Q226)
 
-   Inspection scores bucketed into bands of ten -- 0-9, 10-19, and so on
-   up to 90-99 -- with how many inspections fall in each band.
+   One row per month in which any work order was opened: the month, how
+   many were opened, and the average over that month and the two months
+   before it.
 
-   All ten bands must appear, including the ones no inspection reached.
-   Inspections with no score recorded belong to no band.
+   The first month averages just itself, the second averages two
+   months, and every month after that averages three.
 
-   *Return: band_low, inspections*
+   *Return: month, work_orders, rolling_avg*
 
-6. **Critical months, including the quiet ones** (Q167)
+6. **Quartiles of workload** (Q227)
 
-   For every calendar month from 2025-02 to 2026-07 inclusive, how many
-   critical work orders were opened in it.
+   Every technician who has logged any labour, with their total hours
+   and which quarter of the workforce they fall into by hours: 1 for
+   the busiest quarter, 4 for the quietest.
 
-   Every month in that window appears, including the many where no
-   critical job was opened at all -- those show 0.
+   Fourteen technicians split into four groups, so the first two groups
+   get four each and the last two get three.
 
-   *Return: month, critical_work_orders*
+   *Return: technician_id, total_hours, quartile*
 
+7. **Share of the invoiced total** (Q228)
 
-## Set operations (2)
+   One row per work-order priority: the priority, the total invoiced on
+   work orders of that priority, and that total as a percentage of
+   everything invoiced.
 
-Comparing two SETS of rows, not filtering one. Remember that UNION,
-INTERSECT and EXCEPT all deduplicate; only UNION ALL does not.
+   Only work orders that actually have an invoice count. The four
+   percentages add up to 100.
 
-7. **Stocked in Leeds, not in Coventry** (Q168)
+   *Return: priority, invoiced, pct_of_total*
 
-   Parts that Leeds Central holds a stock line for and Coventry Hub does
-   not.
+8. **How long until the machine is seen again** (Q229)
 
-   This compares two SETS of parts. A part stocked at both depots must
-   not appear, and it makes no difference how many are on hand.
+   Every work order, with the number of whole days until the NEXT work
+   order opened on the same machine.
 
-   *Return: part_id, name*
+   The most recent work order on each machine has nothing after it, so
+   its gap is NULL. One row per work order -- all 180.
 
-8. **Both kinds of contract** (Q169)
+   *Return: machine_id, work_order_id, opened_at, days_to_next*
 
-   Customers who hold at least one contract that agreed a response time
-   and at least one that did not.
+9. **Each entry against its technician's average** (Q230)
 
-   *Return: customer_id, name*
+   Every labour entry dated in January 2026, with the average hours of
+   the January entries belonging to that same technician.
 
+   One row per entry, not one per technician: the same average repeats
+   down each technician's entries.
+
+   *Return: entry_id, technician_id, hours, tech_avg*
+
+## Aggregation (4)
+
+GROUP BY and the functions that ride on it. Four questions on the parts
+that are easy to get subtly wrong rather than outright wrong.
+
+10. **Certified and not** (Q231)
+
+    One row per depot: how many technicians it has, and how many of them
+    have a certification level recorded.
+
+    Four technicians company-wide have no cert_level, so the two counts
+    differ at the depots those technicians work from.
+
+    *Return: depot_id, depot_name, technicians, certified*
+
+11. **Which priorities were busy in 2026** (Q232)
+
+    Counting only work orders opened on or after 2026-01-01, one row per
+    priority, keeping the priorities with at least 15 of them.
+
+    Two of the four priorities clear the bar.
+
+    *Return: priority, work_orders*
+
+12. **Invoice status by priority** (Q233)
+
+    One row per work-order priority, with the number of its invoices in
+    each of three statuses side by side as columns.
+
+    Every priority has at least one PAID invoice; some have zero PENDING
+    or zero OVERDUE, and those must show as 0.
+
+    *Return: priority, paid, pending, overdue*
+
+13. **Average score, where there is one** (Q234)
+
+    One row per inspection result: how many inspections had that result,
+    how many of them carry a score, and the average of the scores that
+    exist.
+
+    Plenty of inspections have no score at all. The average must be over
+    the scored ones only.
+
+    *Return: result, inspections, scored, avg_score*
+
+## Joins (4)
+
+Four questions where the answer hinges on the rows that DON'T match -- the
+unused part, the technician with no critical jobs, the machine nobody has
+touched -- plus one on pairing a table with itself.
+
+14. **Every part, used or not** (Q235)
+
+    One row for every part in the catalogue: its id, its name, and the
+    number of DISTINCT work orders it has been used on.
+
+    Four parts have never been used on anything. They must appear with
+    0, so all 40 parts come back.
+
+    *Return: part_id, name, work_orders*
+
+15. **Critical jobs per technician** (Q236)
+
+    One row for every technician: id, name, and how many CRITICAL work
+    orders they are the assigned technician on.
+
+    Five technicians have never been assigned one. They must appear with
+    0, so all 14 technicians come back.
+
+    *Return: technician_id, name, critical_jobs*
+
+16. **Hired the same year, same depot** (Q237)
+
+    Pairs of technicians who work from the same depot and were hired in
+    the same calendar year.
+
+    Each pair once, not twice: Ann with Bob, never also Bob with Ann,
+    and nobody paired with themselves. Three pairs exist.
+
+    *Return: depot_id, name_a, name_b*
+
+17. **Machines nobody has touched** (Q238)
+
+    Every machine that has never had a single work order raised against
+    it.
+
+    Write it as an outer join that keeps the non-matches, rather than
+    with NOT IN. There are 27 such machines.
+
+    *Return: machine_id, serial*
 
 ## Subqueries & EXISTS (3)
 
-Asking a question about each row's own group, and proving something about
-EVERY related row by failing to find a counterexample.
+Asking a question about a row without changing what a row is. Three
+questions: EXISTS instead of a join, NOT EXISTS instead of NOT IN, and a
+subquery that has to be re-evaluated per row.
 
-9. **Machines nobody has touched** (Q170)
+18. **Customers still under warranty somewhere** (Q239)
 
-   Machines that have never had a work order raised against them, with
-   the site they stand on.
+    Every customer who owns at least one machine whose warranty runs
+    beyond 2026-01-01.
 
-   *Return: machine_id, model, site_name*
+    Machines belong to sites and sites belong to customers. One row per
+    customer, however many qualifying machines they own -- three
+    customers own two apiece.
 
-10. **Never failed an inspection** (Q171)
+    *Return: customer_id, name*
 
-   Machines that have been inspected at least once and passed every time
-   -- no 'fail' and no 'conditional' among their inspections.
+19. **Never on a critical job** (Q240)
 
-   Machines never inspected at all do not qualify.
+    Every technician who has never been the assigned technician on a
+    critical work order. Five of the fourteen qualify.
 
-   *Return: machine_id, model*
+    Watch out: three critical work orders have no technician assigned at
+    all, which is what makes the obvious answer wrong.
 
-11. **Costlier than its category average** (Q172)
+    *Return: technician_id, name*
 
-   Parts whose unit cost is above the average unit cost of the parts in
-   their OWN category -- not the average across all parts.
+20. **Dear for its own category** (Q241)
 
-   *Return: part_id, name, category, unit_cost*
+    Every part costing more than the average unit_cost of the parts in
+    ITS OWN category -- not more than the average across the whole
+    catalogue.
 
+    One row per part.
 
-## Conditional aggregation (3)
-
-Routing rows into columns with CASE inside the aggregate, so one pass
-produces several counts and nothing is thrown away first.
-
-12. **Counted and uncounted stock** (Q173)
-
-   For each depot: how many stock lines it holds, how many have ever been
-   counted, and how many never have.
-
-   The last two must add up to the first.
-
-   *Return: depot_id, name, stock_lines, counted, never_counted*
-
-13. **Close rate by priority** (Q174)
-
-   For each priority: how many work orders carry it, how many of those
-   are closed, and the closed share as a fraction between 0 and 1.
-
-   *Return: priority, work_orders, closed, close_rate*
-
-14. **Every status in one row** (Q175)
-
-   For each technician who has been assigned any work order: how many of
-   their work orders are open, how many closed, and how many cancelled --
-   three counts on one row.
-
-   A technician with none of a given status shows 0 for it.
-
-   *Return: technician_id, name, open, closed, cancelled*
-
-
-## Dates & gaps (3)
-
-julianday() for arithmetic, and care about what a NULL date means.
-
-15. **The jobs that dragged** (Q176)
-
-   Work orders that took more than 14 days to close, with how many days
-   they took.
-
-   Only jobs that actually closed count. The gap is closed_at minus
-   opened_at, in days.
-
-   *Return: work_order_id, opened_at, closed_at, days_open*
-
-16. **Out of warranty when it broke** (Q177)
-
-   Work orders opened after the machine's warranty had already expired.
-
-   Machines with no warranty date recorded are not known to be out of
-   warranty, so they do not count.
-
-   *Return: work_order_id, machine_id, opened_at, warranty_until*
-
-17. **How long invoices take to pay** (Q178)
-
-   Across the invoices that have been paid, the average number of days
-   between being issued and being paid, and the longest such gap.
-
-   *Return: invoices_paid, avg_days_to_pay, max_days_to_pay*
-
-
-## Window frames (4)
-
-Aggregates that do not collapse the rows. Mind PARTITION BY (where the
-sequence restarts) against ORDER BY (what 'previous' means) -- and that
-adding ORDER BY to a window aggregate silently reframes it.
-
-18. **Invoiced so far this year** (Q179)
-
-   Invoice value per calendar month, with a running total that
-   accumulates from the first month onwards.
-
-   The running total on the last month equals the whole invoice book.
-
-   *Return: month, invoiced, running_total*
-
-19. **Ranked inside your own depot** (Q180)
-
-   Every technician who has logged labour, with their total hours and
-   their rank by hours WITHIN their own depot -- the busiest technician
-   at each depot is rank 1.
-
-   Break ties on technician_id ascending.
-
-   *Return: depot_id, technician_id, name, hours, rank_in_depot*
-
-20. **Share of the category** (Q181)
-
-   For each part that has ever been fitted: its total spend, and what
-   fraction of its CATEGORY's total spend that represents, as a value
-   between 0 and 1.
-
-   Spend on a part is quantity * unit_price * (1 - discount), summed over
-   every time it was fitted.
-
-   *Return: category, part_id, name, spend, share_of_category*
-
-21. **Against the best in the depot** (Q182)
-
-   Every technician who has logged labour, with their total hours, the
-   highest total logged by anyone at their depot, and the difference
-   between the two.
-
-   The busiest technician at each depot shows a difference of 0.
-
-   *Return: depot_id, technician_id, name, hours, depot_best, behind_by*
-
-
-## Silent sampling (2)
-
-The bare column under GROUP BY, in the arithmetic form that costs real
-answers. When a per-row value feeds an aggregate, it goes inside.
-
-22. **What the labour cost each depot** (Q183)
-
-   For each depot, the total cost of all labour logged by the technicians
-   based there.
-
-   A visit costs hours * rate, and technicians are not all on the same
-   rate.
-
-   *Return: depot_id, name, labour_cost*
-
-23. **Spend by category, after discount** (Q184)
-
-   For each part category, the total spent on its parts across every work
-   order.
-
-   A line costs quantity * unit_price * (1 - discount), and lines are not
-   all discounted the same.
-
-   *Return: category, spend*
-
-
-## Self-joins (2)
-
-One table twice, under two aliases. The comparison operator decides whether
-you get each pair once, twice, or paired with itself.
-
-24. **Same region, same tier** (Q185)
-
-   Every pair of customers in the same region holding the same account
-   tier, with the region name and the tier.
-
-   Each pair once, not twice, and nobody paired with themselves. List the
-   lower customer_id first. Customers with no tier recorded do not pair
-   up.
-
-   *Return: region_name, account_tier, customer_a, customer_b*
-
-25. **Same depot, same certification** (Q186)
-
-   Every pair of technicians working out of the same depot who hold the
-   same certification level, with the depot name and that level.
-
-   Each pair once. List the lower technician_id first.
-
-   *Return: depot_name, cert_level, technician_a, technician_b*
-
-
-## Grain (2)
-
-What one row of your intermediate result actually represents. Joining to a
-child table multiplies the parent; only a GROUP BY puts it back.
-
-26. **Parts and labour on one job** (Q187)
-
-   For each closed work order that has both parts fitted and labour
-   logged: the parts total, the labour total, and the two added together.
-
-   Parts total is quantity * unit_price * (1 - discount) summed over the
-   parts. Labour total is hours * rate summed over the visits.
-
-   *Return: work_order_id, parts_total, labour_total, job_total*
-
-27. **Contracts and sites per customer** (Q188)
-
-   For each customer: how many contracts they hold and how many sites
-   they run.
-
-   Only customers who have at least one of each.
-
-   *Return: customer_id, name, contracts, sites*
-
+    *Return: part_id, name, category, unit_cost*
 
 ## NULLs (2)
 
-Unknown is not zero, not empty, and not equal to itself.
+Two questions on the same fact from opposite directions: a comparison
+against NULL is neither true nor false, so it never matches and never
+excludes -- it just quietly drops the row.
 
-28. **Still running, or merely undated** (Q189)
+21. **Ended, running, or open-ended** (Q242)
 
-   For each account tier: how many contracts those customers hold, and
-   how many of them have no end date recorded and so are still running.
+    Classify every contract into one of three states as of 2026-08-01,
+    and count them:
 
-   Customers who were never graded have no tier. That is a tier in its
-   own right here and gets its own row.
+        'open-ended' if end_date is missing entirely
+        'ended'      if end_date is before 2026-08-01
+        'active'     otherwise
 
-   *Return: account_tier, contracts, still_running*
+    All 34 contracts land in exactly one state.
 
-29. **Certified, uncertified, unknown** (Q190)
+    *Return: state, contracts*
 
-   For each depot: how many technicians it has, how many have a
-   certification level recorded, and the average of those levels.
+22. **Everyone who is not level 5** (Q243)
 
-   Technicians with no level recorded still count toward the headcount,
-   and must not drag the average down.
+    Count technicians by certification level, excluding level 5, and
+    counting the ones with NO certification level as 'none'.
 
-   *Return: depot_id, name, technicians, certified, avg_cert_level*
+    Twelve of the fourteen technicians are not level 5 -- four of them
+    because they have no level at all.
 
+    *Return: level, technicians  (level is text: '1'..'4' or 'none')*
+
+## Dates (3)
+
+Dates are TEXT in SQLite. Three questions on doing arithmetic on them,
+naming parts of them, and grouping by them without losing the year.
+
+23. **The five slowest jobs to close** (Q244)
+
+    The five closed work orders that took the longest from opening to
+    closing, longest first.
+
+    Days must be a whole number. Break ties on days by work_order_id
+    ascending, so the five are unambiguous.
+
+    *Return: work_order_id, opened_at, closed_at, days*
+
+24. **Which day of the week is busiest** (Q245)
+
+    How many work orders were opened on each day of the week, across the
+    whole data set. Seven rows, Sunday first.
+
+    Name the day rather than numbering it.
+
+    *Return: day_name, work_orders*
+
+25. **Inspections by month, across two years** (Q246)
+
+    One row per calendar month in which any inspection happened: the
+    month as 'YYYY-MM', and how many inspections it held.
+
+    The data spans two calendar years, so February 2025 and February
+    2026 are different months and must not be added together.
+
+    *Return: month, inspections*
+
+## Set operations (2)
+
+Stacking two result sets rather than joining them. Two questions: one on
+EXCEPT having a direction, one on INTERSECT not being UNION.
+
+26. **Invoiced in a month nothing opened** (Q247)
+
+    Months in which at least one invoice was issued but NO work order
+    was opened. Months are 'YYYY-MM'.
+
+    Invoices trail the work that produced them, so this catches the tail
+    end of the data set. Exactly one month qualifies.
+
+    *Return: month*
+
+27. **Low on stock and needed for critical work** (Q248)
+
+    Parts that are BOTH below their reorder level in at least one depot
+    AND have been used on at least one critical work order.
+
+    Only stock lines that actually have a reorder_level count. Three
+    parts satisfy both conditions.
+
+    *Return: part_id, name*
+
+## Grain (2)
+
+What one row means. Two questions: what happens when two child tables meet
+over the same parent, and where the multiplication goes.
+
+28. **Parts and labour on the critical jobs** (Q249)
+
+    One row per CRITICAL work order, with what was spent on parts and
+    what was spent on labour.
+
+    Parts spend is quantity * unit_price * (1 - discount) summed; labour
+    is hours * rate summed. A job with none of one or the other shows 0,
+    not NULL. All 21 critical work orders appear.
+
+    *Return: work_order_id, parts_cost, labour_cost*
+
+29. **Spend by part category** (Q250)
+
+    One row per part category that has ever been used, with the total
+    spent on it.
+
+    Each parts_used line is worth quantity * unit_price * (1 -
+    discount), and every line must be priced on its own quantity, price
+    and discount.
+
+    *Return: category, spend*
 
 ## General (1)
 
-No single mechanism -- just the query the question asks for.
+One question on CASE.
 
-30. **Money still owed, by region** (Q191)
+30. **Machines by age band** (Q251)
 
-   For each region, the value of invoices that are not yet settled --
-   status PENDING or OVERDUE -- and how many such invoices there are.
+    Put every machine into one of three bands by installed_on and count
+    them:
 
-   An invoice belongs to the region of the site its machine stands on.
-   Regions with nothing outstanding do not appear.
+        '2024 or later'  installed on or after 2024-01-01
+        '2021 to 2023'   installed on or after 2021-01-01
+        'before 2021'    everything else
 
-   *Return: region_name, unsettled_invoices, unsettled_value*
+    All 98 machines land in exactly one band.
 
+    *Return: band, machines*
 
 ## The one concept with no question here
 
@@ -455,7 +470,7 @@ questions above have to be written, since a window function cannot appear in
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-131 retired ones. New questions must not repeat anything in that ledger.
+221 retired ones. New questions must not repeat anything in that ledger.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
