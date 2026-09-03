@@ -1,4 +1,4 @@
-"""Populate testdb with practice data for a field-service repair depot.
+"""Populate testdb with practice data for a further-education college.
 
 Deterministic: the RNG is seeded and no wall-clock dates are used, so running
 this twice produces byte-identical data. Safe to re-run -- it drops and
@@ -9,13 +9,16 @@ recreates the tables first, so a schema change is picked up.
 The gaps below are deliberate, not sloppiness. Questions about anti-joins,
 NULL handling and COUNT need something real to find:
 
-  * work orders with parts but no labour, labour but no parts, and neither
-  * work orders never inspected, and a few inspected twice
-  * open work orders (closed_at NULL) alongside cancelled ones
-  * technicians who have not certified (cert_level NULL)
-  * contracts with no agreed response time, and open-ended contracts
-  * parts stocked in no depot at all
-  * machines never worked on, customers with no work orders
+  * courses that are never scheduled, and courses with no prerequisites
+  * sections with enrolments but no assessments, assessments but no
+    enrolments, and neither
+  * sections scheduled but not staffed (instructor_id NULL)
+  * enrolments still active or withdrawn, so grade is NULL
+  * students who never enrol on anything
+  * textbooks on nobody's reading list
+  * instructors with no formal pay grade, students with no funding band
+  * payments waived or still due, so paid_on is NULL
+  * an August gap every year, so "every month" needs a generated series
 """
 
 import random
@@ -23,108 +26,141 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 185
-
-# Work orders span this window. Fixed, not derived from today, so the data set
-# does not drift as time passes.
-RANGE_START = date(2025, 2, 3)
-RANGE_END = date(2026, 7, 20)
+SEED = 221
 
 # Tables in dependency order; dropped in reverse so foreign keys stay satisfied.
 TABLES = [
-    "regions",
-    "customers",
-    "sites",
-    "machines",
-    "depots",
-    "technicians",
-    "contracts",
-    "parts",
-    "work_orders",
-    "parts_used",
-    "labor_entries",
-    "inspections",
-    "part_stock",
-    "invoices",
+    "campuses",
+    "departments",
+    "instructors",
+    "students",
+    "courses",
+    "prerequisites",
+    "terms",
+    "sections",
+    "enrolments",
+    "assessments",
+    "textbooks",
+    "course_books",
+    "payments",
 ]
 
-REGIONS = [
-    ("North", "United Kingdom"),
-    ("Midlands", "United Kingdom"),
-    ("South West", "United Kingdom"),
-    ("Scotland", "United Kingdom"),
-    ("Leinster", "Ireland"),
+CAMPUSES = [
+    ("Riverside", "Leeds", "2004-09-01"),
+    ("Northgate", "Sheffield", "2009-09-01"),
+    ("Kingsway", "Nottingham", "2013-09-01"),
+    ("Harbour Point", "Hull", "2018-09-01"),
 ]
 
-CUSTOMER_NAMES = [
-    "Ashfield Dairy", "Brightwater Foods", "Calder Print", "Dunmore Packaging",
-    "Eastgate Brewing", "Fenwick Textiles", "Girvan Aggregates", "Harlow Plastics",
-    "Ironbridge Castings", "Jesmond Bakery", "Kelvin Engineering",
-    "Lomond Distillery", "Marlow Glassworks", "Newforge Metals",
-    "Oakhampton Mills", "Penrith Cold Store", "Quarrywood Stone",
-    "Ravensbourne Labs", "Selkirk Joinery", "Thornbury Farms",
-    "Ulverston Chemicals", "Vale Composites", "Westmoor Recycling",
-    "Xavier Precision", "Yardley Bottling", "Zetland Marine",
-    "Aldridge Coatings", "Bridgnorth Tooling",
+# (name, faculty, campus index)
+DEPARTMENTS = [
+    ("Computing", "Science & Technology", 0),
+    ("Engineering", "Science & Technology", 0),
+    ("Mathematics", "Science & Technology", 1),
+    ("Business", "Business & Law", 1),
+    ("Accounting", "Business & Law", 2),
+    ("Design", "Arts & Humanities", 2),
+    ("Languages", "Arts & Humanities", 3),
+    ("Health Sciences", "Health & Care", 3),
+    ("Nursing", "Health & Care", 0),
 ]
 
-CITIES = {
-    "North": ["Leeds", "York", "Durham", "Carlisle"],
-    "Midlands": ["Derby", "Coventry", "Stoke", "Lincoln"],
-    "South West": ["Bristol", "Exeter", "Taunton", "Truro"],
-    "Scotland": ["Glasgow", "Dundee", "Perth", "Ayr"],
-    "Leinster": ["Dublin", "Drogheda", "Naas", "Wexford"],
-}
-
-SITE_SUFFIX = ["Works", "Plant", "Depot", "Unit 4", "North Site", "Yard",
-               "Mill", "Annexe"]
-
-MACHINE_MODELS = [
-    "AX-200 Filler", "AX-450 Filler", "BR-90 Conveyor", "BR-140 Conveyor",
-    "CH-12 Chiller", "CH-30 Chiller", "DL-7 Labeller", "DL-15 Labeller",
-    "EP-3 Press", "EP-8 Press", "FS-22 Sorter", "GT-60 Dryer",
+INSTRUCTOR_NAMES = [
+    "Margaret Ashworth", "Devan Rao", "Sinead Fahey", "Peter Nowak",
+    "Amara Diallo", "Joachim Brandt", "Ruth Ellery", "Yusuf Demir",
+    "Clara Bassett", "Hiro Tanabe", "Ingrid Solberg", "Femi Adeyemi",
+    "Rosalind Vane", "Tomas Kucera", "Bridget Moloney", "Anil Chaudhary",
 ]
 
-DEPOTS = [
-    ("Leeds Central", "North", 4200),
-    ("Coventry Hub", "Midlands", 5100),
-    ("Bristol West", "South West", 3300),
-    ("Glasgow North", "Scotland", 2800),
+STUDENT_FIRST = [
+    "Alice", "Bilal", "Chloe", "Dmitri", "Esme", "Farhan", "Gemma", "Hugo",
+    "Isla", "Jonah", "Kiera", "Lucas", "Maya", "Niall", "Orla", "Pavel",
+    "Quinn", "Rhys", "Sofia", "Tariq", "Una", "Viktor", "Wren", "Xiomara",
+    "Yannick", "Zara",
+]
+STUDENT_LAST = [
+    "Attwood", "Barrow", "Chandra", "Doherty", "Ekstrom", "Fitzgerald",
+    "Gallagher", "Hollis", "Ibrahim", "Jarvis", "Kowalski", "Lindqvist",
+    "Mensah", "Novak", "Ogilvie", "Pereira", "Quinlan", "Rasmussen",
+    "Sandoval", "Thackeray", "Uddin", "Voss", "Whitlock", "Yates",
 ]
 
-TECH_NAMES = [
-    "Priya Raman", "Tom Alderton", "Grace Okonkwo", "Ben Halliday",
-    "Nadia Kaur", "Rory MacLeod", "Iris Chen", "Owen Pritchard",
-    "Salma Haddad", "Dmitri Volkov", "Fiona Byrne", "Karl Jensen",
-    "Lena Fischer", "Marcus Bell",
+PROGRAMMES = [
+    "BSc Computing", "BEng Engineering", "BSc Mathematics",
+    "BA Business", "BA Accounting", "BA Design", "BA Languages",
+    "BSc Health Sciences", "BSc Nursing",
 ]
 
-PART_NAMES = [
-    ("Drive belt", "Transmission"), ("Bearing housing", "Transmission"),
-    ("Timing chain", "Transmission"), ("Gearbox seal", "Transmission"),
-    ("Coupling sleeve", "Transmission"), ("Servo motor", "Electrical"),
-    ("Contactor 40A", "Electrical"), ("Relay board", "Electrical"),
-    ("Wiring loom", "Electrical"), ("Encoder disc", "Electrical"),
-    ("Control PCB", "Electrical"), ("Proximity sensor", "Sensors"),
-    ("Load cell", "Sensors"), ("Thermocouple", "Sensors"),
-    ("Pressure switch", "Sensors"), ("Optical gate", "Sensors"),
-    ("Hydraulic hose", "Hydraulics"), ("Pump cartridge", "Hydraulics"),
-    ("Solenoid valve", "Hydraulics"), ("Accumulator", "Hydraulics"),
-    ("O-ring set", "Hydraulics"), ("Filter element", "Filtration"),
-    ("Strainer basket", "Filtration"), ("Membrane pack", "Filtration"),
-    ("Carbon cartridge", "Filtration"), ("Guard panel", "Chassis"),
-    ("Castor wheel", "Chassis"), ("Levelling foot", "Chassis"),
-    ("Hinge assembly", "Chassis"), ("Access hatch", "Chassis"),
-    ("Compressor head", "Refrigeration"), ("Expansion valve", "Refrigeration"),
-    ("Condenser fan", "Refrigeration"), ("Evaporator coil", "Refrigeration"),
-    ("Heating element", "Thermal"), ("Insulation jacket", "Thermal"),
-    ("Fan blade", "Thermal"), ("Nozzle tip", "Consumables"),
-    ("Squeegee blade", "Consumables"), ("Ink cup", "Consumables"),
+# (department index, level, code stem, title)
+COURSES = [
+    (0, 1, "CMP101", "Programming Foundations"),
+    (0, 1, "CMP110", "Computer Systems"),
+    (0, 2, "CMP201", "Data Structures"),
+    (0, 2, "CMP210", "Databases"),
+    (0, 3, "CMP301", "Algorithms"),
+    (0, 3, "CMP310", "Distributed Systems"),
+    (0, 4, "CMP401", "Machine Learning"),
+    (1, 1, "ENG101", "Statics and Dynamics"),
+    (1, 2, "ENG201", "Thermofluids"),
+    (1, 3, "ENG301", "Control Engineering"),
+    (1, 4, "ENG401", "Systems Design"),
+    (2, 1, "MTH101", "Calculus"),
+    (2, 1, "MTH110", "Linear Algebra"),
+    (2, 2, "MTH201", "Probability"),
+    (2, 3, "MTH301", "Numerical Methods"),
+    (2, 4, "MTH401", "Stochastic Processes"),
+    (3, 1, "BUS101", "Principles of Management"),
+    (3, 2, "BUS201", "Operations"),
+    (3, 3, "BUS301", "Strategy"),
+    (4, 1, "ACC101", "Financial Accounting"),
+    (4, 2, "ACC201", "Management Accounting"),
+    (4, 3, "ACC301", "Audit and Assurance"),
+    (5, 1, "DES101", "Visual Communication"),
+    (5, 2, "DES201", "Typography"),
+    (5, 3, "DES301", "Interaction Design"),
+    (6, 1, "LAN101", "Spanish I"),
+    (6, 2, "LAN201", "Spanish II"),
+    (6, 3, "LAN301", "Translation Studies"),
+    (7, 1, "HSC101", "Human Physiology"),
+    (7, 2, "HSC201", "Public Health"),
+    (7, 3, "HSC301", "Epidemiology"),
+    (8, 1, "NUR101", "Foundations of Nursing"),
+    (8, 2, "NUR201", "Clinical Practice"),
+    (8, 3, "NUR301", "Acute Care"),
 ]
 
-PRIORITIES = ["low", "normal", "high", "critical"]
-INSPECTION_RESULTS = ["pass", "fail", "conditional"]
-TIERS = ["bronze", "silver", "gold"]
+TERMS = [
+    ("Autumn 2024", "2024-09-16", "2024-12-13"),
+    ("Spring 2025", "2025-01-13", "2025-04-04"),
+    ("Summer 2025", "2025-04-21", "2025-07-04"),
+    ("Autumn 2025", "2025-09-15", "2025-12-12"),
+    ("Spring 2026", "2026-01-12", "2026-04-02"),
+    ("Summer 2026", "2026-04-20", "2026-07-03"),
+]
+
+ROOMS = ["A1.04", "A2.11", "B1.02", "B3.07", "C2.15", "D1.01", "D4.20",
+         "Lab 1", "Lab 2", "Studio A"]
+DELIVERY = ["in person", "online", "blended"]
+ASSESSMENT_KINDS = ["essay", "exam", "project", "practical"]
+FUNDING = ["self", "grant", "sponsor"]
+
+BOOK_TITLES = [
+    "Foundations of Computation", "The Pragmatic Engineer",
+    "Discrete Mathematics in Practice", "Database Design Handbook",
+    "Algorithms Illustrated", "Statistical Inference",
+    "Thermodynamics for Engineers", "Control Theory Primer",
+    "Management in Context", "Operations and Supply", "Strategy Cases",
+    "Financial Reporting Standards", "Cost and Management Accounting",
+    "Auditing Principles", "Grid Systems in Design", "Type and Layout",
+    "Designing Interfaces", "Spanish Grammar in Use",
+    "Advanced Spanish Composition", "Theories of Translation",
+    "Anatomy and Physiology", "Public Health Foundations",
+    "Epidemiology at a Glance", "Clinical Nursing Skills",
+    "Acute Care Essentials", "Research Methods", "Academic Writing",
+    "Data Visualisation", "Numerical Recipes", "Ethics in Practice",
+]
+PUBLISHERS = ["Aldgate Press", "Brookfield", "Cormorant Academic",
+              "Deverell & Sons", "Eastgate"]
 
 
 def _random_date(rng, start, end):
@@ -141,332 +177,266 @@ def seed():
     conn = db.connect()
     try:
         with conn:
-            # Drop rather than DELETE so schema changes are picked up.
+            # Drop rather than DELETE so schema changes are picked up. Drop
+            # EVERY table, not just the ones in TABLES -- when the schema is
+            # replaced wholesale, tables from the previous one are otherwise
+            # left behind in the file and show up in any schema browser.
             conn.execute("PRAGMA foreign_keys=OFF")
-            for table in reversed(TABLES):
-                conn.execute(f"DROP TABLE IF EXISTS {table}")
+            existing = [r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+                " AND name NOT LIKE 'sqlite_%'")]
+            for table in existing:
+                conn.execute(f'DROP TABLE IF EXISTS "{table}"')
         conn.executescript(db.SCHEMA_PATH.read_text(encoding="utf-8"))
         conn.execute("PRAGMA foreign_keys=ON")
 
         with conn:
-            # ---------------------------------------------------------- regions
-            region_rows = [(i, name, country)
-                           for i, (name, country) in enumerate(REGIONS, 1)]
+            # --------------------------------------------------------- campuses
             conn.executemany(
-                "INSERT INTO regions (region_id, name, country) VALUES (?, ?, ?)",
-                region_rows,
-            )
-            region_by_name = {name: i for i, name, _ in region_rows}
+                "INSERT INTO campuses (campus_id, name, city, opened_on)"
+                " VALUES (?, ?, ?, ?)",
+                [(i, n, c, o) for i, (n, c, o) in enumerate(CAMPUSES, 1)])
 
-            # -------------------------------------------------------- customers
-            customer_rows = []
-            for cid, name in enumerate(CUSTOMER_NAMES, 1):
-                region = REGIONS[rng.randrange(len(REGIONS))][0]
-                signed = _random_date(rng, date(2019, 1, 1), date(2025, 1, 20))
-                # A fifth of accounts were never graded -- NULL, not 'bronze'.
-                tier = None if rng.random() < 0.20 else TIERS[rng.randrange(3)]
-                customer_rows.append((cid, name, region_by_name[region],
-                                      _iso(signed), tier))
+            # ------------------------------------------------------ departments
+            dept_rows = []
+            for did, (name, faculty, ci) in enumerate(DEPARTMENTS, 1):
+                budget = round(rng.uniform(180_000, 940_000), 2)
+                dept_rows.append((did, ci + 1, name, faculty, budget))
             conn.executemany(
-                "INSERT INTO customers (customer_id, name, region_id, signed_on,"
-                " account_tier) VALUES (?, ?, ?, ?, ?)",
-                customer_rows,
-            )
+                "INSERT INTO departments (department_id, campus_id, name,"
+                " faculty, annual_budget) VALUES (?, ?, ?, ?, ?)", dept_rows)
 
-            # ------------------------------------------------------------ sites
-            site_rows = []
-            sid = 0
-            sites_by_customer = {}
-            for cid, _name, region_id, _signed, _tier in customer_rows:
-                region_name = REGIONS[region_id - 1][0]
-                # Most customers have one or two sites; a few have three, which
-                # is what makes rolling site figures up to the customer a trap.
-                n_sites = rng.choices([1, 2, 3], weights=[5, 3, 2])[0]
-                sites_by_customer[cid] = []
-                for k in range(n_sites):
-                    sid += 1
-                    city = CITIES[region_name][rng.randrange(4)]
-                    suffix = SITE_SUFFIX[rng.randrange(len(SITE_SUFFIX))]
-                    site_rows.append((sid, cid, f"{city} {suffix}", city,
-                                      region_id))
-                    sites_by_customer[cid].append(sid)
-            conn.executemany(
-                "INSERT INTO sites (site_id, customer_id, name, city, region_id)"
-                " VALUES (?, ?, ?, ?, ?)",
-                site_rows,
-            )
-
-            # --------------------------------------------------------- machines
-            machine_rows = []
-            mid = 0
-            for site in site_rows:
-                s_id = site[0]
-                for _ in range(rng.choices([1, 2, 3], weights=[4, 4, 2])[0]):
-                    mid += 1
-                    model = MACHINE_MODELS[rng.randrange(len(MACHINE_MODELS))]
-                    installed = _random_date(rng, date(2018, 3, 1),
-                                             date(2025, 6, 1))
-                    # A quarter were never registered for warranty: NULL.
-                    # The rest have a real date, some already in the past.
-                    if rng.random() < 0.25:
-                        warranty = None
-                    else:
-                        warranty = _iso(installed + timedelta(
-                            days=rng.choice([365, 730, 1095, 1460])))
-                    machine_rows.append((mid, s_id, model, f"SN{100000 + mid}",
-                                         _iso(installed), warranty))
-            conn.executemany(
-                "INSERT INTO machines (machine_id, site_id, model, serial,"
-                " installed_on, warranty_until) VALUES (?, ?, ?, ?, ?, ?)",
-                machine_rows,
-            )
-
-            # ----------------------------------------------------------- depots
-            depot_rows = [
-                (i, name, region_by_name[region], cap,
-                 _iso(date(2016 + i, 4, 1)))
-                for i, (name, region, cap) in enumerate(DEPOTS, 1)
-            ]
-            conn.executemany(
-                "INSERT INTO depots (depot_id, name, region_id, capacity_units,"
-                " opened_on) VALUES (?, ?, ?, ?, ?)",
-                depot_rows,
-            )
-
-            # ------------------------------------------------------ technicians
-            # Technician 1 is the depot manager: supervisor_id NULL.
-            tech_rows = []
-            for tid, name in enumerate(TECH_NAMES, 1):
-                depot = 1 if tid == 1 else rng.randrange(1, len(DEPOTS) + 1)
-                hired = _random_date(rng, date(2015, 1, 5), date(2024, 11, 1))
-                supervisor = None if tid == 1 else (
-                    1 if tid <= 4 else rng.randrange(2, 5))
-                rate = round(rng.uniform(38, 82), 2)
-                # Four technicians have not sat the certification yet.
-                cert = None if tid in (6, 9, 12, 14) else rng.randint(1, 5)
-                tech_rows.append((tid, name, depot, _iso(hired), supervisor,
-                                  rate, cert))
-            conn.executemany(
-                "INSERT INTO technicians (technician_id, name, depot_id,"
-                " hired_on, supervisor_id, hourly_rate, cert_level)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                tech_rows,
-            )
-
-            # -------------------------------------------------------- contracts
-            contract_rows = []
-            ctr = 0
-            for cid, *_ in customer_rows:
-                # Some customers have no contract; a few have two, which makes
-                # contracts a second child of customers and so a fan-out risk.
-                n = rng.choices([0, 1, 2], weights=[2, 6, 3])[0]
-                for _ in range(n):
-                    ctr += 1
-                    start = _random_date(rng, date(2022, 1, 1),
-                                         date(2025, 9, 1))
-                    # A third are open-ended: end_date NULL, not expired.
-                    end = None if rng.random() < 0.33 else _iso(
-                        start + timedelta(days=rng.choice([365, 730, 1095])))
-                    fee = round(rng.uniform(180, 2400), 2)
-                    # A quarter never agreed a response time.
-                    resp = None if rng.random() < 0.25 else rng.choice(
-                        [4, 8, 12, 24, 48, 72])
-                    contract_rows.append((ctr, cid, _iso(start), end, fee, resp))
-            conn.executemany(
-                "INSERT INTO contracts (contract_id, customer_id, start_date,"
-                " end_date, monthly_fee, response_hours)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                contract_rows,
-            )
-
-            # ------------------------------------------------------------ parts
-            part_rows = []
-            for pid, (name, category) in enumerate(PART_NAMES, 1):
-                cost = round(rng.uniform(4, 480), 2)
-                # A sixth of parts have never been weighed: NULL, not 0.
-                weight = None if rng.random() < 0.17 else rng.randrange(
-                    20, 9000, 10)
-                part_rows.append((pid, name, category, cost, weight))
-            conn.executemany(
-                "INSERT INTO parts (part_id, name, category, unit_cost,"
-                " weight_grams) VALUES (?, ?, ?, ?, ?)",
-                part_rows,
-            )
-
-            # ------------------------------------------------------ work_orders
-            # Machines are picked from a subset so some are never worked on,
-            # and customers 7 and 19 are excluded entirely so an anti-join can
-            # find customers who have never raised a work order.
-            quiet_sites = {s[0] for s in site_rows if s[1] in (7, 19)}
-            workable = [m[0] for m in machine_rows
-                        if m[0] % 7 != 0 and m[1] not in quiet_sites]
-            wo_rows = []
-            for wid in range(1, 181):
-                machine = workable[rng.randrange(len(workable))]
-                opened = _random_date(rng, RANGE_START, RANGE_END)
-                status = rng.choices(["closed", "open", "cancelled"],
-                                     weights=[72, 19, 9])[0]
-                if status == "closed":
-                    closed = _iso(opened + timedelta(
-                        days=rng.choices([1, 2, 3, 5, 8, 13, 21],
-                                         weights=[6, 6, 5, 4, 3, 2, 1])[0]))
+            # ------------------------------------------------------ instructors
+            # A three-level mentoring tree: one root, three who report to the
+            # root, everyone else under those. Deep enough that a single
+            # self-join cannot reach the bottom.
+            instr_rows = []
+            for iid, name in enumerate(INSTRUCTOR_NAMES, 1):
+                dept = rng.randrange(1, len(DEPARTMENTS) + 1)
+                hired = _random_date(rng, date(2011, 1, 1), date(2024, 6, 30))
+                if iid == 1:
+                    mentor = None
+                elif iid <= 4:
+                    mentor = 1
                 else:
-                    # Open and cancelled jobs both have closed_at NULL, so
-                    # "still open" needs the status, not just the NULL.
-                    closed = None
-                # A tenth of jobs sit unassigned in the queue.
-                tech = None if rng.random() < 0.10 else rng.randrange(
-                    1, len(TECH_NAMES) + 1)
-                priority = rng.choices(PRIORITIES, weights=[3, 6, 4, 2])[0]
-                wo_rows.append((wid, machine, tech, _iso(opened), closed,
-                                priority, status))
+                    mentor = rng.randrange(2, 5)
+                rate = round(rng.uniform(38.0, 82.0), 2)
+                # A quarter have never been formally graded -- NULL, not 1.
+                grade = None if rng.random() < 0.25 else rng.randrange(1, 6)
+                instr_rows.append((iid, dept, name, _iso(hired), mentor,
+                                   rate, grade))
             conn.executemany(
-                "INSERT INTO work_orders (work_order_id, machine_id,"
-                " technician_id, opened_at, closed_at, priority, status)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                wo_rows,
-            )
+                "INSERT INTO instructors (instructor_id, department_id, name,"
+                " hired_on, mentor_id, hourly_rate, pay_grade)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)", instr_rows)
 
-            # ------------------------------------------------------- parts_used
-            # Parts 39 and 40 are never fitted AND stocked nowhere, so an
-            # anti-join finds them. Parts 12 and 25 are stocked but never
-            # fitted, and 7, 19 and 38 are fitted but stocked nowhere -- that
-            # asymmetry is what gives the set-difference questions two
-            # non-empty sides instead of one.
-            usable_parts = [p for p in range(1, len(PART_NAMES) - 1)
-                            if p not in (12, 25)]
-            parts_used_rows = []
-            for wid, _m, _t, _o, _c, _p, status in wo_rows:
-                if status == "cancelled" or rng.random() < 0.14:
-                    continue  # no parts on this job
-                n = rng.choices([1, 2, 3, 4, 5], weights=[5, 6, 5, 3, 2])[0]
-                chosen = rng.sample(usable_parts, n)
-                for pid in chosen:
-                    qty = rng.choices([1, 2, 3, 4, 6, 8],
-                                      weights=[8, 6, 4, 3, 2, 1])[0]
-                    base = part_rows[pid - 1][3]
-                    price = round(base * rng.uniform(1.25, 1.9), 2)
-                    disc = rng.choices([0.0, 0.05, 0.10, 0.15],
-                                       weights=[12, 4, 3, 1])[0]
-                    parts_used_rows.append((wid, pid, qty, price, disc))
+            # --------------------------------------------------------- students
+            student_rows = []
+            used = set()
+            for sid in range(1, 61):
+                while True:
+                    name = (STUDENT_FIRST[rng.randrange(len(STUDENT_FIRST))]
+                            + " "
+                            + STUDENT_LAST[rng.randrange(len(STUDENT_LAST))])
+                    if name not in used:
+                        used.add(name)
+                        break
+                campus = rng.randrange(1, len(CAMPUSES) + 1)
+                joined = _random_date(rng, date(2024, 8, 1), date(2026, 4, 1))
+                programme = PROGRAMMES[rng.randrange(len(PROGRAMMES))]
+                # A sixth have no funding band recorded yet.
+                band = None if rng.random() < 0.17 else FUNDING[rng.randrange(3)]
+                student_rows.append((sid, name, campus, _iso(joined),
+                                     programme, band))
             conn.executemany(
-                "INSERT INTO parts_used (work_order_id, part_id, quantity,"
-                " unit_price, discount) VALUES (?, ?, ?, ?, ?)",
-                parts_used_rows,
-            )
+                "INSERT INTO students (student_id, name, campus_id,"
+                " enrolled_on, programme, funding_band)"
+                " VALUES (?, ?, ?, ?, ?, ?)", student_rows)
 
-            # ---------------------------------------------------- labor_entries
-            # Multiple visits per job is the whole point: this is what makes
-            # joining parts_used and labor_entries in one block multiply.
-            labor_rows = []
-            entry = 0
-            for wid, _m, tech, opened, _c, _p, status in wo_rows:
-                if status == "cancelled" or rng.random() < 0.11:
-                    continue  # no labour logged
-                n = rng.choices([1, 2, 3, 4], weights=[7, 6, 3, 1])[0]
-                start = date.fromisoformat(opened)
-                offset = 0
-                for k in range(n):
-                    entry += 1
-                    # Usually the assigned technician, but a fifth of visits are
-                    # covered by somebody else. So the technician who logged a
-                    # visit is NOT reliably the one the job is assigned to.
-                    if tech is None or rng.random() < 0.20:
-                        who = rng.randrange(1, len(TECH_NAMES) + 1)
+            # ---------------------------------------------------------- courses
+            course_rows = []
+            for cid, (di, level, code, title) in enumerate(COURSES, 1):
+                credits = rng.choice([10, 15, 20, 30])
+                course_rows.append((cid, di + 1, code, title, credits, level))
+            conn.executemany(
+                "INSERT INTO courses (course_id, department_id, code, title,"
+                " credits, level) VALUES (?, ?, ?, ?, ?, ?)", course_rows)
+
+            # ---------------------------------------------------- prerequisites
+            # A course may only require STRICTLY lower levels, which makes the
+            # graph acyclic by construction -- a recursive walk always ends.
+            by_dept_level = {}
+            for cid, (di, level, _code, _t) in enumerate(COURSES, 1):
+                by_dept_level.setdefault((di, level), []).append(cid)
+            prereq_rows = []
+            for cid, (di, level, _code, _t) in enumerate(COURSES, 1):
+                if level == 1:
+                    continue
+                # Always require something from the level immediately below, so
+                # chains actually form: a level-4 course reaches level 1 in
+                # three hops, which is what makes a recursive walk necessary
+                # rather than decorative. Sometimes also reach further down,
+                # so not every path from a course is the same length.
+                direct = list(by_dept_level.get((di, level - 1), []))
+                deeper = [c for lv in range(1, level - 1)
+                          for c in by_dept_level.get((di, lv), [])]
+                if direct:
+                    rng.shuffle(direct)
+                    prereq_rows.append((cid, direct[0]))
+                if deeper and rng.random() < 0.45:
+                    rng.shuffle(deeper)
+                    prereq_rows.append((cid, deeper[0]))
+            # Two cross-department requirements, so the graph is not just a set
+            # of independent per-department chains.
+            prereq_rows.append((7, 14))    # Machine Learning <- Probability
+            prereq_rows.append((31, 14))   # Epidemiology     <- Probability
+            conn.executemany(
+                "INSERT INTO prerequisites (course_id, requires_course_id)"
+                " VALUES (?, ?)", sorted(set(prereq_rows)))
+
+            # ------------------------------------------------------------ terms
+            conn.executemany(
+                "INSERT INTO terms (term_id, name, starts_on, ends_on)"
+                " VALUES (?, ?, ?, ?)",
+                [(i, n, s, e) for i, (n, s, e) in enumerate(TERMS, 1)])
+
+            # --------------------------------------------------------- sections
+            # Five courses are never scheduled at all, so an anti-join has
+            # something to find.
+            never_scheduled = {6, 16, 22, 28, 34}
+            section_rows = []
+            sid = 0
+            for tid in range(1, len(TERMS) + 1):
+                for cid in range(1, len(COURSES) + 1):
+                    if cid in never_scheduled:
+                        continue
+                    if rng.random() > 0.45:
+                        continue
+                    sid += 1
+                    # One section in nine is scheduled but not yet staffed.
+                    instr = (None if rng.random() < 0.11
+                             else rng.randrange(1, len(INSTRUCTOR_NAMES) + 1))
+                    section_rows.append((
+                        sid, cid, tid, instr,
+                        ROOMS[rng.randrange(len(ROOMS))],
+                        rng.choice([18, 20, 24, 30, 36, 40]),
+                        DELIVERY[rng.randrange(3)]))
+            conn.executemany(
+                "INSERT INTO sections (section_id, course_id, term_id,"
+                " instructor_id, room, capacity, delivery)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)", section_rows)
+
+            term_start = {i: date.fromisoformat(s)
+                          for i, (_n, s, _e) in enumerate(TERMS, 1)}
+
+            # ------------------------------------------------------- enrolments
+            # Eight students never enrol on anything.
+            enrollable = [s for s in range(1, 61) if s % 7 != 3][:52]
+            enrol_rows = []
+            eid = 0
+            for s_id, c_id, t_id, *_rest in section_rows:
+                # A tenth of sections take nobody at all.
+                if rng.random() < 0.10:
+                    continue
+                take = rng.randrange(3, 12)
+                for stu in rng.sample(enrollable, take):
+                    eid += 1
+                    start = term_start[t_id]
+                    when = start + timedelta(days=rng.randrange(-21, 15))
+                    roll = rng.random()
+                    if roll < 0.68:
+                        status, grade = "completed", rng.randrange(35, 99)
+                    elif roll < 0.87:
+                        status, grade = "active", None
                     else:
-                        who = tech
-                    # Consecutive visits sometimes land on the same day, so
-                    # ordering by work_date alone leaves genuine ties.
-                    day = start + timedelta(days=offset)
-                    offset += rng.choice([0, 1, 1, 2, 3])
-                    hours = round(rng.choice([0.5, 1.0, 1.5, 2.0, 2.5, 3.0,
-                                              4.0, 5.5, 7.0]), 2)
-                    rate = tech_rows[who - 1][5]
-                    labor_rows.append((entry, wid, who, _iso(day), hours, rate))
+                        status, grade = "withdrawn", None
+                    enrol_rows.append((eid, s_id, stu, _iso(when), status,
+                                       grade))
             conn.executemany(
-                "INSERT INTO labor_entries (entry_id, work_order_id,"
-                " technician_id, work_date, hours, rate)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                labor_rows,
-            )
+                "INSERT INTO enrolments (enrolment_id, section_id, student_id,"
+                " enrolled_on, status, grade) VALUES (?, ?, ?, ?, ?, ?)",
+                enrol_rows)
 
-            # ------------------------------------------------------ inspections
-            insp_rows = []
-            insp = 0
-            for wid, _m, _t, opened, closed, _p, status in wo_rows:
-                if status != "closed":
+            # ------------------------------------------------------ assessments
+            assess_rows = []
+            aid = 0
+            for s_id, _c, t_id, *_rest in section_rows:
+                # A sixth of sections have no assessments recorded, which is a
+                # DIFFERENT set from the ones with no students.
+                if rng.random() < 0.16:
                     continue
-                # Most closed jobs are inspected once, some twice, some not at
-                # all -- so COUNT(*) and COUNT(inspection_id) diverge.
-                n = rng.choices([0, 1, 2], weights=[2, 7, 2])[0]
-                base = date.fromisoformat(closed)
+                n = rng.randrange(2, 5)
+                weights = [round(1.0 / n, 2)] * n
                 for k in range(n):
-                    insp += 1
-                    when = base + timedelta(days=k + rng.randint(0, 4))
-                    result = rng.choices(INSPECTION_RESULTS,
-                                         weights=[7, 2, 3])[0]
-                    # A fifth carry a verdict but no numeric score.
-                    score = None if rng.random() < 0.20 else rng.randint(41, 99)
-                    insp_rows.append((insp, wid, _iso(when), result, score))
+                    aid += 1
+                    kind = ASSESSMENT_KINDS[rng.randrange(4)]
+                    due = term_start[t_id] + timedelta(
+                        days=rng.randrange(28, 84))
+                    assess_rows.append((
+                        aid, s_id, f"{kind.title()} {k + 1}", kind,
+                        weights[k], _iso(due)))
             conn.executemany(
-                "INSERT INTO inspections (inspection_id, work_order_id,"
-                " inspected_at, result, score) VALUES (?, ?, ?, ?, ?)",
-                insp_rows,
-            )
+                "INSERT INTO assessments (assessment_id, section_id, title,"
+                " kind, weight, due_on) VALUES (?, ?, ?, ?, ?, ?)", assess_rows)
 
-            # ------------------------------------------------------- part_stock
-            # The last three parts are stocked in no depot at all, and so are
-            # parts 7 and 19 -- which unlike 38-40 do get fitted on jobs.
-            stocked = [p for p in range(1, len(PART_NAMES) - 2)
-                       if p not in (7, 19)]
-            stock_rows = []
-            for pid in stocked:
-                for did in range(1, len(DEPOTS) + 1):
-                    if rng.random() < 0.32:
-                        continue  # not carried at this depot
-                    qty = rng.randrange(0, 260)
-                    # A quarter of lines have no agreed reorder policy.
-                    reorder = None if rng.random() < 0.25 else rng.choice(
-                        [10, 20, 25, 40, 60])
-                    counted = None if rng.random() < 0.30 else _iso(
-                        _random_date(rng, date(2025, 6, 1), RANGE_END))
-                    stock_rows.append((did, pid, qty, reorder, counted))
+            # -------------------------------------------------------- textbooks
+            book_rows = []
+            for bid, title in enumerate(BOOK_TITLES, 1):
+                price = round(rng.uniform(18.0, 145.0), 2)
+                # A few have no page count recorded.
+                pages = None if rng.random() < 0.12 else rng.randrange(180, 940)
+                book_rows.append((bid, title,
+                                  PUBLISHERS[rng.randrange(len(PUBLISHERS))],
+                                  price, pages))
             conn.executemany(
-                "INSERT INTO part_stock (depot_id, part_id, quantity_on_hand,"
-                " reorder_level, last_counted_at) VALUES (?, ?, ?, ?, ?)",
-                stock_rows,
-            )
+                "INSERT INTO textbooks (book_id, title, publisher, list_price,"
+                " pages) VALUES (?, ?, ?, ?, ?)", book_rows)
 
-            # --------------------------------------------------------- invoices
-            # Only closed jobs are invoiced, and not even all of those.
-            parts_total = {}
-            for wid, pid, qty, price, disc in parts_used_rows:
-                parts_total[wid] = parts_total.get(wid, 0.0) + \
-                    qty * price * (1 - disc)
-            labor_total = {}
-            for _e, wid, _t, _d, hours, rate in labor_rows:
-                labor_total[wid] = labor_total.get(wid, 0.0) + hours * rate
-
-            inv_rows = []
-            inv = 0
-            for wid, _m, _t, _o, closed, _p, status in wo_rows:
-                if status != "closed" or rng.random() < 0.14:
+            # ----------------------------------------------------- course_books
+            # Six textbooks end up on no reading list at all.
+            listable = list(range(1, len(BOOK_TITLES) - 5))
+            cb_rows = set()
+            for cid in range(1, len(COURSES) + 1):
+                if rng.random() < 0.12:
                     continue
-                inv += 1
-                amount = round(parts_total.get(wid, 0.0)
-                               + labor_total.get(wid, 0.0), 2)
-                issued = date.fromisoformat(closed) + timedelta(
-                    days=rng.randint(1, 10))
-                st = rng.choices(["PAID", "PENDING", "OVERDUE", "VOID"],
-                                 weights=[11, 4, 3, 1])[0]
-                paid = _iso(issued + timedelta(days=rng.randint(3, 45))) \
-                    if st == "PAID" else None
-                inv_rows.append((inv, wid, _iso(issued), amount, st, paid))
+                for bid in rng.sample(listable, rng.randrange(1, 4)):
+                    cb_rows.add((cid, bid))
+            cb_full = []
+            for cid, bid in sorted(cb_rows):
+                required = 1 if rng.random() < 0.6 else 0
+                # A fifth have no library copy target set.
+                copies = None if rng.random() < 0.20 else rng.randrange(0, 25)
+                cb_full.append((cid, bid, required, copies))
             conn.executemany(
-                "INSERT INTO invoices (invoice_id, work_order_id, issued_on,"
+                "INSERT INTO course_books (course_id, book_id, required,"
+                " copies_held) VALUES (?, ?, ?, ?)", cb_full)
+
+            # --------------------------------------------------------- payments
+            pay_rows = []
+            pid = 0
+            for stu in range(1, 61):
+                for _ in range(rng.randrange(0, 5)):
+                    pid += 1
+                    billed = _random_date(rng, date(2024, 9, 1),
+                                          date(2026, 6, 30))
+                    amount = round(rng.uniform(120.0, 2400.0), 2)
+                    roll = rng.random()
+                    if roll < 0.62:
+                        status = "PAID"
+                        paid = _iso(billed + timedelta(
+                            days=rng.randrange(1, 75)))
+                    elif roll < 0.80:
+                        status, paid = "DUE", None
+                    elif roll < 0.96:
+                        status, paid = "LATE", None
+                    else:
+                        status, paid = "WAIVED", None
+                    pay_rows.append((pid, stu, _iso(billed), amount, status,
+                                     paid))
+            conn.executemany(
+                "INSERT INTO payments (payment_id, student_id, billed_on,"
                 " amount, status, paid_on) VALUES (?, ?, ?, ?, ?, ?)",
-                inv_rows,
-            )
+                pay_rows)
     finally:
         conn.close()
 

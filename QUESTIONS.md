@@ -24,51 +24,53 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the repair-depot schema, re-seeded again (SEED 149 -> 185)
-so no answer value from the last set carries over.
+Thirty questions on a **new schema**. The repair-depot tables are retired; this
+is a further-education college, and the change is the point -- five sets in a
+row on the same fourteen tables had made the joins muscle memory. Read
+[schema.sql](schema.sql) before starting.
 
-Deliberately easier than Q192-Q221, and with **no recursion at all** -- that
-mechanism has had two sets in a row. Two rules shaped every question: one
-concept each, so nothing stacks a window function on a self-join on a date
-trick; and the prompt states the grain, so no time goes on decoding what one
-row is meant to be.
+Difficulty is pitched at the same level as Q222-Q251: one concept per question,
+and each prompt states its grain. Coverage is even rather than weighted to a
+single tier.
 
-The weighting follows where the questions have been going: nine on window
-functions, then four on aggregation, four on joins, three on subqueries and
-EXISTS, three on dates, and two each on set operations, NULLs and grain.
+The four recursion questions avoid the supervisor-chain shape the last three
+sets leaned on. `prerequisites` is a genuine directed **graph** -- a course can
+require several others and be required by several others -- so the same course
+is reachable by more than one path, and the choice between `UNION` and
+`UNION ALL` actually matters. Only one of the four is a hierarchy at all.
 
 | ID | Concept | Question | In GUI | Tier |
 |----|---------|----------|--------|------|
-| Q222 | W1 window frames | Invoicing, month by month and so far | ex 1 | Window functions |
-| Q223 | W1 window frames | Month on month | ex 2 | Window functions |
-| Q224 | W2 window ranking | The latest job on each machine | ex 3 | Window functions |
-| Q225 | W2 window ranking | Busiest at each depot, ties and all | ex 4 | Window functions |
-| Q226 | W1 window frames | Three-month rolling average | ex 5 | Window functions |
-| Q227 | W2 window ranking | Quartiles of workload | ex 6 | Window functions |
-| Q228 | W3 window vs GROUP BY | Share of the invoiced total | ex 7 | Window functions |
-| Q229 | W3 window vs GROUP BY | How long until the machine is seen again | ex 8 | Window functions |
-| Q230 | W3 window vs GROUP BY | Each entry against its technician's average | ex 9 | Window functions |
-| Q231 | A2 COUNT and AVG | Certified and not | ex 10 | Aggregation |
-| Q232 | A3 WHERE vs HAVING | Which priorities were busy in 2026 | ex 11 | Aggregation |
-| Q233 | A1 conditional aggregation | Invoice status by priority | ex 12 | Aggregation |
-| Q234 | A2 COUNT and AVG | Average score, where there is one | ex 13 | Aggregation |
-| Q235 | J2 outer joins | Every part, used or not | ex 14 | Joins |
-| Q236 | J2 outer joins | Critical jobs per technician | ex 15 | Joins |
-| Q237 | J1 self-joins | Hired the same year, same depot | ex 16 | Joins |
-| Q238 | J2 outer joins | Machines nobody has touched | ex 17 | Joins |
-| Q239 | E1 EXISTS | Customers still under warranty somewhere | ex 18 | Subqueries & EXISTS |
-| Q240 | E1 EXISTS | Never on a critical job | ex 19 | Subqueries & EXISTS |
-| Q241 | E2 correlated subqueries | Dear for its own category | ex 20 | Subqueries & EXISTS |
-| Q242 | C7 NULL | Ended, running, or open-ended | ex 21 | NULLs |
-| Q243 | C7 NULL | Everyone who is not level 5 | ex 22 | NULLs |
-| Q244 | D1 dates & gaps | The five slowest jobs to close | ex 23 | Dates |
-| Q245 | D1 dates & gaps | Which day of the week is busiest | ex 24 | Dates |
-| Q246 | D1 dates & gaps | Inspections by month, across two years | ex 25 | Dates |
-| Q247 | S1 set operations | Invoiced in a month nothing opened | ex 26 | Set operations |
-| Q248 | S1 set operations | Low on stock and needed for critical work | ex 27 | Set operations |
-| Q249 | C2 grain | Parts and labour on the critical jobs | ex 28 | Grain |
-| Q250 | C2 grain | Spend by part category | ex 29 | Grain |
-| Q251 | general | Machines by age band | ex 30 | General |
+| Q252 | R1 recursive CTE | Everything Machine Learning depends on | ex 1 | Recursion |
+| Q253 | R1 recursive CTE | How deep does the chain go | ex 2 | Recursion |
+| Q254 | R2 recursive series | Every month, including the quiet ones | ex 3 | Recursion |
+| Q255 | R1 recursive CTE | How far below the top | ex 4 | Recursion |
+| Q256 | W2 window ranking | Top of each programme, ties and all | ex 5 | Window functions |
+| Q257 | W3 window vs GROUP BY | Term on term | ex 6 | Window functions |
+| Q258 | W1 window frames | Billed so far | ex 7 | Window functions |
+| Q259 | W3 window vs GROUP BY | Share of the enrolments by faculty | ex 8 | Window functions |
+| Q260 | J2 outer joins | Every course, scheduled or not | ex 9 | Joins |
+| Q261 | J2 outer joins | Withdrawals per section | ex 10 | Joins |
+| Q262 | J1 self-joins | Classmates on the same programme | ex 11 | Joins |
+| Q263 | J2 outer joins | Textbooks nobody assigns | ex 12 | Joins |
+| Q264 | A2 COUNT and AVG | Graded and not | ex 13 | Aggregation |
+| Q265 | A3 WHERE vs HAVING | Which programmes were busy in 2026 | ex 14 | Aggregation |
+| Q266 | A1 conditional aggregation | Enrolment status by delivery mode | ex 15 | Aggregation |
+| Q267 | A2 COUNT and AVG | Average mark, where there is one | ex 16 | Aggregation |
+| Q268 | E1 EXISTS | Students who have reached level 4 | ex 17 | Subqueries & EXISTS |
+| Q269 | E1 EXISTS | Never taught online | ex 18 | Subqueries & EXISTS |
+| Q270 | E2 correlated subqueries | Dear for its own publisher | ex 19 | Subqueries & EXISTS |
+| Q271 | D1 dates & gaps | The five slowest payments to settle | ex 20 | Dates |
+| Q272 | D1 dates & gaps | Enrolled before the term began | ex 21 | Dates |
+| Q273 | D1 dates & gaps | Assessment deadlines by month | ex 22 | Dates |
+| Q274 | C7 NULL | Settled, outstanding, or waived | ex 23 | NULLs |
+| Q275 | C7 NULL | Everyone not funding themselves | ex 24 | NULLs |
+| Q276 | S1 set operations | Billed in a month nobody enrolled | ex 25 | Set operations |
+| Q277 | S1 set operations | Required reading on a first-year course | ex 26 | Set operations |
+| Q278 | C2 grain | Students and assessments on each section | ex 27 | Grain |
+| Q279 | C2 grain | What the library spent by publisher | ex 28 | Grain |
+| Q280 | general | Courses by credit band | ex 29 | General |
+| Q281 | C2 grain | How many departments does each campus actually run | ex 30 | General |
 
 ## Retired
 
@@ -298,6 +300,36 @@ they still count as asked.
 | Q219 | J1 self-joins | Parts fitted on the same job | - | retired |
 | Q220 | J1 self-joins | Hired around the same time | - | retired |
 | Q221 | general | Depot scorecard | - | retired |
+| Q222 | W1 window frames | Invoicing, month by month and so far | - | retired |
+| Q223 | W1 window frames | Month on month | - | retired |
+| Q224 | W2 window ranking | The latest job on each machine | - | retired |
+| Q225 | W2 window ranking | Busiest at each depot, ties and all | - | retired |
+| Q226 | W1 window frames | Three-month rolling average | - | retired |
+| Q227 | W2 window ranking | Quartiles of workload | - | retired |
+| Q228 | W3 window vs GROUP BY | Share of the invoiced total | - | retired |
+| Q229 | W3 window vs GROUP BY | How long until the machine is seen again | - | retired |
+| Q230 | W3 window vs GROUP BY | Each entry against its technician's average | - | retired |
+| Q231 | A2 COUNT and AVG | Certified and not | - | retired |
+| Q232 | A3 WHERE vs HAVING | Which priorities were busy in 2026 | - | retired |
+| Q233 | A1 conditional aggregation | Invoice status by priority | - | retired |
+| Q234 | A2 COUNT and AVG | Average score, where there is one | - | retired |
+| Q235 | J2 outer joins | Every part, used or not | - | retired |
+| Q236 | J2 outer joins | Critical jobs per technician | - | retired |
+| Q237 | J1 self-joins | Hired the same year, same depot | - | retired |
+| Q238 | J2 outer joins | Machines nobody has touched | - | retired |
+| Q239 | E1 EXISTS | Customers still under warranty somewhere | - | retired |
+| Q240 | E1 EXISTS | Never on a critical job | - | retired |
+| Q241 | E2 correlated subqueries | Dear for its own category | - | retired |
+| Q242 | C7 NULL | Ended, running, or open-ended | - | retired |
+| Q243 | C7 NULL | Everyone who is not level 5 | - | retired |
+| Q244 | D1 dates & gaps | The five slowest jobs to close | - | retired |
+| Q245 | D1 dates & gaps | Which day of the week is busiest | - | retired |
+| Q246 | D1 dates & gaps | Inspections by month, across two years | - | retired |
+| Q247 | S1 set operations | Invoiced in a month nothing opened | - | retired |
+| Q248 | S1 set operations | Low on stock and needed for critical work | - | retired |
+| Q249 | C2 grain | Parts and labour on the critical jobs | - | retired |
+| Q250 | C2 grain | Spend by part category | - | retired |
+| Q251 | general | Machines by age band | - | retired |
 
 ## History
 
@@ -325,3 +357,8 @@ they still count as asked.
   and recursion-free, weighted toward window functions: 9 window, 4
   aggregation, 4 joins, 3 subqueries/EXISTS, 3 dates, 2 set operations, 2
   NULLs, 2 grain, 1 general.
+- **Q252-Q281** current set, on a NEW schema: the repair depot is replaced by a
+  further-education college (13 tables, SEED 221). Same difficulty as the last
+  set, even coverage: 4 recursion, 4 window, 4 joins, 4 aggregation, 3
+  subqueries/EXISTS, 3 dates, 2 set operations, 2 NULLs, 2 grain, 2 general.
+  Recursion runs over a course-prerequisite GRAPH rather than an org chart.

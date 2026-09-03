@@ -1,35 +1,34 @@
 # SQL practice exercises
 
-Thirty questions on the repair-depot schema, re-seeded again so no answer from
-the previous set carries over.
+Thirty questions on a **new schema**. The repair-depot tables are gone; this is
+a further-education college. Five sets in a row ran on the same fourteen tables,
+and the joins had become muscle memory -- so the tables, the columns and the
+relationships are all different now. Read [schema.sql](schema.sql) first.
 
-This set is deliberately **easier** than the last one, and there is **no
-recursion in it at all** -- that mechanism has had two sets in a row. Two rules
-shaped every question:
+Difficulty is pitched at the same level as the last set, and the same two rules
+apply:
 
 - **one concept each.** Nothing stacks a window function on top of a self-join
-  on top of a date trick. If you know the one idea being drilled, the query is
-  short -- no reference solution in the set is longer than six lines.
-- **the prompt states the grain.** Where the last set left you to work out what
-  one row meant, these say it outright: "one row per depot", "one row per
-  month", "all 14 technicians come back".
+  on top of a date trick.
+- **the prompt states the grain.** "One row per course", "all 84 sections come
+  back", "12 rows across 9 programmes".
 
-**Nine of the thirty are window functions**, the area that has come up most:
+Coverage is even this time rather than weighted to one tier: 4 recursion, 4
+window functions, 4 joins, 4 aggregation, 3 subqueries and EXISTS, 3 dates, 2
+set operations, 2 NULLs, 2 grain, 2 general.
 
-| The idea | Questions |
-|---|---|
-| `PARTITION BY` -- present, absent, or wrong | 3, 8 |
-| The frame: running vs rolling vs whole-table | 1, 5, 7 |
-| Ranking, and what happens on a tie | 4, 6 |
-| `LAG` and `LEAD` along a series | 2, 8 |
-| A window instead of a `GROUP BY`, keeping the detail rows | 9 |
+**The recursion questions are the ones that changed most.** The last three sets
+walked a supervisor chain; `prerequisites` here is a genuine directed **graph**:
 
-The other twenty-one keep the breadth, one idea at a time: `COUNT(*)` vs
-`COUNT(col)`, `WHERE` vs `HAVING`, conditional aggregation, outer joins that
-keep the zeroes, self-joins, anti-joins, `EXISTS` and `NOT EXISTS`,
-correlation, `= NULL` and `<>` against nullable columns, `julianday` and
-`strftime`, `EXCEPT` and `INTERSECT`, fan-out from two child tables,
-`SUM(a * b)`, and the order of `CASE` branches.
+- a course can require several others, and be required by several others
+- three courses are reachable from the same starting course by **two different
+  paths**, so `UNION ALL` would list them twice where `UNION` would not
+- the deepest chain runs **three hops**, so a self-join cannot reach the bottom
+- levels only ever point downward, so the graph is acyclic and a walk always
+  terminates
+
+Only one of the four is a hierarchy at all. The others measure depth, and
+generate a month series that no table contains.
 
 **Work through them in the GUI**: double-click `SQL Practice.bat` on Windows or
 `sql-practice.command` on macOS/Linux, or run `python gui.py`. It grades your
@@ -45,238 +44,234 @@ python q.py "SELECT ..."
 or `python q.py` on its own for an interactive prompt (blank line runs,
 `\q` quits).
 
-The tables: `regions`, `customers`, `sites`, `machines`, `depots`,
-`technicians`, `contracts`, `parts`, `work_orders`, `parts_used`,
-`labor_entries`, `inspections`, `part_stock`, `invoices`. See
-[schema.sql](schema.sql).
+The tables: `campuses`, `departments`, `instructors`, `students`, `courses`,
+`prerequisites`, `terms`, `sections`, `enrolments`, `assessments`, `textbooks`,
+`course_books`, `payments`. See [schema.sql](schema.sql).
 
 ## Things the data does on purpose
 
-- **14 technicians in a 3-level reporting chain.** One reports to nobody
-  (`supervisor_id` NULL); 10 supervise nobody. Deep enough that a single
-  self-join cannot reach the bottom, and that only the person at the top has
-  anyone *indirectly* beneath them.
-- **`NOT IN` is a trap here.** `supervisor_id` contains a NULL, and so does
-  `work_orders.technician_id` -- 15 work orders have nobody assigned. Any
+- **`prerequisites` is a graph, not a tree.** 30 edges over 34 courses; 11
+  courses require nothing, 4 courses are required by more than one other, and 3
+  are reachable from the same start by two paths of different lengths.
+- **`NOT IN` is a trap here.** `sections.instructor_id` is NULL for 6 unstaffed
+  sections and `instructors.mentor_id` is NULL at the top of the tree, so
   `x NOT IN (SELECT that_column ...)` returns nothing at all.
-- **Invoices run one month past the work.** 19 months have an invoice issued
-  and only 18 have a work order opened, so the two calendars are not the same
-  set -- which is what `EXCEPT` is for.
-- **Only 6 of the 10 score bands are populated.** A `GROUP BY` can only return
-  groups the data already contains; the empty bands do not appear at all.
-- **Dates are TEXT.** `closed_at - opened_at` does not error -- it coerces to
+- **Enrolment clusters around terms; billing does not.** 22 months have a
+  payment billed and only 14 have an enrolment: 9 months bill without
+  enrolling, 1 enrols without billing -- which is what `EXCEPT` and a
+  generated series are for.
+- **`grade` is NULL unless the enrolment completed.** 328 of 500 are graded;
+  the other 172 are active or withdrawn. `AVG` skips them, `SUM/COUNT(*)` does
+  not.
+- **Dates are TEXT.** `paid_on - billed_on` does not error -- it coerces to
   numbers and returns nonsense. Use `julianday()` for arithmetic; `<` and `>`
   on ISO dates are fine as strings.
-- **18 distinct months** of work orders, so `strftime('%m', ...)` collapses
-  two Januaries into one bucket.
-- **`closed_at` is NULL for cancelled jobs as well as open ones.** It tells
-  you a job has no end date, not why.
-- **Invoice `status` is UPPERCASE** (`PAID`, `PENDING`, `OVERDUE`, `VOID`),
-  and 2 invoices are VOID -- so `status <> 'PAID'` is wider than "unpaid".
-- **14 distinct labour rates and 4 distinct discounts**, so `SUM(h) * rate`
-  and `SUM(h * rate)` genuinely disagree.
-- **Some parts are stocked but never fitted (2), some fitted but stocked
-  nowhere (3), and two are neither** -- three different sets, on purpose.
-  Four parts have never been fitted at all.
-- **`discount` is a rate**, not a percentage: `quantity * unit_price *
-  (1 - discount)`.
-- **Nullable on purpose**: `cert_level` (4), `response_hours` (10),
-  `reorder_level` (19), `last_counted_at`, `warranty_until` (21), `score` (29),
-  `weight_grams` (2), `account_tier` (3), `end_date` (11), `paid_on`, and
-  `technician_id` on work orders (15).
+- **18 distinct months** of assessment deadlines across two academic years, so
+  `strftime('%m', ...)` collapses two Novembers into one bucket.
+- **Sections have two independent children.** 10 have no enrolments, 10 have no
+  assessments, and only 1 has neither -- three different sets, so joining both
+  fans out rather than filtering.
+- **Payment `status` is UPPERCASE** (`PAID`, `DUE`, `LATE`, `WAIVED`) while
+  enrolment `status` and section `delivery` are lowercase. The inconsistency is
+  deliberate.
+- **30 distinct list prices and 23 distinct copy counts**, so
+  `SUM(copies) * AVG(price)` and `SUM(copies * price)` genuinely disagree.
+- **A three-level mentoring tree.** One instructor has no mentor, 12 mentor
+  nobody. Deep enough that a single self-join cannot reach the bottom.
+- **Deliberate gaps**: 6 courses never scheduled, 9 students never enrolled, 7
+  textbooks on no reading list, 1 section with neither students nor
+  assessments.
+- **Nullable on purpose**: `grade` (172), `instructor_id` on sections (6),
+  `mentor_id` (1), `pay_grade` (2), `funding_band` (7), `copies_held` (10),
+  `pages` (3), `paid_on` (52).
 
-## Window functions (9)
+## Recursion (4)
+
+An anchor row, then a step that joins back to the CTE itself, run over and
+over until a pass returns nothing. Four questions, and only the last is a
+hierarchy -- the others walk a dependency graph, measure depth, and
+generate rows that are not in any table.
+
+1. **Everything Machine Learning depends on** (Q252)
+
+   Course CMP401 'Machine Learning' has prerequisites, and those have
+   prerequisites of their own. List every course it depends on, at any
+   depth.
+
+   Five courses qualify. Two are direct prerequisites; the rest are
+   reached through them. CMP401 itself is not in the answer.
+
+   *Return: course_id, code, title*
+
+2. **How deep does the chain go** (Q253)
+
+   For every course that has at least one prerequisite, how many hops
+   it is from that course to its most distant prerequisite.
+
+   A course whose prerequisites have none of their own is 1. If any
+   path runs three courses back, it is 3. Where two paths differ in
+   length, take the longer.
+
+   *Return: course_id, code, depth*
+
+3. **Every month, including the quiet ones** (Q254)
+
+   How many enrolments were made in each month from 2024-08 to 2026-05
+   inclusive, as 'YYYY-MM'.
+
+   Nobody enrols in August or over the summer, so several months have
+   none. Those months must still appear, with 0. That is 22 rows, not
+   the 14 a GROUP BY gives you.
+
+   *Return: month, enrolments*
+
+4. **How far below the top** (Q255)
+
+   Every instructor, with how many levels below the top of the
+   mentoring tree they sit.
+
+   One instructor has no mentor -- they are level 0. Anyone mentored by
+   them is 1, anyone mentored by those is 2. All 16 appear.
+
+   *Return: instructor_id, name, level*
+
+## Window functions (4)
 
 A calculation that sees a set of rows around each row without collapsing
 them. PARTITION BY says which rows it may see, ORDER BY orders them inside
-that set, and a ROWS clause narrows it further. Nine questions, each
-isolating one of those three.
+that set. Four questions, each isolating one part.
 
-1. **Invoicing, month by month and so far** (Q222)
+5. **Top of each programme, ties and all** (Q256)
 
-   One row per calendar month in which any invoice was issued: the
-   month, what was invoiced in it, and the running total of everything
-   invoiced up to and including that month.
+   The highest mark achieved in each programme, and who got it. Only
+   graded enrolments count.
 
-   Months are 'YYYY-MM'. The running total on the last month equals the
-   total of every invoice in the table.
+   Three programmes have two students tied on the top mark. Both must
+   appear, so the answer is 12 rows across 9 programmes.
+
+   *Return: programme, student_id, name, grade*
+
+6. **Term on term** (Q257)
+
+   One row per term, in term order: the term name, how many enrolments
+   were made on its sections, and the change from the term before.
+
+   The first term has nothing before it, so its change is NULL -- leave
+   it NULL rather than turning it into 0. All six terms appear.
+
+   *Return: term_id, name, enrolments, change*
+
+7. **Billed so far** (Q258)
+
+   One row per calendar month in which anything was billed: the month
+   as 'YYYY-MM', the amount billed in it, and the running total of
+   everything billed up to and including that month.
+
+   The running total on the last month equals the total of every
+   payment row in the table.
 
    *Return: month, month_total, running_total*
 
-2. **Month on month** (Q223)
+8. **Share of the enrolments by faculty** (Q259)
 
-   One row per month in which any work order was opened: the month, how
-   many were opened, and the change from the month before.
+   One row per faculty: the faculty, how many enrolments its
+   departments' courses attracted, and that count as a percentage of
+   all enrolments.
 
-   The earliest month has no month before it, so its change is NULL --
-   leave it NULL rather than turning it into 0.
+   Four faculties, and the four percentages add up to 100.
 
-   *Return: month, work_orders, change*
+   *Return: faculty, enrolments, pct_of_total*
 
-3. **The latest job on each machine** (Q224)
+## Joins (4)
 
-   For every machine that has ever had a work order, its most recent
-   one. One row per machine -- machines with no work orders at all do
-   not appear.
+Four questions where the answer hinges on the rows that DON'T match -- the
+unscheduled course, the section with no withdrawals, the textbook nobody
+assigns -- plus one on pairing a table with itself.
 
-   No machine has two work orders opened on the same date, so 'most
-   recent' is never a tie.
+9. **Every course, scheduled or not** (Q260)
 
-   *Return: machine_id, work_order_id, opened_at*
+   One row for every course in the catalogue: its id, code, and how
+   many sections have ever been scheduled for it.
 
-4. **Busiest at each depot, ties and all** (Q225)
+   Six courses have never been scheduled. They must appear with 0, so
+   all 34 courses come back.
 
-   The busiest technician at each depot, counting work orders they are
-   the assigned technician on.
+   *Return: course_id, code, sections*
 
-   One depot has two technicians tied on the same count. Both of them
-   must appear -- five rows in total, not four.
+10. **Withdrawals per section** (Q261)
 
-   *Return: depot_id, technician_id, name, work_orders*
+    One row for every section: its id, its room, and how many of its
+    enrolments were WITHDRAWN.
 
-5. **Three-month rolling average** (Q226)
+    Most sections have none. They must appear with 0, so all 84 sections
+    come back.
 
-   One row per month in which any work order was opened: the month, how
-   many were opened, and the average over that month and the two months
-   before it.
+    *Return: section_id, room, withdrawals*
 
-   The first month averages just itself, the second averages two
-   months, and every month after that averages three.
+11. **Classmates on the same programme** (Q262)
 
-   *Return: month, work_orders, rolling_avg*
+    Pairs of students on the same programme at the same campus.
 
-6. **Quartiles of workload** (Q227)
+    Each pair once, not twice: Ann with Bob, never also Bob with Ann,
+    and nobody paired with themselves. Order each pair so that student_a
+    is the LOWER student_id. There are 52 pairs.
 
-   Every technician who has logged any labour, with their total hours
-   and which quarter of the workforce they fall into by hours: 1 for
-   the busiest quarter, 4 for the quietest.
+    *Return: programme, student_a, student_b*
 
-   Fourteen technicians split into four groups, so the first two groups
-   get four each and the last two get three.
+12. **Textbooks nobody assigns** (Q263)
 
-   *Return: technician_id, total_hours, quartile*
+    Every textbook that appears on no course reading list at all.
 
-7. **Share of the invoiced total** (Q228)
+    Write it as an outer join that keeps the non-matches, rather than
+    with NOT IN. There are 7 such books.
 
-   One row per work-order priority: the priority, the total invoiced on
-   work orders of that priority, and that total as a percentage of
-   everything invoiced.
-
-   Only work orders that actually have an invoice count. The four
-   percentages add up to 100.
-
-   *Return: priority, invoiced, pct_of_total*
-
-8. **How long until the machine is seen again** (Q229)
-
-   Every work order, with the number of whole days until the NEXT work
-   order opened on the same machine.
-
-   The most recent work order on each machine has nothing after it, so
-   its gap is NULL. One row per work order -- all 180.
-
-   *Return: machine_id, work_order_id, opened_at, days_to_next*
-
-9. **Each entry against its technician's average** (Q230)
-
-   Every labour entry dated in January 2026, with the average hours of
-   the January entries belonging to that same technician.
-
-   One row per entry, not one per technician: the same average repeats
-   down each technician's entries.
-
-   *Return: entry_id, technician_id, hours, tech_avg*
+    *Return: book_id, title*
 
 ## Aggregation (4)
 
 GROUP BY and the functions that ride on it. Four questions on the parts
 that are easy to get subtly wrong rather than outright wrong.
 
-10. **Certified and not** (Q231)
+13. **Graded and not** (Q264)
 
-    One row per depot: how many technicians it has, and how many of them
-    have a certification level recorded.
+    One row per term: its name, how many enrolments were made on its
+    sections, and how many of those carry a grade.
 
-    Four technicians company-wide have no cert_level, so the two counts
-    differ at the depots those technicians work from.
+    Active and withdrawn enrolments have no grade, so the two counts
+    differ in every term.
 
-    *Return: depot_id, depot_name, technicians, certified*
+    *Return: term_id, name, enrolments, graded*
 
-11. **Which priorities were busy in 2026** (Q232)
+14. **Which programmes were busy in 2026** (Q265)
 
-    Counting only work orders opened on or after 2026-01-01, one row per
-    priority, keeping the priorities with at least 15 of them.
+    Counting only enrolments made on or after 2026-01-01, one row per
+    programme, keeping the programmes with at least 10 of them.
 
-    Two of the four priorities clear the bar.
+    Six of the nine programmes clear the bar.
 
-    *Return: priority, work_orders*
+    *Return: programme, enrolments*
 
-12. **Invoice status by priority** (Q233)
+15. **Enrolment status by delivery mode** (Q266)
 
-    One row per work-order priority, with the number of its invoices in
-    each of three statuses side by side as columns.
+    One row per delivery mode, with the number of its enrolments in each
+    of the three statuses side by side as columns.
 
-    Every priority has at least one PAID invoice; some have zero PENDING
-    or zero OVERDUE, and those must show as 0.
+    Three delivery modes, and the three columns together account for
+    every enrolment.
 
-    *Return: priority, paid, pending, overdue*
+    *Return: delivery, completed, active, withdrawn*
 
-13. **Average score, where there is one** (Q234)
+16. **Average mark, where there is one** (Q267)
 
-    One row per inspection result: how many inspections had that result,
-    how many of them carry a score, and the average of the scores that
+    One row per programme: how many enrolments its students made, how
+    many of those carry a grade, and the average of the grades that
     exist.
 
-    Plenty of inspections have no score at all. The average must be over
-    the scored ones only.
+    Only completed enrolments are graded, so in every programme the
+    average must be over the graded ones alone -- not over everyone
+    enrolled. All nine programmes appear.
 
-    *Return: result, inspections, scored, avg_score*
-
-## Joins (4)
-
-Four questions where the answer hinges on the rows that DON'T match -- the
-unused part, the technician with no critical jobs, the machine nobody has
-touched -- plus one on pairing a table with itself.
-
-14. **Every part, used or not** (Q235)
-
-    One row for every part in the catalogue: its id, its name, and the
-    number of DISTINCT work orders it has been used on.
-
-    Four parts have never been used on anything. They must appear with
-    0, so all 40 parts come back.
-
-    *Return: part_id, name, work_orders*
-
-15. **Critical jobs per technician** (Q236)
-
-    One row for every technician: id, name, and how many CRITICAL work
-    orders they are the assigned technician on.
-
-    Five technicians have never been assigned one. They must appear with
-    0, so all 14 technicians come back.
-
-    *Return: technician_id, name, critical_jobs*
-
-16. **Hired the same year, same depot** (Q237)
-
-    Pairs of technicians who work from the same depot and were hired in
-    the same calendar year.
-
-    Each pair once, not twice: Ann with Bob, never also Bob with Ann,
-    and nobody paired with themselves. Three pairs exist.
-
-    *Return: depot_id, name_a, name_b*
-
-17. **Machines nobody has touched** (Q238)
-
-    Every machine that has never had a single work order raised against
-    it.
-
-    Write it as an outer join that keeps the non-matches, rather than
-    with NOT IN. There are 27 such machines.
-
-    *Return: machine_id, serial*
+    *Return: programme, enrolments, graded, avg_grade*
 
 ## Subqueries & EXISTS (3)
 
@@ -284,36 +279,71 @@ Asking a question about a row without changing what a row is. Three
 questions: EXISTS instead of a join, NOT EXISTS instead of NOT IN, and a
 subquery that has to be re-evaluated per row.
 
-18. **Customers still under warranty somewhere** (Q239)
+17. **Students who have reached level 4** (Q268)
 
-    Every customer who owns at least one machine whose warranty runs
-    beyond 2026-01-01.
+    Every student who has ever enrolled on a level-4 course.
 
-    Machines belong to sites and sites belong to customers. One row per
-    customer, however many qualifying machines they own -- three
-    customers own two apiece.
+    Courses sit under sections and sections carry the enrolment. One row
+    per student, however many level-4 courses they took -- and several
+    took more than one.
 
-    *Return: customer_id, name*
+    *Return: student_id, name*
 
-19. **Never on a critical job** (Q240)
+18. **Never taught online** (Q269)
 
-    Every technician who has never been the assigned technician on a
-    critical work order. Five of the fourteen qualify.
+    Every instructor who has never taught a section delivered ONLINE.
+    Two of the sixteen qualify.
 
-    Watch out: three critical work orders have no technician assigned at
-    all, which is what makes the obvious answer wrong.
+    Watch out: some online sections have no instructor assigned at all,
+    which is what makes the obvious answer wrong.
 
-    *Return: technician_id, name*
+    *Return: instructor_id, name*
 
-20. **Dear for its own category** (Q241)
+19. **Dear for its own publisher** (Q270)
 
-    Every part costing more than the average unit_cost of the parts in
-    ITS OWN category -- not more than the average across the whole
+    Every textbook priced above the average list_price of the books from
+    ITS OWN publisher -- not above the average across the whole
     catalogue.
 
-    One row per part.
+    One row per book.
 
-    *Return: part_id, name, category, unit_cost*
+    *Return: book_id, title, publisher, list_price*
+
+## Dates (3)
+
+Dates are TEXT in SQLite. Three questions on doing arithmetic on them,
+comparing them across a join, and grouping by them without losing the year.
+
+20. **The five slowest payments to settle** (Q271)
+
+    The five settled payments that took the longest from being billed to
+    being paid, longest first.
+
+    Days must be a whole number. Break ties on days by payment_id
+    ascending, so the five are unambiguous.
+
+    *Return: payment_id, billed_on, paid_on, days*
+
+21. **Enrolled before the term began** (Q272)
+
+    How many enrolments were made BEFORE their term's start date, broken
+    down by term.
+
+    The enrolment date is on the enrolment; the start date is on the
+    term, reached through the section. All six terms have some.
+
+    *Return: term_id, name, early_enrolments*
+
+22. **Assessment deadlines by month** (Q273)
+
+    One row per calendar month in which any assessment falls due: the
+    month as 'YYYY-MM', and how many are due in it.
+
+    The data spans two academic years, so November 2024 and November
+    2025 are different months and must not be added together. There are
+    18 such months.
+
+    *Return: month, assessments*
 
 ## NULLs (2)
 
@@ -321,131 +351,107 @@ Two questions on the same fact from opposite directions: a comparison
 against NULL is neither true nor false, so it never matches and never
 excludes -- it just quietly drops the row.
 
-21. **Ended, running, or open-ended** (Q242)
+23. **Settled, outstanding, or waived** (Q274)
 
-    Classify every contract into one of three states as of 2026-08-01,
-    and count them:
+    Classify every payment into one of three states and count them:
 
-        'open-ended' if end_date is missing entirely
-        'ended'      if end_date is before 2026-08-01
-        'active'     otherwise
+        'settled'     if paid_on has a date
+        'waived'      if it has no paid_on and status is WAIVED
+        'outstanding' otherwise
 
-    All 34 contracts land in exactly one state.
+    All 136 payments land in exactly one state.
 
-    *Return: state, contracts*
+    *Return: state, payments*
 
-22. **Everyone who is not level 5** (Q243)
+24. **Everyone not funding themselves** (Q275)
 
-    Count technicians by certification level, excluding level 5, and
-    counting the ones with NO certification level as 'none'.
+    Count students by funding band, excluding the self-funded, and
+    counting the ones with NO funding band recorded as 'none'.
 
-    Twelve of the fourteen technicians are not level 5 -- four of them
-    because they have no level at all.
+    41 of the 60 students are not self-funded -- seven of them because
+    they have no band at all.
 
-    *Return: level, technicians  (level is text: '1'..'4' or 'none')*
-
-## Dates (3)
-
-Dates are TEXT in SQLite. Three questions on doing arithmetic on them,
-naming parts of them, and grouping by them without losing the year.
-
-23. **The five slowest jobs to close** (Q244)
-
-    The five closed work orders that took the longest from opening to
-    closing, longest first.
-
-    Days must be a whole number. Break ties on days by work_order_id
-    ascending, so the five are unambiguous.
-
-    *Return: work_order_id, opened_at, closed_at, days*
-
-24. **Which day of the week is busiest** (Q245)
-
-    How many work orders were opened on each day of the week, across the
-    whole data set. Seven rows, Sunday first.
-
-    Name the day rather than numbering it.
-
-    *Return: day_name, work_orders*
-
-25. **Inspections by month, across two years** (Q246)
-
-    One row per calendar month in which any inspection happened: the
-    month as 'YYYY-MM', and how many inspections it held.
-
-    The data spans two calendar years, so February 2025 and February
-    2026 are different months and must not be added together.
-
-    *Return: month, inspections*
+    *Return: band, students  (band is 'grant', 'sponsor' or 'none')*
 
 ## Set operations (2)
 
 Stacking two result sets rather than joining them. Two questions: one on
 EXCEPT having a direction, one on INTERSECT not being UNION.
 
-26. **Invoiced in a month nothing opened** (Q247)
+25. **Billed in a month nobody enrolled** (Q276)
 
-    Months in which at least one invoice was issued but NO work order
-    was opened. Months are 'YYYY-MM'.
+    Months in which at least one payment was billed but NO enrolment was
+    made. Months are 'YYYY-MM'.
 
-    Invoices trail the work that produced them, so this catches the tail
-    end of the data set. Exactly one month qualifies.
+    Billing runs all year while enrolment clusters around the terms, so
+    this catches the quiet months. Nine qualify.
 
     *Return: month*
 
-27. **Low on stock and needed for critical work** (Q248)
+26. **Required reading on a first-year course** (Q277)
 
-    Parts that are BOTH below their reorder level in at least one depot
-    AND have been used on at least one critical work order.
+    Textbooks that are BOTH marked required (required = 1) on some
+    course AND appear on the reading list of a level-1 course.
 
-    Only stock lines that actually have a reorder_level count. Three
-    parts satisfy both conditions.
+    The two need not be the same course: a book required on a level-3
+    course and merely recommended on a level-1 one still counts. Fifteen
+    books qualify.
 
-    *Return: part_id, name*
+    *Return: book_id, title*
 
 ## Grain (2)
 
 What one row means. Two questions: what happens when two child tables meet
 over the same parent, and where the multiplication goes.
 
-28. **Parts and labour on the critical jobs** (Q249)
+27. **Students and assessments on each section** (Q278)
 
-    One row per CRITICAL work order, with what was spent on parts and
-    what was spent on labour.
+    One row per section: how many students are enrolled on it, and how
+    many assessments it has.
 
-    Parts spend is quantity * unit_price * (1 - discount) summed; labour
-    is hours * rate summed. A job with none of one or the other shows 0,
-    not NULL. All 21 critical work orders appear.
+    The two are independent -- a section can have many of one and none
+    of the other. A section with none of something shows 0, not NULL.
+    All 84 sections appear.
 
-    *Return: work_order_id, parts_cost, labour_cost*
+    *Return: section_id, students, assessments*
 
-29. **Spend by part category** (Q250)
+28. **What the library spent by publisher** (Q279)
 
-    One row per part category that has ever been used, with the total
-    spent on it.
+    One row per publisher, with the total value of the library copies
+    held across all reading lists.
 
-    Each parts_used line is worth quantity * unit_price * (1 -
-    discount), and every line must be priced on its own quantity, price
-    and discount.
+    Each course_books row is worth copies_held * list_price. Rows with
+    no copies_held recorded contribute nothing. Every line must be
+    priced on its own copies and its own book.
 
-    *Return: category, spend*
+    *Return: publisher, value*
 
-## General (1)
+## General (2)
 
-One question on CASE.
+One on CASE branch order, one on counting above the grain of a join.
 
-30. **Machines by age band** (Q251)
+29. **Courses by credit band** (Q280)
 
-    Put every machine into one of three bands by installed_on and count
-    them:
+    Put every course into one of three bands by credits and count them:
 
-        '2024 or later'  installed on or after 2024-01-01
-        '2021 to 2023'   installed on or after 2021-01-01
-        'before 2021'    everything else
+        'major'    30 credits or more
+        'standard' 15 to 29 credits
+        'short'    everything else
 
-    All 98 machines land in exactly one band.
+    All 34 courses land in exactly one band.
 
-    *Return: band, machines*
+    *Return: band, courses*
+
+30. **How many departments does each campus actually run** (Q281)
+
+    One row per campus: its name, how many DISTINCT departments have had
+    a section scheduled, and how many sections that was in total.
+
+    The path runs campus -> department -> course -> section, so the same
+    department is reached once per section. All four campuses appear,
+    and no campus has more than three departments.
+
+    *Return: name, departments, sections*
 
 ## The one concept with no question here
 
@@ -459,7 +465,7 @@ There is no graded question for this because **SQLite will not punish you for
 it**. It happily accepts an alias in `WHERE`:
 
 ```sql
-SELECT unit_cost * 2 AS d FROM parts WHERE d > 100   -- runs fine in SQLite
+SELECT list_price * 2 AS d FROM textbooks WHERE d > 100   -- fine in SQLite
 ```
 
 Keep the rule for portability, and reach for a CTE when you want a real
@@ -470,7 +476,7 @@ questions above have to be written, since a window function cannot appear in
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-221 retired ones. New questions must not repeat anything in that ledger.
+251 retired ones. New questions must not repeat anything in that ledger.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
