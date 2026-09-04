@@ -24,53 +24,54 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on a **new schema**. The repair-depot tables are retired; this
-is a further-education college, and the change is the point -- five sets in a
-row on the same fourteen tables had made the joins muscle memory. Read
-[schema.sql](schema.sql) before starting.
+Thirty questions on the college schema, re-seeded (SEED 221 -> 257) so no answer
+value from the last set carries over. Same tables, so the schema you learned
+last time still applies.
 
-Difficulty is pitched at the same level as Q222-Q251: one concept per question,
-and each prompt states its grain. Coverage is even rather than weighted to a
-single tier.
+What changed is the **order**. The last set was grouped by concept, which put
+all four recursion questions first -- the hardest mechanism before any warm-up.
+This set is graded easy to hard, and the tier names are the stages of that ramp
+rather than concept labels: 6 single-table warm-ups, 6 first joins, 4 recursion,
+6 dates/sets/pivots, 5 window functions, 3 on grain and correlation.
 
-The four recursion questions avoid the supervisor-chain shape the last three
-sets leaned on. `prerequisites` is a genuine directed **graph** -- a course can
-require several others and be required by several others -- so the same course
-is reachable by more than one path, and the choice between `UNION` and
-`UNION ALL` actually matters. Only one of the four is a hierarchy at all.
+The four recursion questions are deliberately the gentlest in the set and all
+share one shape: an anchor that is a single obvious row, and a step that is one
+join back to the CTE. No depth counters, no generated series, no labels carried
+down a tree. Only the direction of travel and the table vary -- and the last of
+the four is where `UNION` and `UNION ALL` finally disagree.
 
-| ID | Concept | Question | In GUI | Tier |
-|----|---------|----------|--------|------|
-| Q252 | R1 recursive CTE | Everything Machine Learning depends on | ex 1 | Recursion |
-| Q253 | R1 recursive CTE | How deep does the chain go | ex 2 | Recursion |
-| Q254 | R2 recursive series | Every month, including the quiet ones | ex 3 | Recursion |
-| Q255 | R1 recursive CTE | How far below the top | ex 4 | Recursion |
-| Q256 | W2 window ranking | Top of each programme, ties and all | ex 5 | Window functions |
-| Q257 | W3 window vs GROUP BY | Term on term | ex 6 | Window functions |
-| Q258 | W1 window frames | Billed so far | ex 7 | Window functions |
-| Q259 | W3 window vs GROUP BY | Share of the enrolments by faculty | ex 8 | Window functions |
-| Q260 | J2 outer joins | Every course, scheduled or not | ex 9 | Joins |
-| Q261 | J2 outer joins | Withdrawals per section | ex 10 | Joins |
-| Q262 | J1 self-joins | Classmates on the same programme | ex 11 | Joins |
-| Q263 | J2 outer joins | Textbooks nobody assigns | ex 12 | Joins |
-| Q264 | A2 COUNT and AVG | Graded and not | ex 13 | Aggregation |
-| Q265 | A3 WHERE vs HAVING | Which programmes were busy in 2026 | ex 14 | Aggregation |
-| Q266 | A1 conditional aggregation | Enrolment status by delivery mode | ex 15 | Aggregation |
-| Q267 | A2 COUNT and AVG | Average mark, where there is one | ex 16 | Aggregation |
-| Q268 | E1 EXISTS | Students who have reached level 4 | ex 17 | Subqueries & EXISTS |
-| Q269 | E1 EXISTS | Never taught online | ex 18 | Subqueries & EXISTS |
-| Q270 | E2 correlated subqueries | Dear for its own publisher | ex 19 | Subqueries & EXISTS |
-| Q271 | D1 dates & gaps | The five slowest payments to settle | ex 20 | Dates |
-| Q272 | D1 dates & gaps | Enrolled before the term began | ex 21 | Dates |
-| Q273 | D1 dates & gaps | Assessment deadlines by month | ex 22 | Dates |
-| Q274 | C7 NULL | Settled, outstanding, or waived | ex 23 | NULLs |
-| Q275 | C7 NULL | Everyone not funding themselves | ex 24 | NULLs |
-| Q276 | S1 set operations | Billed in a month nobody enrolled | ex 25 | Set operations |
-| Q277 | S1 set operations | Required reading on a first-year course | ex 26 | Set operations |
-| Q278 | C2 grain | Students and assessments on each section | ex 27 | Grain |
-| Q279 | C2 grain | What the library spent by publisher | ex 28 | Grain |
-| Q280 | general | Courses by credit band | ex 29 | General |
-| Q281 | C2 grain | How many departments does each campus actually run | ex 30 | General |
+| ID | Concept | Question | In GUI | Stage |
+|----|---------|----------|--------|-------|
+| Q282 | A2 COUNT and AVG | Funding recorded, and not | ex 1 | 1 - Warm-up |
+| Q283 | A3 WHERE vs HAVING | Which payment statuses were common in 2025 | ex 2 | 1 - Warm-up |
+| Q284 | general | Textbooks by price band | ex 3 | 1 - Warm-up |
+| Q285 | C7 NULL | Settled, waived, or still owing | ex 4 | 1 - Warm-up |
+| Q286 | C7 NULL | Everyone not funding themselves | ex 5 | 1 - Warm-up |
+| Q287 | A2 COUNT and AVG | Average page count, where it is known | ex 6 | 1 - Warm-up |
+| Q288 | J2 outer joins | Every course, scheduled or not | ex 7 | 2 - First joins |
+| Q289 | J2 outer joins | Online teaching per instructor | ex 8 | 2 - First joins |
+| Q290 | J1 self-joins | Courses that sit alongside each other | ex 9 | 2 - First joins |
+| Q291 | J2 outer joins | Textbooks nobody assigns | ex 10 | 2 - First joins |
+| Q292 | E1 EXISTS | Students who have reached level 4 | ex 11 | 2 - First joins |
+| Q293 | E1 EXISTS | Never taught online | ex 12 | 2 - First joins |
+| Q294 | R1 recursive CTE | Anil Chaudhary's line of mentors | ex 13 | 3 - Recursion |
+| Q295 | R1 recursive CTE | What Interaction Design needs, all the way down | ex 14 | 3 - Recursion |
+| Q296 | R1 recursive CTE | What is blocked by Visual Communication | ex 15 | 3 - Recursion |
+| Q297 | R1 recursive CTE | What Machine Learning needs, all the way down | ex 16 | 3 - Recursion |
+| Q298 | D1 dates & gaps | The five slowest payments to settle | ex 17 | 4 - Dates, sets and pivots |
+| Q299 | D1 dates & gaps | Assessment deadlines by month | ex 18 | 4 - Dates, sets and pivots |
+| Q300 | D1 dates & gaps | Enrolled before the term began | ex 19 | 4 - Dates, sets and pivots |
+| Q301 | S1 set operations | Billed in a month nobody enrolled | ex 20 | 4 - Dates, sets and pivots |
+| Q302 | S1 set operations | Required reading on a first-year course | ex 21 | 4 - Dates, sets and pivots |
+| Q303 | A1 conditional aggregation | Enrolment status by term | ex 22 | 4 - Dates, sets and pivots |
+| Q304 | W3 window vs GROUP BY | Term on term | ex 23 | 5 - Window functions |
+| Q305 | W1 window frames | Billed so far | ex 24 | 5 - Window functions |
+| Q306 | W3 window vs GROUP BY | Share of the enrolments by faculty | ex 25 | 5 - Window functions |
+| Q307 | W2 window ranking | The most recent run of each course | ex 26 | 5 - Window functions |
+| Q308 | W2 window ranking | Top of each programme, ties and all | ex 27 | 5 - Window functions |
+| Q309 | E2 correlated subqueries | Bigger than its own department's average | ex 28 | 6 - Grain and correlation |
+| Q310 | C2 grain | Students and assessments on each section | ex 29 | 6 - Grain and correlation |
+| Q311 | C2 grain | What the library holds, by faculty | ex 30 | 6 - Grain and correlation |
 
 ## Retired
 
@@ -330,6 +331,36 @@ they still count as asked.
 | Q249 | C2 grain | Parts and labour on the critical jobs | - | retired |
 | Q250 | C2 grain | Spend by part category | - | retired |
 | Q251 | general | Machines by age band | - | retired |
+| Q252 | R1 recursive CTE | Everything Machine Learning depends on | - | retired |
+| Q253 | R1 recursive CTE | How deep does the chain go | - | retired |
+| Q254 | R2 recursive series | Every month, including the quiet ones | - | retired |
+| Q255 | R1 recursive CTE | How far below the top | - | retired |
+| Q256 | W2 window ranking | Top of each programme, ties and all | - | retired |
+| Q257 | W3 window vs GROUP BY | Term on term | - | retired |
+| Q258 | W1 window frames | Billed so far | - | retired |
+| Q259 | W3 window vs GROUP BY | Share of the enrolments by faculty | - | retired |
+| Q260 | J2 outer joins | Every course, scheduled or not | - | retired |
+| Q261 | J2 outer joins | Withdrawals per section | - | retired |
+| Q262 | J1 self-joins | Classmates on the same programme | - | retired |
+| Q263 | J2 outer joins | Textbooks nobody assigns | - | retired |
+| Q264 | A2 COUNT and AVG | Graded and not | - | retired |
+| Q265 | A3 WHERE vs HAVING | Which programmes were busy in 2026 | - | retired |
+| Q266 | A1 conditional aggregation | Enrolment status by delivery mode | - | retired |
+| Q267 | A2 COUNT and AVG | Average mark, where there is one | - | retired |
+| Q268 | E1 EXISTS | Students who have reached level 4 | - | retired |
+| Q269 | E1 EXISTS | Never taught online | - | retired |
+| Q270 | E2 correlated subqueries | Dear for its own publisher | - | retired |
+| Q271 | D1 dates & gaps | The five slowest payments to settle | - | retired |
+| Q272 | D1 dates & gaps | Enrolled before the term began | - | retired |
+| Q273 | D1 dates & gaps | Assessment deadlines by month | - | retired |
+| Q274 | C7 NULL | Settled, outstanding, or waived | - | retired |
+| Q275 | C7 NULL | Everyone not funding themselves | - | retired |
+| Q276 | S1 set operations | Billed in a month nobody enrolled | - | retired |
+| Q277 | S1 set operations | Required reading on a first-year course | - | retired |
+| Q278 | C2 grain | Students and assessments on each section | - | retired |
+| Q279 | C2 grain | What the library spent by publisher | - | retired |
+| Q280 | general | Courses by credit band | - | retired |
+| Q281 | C2 grain | How many departments does each campus actually run | - | retired |
 
 ## History
 
@@ -362,3 +393,8 @@ they still count as asked.
   set, even coverage: 4 recursion, 4 window, 4 joins, 4 aggregation, 3
   subqueries/EXISTS, 3 dates, 2 set operations, 2 NULLs, 2 grain, 2 general.
   Recursion runs over a course-prerequisite GRAPH rather than an org chart.
+- **Q282-Q311** current set, college schema re-seeded (SEED 221 -> 257).
+  Graded easy to hard rather than grouped by concept, with the four recursion
+  questions placed mid-set and kept to the simplest possible shape. Stages: 6
+  warm-up, 6 first joins, 4 recursion, 6 dates/sets/pivots, 5 window, 3 grain
+  and correlation.
