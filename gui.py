@@ -13,6 +13,7 @@ progress.json next to this file.
 """
 
 import json
+import re
 import sqlite3
 import tkinter as tk
 from tkinter import font as tkfont
@@ -73,6 +74,96 @@ CURSOR = "#d6d6d6"
 BG_OK = "#1a7f37"
 BG_BAD = "#b3261e"
 BG_INFO = "#333333"
+
+
+# Reference solutions are stored as one long string so the source of
+# exercises.py stays readable. Nobody wants to read one back that way, so the
+# GUI breaks it into clauses before showing it.
+CLAUSES = (
+    "WITH RECURSIVE", "SELECT DISTINCT", "GROUP BY", "ORDER BY", "UNION ALL",
+    "LEFT JOIN", "CROSS JOIN", "INNER JOIN", "INTERSECT", "WITH", "SELECT",
+    "FROM", "JOIN", "ON", "WHERE", "HAVING", "LIMIT", "UNION", "EXCEPT",
+)
+_WORD = re.compile(r"\w")
+_SUBQUERY = re.compile(r"\(\s*(SELECT|WITH|VALUES)\b", re.IGNORECASE)
+
+
+def format_sql(sql, indent="    "):
+    """Break a one-line reference solution onto readable lines.
+
+    One clause per line, one select-list item per line, indented by subquery
+    depth. Only parentheses that open a subquery are structural; a function
+    call -- ROUND(...), OVER (...) -- is left strictly alone, so an expression
+    is never split in half. Purely cosmetic: the SQL is unchanged.
+    """
+    s = " ".join(sql.split())
+    out, line, i = [], "", 0
+    depth = 0          # nesting of subquery parens only
+    stack = []         # True for each open paren that was structural
+    in_select = False  # inside a select list, so commas end a line
+
+    def flush():
+        nonlocal line
+        if line.strip():
+            out.append(indent * depth + line.strip())
+        line = ""
+
+    while i < len(s):
+        ch = s[i]
+
+        if ch == "'":                                    # string literal
+            j = s.index("'", i + 1) + 1
+            line, i = line + s[i:j], j
+            continue
+
+        if ch == "(":
+            stack.append(bool(_SUBQUERY.match(s, i)))
+            line += "("
+            if stack[-1]:
+                flush()
+                depth += 1
+            i += 1
+            continue
+
+        if ch == ")":
+            if stack and stack.pop():
+                flush()
+                depth -= 1
+                line = ")"
+            else:
+                line += ")"
+            i += 1
+            continue
+
+        # Only break at statement level -- never inside a function call.
+        at_top = len(stack) == depth
+
+        if ch == "," and in_select and at_top:
+            line += ","
+            flush()
+            i += 1
+            continue
+
+        if at_top and (not line or not _WORD.match(line[-1])) \
+                and (i == 0 or not _WORD.match(s[i - 1])):
+            upper = s[i:].upper()
+            hit = next((k for k in CLAUSES if upper.startswith(k) and (
+                len(s) == i + len(k) or not _WORD.match(s[i + len(k)]))), None)
+            if hit:
+                flush()
+                line = s[i:i + len(hit)]
+                if hit.startswith("SELECT"):
+                    in_select = True
+                elif hit == "FROM":
+                    in_select = False
+                i += len(hit)
+                continue
+
+        line += ch
+        i += 1
+
+    flush()
+    return "\n".join(out)
 
 
 class App(tk.Tk):
@@ -528,7 +619,7 @@ class App(tk.Tk):
         ):
             return
         self.editor.delete("1.0", "end")
-        self.editor.insert("1.0", ex.BY_ID[self.current]["solution"])
+        self.editor.insert("1.0", format_sql(ex.BY_ID[self.current]["solution"]))
         self._set_status("Reference solution shown -- it is one valid answer, not the only one.",
                          BG_INFO)
 
