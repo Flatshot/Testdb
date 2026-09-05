@@ -1,12 +1,10 @@
 # SQL practice exercises
 
 Thirty questions on the college schema, re-seeded so no answer from the previous
-set carries over. **The tables are the same**, so the schema you learned last
-time still applies -- see [schema.sql](schema.sql).
+set carries over. **The tables are the same** -- see [schema.sql](schema.sql).
 
-**What changed is the order.** The last set was grouped by concept, which put all
-four recursion questions at numbers 1-4 -- the hardest mechanism before any
-warm-up. This set is graded **easy to hard**, and the stage names are the ramp:
+Same **easy-to-hard ramp** as the last set, and the same difficulty: one concept
+per question, every prompt states its grain.
 
 | Stage | Questions | What it is |
 |---|---|---|
@@ -17,19 +15,21 @@ warm-up. This set is graded **easy to hard**, and the stage names are the ramp:
 | 5 - Window functions | 23-27 | |
 | 6 - Grain and correlation | 28-30 | the ones needing most care |
 
-Work them in order and each leans on the one before.
+**What is new is the questions.** Each reaches its concept through a different
+table or relationship than last time, so none is the previous set with the
+constants swapped. `COUNT(*)` vs `COUNT(col)` is now about staffed sections
+rather than funded students; the self-join is a room clash rather than a pair of
+courses; the fan-out is two children of `students` rather than of `sections`.
 
-**The recursion questions are all one shape on purpose.** An anchor that is a
-single obvious row; a step that is a single join back to the CTE. Nothing else.
-What varies between them is only where you start and which way you travel:
+**The four recursion questions are four different shapes** this time, rather
+than one shape from four starting points:
 
-1. **up** a mentor chain — `instructors`, one hop at a time
-2. **down** a prerequisite chain — a course whose ancestry is a straight line
-3. **up** a prerequisite chain — the same table, the other column
-4. **down** a branching one — where `UNION` and `UNION ALL` finally differ
-
-If the mechanism didn't land last time, 13 and 14 are the two to sit with. They
-are the smallest complete recursive queries this schema can produce.
+1. **down a tree from its root** — 15 people below the top, of whom only 3 are
+   direct, so a single join is visibly not enough
+2. **down a straight chain** — two hops, no branching anywhere
+3. **up a branching chain** — one course, five things blocked by it
+4. **a walk that includes its own starting row** — and where `UNION` and
+   `UNION ALL` finally disagree
 
 **Work through them in the GUI**: double-click `SQL Practice.bat` on Windows or
 `sql-practice.command` on macOS/Linux, or run `python gui.py`. It grades your
@@ -51,219 +51,222 @@ The tables: `campuses`, `departments`, `instructors`, `students`, `courses`,
 
 ## Things the data does on purpose
 
-- **`prerequisites` is a graph, not a tree.** 36 edges over 34 courses; 11
-  courses require nothing, the deepest chain runs 3 hops, and 11 course pairs
-  are reachable by two different paths — which is why `UNION` vs `UNION ALL`
+- **`prerequisites` is a graph, not a tree.** 30 edges over 34 courses; 11
+  courses require nothing, the deepest chain runs 3 hops, and 5 course pairs are
+  reachable by two different routes — which is why `UNION` vs `UNION ALL`
   changes the answer in question 16 but not in 14.
-- **A three-level mentoring tree.** One instructor has no mentor, 12 mentor
-  nobody. Deep enough that a single self-join cannot reach the bottom, which is
-  question 13's whole point.
-- **`NOT IN` is a trap here.** `sections.instructor_id` is NULL for 13
-  unstaffed sections (6 of them online) and `instructors.mentor_id` is NULL at
-  the top, so `x NOT IN (SELECT that_column ...)` returns nothing at all.
+- **A three-level mentoring tree.** One instructor has no mentor and mentors 3
+  people directly, but 15 sit below them in total. 12 mentor nobody.
+- **`NOT IN` is a trap here.** `instructors.mentor_id` is NULL at the top and
+  `sections.instructor_id` is NULL for 12 unstaffed sections, so
+  `x NOT IN (SELECT that_column ...)` returns nothing at all.
 - **Enrolment clusters around terms; billing does not.** 22 months have a
-  payment billed and only 14 have an enrolment: 9 months bill without enrolling,
-  1 enrols without billing — which is what `EXCEPT` is for.
-- **`grade` is NULL unless the enrolment completed.** 292 of 432 are graded; the
-  other 140 are active or withdrawn. `AVG` skips them, `SUM/COUNT(*)` does not.
-- **Dates are TEXT.** `paid_on - billed_on` does not error — it coerces to
+  payment billed and only 14 have an enrolment.
+- **`grade` is NULL unless the enrolment completed.** 373 of 550 are graded; the
+  other 177 are active or withdrawn. `AVG` skips them, `SUM/COUNT(*)` does not.
+- **Dates are TEXT.** `ends_on - starts_on` does not error — it coerces to
   numbers and returns nonsense. Use `julianday()` for arithmetic; `<` and `>` on
   ISO dates are fine as strings.
-- **17 distinct months** of assessment deadlines across two academic years, so
-  `strftime('%m', ...)` collapses two Novembers into one bucket.
-- **Sections have two independent children.** 9 have no enrolments and 6 have no
-  assessments — different sets, so joining both fans out rather than filtering.
+- **18 distinct months** of assessment deadlines and 14 of enrolments, across
+  two academic years — so `strftime('%m', ...)` halves the row count.
+- **Assessment weights do not always add up.** 20 of the 74 sections that have
+  assessments have weights totalling something other than 1. Deliberate: it is
+  what question 30 looks for, and it needs rounding before comparison.
+- **Sections have two independent children**, and so do students. 5 sections
+  have no enrolments and 11 have no assessments — different sets, so joining
+  both fans out rather than filtering.
 - **Payment `status` is UPPERCASE** (`PAID`, `DUE`, `LATE`, `WAIVED`) while
   enrolment `status` and section `delivery` are lowercase. Deliberate.
-- **30 distinct list prices and 23 distinct copy counts**, so
+- **30 distinct list prices and 20 distinct copy counts**, so
   `SUM(copies) * AVG(price)` and `SUM(copies * price)` genuinely disagree.
-- **Deliberate gaps**: 7 courses never scheduled, 9 students never enrolled, 6
+- **Deliberate gaps**: 6 courses never scheduled, 9 students never enrolled, 6
   textbooks on no reading list.
-- **Nullable on purpose**: `grade` (140), `paid_on` (55), `instructor_id` on
-  sections (13), `funding_band` (12), `copies_held` (9), `pay_grade` (3),
-  `pages` (3), `mentor_id` (1).
+- **Nullable on purpose**: `grade` (177), `paid_on` (51), `copies_held` (13),
+  `instructor_id` on sections (12), `funding_band` (9), `pay_grade` (7),
+  `pages` (4), `mentor_id` (1).
 
 ## 1 - Warm-up (6)
 
-Six questions on a single table, no joins at all. If you are rusty, start
-here -- each one isolates a single behaviour of GROUP BY, CASE or NULL.
+Six questions on a single table, no joins at all. Each isolates one
+behaviour of GROUP BY, CASE or NULL.
 
-1. **Funding recorded, and not** (Q282)
+1. **Staffed and unstaffed** (Q312)
 
-   One row per campus id: how many students it has, and how many of
-   them have a funding band recorded.
+   One row per delivery mode: how many sections use it, and how many of
+   those have an instructor assigned.
 
-   Twelve students company-wide have no funding_band, so the two counts
-   differ. One table, no joins.
+   Some sections are scheduled but not yet staffed, so the two counts
+   differ in every mode. One table, no joins.
 
-   *Return: campus_id, students, with_band*
+   *Return: delivery, sections, staffed*
 
-2. **Which payment statuses were common in 2025** (Q283)
+2. **Which assessment kinds cluster in 2026** (Q313)
 
-   Counting only payments billed during the 2025 calendar year, one row
-   per status, keeping the statuses with at least 10 of them.
+   Counting only assessments due on or after 2026-01-01, one row per
+   kind, keeping the kinds with at least 15 of them.
 
-   Three of the four statuses clear the bar. One table, no joins.
+   Two of the four kinds clear the bar. One table, no joins.
 
-   *Return: status, payments*
+   *Return: kind, assessments*
 
-3. **Textbooks by price band** (Q284)
+3. **Instructors by pay band** (Q314)
 
-   Put every textbook into one of three bands by list_price and count
-   them:
+   Put every instructor into one of three bands by hourly_rate and
+   count them:
 
-       'premium'  100 or more
-       'standard' 50 up to but not including 100
-       'budget'   everything else
+       'senior'   70 or more
+       'standard' 50 up to but not including 70
+       'junior'   everything else
 
-   All 30 textbooks land in exactly one band.
+   All 16 instructors land in exactly one band.
 
-   *Return: band, textbooks*
+   *Return: band, instructors*
 
-4. **Settled, waived, or still owing** (Q285)
+4. **Graded, dropped, or still going** (Q315)
 
-   Classify every payment into one of three states and count them:
+   Classify every enrolment into one of three states and count them:
 
-       'settled' if paid_on has a date
-       'waived'  if it has no paid_on and status is WAIVED
-       'owing'   otherwise
+       'graded'      if grade has a value
+       'dropped'     if it has no grade and status is withdrawn
+       'in progress' otherwise
 
-   All 122 payments land in exactly one state.
+   All 550 enrolments land in exactly one state.
 
-   *Return: state, payments*
+   *Return: state, enrolments*
 
-5. **Everyone not funding themselves** (Q286)
+5. **Everyone not on the top pay grade** (Q316)
 
-   Count students by funding band, excluding the self-funded, and
-   counting the ones with NO band recorded as 'none'.
+   Count instructors by pay grade, excluding grade 5, and counting the
+   ones with NO pay grade recorded as 'none'.
 
-   46 of the 60 students are not self-funded -- twelve of them because
-   they have no band at all.
+   15 of the 16 instructors are not on grade 5 -- seven of them because
+   they have no grade at all.
 
-   *Return: band, students  ('grant', 'sponsor' or 'none')*
+   *Return: grade, instructors  (text: '1'..'4' or 'none')*
 
-6. **Average page count, where it is known** (Q287)
+6. **Average copies held, where it is known** (Q317)
 
-   One row per publisher: how many textbooks they have, how many of
-   those record a page count, and the average of the page counts that
-   exist.
+   One row per required flag (0 and 1): how many reading-list entries
+   have it, how many of those record a copies_held figure, and the
+   average of the figures that exist.
 
-   Three publishers have a book with no page count. The average must be
-   over the recorded ones only. One table, no joins.
+   Plenty of entries have no copy target set. The average must be over
+   the recorded ones only. One table, no joins.
 
-   *Return: publisher, books, with_pages, avg_pages*
+   *Return: required, entries, with_copies, avg_copies*
 
 ## 2 - First joins (6)
 
 Two tables at a time. Four of the six hinge on the rows that DON'T match --
-the unscheduled course, the instructor teaching no online sections, the
-textbook nobody assigns.
+the student who never enrolled, the department with no level-4 course, the
+instructor nobody reports to.
 
-7. **Every course, scheduled or not** (Q288)
+7. **Every student, enrolled or not** (Q318)
 
-   One row for every course in the catalogue: its id, code, and how
-   many sections have ever been scheduled for it.
+   One row for every student on the books: id, name, and how many
+   enrolments they have made.
 
-   Seven courses have never been scheduled. They must appear with 0, so
-   all 34 courses come back.
+   Nine students have never enrolled on anything. They must appear with
+   0, so all 60 students come back.
 
-   *Return: course_id, code, sections*
+   *Return: student_id, name, enrolments*
 
-8. **Online teaching per instructor** (Q289)
+8. **Level-4 courses per department** (Q319)
 
-   One row for every instructor: id, name, and how many sections they
-   teach that are delivered ONLINE.
+   One row for every department: id, name, and how many LEVEL-4 courses
+   it owns.
 
-   Five instructors teach none. They must appear with 0, so all 16
-   instructors come back.
+   Only three departments run anything at level 4. The other six must
+   appear with 0, so all 9 departments come back.
 
-   *Return: instructor_id, name, online_sections*
+   *Return: department_id, name, level4_courses*
 
-9. **Courses that sit alongside each other** (Q290)
+9. **Room clashes** (Q320)
 
-   Pairs of courses in the same department at the same level.
+   Pairs of sections booked into the same room in the same term.
 
-   Each pair once, not twice, and no course paired with itself. Order
-   each pair so that code_a belongs to the LOWER course_id. There are 4
+   Each pair once, not twice, and no section paired with itself. Order
+   each pair so that section_a is the LOWER section_id. There are 51
    pairs.
 
-   *Return: department_id, code_a, code_b*
+   *Return: term_id, room, section_a, section_b*
 
-10. **Textbooks nobody assigns** (Q291)
+10. **Students who never enrolled** (Q321)
 
-    Every textbook that appears on no course reading list at all.
+    Every student who has never enrolled on anything at all.
 
     Write it as an outer join that keeps the non-matches, rather than
-    with NOT IN. There are 6 such books.
-
-    *Return: book_id, title*
-
-11. **Students who have reached level 4** (Q292)
-
-    Every student who has ever enrolled on a level-4 course.
-
-    Courses sit under sections and sections carry the enrolment. One row
-    per student, however many level-4 courses they took -- and some took
-    two. 25 students qualify.
+    with NOT IN. There are 9 such students.
 
     *Return: student_id, name*
 
-12. **Never taught online** (Q293)
+11. **Courses with an unstaffed section** (Q322)
 
-    Every instructor who has never taught a section delivered ONLINE.
-    Five of the sixteen qualify.
+    Every course that has at least one section with no instructor
+    assigned.
 
-    Watch out: six online sections have no instructor assigned at all,
-    which is what makes the obvious answer wrong.
+    One row per course, however many unstaffed sections it has -- and
+    some have more than one. Nine courses qualify.
+
+    *Return: course_id, code*
+
+12. **Instructors who mentor nobody** (Q323)
+
+    Every instructor who is nobody's mentor. Twelve of the sixteen
+    qualify.
+
+    Watch out: one instructor -- the one at the top -- has no mentor
+    themselves, so mentor_id contains a NULL. That is what makes the
+    obvious answer wrong.
 
     *Return: instructor_id, name*
 
 ## 3 - Recursion (4)
 
-Deliberately the gentlest questions in the set, and all four are the same
-shape: an anchor that is ONE obvious row, and a step that is ONE join back
-to the CTE. No depth counters, no generated series, no labels carried down
-a tree. Only the direction of travel and the table change.
+Still the gentlest questions in the set -- an anchor that is one obvious
+row and a step that is one join back to the CTE. But these are four
+different SHAPES rather than the same walk four times: down a tree, down a
+straight chain, up a branching one, and one whose anchor is its own answer.
 
-13. **Anil Chaudhary's line of mentors** (Q294)
+13. **Everyone under Margaret Ashworth** (Q324)
 
-    Anil Chaudhary, then their mentor, then that person's mentor, and so
-    on up to the instructor who has no mentor.
+    Margaret Ashworth is the one instructor with no mentor. List
+    everyone below her: the people she mentors, the people they mentor,
+    and so on.
 
-    Three rows: Anil themselves, then two above. Start with Anil in the
-    anchor and follow mentor_id upward one hop at a time.
+    Fifteen rows -- everyone except Margaret herself. Only three are her
+    direct mentees, which is why a single join is not enough.
 
     *Return: instructor_id, name*
 
-14. **What Interaction Design needs, all the way down** (Q295)
+14. **What Audit and Assurance needs** (Q325)
 
-    Course DES301 'Interaction Design' has a prerequisite, and that has
-    one of its own. List every course DES301 depends on, at any depth.
+    Course ACC301 'Audit and Assurance' has a prerequisite, and that has
+    one of its own. List every course ACC301 depends on, at any depth.
 
     This chain is a straight line -- exactly one prerequisite at each
-    hop -- so it is two rows. DES301 itself is not in the answer.
+    hop -- so it is two rows. ACC301 itself is not in the answer.
 
     *Return: code, title*
 
-15. **What is blocked by Visual Communication** (Q296)
+15. **What is blocked by Computer Systems** (Q326)
 
-    The other way round. Every course that requires DES101 'Visual
-    Communication', directly or indirectly -- that is, every course a
-    student could not take until they had passed it.
+    The other way round. Every course that requires CMP110 'Computer
+    Systems', directly or indirectly -- everything a student could not
+    take until they had passed it.
 
-    Two courses. Same table and same shape as question 14, but you
-    travel along the other column.
+    Five courses, and the chain branches: two require it directly, and
+    the rest come through those.
 
     *Return: code, title*
 
-16. **What Machine Learning needs, all the way down** (Q297)
+16. **A full study plan for Machine Learning** (Q327)
 
-    The same question as 14, but on a course whose prerequisites branch:
-    everything CMP401 'Machine Learning' depends on, at any depth.
+    Everything a student must pass to finish CMP401 'Machine Learning'
+    -- every course it depends on at any depth, AND CMP401 itself.
 
-    Five courses. Three are direct, and the rest are reached through
-    them -- one course is reachable by TWO different paths and must
-    still appear once.
+    Six courses. Unlike question 14 this one branches, and one course is
+    reachable by two different routes but must still appear once.
 
     *Return: code, title*
 
@@ -272,66 +275,64 @@ a tree. Only the direction of travel and the table change.
 Dates are TEXT in SQLite, and set operators stack results rather than
 joining them. Six questions on doing both correctly.
 
-17. **The five slowest payments to settle** (Q298)
+17. **How long each term runs** (Q328)
 
-    The five settled payments that took the longest from being billed to
-    being paid, longest first.
+    One row per term: its name, and how many whole days it lasts from
+    starts_on to ends_on.
 
-    Days must be a whole number. Break ties on days by payment_id
-    ascending, so the five are unambiguous.
+    All six terms appear, and every length is a whole number between 70
+    and 90.
 
-    *Return: payment_id, billed_on, paid_on, days*
+    *Return: term_id, name, days*
 
-18. **Assessment deadlines by month** (Q299)
+18. **Enrolments by month** (Q329)
 
-    One row per calendar month in which any assessment falls due: the
-    month as 'YYYY-MM', and how many are due in it.
+    One row per calendar month in which any enrolment was made: the
+    month as 'YYYY-MM', and how many were made in it.
 
     The data spans two academic years, so the same month name recurs and
-    the two must not be added together. There are 17 such months.
+    the two must not be added together. There are 14 such months.
 
-    *Return: month, assessments*
+    *Return: month, enrolments*
 
-19. **Enrolled before the term began** (Q300)
+19. **Deadlines after the term ends** (Q330)
 
-    How many enrolments were made BEFORE their term's start date, broken
-    down by term.
+    Assessments whose due date falls AFTER the end of the term their
+    section runs in.
 
-    The enrolment date is on the enrolment; the start date is on the
-    term, reached through the section. All six terms have some.
+    The due date is on the assessment; the end date is on the term,
+    reached through the section. There are 13.
 
-    *Return: term_id, name, early_enrolments*
+    *Return: assessment_id, title, due_on, ends_on*
 
-20. **Billed in a month nobody enrolled** (Q301)
+20. **First-year reading that never reappears** (Q331)
 
-    Months in which at least one payment was billed but NO enrolment was
-    made. Months are 'YYYY-MM'.
+    Textbooks that appear on a LEVEL-1 course's reading list but on no
+    LEVEL-3 course's list.
 
-    Billing runs all year while enrolment clusters around the terms, so
-    this catches the quiet months. Nine qualify.
-
-    *Return: month*
-
-21. **Required reading on a first-year course** (Q302)
-
-    Textbooks that are BOTH marked required (required = 1) on some
-    course AND appear on the reading list of a level-1 course.
-
-    The two need not be the same course: a book required on a level-3
-    course and merely recommended on a level-1 one still counts. Ten
-    books qualify.
+    Eight books qualify. A book on both a level-1 and a level-3 course
+    is excluded, even if the two are in different departments.
 
     *Return: book_id, title*
 
-22. **Enrolment status by term** (Q303)
+21. **Students who have both finished and dropped** (Q332)
 
-    One row per term, with the number of its enrolments in each of the
-    three statuses side by side as columns.
+    Students who have BOTH completed at least one enrolment AND
+    withdrawn from at least one.
 
-    All six terms appear, and the three columns together account for
-    every enrolment.
+    The two need not be the same course. 37 students qualify.
 
-    *Return: term_id, name, completed, active, withdrawn*
+    *Return: student_id, name*
+
+22. **Assessment kinds by term** (Q333)
+
+    One row per term, with the number of its assessments of each kind
+    side by side as columns.
+
+    All six terms appear, and the four columns together account for
+    every assessment.
+
+    *Return: term_id, name, essay, exam, project, practical*
 
 ## 5 - Window functions (5)
 
@@ -339,93 +340,97 @@ A calculation that sees a set of rows around each row without collapsing
 them. PARTITION BY says which rows it may see, ORDER BY orders them inside
 that set. Five questions, each isolating one part.
 
-23. **Term on term** (Q304)
+23. **Month on month** (Q334)
+
+    One row per calendar month in which any enrolment was made: the
+    month as 'YYYY-MM', how many were made, and the change from the
+    month before.
+
+    The earliest month has nothing before it, so its change is NULL --
+    leave it NULL rather than turning it into 0. 14 months.
+
+    *Return: month, enrolments, change*
+
+24. **Enrolments so far** (Q335)
 
     One row per term, in term order: the term name, how many enrolments
-    were made on its sections, and the change from the term before.
+    were made on its sections, and the running total of enrolments up to
+    and including that term.
 
-    The first term has nothing before it, so its change is NULL -- leave
-    it NULL rather than turning it into 0. All six terms appear.
+    The running total on the last term equals every enrolment in the
+    table. All six terms appear.
 
-    *Return: term_id, name, enrolments, change*
+    *Return: term_id, name, enrolments, running_total*
 
-24. **Billed so far** (Q305)
+25. **Share of the billing by status** (Q336)
 
-    One row per calendar month in which anything was billed: the month
-    as 'YYYY-MM', the amount billed in it, and the running total of
-    everything billed up to and including that month.
+    One row per payment status: the status, the total amount billed
+    under it, and that total as a percentage of everything billed.
 
-    The running total on the last month equals the total of every
-    payment in the table. 22 months.
+    Four statuses, and the four percentages add up to 100.
 
-    *Return: month, month_total, running_total*
+    *Return: status, billed, pct_of_total*
 
-25. **Share of the enrolments by faculty** (Q306)
+26. **Each student's first enrolment** (Q337)
 
-    One row per faculty: the faculty, how many enrolments its
-    departments' courses attracted, and that count as a percentage of
-    all enrolments.
+    For every student who has ever enrolled, their earliest enrolment by
+    date. One row per student -- students who never enrolled do not
+    appear, so 51 rows.
 
-    Four faculties, and the four percentages add up to 100.
+    Break ties on date by the lower enrolment_id, so each student's
+    first is unambiguous.
 
-    *Return: faculty, enrolments, pct_of_total*
+    *Return: student_id, enrolment_id, enrolled_on*
 
-26. **The most recent run of each course** (Q307)
+27. **Top of each campus, ties and all** (Q338)
 
-    For every course that has ever been scheduled, its latest section by
-    term. One row per course -- courses never scheduled do not appear,
-    so 27 rows.
+    The highest mark achieved by students at each campus, and who got
+    it. Only graded enrolments count.
 
-    No course runs twice in the same term, so 'latest' is never a tie.
+    Every campus has students tied on its top mark, so the answer is 8
+    rows across 4 campuses, not 4.
 
-    *Return: course_id, section_id, term_id*
-
-27. **Top of each programme, ties and all** (Q308)
-
-    The highest mark achieved in each programme, and who got it. Only
-    graded enrolments count.
-
-    Two programmes have two students tied on the top mark. Both must
-    appear, so the answer is 11 rows across 9 programmes.
-
-    *Return: programme, student_id, name, grade*
+    *Return: campus_id, student_id, name, grade*
 
 ## 6 - Grain and correlation (3)
 
-The three that need the most care: a subquery that must run per row, two
-child tables that multiply when joined together, and arithmetic that has
-to happen inside the aggregate rather than outside it.
+The three that need most care: a subquery that must run per row, two child
+tables that multiply when joined together, and an aggregate condition that
+only HAVING can express.
 
-28. **Bigger than its own department's average** (Q309)
+28. **Paid above their own department's average** (Q339)
 
-    Every course worth more credits than the average for ITS OWN
-    department -- not more than the average across the whole catalogue.
+    Every instructor on a higher hourly_rate than the average for THEIR
+    OWN department -- not higher than the average across the whole
+    college.
 
-    One row per course. Twelve qualify.
+    Seven qualify. Be careful: the college-wide version also returns
+    seven, so a row count will not tell you which one you wrote.
 
-    *Return: course_id, code, department_id, credits*
+    *Return: instructor_id, name, department_id, hourly_rate*
 
-29. **Students and assessments on each section** (Q310)
+29. **Enrolments and payments per student** (Q340)
 
-    One row per section: how many students are enrolled on it, and how
-    many assessments it has.
+    One row per student: how many enrolments they have made, and how
+    many payments have been billed to them.
 
-    The two are independent -- a section can have many of one and none
-    of the other. A section with none of something shows 0, not NULL.
-    All 70 sections appear.
+    The two are independent -- a student can have many of one and none
+    of the other. A student with none of something shows 0, not NULL.
+    All 60 students appear.
 
-    *Return: section_id, students, assessments*
+    *Return: student_id, enrolments, payments*
 
-30. **What the library holds, by faculty** (Q311)
+30. **Sections whose marking does not add up** (Q341)
 
-    One row per faculty, with the total value of the library copies held
-    on its courses' reading lists.
+    An assessment's weight is its share of the section's final mark, so
+    a section's weights should total 1. Find the sections where they do
+    not.
 
-    Each course_books row is worth copies_held * list_price. Rows with
-    no copies_held recorded contribute nothing. Every line must be
-    priced on its own copies and its own book.
+    Round the total to 2 decimals before comparing, or floating-point
+    noise will report almost every section. 20 of the 74 sections that
+    have assessments are wrong.
 
-    *Return: faculty, value*
+    *Return: section_id, total_weight*
 
 ## The one concept with no question here
 
@@ -449,7 +454,7 @@ be written, since a window function cannot appear in `WHERE` on any engine.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-281 retired ones. New questions must not repeat anything in that ledger.
+311 retired ones. New questions must not repeat anything in that ledger.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

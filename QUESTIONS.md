@@ -24,54 +24,53 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the college schema, re-seeded (SEED 221 -> 257) so no answer
-value from the last set carries over. Same tables, so the schema you learned
-last time still applies.
+Thirty questions on the college schema, re-seeded (SEED 257 -> 293) so no answer
+value from the last set carries over. Same tables.
 
-What changed is the **order**. The last set was grouped by concept, which put
-all four recursion questions first -- the hardest mechanism before any warm-up.
-This set is graded easy to hard, and the tier names are the stages of that ramp
-rather than concept labels: 6 single-table warm-ups, 6 first joins, 4 recursion,
-6 dates/sets/pivots, 5 window functions, 3 on grain and correlation.
+Same structure as Q282-Q311 -- graded easy to hard, with the tier names as the
+stages of the ramp -- and the same difficulty: one concept per question, every
+prompt states its grain. What is new is the questions themselves. Each targets
+its concept through a **different table or relationship** than last time, so
+none of them is the previous set with the constants changed.
 
-The four recursion questions are deliberately the gentlest in the set and all
-share one shape: an anchor that is a single obvious row, and a step that is one
-join back to the CTE. No depth counters, no generated series, no labels carried
-down a tree. Only the direction of travel and the table vary -- and the last of
-the four is where `UNION` and `UNION ALL` finally disagree.
+The four recursion questions stay gentle but are now four different SHAPES
+rather than the same walk from four starting points: down a tree from its root
+(where a single join reaches only 3 of 15), down a straight chain, up a
+branching one, and a walk whose anchor is its own starting row -- which is also
+where `UNION` and `UNION ALL` stop agreeing.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q282 | A2 COUNT and AVG | Funding recorded, and not | ex 1 | 1 - Warm-up |
-| Q283 | A3 WHERE vs HAVING | Which payment statuses were common in 2025 | ex 2 | 1 - Warm-up |
-| Q284 | general | Textbooks by price band | ex 3 | 1 - Warm-up |
-| Q285 | C7 NULL | Settled, waived, or still owing | ex 4 | 1 - Warm-up |
-| Q286 | C7 NULL | Everyone not funding themselves | ex 5 | 1 - Warm-up |
-| Q287 | A2 COUNT and AVG | Average page count, where it is known | ex 6 | 1 - Warm-up |
-| Q288 | J2 outer joins | Every course, scheduled or not | ex 7 | 2 - First joins |
-| Q289 | J2 outer joins | Online teaching per instructor | ex 8 | 2 - First joins |
-| Q290 | J1 self-joins | Courses that sit alongside each other | ex 9 | 2 - First joins |
-| Q291 | J2 outer joins | Textbooks nobody assigns | ex 10 | 2 - First joins |
-| Q292 | E1 EXISTS | Students who have reached level 4 | ex 11 | 2 - First joins |
-| Q293 | E1 EXISTS | Never taught online | ex 12 | 2 - First joins |
-| Q294 | R1 recursive CTE | Anil Chaudhary's line of mentors | ex 13 | 3 - Recursion |
-| Q295 | R1 recursive CTE | What Interaction Design needs, all the way down | ex 14 | 3 - Recursion |
-| Q296 | R1 recursive CTE | What is blocked by Visual Communication | ex 15 | 3 - Recursion |
-| Q297 | R1 recursive CTE | What Machine Learning needs, all the way down | ex 16 | 3 - Recursion |
-| Q298 | D1 dates & gaps | The five slowest payments to settle | ex 17 | 4 - Dates, sets and pivots |
-| Q299 | D1 dates & gaps | Assessment deadlines by month | ex 18 | 4 - Dates, sets and pivots |
-| Q300 | D1 dates & gaps | Enrolled before the term began | ex 19 | 4 - Dates, sets and pivots |
-| Q301 | S1 set operations | Billed in a month nobody enrolled | ex 20 | 4 - Dates, sets and pivots |
-| Q302 | S1 set operations | Required reading on a first-year course | ex 21 | 4 - Dates, sets and pivots |
-| Q303 | A1 conditional aggregation | Enrolment status by term | ex 22 | 4 - Dates, sets and pivots |
-| Q304 | W3 window vs GROUP BY | Term on term | ex 23 | 5 - Window functions |
-| Q305 | W1 window frames | Billed so far | ex 24 | 5 - Window functions |
-| Q306 | W3 window vs GROUP BY | Share of the enrolments by faculty | ex 25 | 5 - Window functions |
-| Q307 | W2 window ranking | The most recent run of each course | ex 26 | 5 - Window functions |
-| Q308 | W2 window ranking | Top of each programme, ties and all | ex 27 | 5 - Window functions |
-| Q309 | E2 correlated subqueries | Bigger than its own department's average | ex 28 | 6 - Grain and correlation |
-| Q310 | C2 grain | Students and assessments on each section | ex 29 | 6 - Grain and correlation |
-| Q311 | C2 grain | What the library holds, by faculty | ex 30 | 6 - Grain and correlation |
+| Q312 | A2 COUNT and AVG | Staffed and unstaffed | ex 1 | 1 - Warm-up |
+| Q313 | A3 WHERE vs HAVING | Which assessment kinds cluster in 2026 | ex 2 | 1 - Warm-up |
+| Q314 | general | Instructors by pay band | ex 3 | 1 - Warm-up |
+| Q315 | C7 NULL | Graded, dropped, or still going | ex 4 | 1 - Warm-up |
+| Q316 | C7 NULL | Everyone not on the top pay grade | ex 5 | 1 - Warm-up |
+| Q317 | A2 COUNT and AVG | Average copies held, where it is known | ex 6 | 1 - Warm-up |
+| Q318 | J2 outer joins | Every student, enrolled or not | ex 7 | 2 - First joins |
+| Q319 | J2 outer joins | Level-4 courses per department | ex 8 | 2 - First joins |
+| Q320 | J1 self-joins | Room clashes | ex 9 | 2 - First joins |
+| Q321 | J2 outer joins | Students who never enrolled | ex 10 | 2 - First joins |
+| Q322 | E1 EXISTS | Courses with an unstaffed section | ex 11 | 2 - First joins |
+| Q323 | E1 EXISTS | Instructors who mentor nobody | ex 12 | 2 - First joins |
+| Q324 | R1 recursive CTE | Everyone under Margaret Ashworth | ex 13 | 3 - Recursion |
+| Q325 | R1 recursive CTE | What Audit and Assurance needs | ex 14 | 3 - Recursion |
+| Q326 | R1 recursive CTE | What is blocked by Computer Systems | ex 15 | 3 - Recursion |
+| Q327 | R1 recursive CTE | A full study plan for Machine Learning | ex 16 | 3 - Recursion |
+| Q328 | D1 dates & gaps | How long each term runs | ex 17 | 4 - Dates, sets and pivots |
+| Q329 | D1 dates & gaps | Enrolments by month | ex 18 | 4 - Dates, sets and pivots |
+| Q330 | D1 dates & gaps | Deadlines after the term ends | ex 19 | 4 - Dates, sets and pivots |
+| Q331 | S1 set operations | First-year reading that never reappears | ex 20 | 4 - Dates, sets and pivots |
+| Q332 | S1 set operations | Students who have both finished and dropped | ex 21 | 4 - Dates, sets and pivots |
+| Q333 | A1 conditional aggregation | Assessment kinds by term | ex 22 | 4 - Dates, sets and pivots |
+| Q334 | W3 window vs GROUP BY | Month on month | ex 23 | 5 - Window functions |
+| Q335 | W1 window frames | Enrolments so far | ex 24 | 5 - Window functions |
+| Q336 | W3 window vs GROUP BY | Share of the billing by status | ex 25 | 5 - Window functions |
+| Q337 | W2 window ranking | Each student's first enrolment | ex 26 | 5 - Window functions |
+| Q338 | W2 window ranking | Top of each campus, ties and all | ex 27 | 5 - Window functions |
+| Q339 | E2 correlated subqueries | Paid above their own department's average | ex 28 | 6 - Grain and correlation |
+| Q340 | C2 grain | Enrolments and payments per student | ex 29 | 6 - Grain and correlation |
+| Q341 | C2 grain | Sections whose marking does not add up | ex 30 | 6 - Grain and correlation |
 
 ## Retired
 
@@ -361,6 +360,36 @@ they still count as asked.
 | Q279 | C2 grain | What the library spent by publisher | - | retired |
 | Q280 | general | Courses by credit band | - | retired |
 | Q281 | C2 grain | How many departments does each campus actually run | - | retired |
+| Q282 | A2 COUNT and AVG | Funding recorded, and not | - | retired |
+| Q283 | A3 WHERE vs HAVING | Which payment statuses were common in 2025 | - | retired |
+| Q284 | general | Textbooks by price band | - | retired |
+| Q285 | C7 NULL | Settled, waived, or still owing | - | retired |
+| Q286 | C7 NULL | Everyone not funding themselves | - | retired |
+| Q287 | A2 COUNT and AVG | Average page count, where it is known | - | retired |
+| Q288 | J2 outer joins | Every course, scheduled or not | - | retired |
+| Q289 | J2 outer joins | Online teaching per instructor | - | retired |
+| Q290 | J1 self-joins | Courses that sit alongside each other | - | retired |
+| Q291 | J2 outer joins | Textbooks nobody assigns | - | retired |
+| Q292 | E1 EXISTS | Students who have reached level 4 | - | retired |
+| Q293 | E1 EXISTS | Never taught online | - | retired |
+| Q294 | R1 recursive CTE | Anil Chaudhary's line of mentors | - | retired |
+| Q295 | R1 recursive CTE | What Interaction Design needs, all the way down | - | retired |
+| Q296 | R1 recursive CTE | What is blocked by Visual Communication | - | retired |
+| Q297 | R1 recursive CTE | What Machine Learning needs, all the way down | - | retired |
+| Q298 | D1 dates & gaps | The five slowest payments to settle | - | retired |
+| Q299 | D1 dates & gaps | Assessment deadlines by month | - | retired |
+| Q300 | D1 dates & gaps | Enrolled before the term began | - | retired |
+| Q301 | S1 set operations | Billed in a month nobody enrolled | - | retired |
+| Q302 | S1 set operations | Required reading on a first-year course | - | retired |
+| Q303 | A1 conditional aggregation | Enrolment status by term | - | retired |
+| Q304 | W3 window vs GROUP BY | Term on term | - | retired |
+| Q305 | W1 window frames | Billed so far | - | retired |
+| Q306 | W3 window vs GROUP BY | Share of the enrolments by faculty | - | retired |
+| Q307 | W2 window ranking | The most recent run of each course | - | retired |
+| Q308 | W2 window ranking | Top of each programme, ties and all | - | retired |
+| Q309 | E2 correlated subqueries | Bigger than its own department's average | - | retired |
+| Q310 | C2 grain | Students and assessments on each section | - | retired |
+| Q311 | C2 grain | What the library holds, by faculty | - | retired |
 
 ## History
 
@@ -398,3 +427,8 @@ they still count as asked.
   questions placed mid-set and kept to the simplest possible shape. Stages: 6
   warm-up, 6 first joins, 4 recursion, 6 dates/sets/pivots, 5 window, 3 grain
   and correlation.
+- **Q312-Q341** current set, college schema re-seeded (SEED 257 -> 293). Same
+  easy-to-hard ramp and difficulty as Q282-Q311; every question reaches its
+  concept through a different table or relationship, and the four recursion
+  questions are four different shapes rather than one shape from four starting
+  points.
