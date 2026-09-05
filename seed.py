@@ -26,7 +26,7 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 257
+SEED = 293
 
 # Tables in dependency order; dropped in reverse so foreign keys stay satisfied.
 TABLES = [
