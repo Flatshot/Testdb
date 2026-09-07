@@ -181,3 +181,18 @@ CREATE INDEX IF NOT EXISTS idx_enrol_date      ON enrolments(enrolled_on);
 CREATE INDEX IF NOT EXISTS idx_assess_section  ON assessments(section_id);
 CREATE INDEX IF NOT EXISTS idx_books_book      ON course_books(book_id);
 CREATE INDEX IF NOT EXISTS idx_payments_stu    ON payments(student_id);
+
+-- Indexes that exist so the efficiency questions have something to hit or
+-- miss. Each one can be used or defeated depending on how a query is written,
+-- which is the whole point: the index is not the thing that makes a query
+-- fast, being ABLE to use it is.
+--   students(name COLLATE NOCASE)
+--                           a prefix LIKE can seek this; a leading % cannot.
+--                           The NOCASE collation is required: LIKE is
+--                           case-insensitive by default, so a BINARY index
+--                           cannot serve it and SQLite falls back to a scan.
+--   enrolments(status,grade) a composite -- usable from the LEFT only, so a
+--                            filter on status alone seeks and one on grade
+--                            alone does not
+CREATE INDEX IF NOT EXISTS idx_students_name   ON students(name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_enrol_status    ON enrolments(status, grade);

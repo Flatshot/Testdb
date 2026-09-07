@@ -26,7 +26,16 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 293
+SEED = 329
+
+# How many students to generate. The dimension tables (campuses, departments,
+# courses, instructors, terms, textbooks) stay small because they describe the
+# college; the transactional tables scale off this number. It is set high
+# enough that a full table scan of enrolments is measurably slower than an
+# index seek -- efficiency questions need a difference you can actually feel,
+# and at 550 rows every query is instant no matter how it is written.
+N_STUDENTS = 4000
+SECTIONS_PER_COURSE_TERM = 20
 
 # Tables in dependency order; dropped in reverse so foreign keys stay satisfied.
 TABLES = [
@@ -233,14 +242,18 @@ def seed():
             # --------------------------------------------------------- students
             student_rows = []
             used = set()
-            for sid in range(1, 61):
-                while True:
-                    name = (STUDENT_FIRST[rng.randrange(len(STUDENT_FIRST))]
-                            + " "
-                            + STUDENT_LAST[rng.randrange(len(STUDENT_LAST))])
-                    if name not in used:
-                        used.add(name)
-                        break
+            for sid in range(1, N_STUDENTS + 1):
+                # 26 x 24 name pairs cannot cover N_STUDENTS uniquely, so a
+                # repeated pair gets a numeric suffix. Names stay realistic and
+                # stay unique, which matters for the LIKE questions.
+                base = (STUDENT_FIRST[rng.randrange(len(STUDENT_FIRST))]
+                        + " "
+                        + STUDENT_LAST[rng.randrange(len(STUDENT_LAST))])
+                name, n = base, 1
+                while name in used:
+                    n += 1
+                    name = f"{base} {n}"
+                used.add(name)
                 campus = rng.randrange(1, len(CAMPUSES) + 1)
                 joined = _random_date(rng, date(2024, 8, 1), date(2026, 4, 1))
                 programme = PROGRAMMES[rng.randrange(len(PROGRAMMES))]
@@ -312,15 +325,21 @@ def seed():
                         continue
                     if rng.random() > 0.45:
                         continue
-                    sid += 1
-                    # One section in nine is scheduled but not yet staffed.
-                    instr = (None if rng.random() < 0.11
-                             else rng.randrange(1, len(INSTRUCTOR_NAMES) + 1))
-                    section_rows.append((
-                        sid, cid, tid, instr,
-                        ROOMS[rng.randrange(len(ROOMS))],
-                        rng.choice([18, 20, 24, 30, 36, 40]),
-                        DELIVERY[rng.randrange(3)]))
+                    # A popular course runs several parallel sections in the
+                    # same term, which is what gets the row counts up without
+                    # inventing more courses than a college would have.
+                    for _rep in range(rng.randrange(
+                            1, SECTIONS_PER_COURSE_TERM + 1)):
+                        sid += 1
+                        # One section in nine is scheduled but not yet staffed.
+                        instr = (None if rng.random() < 0.11
+                                 else rng.randrange(
+                                     1, len(INSTRUCTOR_NAMES) + 1))
+                        section_rows.append((
+                            sid, cid, tid, instr,
+                            ROOMS[rng.randrange(len(ROOMS))],
+                            rng.choice([40, 60, 90, 120, 150, 180]),
+                            DELIVERY[rng.randrange(3)]))
             conn.executemany(
                 "INSERT INTO sections (section_id, course_id, term_id,"
                 " instructor_id, room, capacity, delivery)"
@@ -331,14 +350,14 @@ def seed():
 
             # ------------------------------------------------------- enrolments
             # Eight students never enrol on anything.
-            enrollable = [s for s in range(1, 61) if s % 7 != 3][:52]
+            enrollable = [s for s in range(1, N_STUDENTS + 1) if s % 7 != 3]
             enrol_rows = []
             eid = 0
             for s_id, c_id, t_id, *_rest in section_rows:
                 # A tenth of sections take nobody at all.
                 if rng.random() < 0.10:
                     continue
-                take = rng.randrange(3, 12)
+                take = rng.randrange(20, 180)
                 for stu in rng.sample(enrollable, take):
                     eid += 1
                     start = term_start[t_id]
@@ -414,7 +433,7 @@ def seed():
             # --------------------------------------------------------- payments
             pay_rows = []
             pid = 0
-            for stu in range(1, 61):
+            for stu in range(1, N_STUDENTS + 1):
                 for _ in range(rng.randrange(0, 5)):
                     pid += 1
                     billed = _random_date(rng, date(2024, 9, 1),

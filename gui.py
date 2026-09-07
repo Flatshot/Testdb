@@ -3,7 +3,8 @@
     python gui.py
 
 Left pane picks an exercise or browses the schema. Write SQL on the right,
-F5 to run it, Ctrl+Enter to have your result graded against the expected one.
+F5 to run it, F6 to see its query plan, Ctrl+Enter to have your result graded
+against the expected one.
 
 The database is opened READ-ONLY, so nothing you type in here can damage the
 practice data no matter how wrong it goes.
@@ -15,6 +16,7 @@ progress.json next to this file.
 import json
 import re
 import sqlite3
+import time
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import messagebox, ttk
@@ -407,6 +409,9 @@ class App(tk.Tk):
         ttk.Button(bar, text="Clear", command=lambda: self.editor.delete("1.0", "end")).pack(
             side="left", padx=(6, 0)
         )
+        self.explain_btn = ttk.Button(bar, text="Explain plan (F6)",
+                                      command=self.explain_plan)
+        self.explain_btn.pack(side="left", padx=(6, 0))
         self.solution_btn = ttk.Button(bar, text="Show solution", command=self.show_solution)
         self.solution_btn.pack(side="left", padx=(6, 0))
         self.progress_var = tk.StringVar()
@@ -449,6 +454,7 @@ class App(tk.Tk):
                   lambda e: self.status.configure(wraplength=max(self.winfo_width() - 40, 400)))
 
         self.bind("<F5>", lambda e: (self.run_query(), "break")[1])
+        self.bind("<F6>", lambda e: (self.explain_plan(), "break")[1])
         self.bind("<Control-Return>", lambda e: (self.check_answer(), "break")[1])
         self.editor.bind("<Control-Return>", lambda e: (self.check_answer(), "break")[1])
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -599,6 +605,15 @@ class App(tk.Tk):
         e = ex.BY_ID[self.current]
         expected = self.conn.execute(e["solution"]).fetchall()
         passed, msg = ex.compare([tuple(r) for r in rows], [tuple(r) for r in expected])
+        if passed and (e.get("plan_requires") or e.get("plan_forbids")):
+            # An efficiency question cannot be graded on its result -- the slow
+            # way and the fast way return the same rows. So the plan is part of
+            # the answer, and a correct result taken by the wrong route is not
+            # a pass.
+            passed, plan_msg = ex.plan_ok(
+                e, ex.query_plan(self.conn, self._sql()))
+            if not passed:
+                msg = plan_msg
         if passed:
             self.progress["solved"].add(self._key(self.current))
             self.ex_tree.item(f"ex{self.current}", text=self._exercise_label(e))
@@ -609,6 +624,35 @@ class App(tk.Tk):
             if e.get("note"):
                 msg = f"{msg}   {e['note']}"
         self._set_status(msg, BG_OK if passed else BG_BAD)
+
+    def explain_plan(self):
+        """Show how SQLite intends to run the query in the editor.
+
+        The three words worth knowing are in nearly every plan:
+          SCAN    every row of the table is read
+          SEARCH  an index is used to jump straight to the rows that match
+          TEMP B-TREE  the rows had to be sorted or grouped on the fly
+        Timed as well, because a plan tells you the shape and the clock tells
+        you whether the shape matters.
+        """
+        sql = self._sql()
+        if not sql:
+            return
+        try:
+            with db.time_limit(self.conn):
+                plan = self.conn.execute(
+                    "EXPLAIN QUERY PLAN " + sql).fetchall()
+                start = time.perf_counter()
+                n = len(db.fetch_capped(self.conn.execute(sql)))
+                elapsed = (time.perf_counter() - start) * 1000
+        except Exception as exc:
+            self._set_status(f"error: {exc}", BG_BAD)
+            return
+        self._show_rows([(r[0], r[3]) for r in plan], ["step", "detail"])
+        self._set_status(
+            f"{n} row(s) in {elapsed:.1f} ms.  SCAN reads every row;"
+            f" SEARCH uses an index; TEMP B-TREE means a sort or group was"
+            f" built on the fly.", BG_INFO)
 
     def show_solution(self):
         if self.current == FREE:

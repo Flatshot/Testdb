@@ -24,53 +24,53 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the college schema, re-seeded (SEED 257 -> 293) so no answer
-value from the last set carries over. Same tables.
+Thirty questions on the college schema, re-seeded and **scaled up**
+(SEED 293 -> 329): 4,000 students, 774 sections, 67,000 enrolments, 7,800
+payments. Same tables, two orders of magnitude more rows.
 
-Same structure as Q282-Q311 -- graded easy to hard, with the tier names as the
-stages of the ramp -- and the same difficulty: one concept per question, every
-prompt states its grain. What is new is the questions themselves. Each targets
-its concept through a **different table or relationship** than last time, so
-none of them is the previous set with the constants changed.
+The scale is the point. At 550 rows every query returns instantly however it is
+written, so there is nothing to learn about cost. At 67,000 a scan takes 10ms
+where an index seek takes 0.8ms, and a blocked index on a join costs 150x.
 
-The four recursion questions stay gentle but are now four different SHAPES
-rather than the same walk from four starting points: down a tree from its root
-(where a single join reaches only 3 of 15), down a straight chain, up a
-branching one, and a walk whose anchor is its own starting row -- which is also
-where `UNION` and `UNION ALL` stop agreeing.
+Same easy-to-hard ramp as the last two sets, with a **new final stage on query
+efficiency**. Those six are graded on their EXPLAIN QUERY PLAN as well as their
+rows -- the slow form and the fast form return identical answers, so the plan is
+the only thing that can tell them apart. A correct result reached by scanning
+67,000 rows is marked wrong, with the plan shown. Press F6 in the GUI to see the
+plan and timing for anything you write.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q312 | A2 COUNT and AVG | Staffed and unstaffed | ex 1 | 1 - Warm-up |
-| Q313 | A3 WHERE vs HAVING | Which assessment kinds cluster in 2026 | ex 2 | 1 - Warm-up |
-| Q314 | general | Instructors by pay band | ex 3 | 1 - Warm-up |
-| Q315 | C7 NULL | Graded, dropped, or still going | ex 4 | 1 - Warm-up |
-| Q316 | C7 NULL | Everyone not on the top pay grade | ex 5 | 1 - Warm-up |
-| Q317 | A2 COUNT and AVG | Average copies held, where it is known | ex 6 | 1 - Warm-up |
-| Q318 | J2 outer joins | Every student, enrolled or not | ex 7 | 2 - First joins |
-| Q319 | J2 outer joins | Level-4 courses per department | ex 8 | 2 - First joins |
-| Q320 | J1 self-joins | Room clashes | ex 9 | 2 - First joins |
-| Q321 | J2 outer joins | Students who never enrolled | ex 10 | 2 - First joins |
-| Q322 | E1 EXISTS | Courses with an unstaffed section | ex 11 | 2 - First joins |
-| Q323 | E1 EXISTS | Instructors who mentor nobody | ex 12 | 2 - First joins |
-| Q324 | R1 recursive CTE | Everyone under Margaret Ashworth | ex 13 | 3 - Recursion |
-| Q325 | R1 recursive CTE | What Audit and Assurance needs | ex 14 | 3 - Recursion |
-| Q326 | R1 recursive CTE | What is blocked by Computer Systems | ex 15 | 3 - Recursion |
-| Q327 | R1 recursive CTE | A full study plan for Machine Learning | ex 16 | 3 - Recursion |
-| Q328 | D1 dates & gaps | How long each term runs | ex 17 | 4 - Dates, sets and pivots |
-| Q329 | D1 dates & gaps | Enrolments by month | ex 18 | 4 - Dates, sets and pivots |
-| Q330 | D1 dates & gaps | Deadlines after the term ends | ex 19 | 4 - Dates, sets and pivots |
-| Q331 | S1 set operations | First-year reading that never reappears | ex 20 | 4 - Dates, sets and pivots |
-| Q332 | S1 set operations | Students who have both finished and dropped | ex 21 | 4 - Dates, sets and pivots |
-| Q333 | A1 conditional aggregation | Assessment kinds by term | ex 22 | 4 - Dates, sets and pivots |
-| Q334 | W3 window vs GROUP BY | Month on month | ex 23 | 5 - Window functions |
-| Q335 | W1 window frames | Enrolments so far | ex 24 | 5 - Window functions |
-| Q336 | W3 window vs GROUP BY | Share of the billing by status | ex 25 | 5 - Window functions |
-| Q337 | W2 window ranking | Each student's first enrolment | ex 26 | 5 - Window functions |
-| Q338 | W2 window ranking | Top of each campus, ties and all | ex 27 | 5 - Window functions |
-| Q339 | E2 correlated subqueries | Paid above their own department's average | ex 28 | 6 - Grain and correlation |
-| Q340 | C2 grain | Enrolments and payments per student | ex 29 | 6 - Grain and correlation |
-| Q341 | C2 grain | Sections whose marking does not add up | ex 30 | 6 - Grain and correlation |
+| Q342 | A2 COUNT and AVG | Funding recorded, and not | ex 1 | 1 - Warm-up |
+| Q343 | A3 WHERE vs HAVING | Which enrolment statuses were common in 2026 | ex 2 | 1 - Warm-up |
+| Q344 | general | Sections by size | ex 3 | 1 - Warm-up |
+| Q345 | A2 COUNT and AVG | Average mark, where there is one | ex 4 | 1 - Warm-up |
+| Q346 | J2 outer joins | Every course, scheduled or not | ex 5 | 2 - First joins |
+| Q347 | J2 outer joins | Unstaffed sections per term | ex 6 | 2 - First joins |
+| Q348 | J1 self-joins | Courses that sit alongside each other | ex 7 | 2 - First joins |
+| Q349 | J2 outer joins | Courses nobody has scheduled | ex 8 | 2 - First joins |
+| Q350 | E1 EXISTS | Instructors who mentor nobody | ex 9 | 2 - First joins |
+| Q351 | R1 recursive CTE | Everyone under Margaret Ashworth | ex 10 | 3 - Recursion |
+| Q352 | R1 recursive CTE | What Audit and Assurance needs | ex 11 | 3 - Recursion |
+| Q353 | R1 recursive CTE | What is blocked by Programming Foundations | ex 12 | 3 - Recursion |
+| Q354 | R1 recursive CTE | A full study plan for Machine Learning | ex 13 | 3 - Recursion |
+| Q355 | D1 dates & gaps | How long each term runs | ex 14 | 4 - Dates, sets and pivots |
+| Q356 | D1 dates & gaps | Enrolments by month | ex 15 | 4 - Dates, sets and pivots |
+| Q357 | S1 set operations | Billed in a month nobody enrolled | ex 16 | 4 - Dates, sets and pivots |
+| Q358 | S1 set operations | Required reading on a first-year course | ex 17 | 4 - Dates, sets and pivots |
+| Q359 | A1 conditional aggregation | Enrolment status by term | ex 18 | 4 - Dates, sets and pivots |
+| Q360 | W3 window vs GROUP BY | Term on term | ex 19 | 5 - Window functions |
+| Q361 | W1 window frames | Enrolments so far | ex 20 | 5 - Window functions |
+| Q362 | W3 window vs GROUP BY | Share of the enrolments by faculty | ex 21 | 5 - Window functions |
+| Q363 | W2 window ranking | The two biggest courses in each faculty | ex 22 | 5 - Window functions |
+| Q364 | E2 correlated subqueries | Paid above their own department's average | ex 23 | 6 - Grain and correlation |
+| Q365 | C2 grain | Enrolments and assessments per term | ex 24 | 6 - Grain and correlation |
+| Q366 | X1 index vs expression | A year of enrolments, without scanning the table | ex 25 | 7 - Query efficiency |
+| Q367 | X1 index vs expression | Names beginning with Sofia | ex 26 | 7 - Query efficiency |
+| Q368 | X2 sorts and temp b-trees | Ten earliest enrolments, without sorting 67,000 rows | ex 27 | 7 - Query efficiency |
+| Q369 | X3 composite index order | Withdrawals, using the composite index | ex 28 | 7 - Query efficiency |
+| Q370 | X2 sorts and temp b-trees | Enrolments per day, without a temporary sort | ex 29 | 7 - Query efficiency |
+| Q371 | X4 join strategy | What blocking an index does to a join | ex 30 | 7 - Query efficiency |
 
 ## Retired
 
@@ -390,6 +390,36 @@ they still count as asked.
 | Q309 | E2 correlated subqueries | Bigger than its own department's average | - | retired |
 | Q310 | C2 grain | Students and assessments on each section | - | retired |
 | Q311 | C2 grain | What the library holds, by faculty | - | retired |
+| Q312 | A2 COUNT and AVG | Staffed and unstaffed | - | retired |
+| Q313 | A3 WHERE vs HAVING | Which assessment kinds cluster in 2026 | - | retired |
+| Q314 | general | Instructors by pay band | - | retired |
+| Q315 | C7 NULL | Graded, dropped, or still going | - | retired |
+| Q316 | C7 NULL | Everyone not on the top pay grade | - | retired |
+| Q317 | A2 COUNT and AVG | Average copies held, where it is known | - | retired |
+| Q318 | J2 outer joins | Every student, enrolled or not | - | retired |
+| Q319 | J2 outer joins | Level-4 courses per department | - | retired |
+| Q320 | J1 self-joins | Room clashes | - | retired |
+| Q321 | J2 outer joins | Students who never enrolled | - | retired |
+| Q322 | E1 EXISTS | Courses with an unstaffed section | - | retired |
+| Q323 | E1 EXISTS | Instructors who mentor nobody | - | retired |
+| Q324 | R1 recursive CTE | Everyone under Margaret Ashworth | - | retired |
+| Q325 | R1 recursive CTE | What Audit and Assurance needs | - | retired |
+| Q326 | R1 recursive CTE | What is blocked by Computer Systems | - | retired |
+| Q327 | R1 recursive CTE | A full study plan for Machine Learning | - | retired |
+| Q328 | D1 dates & gaps | How long each term runs | - | retired |
+| Q329 | D1 dates & gaps | Enrolments by month | - | retired |
+| Q330 | D1 dates & gaps | Deadlines after the term ends | - | retired |
+| Q331 | S1 set operations | First-year reading that never reappears | - | retired |
+| Q332 | S1 set operations | Students who have both finished and dropped | - | retired |
+| Q333 | A1 conditional aggregation | Assessment kinds by term | - | retired |
+| Q334 | W3 window vs GROUP BY | Month on month | - | retired |
+| Q335 | W1 window frames | Enrolments so far | - | retired |
+| Q336 | W3 window vs GROUP BY | Share of the billing by status | - | retired |
+| Q337 | W2 window ranking | Each student's first enrolment | - | retired |
+| Q338 | W2 window ranking | Top of each campus, ties and all | - | retired |
+| Q339 | E2 correlated subqueries | Paid above their own department's average | - | retired |
+| Q340 | C2 grain | Enrolments and payments per student | - | retired |
+| Q341 | C2 grain | Sections whose marking does not add up | - | retired |
 
 ## History
 
@@ -432,3 +462,7 @@ they still count as asked.
   concept through a different table or relationship, and the four recursion
   questions are four different shapes rather than one shape from four starting
   points.
+- **Q342-Q371** current set, college schema re-seeded and scaled (SEED 293 ->
+  329; enrolments 550 -> 67,000). Adds a seventh stage on query efficiency,
+  graded on EXPLAIN QUERY PLAN rather than on rows, plus an F6 "Explain plan"
+  button in the GUI and two new indexes the questions hit or miss.
