@@ -13,6 +13,10 @@ Behavioural checks (against testdb.db, read-only):
   * every solution runs and returns at least one row
   * every trap_sql is graded WRONG -- a trap the grader accepts is a question
     that teaches nothing, and this is what catches it
+  * every exercise carrying plan_requires/plan_forbids has a solution whose
+    own EXPLAIN QUERY PLAN satisfies them, and a trap that violates them --
+    efficiency questions return identical rows either way, so the plan is the
+    only thing that can distinguish right from wrong
   * every claim a prompt makes about the data actually holds -- stated ranges,
     row counts, "these rows appear with 0". trap_sql proves a query wrong; only
     this catches a prompt that describes data the database does not contain
@@ -131,6 +135,7 @@ def main():
     # --- behavioural ------------------------------------------------------
     conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
     traps_by_error = traps_by_result = claims_checked = 0
+    traps_by_plan = plans_checked = 0
     try:
         for e in ex.EXERCISES:
             rows, err = run(conn, e["solution"])
@@ -157,11 +162,31 @@ def main():
                     problems.append(
                         f"exercise {e['id']} claim {says!r} could not be evaluated: {exc}")
 
+            # An efficiency question asserts something about the query PLAN,
+            # because its slow and fast forms return identical rows. Check the
+            # reference actually takes the route it demands -- otherwise the
+            # question is unanswerable.
+            if e.get("plan_requires") or e.get("plan_forbids"):
+                ok, why = ex.plan_ok(e, ex.query_plan(conn, e["solution"]))
+                if not ok:
+                    problems.append(
+                        f"exercise {e['id']} ({e['title']}): its own solution "
+                        f"fails its plan assertion -- {why}")
+                else:
+                    plans_checked += 1
+
             trap_rows, trap_err = run(conn, e["trap_sql"])
             if trap_err:
                 traps_by_error += 1
                 continue
             passed, _ = ex.compare([tuple(r) for r in trap_rows], [tuple(r) for r in rows])
+            if passed and (e.get("plan_requires") or e.get("plan_forbids")):
+                # Returning the right rows is not enough for these: the trap is
+                # SUPPOSED to return them, and be rejected on its plan.
+                passed, _ = ex.plan_ok(e, ex.query_plan(conn, e["trap_sql"]))
+                if not passed:
+                    traps_by_plan += 1
+                    continue
             if passed:
                 problems.append(
                     f"exercise {e['id']} ({e['title']}): trap_sql grades as CORRECT, "
@@ -175,8 +200,11 @@ def main():
     print(f"ledger entries : {len(ledger)}")
     print(f"exercises      : {len(ex.EXERCISES)}")
     print(f"linked to GUI  : {linked}")
-    print(f"traps rejected : {traps_by_error + traps_by_result} / {len(ex.EXERCISES)} "
-          f"({traps_by_error} by SQL error, {traps_by_result} by wrong result)")
+    print(f"traps rejected : "
+          f"{traps_by_error + traps_by_result + traps_by_plan} / {len(ex.EXERCISES)} "
+          f"({traps_by_error} by SQL error, {traps_by_result} by wrong result, "
+          f"{traps_by_plan} by wrong query plan)")
+    print(f"plan assertions: {plans_checked} solutions take the route they demand")
     print(f"prompt claims  : {claims_checked} verified against the data")
 
     if problems:

@@ -1,47 +1,62 @@
 """Practice exercises with reference solutions, used by the GUI to grade answers.
 
-These 30 questions (ledger Q312-Q341) run on the college schema, re-seeded
-(SEED 257 -> 293) so every name, date, mark and amount differs from the last
-set. The tables are unchanged.
+These 30 questions (ledger Q342-Q371) run on the college schema, re-seeded and
+**scaled up** (SEED 293 -> 329). The tables are the same; the volumes are not:
 
-Same structure as Q282-Q311 -- graded easy to hard, with the tier names as the
-stages of the ramp rather than concept labels:
+  students     60 ->  4,000
+  sections     85 ->    774
+  enrolments  550 -> 67,000
+  payments    129 ->  7,800
 
-  1 Warm-up                 6  single table, no joins at all
-  2 First joins             6  two tables, outer joins, EXISTS
-  3 Recursion               4  kept gentle
-  4 Dates, sets and pivots  6
-  5 Window functions        5
-  6 Grain and correlation   3
+That is the point of this set. At 550 rows every query returns instantly no
+matter how it is written, so there is nothing to learn about cost. At 67,000 a
+query that scans the table takes 10ms and one that seeks an index takes 0.8ms,
+and the difference is visible.
 
-Same difficulty too: one concept per question, and every prompt states its
-grain. What is new is the QUESTIONS -- every one targets its concept through a
-different table or relationship than last time, so none of them is the previous
-set with the numbers changed.
+Structure is the usual easy-to-hard ramp, with one new stage on the end:
 
-The four recursion questions stay at the gentle end, but each is now a
-different SHAPE rather than the same walk from four starting points:
+  1 Warm-up                 4  single table, no joins
+  2 First joins             5
+  3 Recursion               4  still the gentlest in the set
+  4 Dates, sets and pivots  5
+  5 Window functions        4
+  6 Grain and correlation   2
+  7 Query efficiency        6  NEW
 
-  13  down a tree from its root       15 rows; a single join gives only 3
-  14  down a straight chain           two hops, no branching anywhere
-  15  up a branching chain            one course, five things blocked by it
-  16  a walk that includes its own    the anchor is the course itself, and
-      starting row                    UNION vs UNION ALL changes the answer
+Because the tables are large, the earlier questions mostly aggregate to a
+dimension -- per campus, per term, per faculty -- rather than listing rows.
+"Top mark per campus" would now return 707 rows and teach nothing.
+
+HOW THE EFFICIENCY QUESTIONS ARE GRADED
+---------------------------------------
+They cannot be graded on their result. The slow way and the fast way return
+exactly the same rows -- that is what makes the mistake worth making. So those
+six carry `plan_requires` / `plan_forbids`, checked against EXPLAIN QUERY PLAN,
+and a right answer has to be correct AND arrive by the intended route. A
+correct result reached by scanning 67,000 rows is marked wrong, with the plan
+shown so you can see why.
+
+Press F6 (or "Explain plan") on any query to see its plan and its timing. The
+three words worth knowing:
+
+  SCAN         every row of the table is read
+  SEARCH       an index is used to jump straight to the matching rows
+  TEMP B-TREE  the rows had to be sorted or grouped on the fly
 
 Each question carries:
 
   concept   the mistake or technique it drills
   solution  one correct answer
   trap_sql  the tempting WRONG query -- check_questions.py asserts the grader
-            rejects it, which is what proves the question actually has teeth
+            rejects it, which is what proves the question actually has teeth.
+            For the efficiency questions the trap returns the RIGHT rows and is
+            rejected on its plan.
   note      the lesson, shown in the GUI once you get it right
   claims    optional facts about the data that the prompt asserts, re-checked
             against the live database so a prompt cannot quietly go stale
 
 Grading compares your result against the reference as an unordered multiset of
-rows, with floats rounded to 2 decimals. Row order never matters and you do not
-need to remember ROUND(). Column count and values do matter -- each prompt
-states exactly what to return.
+rows, with floats rounded to 2 decimals. Row order never matters.
 
 Spoiler warning: the reference SQL is in this file.
 """
@@ -49,363 +64,233 @@ Spoiler warning: the reference SQL is in this file.
 EXERCISES = [
     # ============================================================ 1 Warm-up
     dict(
-        id=1, ledger="Q312", concept="A2", tier="1 - Warm-up",
-        title="Staffed and unstaffed",
+        id=1, ledger="Q342", concept="A2", tier="1 - Warm-up",
+        title="Funding recorded, and not",
         prompt=(
-            "One row per delivery mode: how many sections use it, and how many"
-            " of those have an instructor assigned.\n\n"
-            "Some sections are scheduled but not yet staffed, so the two counts"
-            " differ in every mode. One table, no joins.\n\n"
-            "Return: delivery, sections, staffed"
+            "One row per campus id: how many students it has, and how many of"
+            " them have a funding band recorded.\n\n"
+            "Some students have no funding_band, so the two counts differ at"
+            " every campus. One table, no joins.\n\n"
+            "Return: campus_id, students, with_band"
         ),
-        solution=(
-            "SELECT delivery, COUNT(*), COUNT(instructor_id)"
-            " FROM sections GROUP BY delivery"
-        ),
-        trap_sql=(
-            "SELECT delivery, COUNT(*), COUNT(*) FROM sections GROUP BY delivery"
-        ),
+        solution=("SELECT campus_id, COUNT(*), COUNT(funding_band)"
+                  " FROM students GROUP BY campus_id"),
+        trap_sql=("SELECT campus_id, COUNT(*), COUNT(*)"
+                  " FROM students GROUP BY campus_id"),
         note="COUNT(*) counts rows. COUNT(column) counts rows where that column"
              " is not NULL. That one difference is the cheapest way to ask 'how"
              " many of these have a value' -- no CASE, no subquery. It is also"
              " why COUNT(a column) after a LEFT JOIN gives a real zero instead"
              " of a phantom 1.",
         claims=[
-            ("three modes, 85 sections, 73 staffed",
-             lambda rows, c: len(rows) == 3
-             and sum(r[1] for r in rows) == 85
-             and sum(r[2] for r in rows) == 73),
+            ("four campuses, 4000 students, fewer with a band",
+             lambda rows, c: len(rows) == 4
+             and sum(r[1] for r in rows) == 4000
+             and sum(r[2] for r in rows) < 4000),
         ],
     ),
     dict(
-        id=2, ledger="Q313", concept="A3", tier="1 - Warm-up",
-        title="Which assessment kinds cluster in 2026",
+        id=2, ledger="Q343", concept="A3", tier="1 - Warm-up",
+        title="Which enrolment statuses were common in 2026",
         prompt=(
-            "Counting only assessments due on or after 2026-01-01, one row per"
-            " kind, keeping the kinds with at least 15 of them.\n\n"
-            "Two of the four kinds clear the bar. One table, no joins.\n\n"
-            "Return: kind, assessments"
+            "Counting only enrolments made on or after 2026-01-01, one row per"
+            " status, keeping the statuses with at least 2,500 of them.\n\n"
+            "Two of the three statuses clear the bar. One table, no joins.\n\n"
+            "Return: status, enrolments"
         ),
-        solution=(
-            "SELECT kind, COUNT(*) FROM assessments"
-            " WHERE due_on >= '2026-01-01'"
-            " GROUP BY kind HAVING COUNT(*) >= 15"
-        ),
-        trap_sql=(
-            "SELECT kind, COUNT(*) FROM assessments GROUP BY kind"
-            " HAVING due_on >= '2026-01-01' AND COUNT(*) >= 15"
-        ),
+        solution=("SELECT status, COUNT(*) FROM enrolments"
+                  " WHERE enrolled_on >= '2026-01-01'"
+                  " GROUP BY status HAVING COUNT(*) >= 2500"),
+        trap_sql=("SELECT status, COUNT(*) FROM enrolments GROUP BY status"
+                  " HAVING enrolled_on >= '2026-01-01' AND COUNT(*) >= 2500"),
         note="WHERE throws away ROWS before grouping; HAVING throws away GROUPS"
              " after. The date test is about a row, so it belongs in WHERE. Put"
              " it in HAVING and SQLite does not complain -- it picks one"
-             " arbitrary row's due_on to test, and every count you get back is"
-             " over all history rather than 2026.",
+             " arbitrary row's enrolled_on to test, and every count you get"
+             " back is over all history rather than 2026.",
         claims=[
-            ("two kinds clear 15 in 2026",
-             lambda rows, c: len(rows) == 2 and all(r[1] >= 15 for r in rows)),
+            ("two statuses clear 2500 in 2026",
+             lambda rows, c: len(rows) == 2 and all(r[1] >= 2500 for r in rows)),
         ],
     ),
     dict(
-        id=3, ledger="Q314", concept="general", tier="1 - Warm-up",
-        title="Instructors by pay band",
+        id=3, ledger="Q344", concept="general", tier="1 - Warm-up",
+        title="Sections by size",
         prompt=(
-            "Put every instructor into one of three bands by hourly_rate and"
-            " count them:\n"
-            "  'senior'   70 or more\n"
-            "  'standard' 50 up to but not including 70\n"
-            "  'junior'   everything else\n\n"
-            "All 16 instructors land in exactly one band.\n\n"
-            "Return: band, instructors"
+            "Put every section into one of three bands by capacity and count"
+            " them:\n"
+            "  'large'  120 or more\n"
+            "  'medium' 60 up to but not including 120\n"
+            "  'small'  everything else\n\n"
+            "All 774 sections land in exactly one band.\n\n"
+            "Return: band, sections"
         ),
-        solution=(
-            "SELECT CASE WHEN hourly_rate >= 70 THEN 'senior'"
-            " WHEN hourly_rate >= 50 THEN 'standard'"
-            " ELSE 'junior' END, COUNT(*) FROM instructors GROUP BY 1"
-        ),
-        trap_sql=(
-            "SELECT CASE WHEN hourly_rate >= 50 THEN 'standard'"
-            " WHEN hourly_rate >= 70 THEN 'senior'"
-            " ELSE 'junior' END, COUNT(*) FROM instructors GROUP BY 1"
-        ),
+        solution=("SELECT CASE WHEN capacity >= 120 THEN 'large'"
+                  " WHEN capacity >= 60 THEN 'medium'"
+                  " ELSE 'small' END, COUNT(*) FROM sections GROUP BY 1"),
+        trap_sql=("SELECT CASE WHEN capacity >= 60 THEN 'medium'"
+                  " WHEN capacity >= 120 THEN 'large'"
+                  " ELSE 'small' END, COUNT(*) FROM sections GROUP BY 1"),
         note="CASE is first-match-wins, so the order of the WHEN branches is"
              " part of the logic, not a matter of taste. Test the narrowest"
-             " band first. Put the 50 test ahead of the 70 test and every"
-             " senior matches it on the way past -- the 'senior' branch becomes"
-             " unreachable and never appears at all. The check that catches it"
-             " is arithmetic: do the bands sum to 16?",
+             " band first. Put the 60 test ahead of the 120 test and every"
+             " large section matches it on the way past -- the 'large' branch"
+             " becomes unreachable and never appears at all. The check that"
+             " catches it is arithmetic: do the bands sum to 774?",
         claims=[
-            ("three bands covering all 16 instructors",
+            ("three bands covering all 774 sections",
              lambda rows, c: len(rows) == 3
-             and sum(r[1] for r in rows) == 16),
+             and sum(r[1] for r in rows) == 774),
         ],
     ),
     dict(
-        id=4, ledger="Q315", concept="C7", tier="1 - Warm-up",
-        title="Graded, dropped, or still going",
+        id=4, ledger="Q345", concept="A2", tier="1 - Warm-up",
+        title="Average mark, where there is one",
         prompt=(
-            "Classify every enrolment into one of three states and count"
-            " them:\n"
-            "  'graded'      if grade has a value\n"
-            "  'dropped'     if it has no grade and status is withdrawn\n"
-            "  'in progress' otherwise\n\n"
-            "All 550 enrolments land in exactly one state.\n\n"
-            "Return: state, enrolments"
+            "One row per campus: how many enrolments its students made, how"
+            " many of those carry a grade, and the average of the grades that"
+            " exist.\n\n"
+            "Only completed enrolments are graded, so the average must be over"
+            " the graded ones alone -- not over everyone enrolled.\n\n"
+            "Return: campus_id, enrolments, graded, avg_grade"
         ),
-        solution=(
-            "SELECT CASE WHEN grade IS NOT NULL THEN 'graded'"
-            " WHEN status = 'withdrawn' THEN 'dropped'"
-            " ELSE 'in progress' END, COUNT(*) FROM enrolments GROUP BY 1"
-        ),
-        trap_sql=(
-            "SELECT CASE WHEN grade <> NULL THEN 'graded'"
-            " WHEN status = 'withdrawn' THEN 'dropped'"
-            " ELSE 'in progress' END, COUNT(*) FROM enrolments GROUP BY 1"
-        ),
-        note="<> NULL is never true, and neither is = NULL. Both evaluate to"
-             " NULL, which CASE treats as not-matched, so that branch can never"
-             " fire and every graded enrolment falls through to a later one."
-             " The only tests that work on a NULL are IS NULL and IS NOT NULL.",
-        claims=[
-            ("three states covering all 550 enrolments",
-             lambda rows, c: len(rows) == 3
-             and sum(r[1] for r in rows) == 550),
-            ("graded matches the rows that have a grade",
-             lambda rows, c: dict(rows)["graded"] == c.execute(
-                 "SELECT COUNT(*) FROM enrolments WHERE grade IS NOT NULL"
-             ).fetchone()[0]),
-        ],
-    ),
-    dict(
-        id=5, ledger="Q316", concept="C7", tier="1 - Warm-up",
-        title="Everyone not on the top pay grade",
-        prompt=(
-            "Count instructors by pay grade, excluding grade 5, and counting"
-            " the ones with NO pay grade recorded as 'none'.\n\n"
-            "15 of the 16 instructors are not on grade 5 -- seven of them"
-            " because they have no grade at all.\n\n"
-            "Return: grade, instructors  (text: '1'..'4' or 'none')"
-        ),
-        solution=(
-            "SELECT COALESCE(CAST(pay_grade AS TEXT), 'none'), COUNT(*)"
-            " FROM instructors WHERE pay_grade IS NOT 5 GROUP BY 1"
-        ),
-        trap_sql=(
-            "SELECT COALESCE(CAST(pay_grade AS TEXT), 'none'), COUNT(*)"
-            " FROM instructors WHERE pay_grade <> 5 GROUP BY 1"
-        ),
-        note="pay_grade <> 5 drops the seven ungraded instructors without a"
-             " word, because NULL <> 5 is NULL rather than true. ANY comparison"
-             " on a nullable column silently excludes the NULLs. SQLite's IS"
-             " NOT is null-safe and reads the way you meant it; the portable"
-             " spelling is (pay_grade IS NULL OR pay_grade <> 5).",
-        claims=[
-            ("15 instructors, seven of them ungraded",
-             lambda rows, c: sum(r[1] for r in rows) == 15
-             and dict(rows)["none"] == 7),
-        ],
-    ),
-    dict(
-        id=6, ledger="Q317", concept="A2", tier="1 - Warm-up",
-        title="Average copies held, where it is known",
-        prompt=(
-            "One row per required flag (0 and 1): how many reading-list entries"
-            " have it, how many of those record a copies_held figure, and the"
-            " average of the figures that exist.\n\n"
-            "Plenty of entries have no copy target set. The average must be"
-            " over the recorded ones only. One table, no joins.\n\n"
-            "Return: required, entries, with_copies, avg_copies"
-        ),
-        solution=(
-            "SELECT required, COUNT(*), COUNT(copies_held),"
-            " ROUND(AVG(copies_held), 2) FROM course_books GROUP BY required"
-        ),
-        trap_sql=(
-            "SELECT required, COUNT(*), COUNT(copies_held),"
-            " ROUND(SUM(copies_held) * 1.0 / COUNT(*), 2)"
-            " FROM course_books GROUP BY required"
-        ),
+        solution=("SELECT st.campus_id, COUNT(*), COUNT(e.grade),"
+                  " ROUND(AVG(e.grade), 2) FROM enrolments e"
+                  " JOIN students st ON st.student_id = e.student_id"
+                  " GROUP BY 1"),
+        trap_sql=("SELECT st.campus_id, COUNT(*), COUNT(e.grade),"
+                  " ROUND(SUM(e.grade) * 1.0 / COUNT(*), 2) FROM enrolments e"
+                  " JOIN students st ON st.student_id = e.student_id"
+                  " GROUP BY 1"),
         note="AVG already ignores NULLs -- it divides by the number of non-NULL"
              " values, not by the number of rows. Rebuilding it as SUM/COUNT(*)"
-             " quietly puts the entries with no target into the denominator and"
-             " drags both averages down. If you ever do want SUM over rows"
-             " rather than values, write SUM(COALESCE(copies_held, 0)) and say"
-             " so.",
+             " quietly puts the ungraded enrolments into the denominator and"
+             " drags every average down by about a third. If you ever do want"
+             " SUM over rows rather than values, write SUM(COALESCE(grade, 0))"
+             " and say so.",
         claims=[
-            ("two rows, each with fewer recorded than total",
-             lambda rows, c: len(rows) == 2
+            ("four campuses, each with fewer graded than enrolled",
+             lambda rows, c: len(rows) == 4
              and all(r[2] < r[1] for r in rows)),
+            ("every average is a plausible mark",
+             lambda rows, c: all(50 < r[3] < 80 for r in rows)),
         ],
     ),
     # ======================================================= 2 First joins
     dict(
-        id=7, ledger="Q318", concept="J2", tier="2 - First joins",
-        title="Every student, enrolled or not",
+        id=5, ledger="Q346", concept="J2", tier="2 - First joins",
+        title="Every course, scheduled or not",
         prompt=(
-            "One row for every student on the books: id, name, and how many"
-            " enrolments they have made.\n\n"
-            "Nine students have never enrolled on anything. They must appear"
-            " with 0, so all 60 students come back.\n\n"
-            "Return: student_id, name, enrolments"
+            "One row for every course in the catalogue: its id, code, and how"
+            " many sections have ever been scheduled for it.\n\n"
+            "Five courses have never been scheduled. They must appear with 0,"
+            " so all 34 courses come back.\n\n"
+            "Return: course_id, code, sections"
         ),
-        solution=(
-            "SELECT st.student_id, st.name, COUNT(e.enrolment_id)"
-            " FROM students st LEFT JOIN enrolments e"
-            " ON e.student_id = st.student_id GROUP BY 1, 2"
-        ),
-        trap_sql=(
-            "SELECT st.student_id, st.name, COUNT(e.enrolment_id)"
-            " FROM students st JOIN enrolments e"
-            " ON e.student_id = st.student_id GROUP BY 1, 2"
-        ),
-        note="An inner join can only return students who matched, so the nine"
-             " who never enrolled vanish rather than showing 0 -- and 'the ones"
+        solution=("SELECT c.course_id, c.code, COUNT(s.section_id)"
+                  " FROM courses c LEFT JOIN sections s"
+                  " ON s.course_id = c.course_id GROUP BY 1, 2"),
+        trap_sql=("SELECT c.course_id, c.code, COUNT(s.section_id)"
+                  " FROM courses c JOIN sections s"
+                  " ON s.course_id = c.course_id GROUP BY 1, 2"),
+        note="An inner join can only return courses that matched, so the five"
+             " unscheduled ones vanish rather than showing 0 -- and 'the ones"
              " with none' is usually what the question is really about. Note"
              " the pairing: LEFT JOIN plus COUNT(a column from the right side)."
-             " COUNT(*) there would give those nine a 1.",
-        claims=[
-            ("all 60 students, nine with none",
-             lambda rows, c: len(rows) == 60
-             and sum(1 for r in rows if r[2] == 0) == 9),
-        ],
+             " COUNT(*) there would give those five a 1.",
+        claims=[("all 34 courses, five with none",
+                 lambda rows, c: len(rows) == 34
+                 and sum(1 for r in rows if r[2] == 0) == 5)],
     ),
     dict(
-        id=8, ledger="Q319", concept="J2", tier="2 - First joins",
-        title="Level-4 courses per department",
+        id=6, ledger="Q347", concept="J2", tier="2 - First joins",
+        title="Online teaching per course",
         prompt=(
-            "One row for every department: id, name, and how many LEVEL-4"
-            " courses it owns.\n\n"
-            "Only three departments run anything at level 4. The other six must"
-            " appear with 0, so all 9 departments come back.\n\n"
-            "Return: department_id, name, level4_courses"
+            "One row for every course: id, code, and how many of its sections"
+            " are delivered ONLINE.\n\n"
+            "Six courses have none -- five were never scheduled at all, and one"
+            " runs only in person. They must appear with 0, so all 34 courses"
+            " come back.\n\n"
+            "Return: course_id, code, online_sections"
         ),
-        solution=(
-            "SELECT d.department_id, d.name, COUNT(c.course_id)"
-            " FROM departments d LEFT JOIN courses c"
-            " ON c.department_id = d.department_id AND c.level = 4"
-            " GROUP BY 1, 2"
-        ),
-        trap_sql=(
-            "SELECT d.department_id, d.name, COUNT(c.course_id)"
-            " FROM departments d LEFT JOIN courses c"
-            " ON c.department_id = d.department_id"
-            " WHERE c.level = 4 GROUP BY 1, 2"
-        ),
+        solution=("SELECT c.course_id, c.code, COUNT(s.section_id)"
+                  " FROM courses c LEFT JOIN sections s"
+                  " ON s.course_id = c.course_id AND s.delivery = 'online'"
+                  " GROUP BY 1, 2"),
+        trap_sql=("SELECT c.course_id, c.code, COUNT(s.section_id)"
+                  " FROM courses c LEFT JOIN sections s"
+                  " ON s.course_id = c.course_id"
+                  " WHERE s.delivery = 'online' GROUP BY 1, 2"),
         note="A condition on the right-hand table has to go in the ON clause of"
              " a LEFT JOIN. In WHERE it runs AFTER the join has padded the"
-             " unmatched departments with NULLs, and NULL = 4 is not true, so"
-             " those rows are filtered straight back out and the outer join"
-             " silently becomes an inner one -- three rows instead of nine.",
-        claims=[
-            ("all 9 departments, six with none",
-             lambda rows, c: len(rows) == 9
-             and sum(1 for r in rows if r[2] == 0) == 6),
-        ],
+             " unmatched courses with NULLs, and NULL = 'online' is not true,"
+             " so those rows are filtered straight back out and the outer join"
+             " silently becomes an inner one -- 28 rows instead of 34. Pair it"
+             " with COUNT(a column from the right side), or the six courses"
+             " with none would report 1.",
+        claims=[("all 34 courses, six with none",
+                 lambda rows, c: len(rows) == 34
+                 and sum(1 for r in rows if r[2] == 0) == 6),
+                ("an inner join would return only 28",
+                 lambda rows, c: c.execute(
+                     "SELECT COUNT(*) FROM (SELECT c.course_id FROM courses c"
+                     " JOIN sections s ON s.course_id = c.course_id"
+                     " WHERE s.delivery = 'online' GROUP BY 1)"
+                 ).fetchone()[0] == 28)],
     ),
     dict(
-        id=9, ledger="Q320", concept="J1", tier="2 - First joins",
-        title="Room clashes",
+        id=7, ledger="Q348", concept="J1", tier="2 - First joins",
+        title="Courses that sit alongside each other",
         prompt=(
-            "Pairs of sections booked into the same room in the same term.\n\n"
-            "Each pair once, not twice, and no section paired with itself."
-            " Order each pair so that section_a is the LOWER section_id. There"
-            " are 51 pairs.\n\n"
-            "Return: term_id, room, section_a, section_b"
+            "Pairs of courses in the same department at the same level.\n\n"
+            "Each pair once, not twice, and no course paired with itself. Order"
+            " each pair so that code_a belongs to the LOWER course_id. There"
+            " are 4 pairs.\n\n"
+            "Return: department_id, code_a, code_b"
         ),
-        solution=(
-            "SELECT a.term_id, a.room, a.section_id, b.section_id"
-            " FROM sections a JOIN sections b ON b.room = a.room"
-            " AND b.term_id = a.term_id AND b.section_id > a.section_id"
-        ),
-        trap_sql=(
-            "SELECT a.term_id, a.room, a.section_id, b.section_id"
-            " FROM sections a JOIN sections b ON b.room = a.room"
-            " AND b.term_id = a.term_id AND b.section_id <> a.section_id"
-        ),
+        solution=("SELECT a.department_id, a.code, b.code FROM courses a"
+                  " JOIN courses b ON b.department_id = a.department_id"
+                  " AND b.level = a.level AND b.course_id > a.course_id"),
+        trap_sql=("SELECT a.department_id, a.code, b.code FROM courses a"
+                  " JOIN courses b ON b.department_id = a.department_id"
+                  " AND b.level = a.level AND b.course_id <> a.course_id"),
         note="<> only stops a row pairing with itself; it still lets each pair"
              " through in both directions, so you get exactly twice as many"
              " rows as there are pairs. Use > (or <) on the id instead: it"
              " excludes the self-match AND fixes an order, so only one of the"
              " two directions survives.",
-        claims=[
-            ("51 pairs, none a mirror of another",
-             lambda rows, c: len(rows) == 51
-             and len({frozenset((r[2], r[3])) for r in rows}) == 51),
-            ("section_a is always the lower id",
-             lambda rows, c: all(r[2] < r[3] for r in rows)),
-        ],
+        claims=[("four pairs, none a mirror of another",
+                 lambda rows, c: len(rows) == 4
+                 and len({frozenset((r[1], r[2])) for r in rows}) == 4)],
     ),
     dict(
-        id=10, ledger="Q321", concept="J2", tier="2 - First joins",
-        title="Students who never enrolled",
+        id=8, ledger="Q349", concept="J2", tier="2 - First joins",
+        title="Courses nobody has scheduled",
         prompt=(
-            "Every student who has never enrolled on anything at all.\n\n"
+            "Every course that has never had a section scheduled.\n\n"
             "Write it as an outer join that keeps the non-matches, rather than"
-            " with NOT IN. There are 9 such students.\n\n"
-            "Return: student_id, name"
-        ),
-        solution=(
-            "SELECT st.student_id, st.name FROM students st"
-            " LEFT JOIN enrolments e ON e.student_id = st.student_id"
-            " WHERE e.enrolment_id IS NULL"
-        ),
-        trap_sql=(
-            "SELECT st.student_id, st.name FROM students st"
-            " LEFT JOIN enrolments e ON e.student_id = st.student_id"
-            " AND e.enrolment_id IS NULL"
-        ),
-        note="The anti-join is two halves and both matter: LEFT JOIN to keep"
-             " the unmatched students, then WHERE <right column> IS NULL to"
-             " keep ONLY those. Moving that test into ON changes its meaning"
-             " entirely -- it becomes part of what counts as a match, matches"
-             " nothing, and hands back all 60 students. This is question 7 with"
-             " the survivors filtered rather than counted.",
-        claims=[
-            ("9 students, none of them in enrolments",
-             lambda rows, c: len(rows) == 9
-             and not {r[0] for r in rows} & {
-                 x[0] for x in c.execute(
-                     "SELECT DISTINCT student_id FROM enrolments")}),
-        ],
-    ),
-    dict(
-        id=11, ledger="Q322", concept="E1", tier="2 - First joins",
-        title="Courses with an unstaffed section",
-        prompt=(
-            "Every course that has at least one section with no instructor"
-            " assigned.\n\n"
-            "One row per course, however many unstaffed sections it has -- and"
-            " some have more than one. Nine courses qualify.\n\n"
+            " with NOT IN. There are 5 such courses.\n\n"
             "Return: course_id, code"
         ),
-        solution=(
-            "SELECT c.course_id, c.code FROM courses c"
-            " WHERE EXISTS (SELECT 1 FROM sections s"
-            " WHERE s.course_id = c.course_id AND s.instructor_id IS NULL)"
-        ),
-        trap_sql=(
-            "SELECT c.course_id, c.code FROM courses c"
-            " JOIN sections s ON s.course_id = c.course_id"
-            " WHERE s.instructor_id IS NULL"
-        ),
-        note="Joining down to sections to answer a question ABOUT courses"
-             " changes the grain: you get one row per unstaffed section, so a"
-             " course with two of them appears twice. EXISTS asks the question"
-             " without changing what a row is -- it returns yes or no and stops"
-             " at the first hit. SELECT DISTINCT would patch the join, but"
-             " EXISTS says what you meant.",
-        claims=[
-            ("nine courses, none listed twice",
-             lambda rows, c: len(rows) == 9
-             and len({r[0] for r in rows}) == 9),
-            ("some course has two unstaffed sections",
-             lambda rows, c: c.execute(
-                 "SELECT MAX(n) FROM (SELECT COUNT(*) n FROM sections"
-                 " WHERE instructor_id IS NULL GROUP BY course_id)"
-             ).fetchone()[0] > 1),
-        ],
+        solution=("SELECT c.course_id, c.code FROM courses c"
+                  " LEFT JOIN sections s ON s.course_id = c.course_id"
+                  " WHERE s.section_id IS NULL"),
+        trap_sql=("SELECT c.course_id, c.code FROM courses c"
+                  " LEFT JOIN sections s ON s.course_id = c.course_id"
+                  " AND s.section_id IS NULL"),
+        note="The anti-join is two halves and both matter: LEFT JOIN to keep"
+             " the unmatched courses, then WHERE <right column> IS NULL to keep"
+             " ONLY those. Moving that test into ON changes its meaning"
+             " entirely -- it becomes part of what counts as a match, matches"
+             " nothing, and hands back all 34 courses.",
+        claims=[("5 courses, none of them in sections",
+                 lambda rows, c: len(rows) == 5
+                 and not {r[0] for r in rows} & {
+                     x[0] for x in c.execute(
+                         "SELECT DISTINCT course_id FROM sections")})],
     ),
     dict(
-        id=12, ledger="Q323", concept="E1", tier="2 - First joins",
+        id=9, ledger="Q350", concept="E1", tier="2 - First joins",
         title="Instructors who mentor nobody",
         prompt=(
             "Every instructor who is nobody's mentor. Twelve of the sixteen"
@@ -415,72 +300,63 @@ EXERCISES = [
             " obvious answer wrong.\n\n"
             "Return: instructor_id, name"
         ),
-        solution=(
-            "SELECT i.instructor_id, i.name FROM instructors i"
-            " WHERE NOT EXISTS (SELECT 1 FROM instructors x"
-            " WHERE x.mentor_id = i.instructor_id)"
-        ),
-        trap_sql=(
-            "SELECT i.instructor_id, i.name FROM instructors i"
-            " WHERE i.instructor_id NOT IN (SELECT mentor_id FROM instructors)"
-        ),
+        solution=("SELECT i.instructor_id, i.name FROM instructors i"
+                  " WHERE NOT EXISTS (SELECT 1 FROM instructors x"
+                  " WHERE x.mentor_id = i.instructor_id)"),
+        trap_sql=("SELECT i.instructor_id, i.name FROM instructors i"
+                  " WHERE i.instructor_id NOT IN"
+                  " (SELECT mentor_id FROM instructors)"),
         note="NOT IN over a list containing even one NULL returns no rows at"
              " all. 'Is 7 not in (3, 5, NULL)?' -- SQL cannot say no, because"
              " NULL might have been 7, so the answer is NULL and nothing"
-             " passes. NOT EXISTS has no such hole. Either use NOT EXISTS, or"
-             " add WHERE mentor_id IS NOT NULL inside the subquery.",
-        claims=[
-            ("twelve instructors, and mentor_id really does contain a NULL",
-             lambda rows, c: len(rows) == 12 and c.execute(
-                 "SELECT COUNT(*) FROM instructors WHERE mentor_id IS NULL"
-             ).fetchone()[0] == 1),
-        ],
+             " passes. NOT EXISTS has no such hole, and neither does a"
+             " LEFT JOIN ... IS NULL anti-join.",
+        claims=[("twelve instructors, and mentor_id really contains a NULL",
+                 lambda rows, c: len(rows) == 12 and c.execute(
+                     "SELECT COUNT(*) FROM instructors WHERE mentor_id IS NULL"
+                 ).fetchone()[0] == 1)],
     ),
     # ========================================================= 3 Recursion
     dict(
-        id=13, ledger="Q324", concept="R1", tier="3 - Recursion",
+        id=10, ledger="Q351", concept="R1", tier="3 - Recursion",
         title="Everyone under Margaret Ashworth",
         prompt=(
             "Margaret Ashworth is the one instructor with no mentor. List"
             " everyone below her: the people she mentors, the people they"
             " mentor, and so on.\n\n"
-            "Fifteen rows -- everyone except Margaret herself. Only three are"
-            " her direct mentees, which is why a single join is not enough.\n\n"
+            "Fifteen rows -- everyone except Margaret. Only three are her"
+            " direct mentees, which is why a single join is not enough.\n\n"
             "Return: instructor_id, name"
         ),
-        solution=(
-            "WITH RECURSIVE below(id, name) AS ("
-            " SELECT instructor_id, name FROM instructors"
-            " WHERE mentor_id = (SELECT instructor_id FROM instructors"
-            " WHERE name = 'Margaret Ashworth')"
-            " UNION ALL"
-            " SELECT i.instructor_id, i.name FROM instructors i"
-            " JOIN below b ON i.mentor_id = b.id)"
-            " SELECT id, name FROM below"
-        ),
-        trap_sql=(
-            "SELECT i.instructor_id, i.name FROM instructors i"
-            " WHERE i.mentor_id = (SELECT instructor_id FROM instructors"
-            " WHERE name = 'Margaret Ashworth')"
-        ),
+        solution=("WITH RECURSIVE below(id, name) AS ("
+                  " SELECT instructor_id, name FROM instructors"
+                  " WHERE mentor_id = (SELECT instructor_id FROM instructors"
+                  " WHERE name = 'Margaret Ashworth')"
+                  " UNION ALL"
+                  " SELECT i.instructor_id, i.name FROM instructors i"
+                  " JOIN below b ON i.mentor_id = b.id)"
+                  " SELECT id, name FROM below"),
+        trap_sql=("SELECT i.instructor_id, i.name FROM instructors i"
+                  " WHERE i.mentor_id = (SELECT instructor_id FROM instructors"
+                  " WHERE name = 'Margaret Ashworth')"),
         note="The plain query gives her three DIRECT mentees and stops. The"
              " recursion carries on down: each pass takes whoever was found"
              " last time and looks for people mentored by them, until a pass"
              " finds nobody. Anchor is one lookup; step is one join back to the"
-             " CTE. That is the whole mechanism.",
-        claims=[
-            ("15 rows, and Margaret is not one of them",
-             lambda rows, c: len(rows) == 15
-             and not any(r[1] == 'Margaret Ashworth' for r in rows)),
-            ("only three are direct mentees, so one join would miss twelve",
-             lambda rows, c: c.execute(
-                 "SELECT COUNT(*) FROM instructors WHERE mentor_id ="
-                 " (SELECT instructor_id FROM instructors"
-                 " WHERE name = 'Margaret Ashworth')").fetchone()[0] == 3),
-        ],
+             " CTE. Note the step's SELECT draws from `instructors`, not from"
+             " `below` -- a step that only selects from the CTE cannot advance"
+             " and will loop forever.",
+        claims=[("15 rows, Margaret not among them",
+                 lambda rows, c: len(rows) == 15
+                 and not any(r[1] == 'Margaret Ashworth' for r in rows)),
+                ("only three are direct mentees",
+                 lambda rows, c: c.execute(
+                     "SELECT COUNT(*) FROM instructors WHERE mentor_id ="
+                     " (SELECT instructor_id FROM instructors"
+                     " WHERE name = 'Margaret Ashworth')").fetchone()[0] == 3)],
     ),
     dict(
-        id=14, ledger="Q325", concept="R1", tier="3 - Recursion",
+        id=11, ledger="Q352", concept="R1", tier="3 - Recursion",
         title="What Audit and Assurance needs",
         prompt=(
             "Course ACC301 'Audit and Assurance' has a prerequisite, and that"
@@ -490,171 +366,134 @@ EXERCISES = [
             " hop -- so it is two rows. ACC301 itself is not in the answer.\n\n"
             "Return: code, title"
         ),
-        solution=(
-            "WITH RECURSIVE need(id) AS ("
-            " SELECT requires_course_id FROM prerequisites"
-            " WHERE course_id = (SELECT course_id FROM courses"
-            " WHERE code = 'ACC301')"
-            " UNION"
-            " SELECT p.requires_course_id FROM prerequisites p"
-            " JOIN need n ON p.course_id = n.id)"
-            " SELECT c.code, c.title FROM courses c"
-            " JOIN need ON need.id = c.course_id"
-        ),
-        trap_sql=(
-            "SELECT c.code, c.title FROM prerequisites p"
-            " JOIN courses c ON c.course_id = p.requires_course_id"
-            " WHERE p.course_id = (SELECT course_id FROM courses"
-            " WHERE code = 'ACC301')"
-        ),
+        solution=("WITH RECURSIVE need(id) AS ("
+                  " SELECT requires_course_id FROM prerequisites"
+                  " WHERE course_id = (SELECT course_id FROM courses"
+                  " WHERE code = 'ACC301')"
+                  " UNION"
+                  " SELECT p.requires_course_id FROM prerequisites p"
+                  " JOIN need n ON p.course_id = n.id)"
+                  " SELECT c.code, c.title FROM courses c"
+                  " JOIN need ON need.id = c.course_id"),
+        trap_sql=("SELECT c.code, c.title FROM prerequisites p"
+                  " JOIN courses c ON c.course_id = p.requires_course_id"
+                  " WHERE p.course_id = (SELECT course_id FROM courses"
+                  " WHERE code = 'ACC301')"),
         note="A single join to prerequisites gives the DIRECT requirement and"
-             " stops -- one row, where the answer is two. Same mechanism as"
-             " question 13, pointed at a different table and travelling the"
-             " other way: down a chain of requirements instead of down a tree"
-             " of people.",
-        claims=[
-            ("two courses, and ACC301 is not one of them",
-             lambda rows, c: len(rows) == 2
-             and not any(r[0] == 'ACC301' for r in rows)),
-            ("ACC301 has exactly one direct prerequisite",
-             lambda rows, c: c.execute(
-                 "SELECT COUNT(*) FROM prerequisites WHERE course_id ="
-                 " (SELECT course_id FROM courses WHERE code = 'ACC301')"
-             ).fetchone()[0] == 1),
-        ],
+             " stops -- one row, where the answer is two. Keep the CTE carrying"
+             " ids only and join `courses` once at the end: carrying code and"
+             " title through the walk means joining `courses` inside the step"
+             " too, for information the traversal never uses.",
+        claims=[("two courses, ACC301 not among them",
+                 lambda rows, c: len(rows) == 2
+                 and not any(r[0] == 'ACC301' for r in rows))],
     ),
     dict(
-        id=15, ledger="Q326", concept="R1", tier="3 - Recursion",
-        title="What is blocked by Computer Systems",
+        id=12, ledger="Q353", concept="R1", tier="3 - Recursion",
+        title="What is blocked by Programming Foundations",
         prompt=(
-            "The other way round. Every course that requires CMP110 'Computer"
-            " Systems', directly or indirectly -- everything a student could"
-            " not take until they had passed it.\n\n"
-            "Five courses, and the chain branches: two require it directly, and"
-            " the rest come through those.\n\n"
+            "The other way round. Every course that requires CMP101"
+            " 'Programming Foundations', directly or indirectly.\n\n"
+            "Five courses, and the chain branches: three require it directly,"
+            " and the rest come through those.\n\n"
             "Return: code, title"
         ),
-        solution=(
-            "WITH RECURSIVE blocked(id) AS ("
-            " SELECT course_id FROM prerequisites"
-            " WHERE requires_course_id = (SELECT course_id FROM courses"
-            " WHERE code = 'CMP110')"
-            " UNION"
-            " SELECT p.course_id FROM prerequisites p"
-            " JOIN blocked b ON p.requires_course_id = b.id)"
-            " SELECT c.code, c.title FROM courses c"
-            " JOIN blocked ON blocked.id = c.course_id"
-        ),
-        trap_sql=(
-            "WITH RECURSIVE blocked(id) AS ("
-            " SELECT requires_course_id FROM prerequisites"
-            " WHERE course_id = (SELECT course_id FROM courses"
-            " WHERE code = 'CMP110')"
-            " UNION"
-            " SELECT p.requires_course_id FROM prerequisites p"
-            " JOIN blocked b ON p.course_id = b.id)"
-            " SELECT c.code, c.title FROM courses c"
-            " JOIN blocked ON blocked.id = c.course_id"
-        ),
+        solution=("WITH RECURSIVE blocked(id) AS ("
+                  " SELECT course_id FROM prerequisites"
+                  " WHERE requires_course_id = (SELECT course_id FROM courses"
+                  " WHERE code = 'CMP101')"
+                  " UNION"
+                  " SELECT p.course_id FROM prerequisites p"
+                  " JOIN blocked b ON p.requires_course_id = b.id)"
+                  " SELECT c.code, c.title FROM courses c"
+                  " JOIN blocked ON blocked.id = c.course_id"),
+        trap_sql=("WITH RECURSIVE blocked(id) AS ("
+                  " SELECT requires_course_id FROM prerequisites"
+                  " WHERE course_id = (SELECT course_id FROM courses"
+                  " WHERE code = 'CMP101')"
+                  " UNION"
+                  " SELECT p.requires_course_id FROM prerequisites p"
+                  " JOIN blocked b ON p.course_id = b.id)"
+                  " SELECT c.code, c.title FROM courses c"
+                  " JOIN blocked ON blocked.id = c.course_id"),
         note="A prerequisites row reads 'course_id requires"
-             " requires_course_id'. Question 14 started from course_id and"
+             " requires_course_id'. Question 11 started from course_id and"
              " collected requires_course_id; this one starts from"
              " requires_course_id and collects course_id. Swap the two columns"
-             " in BOTH the anchor and the step and the same query walks the"
-             " other way. Swap only one and you walk a hop out then back,"
-             " which is why the trap returns nothing at all.",
-        claims=[
-            ("five courses, all at a higher level than CMP110",
-             lambda rows, c: len(rows) == 5),
-            ("exactly two require it directly",
-             lambda rows, c: c.execute(
-                 "SELECT COUNT(*) FROM prerequisites WHERE requires_course_id ="
-                 " (SELECT course_id FROM courses WHERE code = 'CMP110')"
-             ).fetchone()[0] == 2),
-        ],
+             " in BOTH the anchor and the step. Swap only one and you walk a"
+             " hop out then back, which is why the trap returns nothing.",
+        claims=[("five courses",
+                 lambda rows, c: len(rows) == 5)],
     ),
     dict(
-        id=16, ledger="Q327", concept="R1", tier="3 - Recursion",
+        id=13, ledger="Q354", concept="R1", tier="3 - Recursion",
         title="A full study plan for Machine Learning",
         prompt=(
             "Everything a student must pass to finish CMP401 'Machine"
             " Learning' -- every course it depends on at any depth, AND CMP401"
             " itself.\n\n"
-            "Six courses. Unlike question 14 this one branches, and one course"
-            " is reachable by two different routes but must still appear"
-            " once.\n\n"
+            "Seven courses. This one branches, and some courses are reachable"
+            " by two different routes but must still appear once.\n\n"
             "Return: code, title"
         ),
-        solution=(
-            "WITH RECURSIVE plan(id) AS ("
-            " SELECT course_id FROM courses WHERE code = 'CMP401'"
-            " UNION"
-            " SELECT p.requires_course_id FROM prerequisites p"
-            " JOIN plan ON p.course_id = plan.id)"
-            " SELECT c.code, c.title FROM courses c"
-            " JOIN plan ON plan.id = c.course_id"
-        ),
-        trap_sql=(
-            "WITH RECURSIVE plan(id) AS ("
-            " SELECT course_id FROM courses WHERE code = 'CMP401'"
-            " UNION ALL"
-            " SELECT p.requires_course_id FROM prerequisites p"
-            " JOIN plan ON p.course_id = plan.id)"
-            " SELECT c.code, c.title FROM courses c"
-            " JOIN plan ON plan.id = c.course_id"
-        ),
-        note="Two things are new here. The anchor is the course ITSELF rather"
-             " than its prerequisites, which is how the starting row ends up in"
-             " the answer -- and it works because the step happens to expand it"
-             " on the first pass anyway. And this is where UNION and UNION ALL"
-             " stop agreeing: CMP201 is reachable both directly and through"
-             " CMP301, so UNION ALL walks it twice and returns 8 rows. UNION"
-             " discards a row it has already produced.",
-        claims=[
-            ("six courses, CMP401 among them",
-             lambda rows, c: len(rows) == 6
-             and any(r[0] == 'CMP401' for r in rows)),
-            ("UNION ALL really would produce more rows here",
-             lambda rows, c: c.execute(
-                 "WITH RECURSIVE p2(id) AS (SELECT course_id FROM courses"
-                 " WHERE code = 'CMP401' UNION ALL SELECT p.requires_course_id"
-                 " FROM prerequisites p JOIN p2 ON p.course_id = p2.id)"
-                 " SELECT COUNT(*) FROM p2").fetchone()[0] > 6),
-        ],
+        solution=("WITH RECURSIVE plan(id) AS ("
+                  " SELECT course_id FROM courses WHERE code = 'CMP401'"
+                  " UNION"
+                  " SELECT p.requires_course_id FROM prerequisites p"
+                  " JOIN plan ON p.course_id = plan.id)"
+                  " SELECT c.code, c.title FROM courses c"
+                  " JOIN plan ON plan.id = c.course_id"),
+        trap_sql=("WITH RECURSIVE plan(id) AS ("
+                  " SELECT course_id FROM courses WHERE code = 'CMP401'"
+                  " UNION ALL"
+                  " SELECT p.requires_course_id FROM prerequisites p"
+                  " JOIN plan ON p.course_id = plan.id)"
+                  " SELECT c.code, c.title FROM courses c"
+                  " JOIN plan ON plan.id = c.course_id"),
+        note="Two things are new. The anchor is the course ITSELF rather than"
+             " its prerequisites, which is how the starting row ends up in the"
+             " answer. And this is where UNION and UNION ALL stop agreeing:"
+             " CMP201 is reachable both directly and through CMP301, so"
+             " UNION ALL walks it twice and returns 9 rows. UNION discards a"
+             " row it has already produced.",
+        claims=[("seven courses, CMP401 among them",
+                 lambda rows, c: len(rows) == 7
+                 and any(r[0] == 'CMP401' for r in rows)),
+                ("UNION ALL really would produce more rows",
+                 lambda rows, c: c.execute(
+                     "WITH RECURSIVE p2(id) AS (SELECT course_id FROM courses"
+                     " WHERE code = 'CMP401' UNION ALL SELECT"
+                     " p.requires_course_id FROM prerequisites p JOIN p2"
+                     " ON p.course_id = p2.id) SELECT COUNT(*) FROM p2"
+                 ).fetchone()[0] > 7)],
     ),
     # ============================================ 4 Dates, sets and pivots
     dict(
-        id=17, ledger="Q328", concept="D1", tier="4 - Dates, sets and pivots",
+        id=14, ledger="Q355", concept="D1", tier="4 - Dates, sets and pivots",
         title="How long each term runs",
         prompt=(
             "One row per term: its name, and how many whole days it lasts from"
             " starts_on to ends_on.\n\n"
-            "All six terms appear, and every length is a whole number between"
-            " 70 and 90.\n\n"
+            "All six terms appear, and every length is between 70 and 90"
+            " days.\n\n"
             "Return: term_id, name, days"
         ),
-        solution=(
-            "SELECT term_id, name,"
-            " CAST(julianday(ends_on) - julianday(starts_on) AS INTEGER)"
-            " FROM terms"
-        ),
-        trap_sql=(
-            "SELECT term_id, name, ends_on - starts_on FROM terms"
-        ),
+        solution=("SELECT term_id, name,"
+                  " CAST(julianday(ends_on) - julianday(starts_on) AS INTEGER)"
+                  " FROM terms"),
+        trap_sql="SELECT term_id, name, ends_on - starts_on FROM terms",
         note="Dates in SQLite are TEXT. Subtracting one from another does not"
              " subtract dates -- SQLite coerces each string to a number, which"
              " reads '2026-04-02' as 2026 and stops at the dash, so the answer"
              " is the difference in YEARS, usually 0. julianday() turns a date"
              " into a day number, and the difference between two of those is"
              " days.",
-        claims=[
-            ("six terms, each 70 to 90 days",
-             lambda rows, c: len(rows) == 6
-             and all(70 <= r[2] <= 90 for r in rows)),
-        ],
+        claims=[("six terms, each 70 to 90 days",
+                 lambda rows, c: len(rows) == 6
+                 and all(70 <= r[2] <= 90 for r in rows))],
     ),
     dict(
-        id=18, ledger="Q329", concept="D1", tier="4 - Dates, sets and pivots",
+        id=15, ledger="Q356", concept="D1", tier="4 - Dates, sets and pivots",
         title="Enrolments by month",
         prompt=(
             "One row per calendar month in which any enrolment was made: the"
@@ -664,496 +503,540 @@ EXERCISES = [
             " months.\n\n"
             "Return: month, enrolments"
         ),
-        solution=(
-            "SELECT strftime('%Y-%m', enrolled_on), COUNT(*)"
-            " FROM enrolments GROUP BY 1"
-        ),
-        trap_sql=(
-            "SELECT strftime('%m', enrolled_on), COUNT(*)"
-            " FROM enrolments GROUP BY 1"
-        ),
+        solution=("SELECT strftime('%Y-%m', enrolled_on), COUNT(*)"
+                  " FROM enrolments GROUP BY 1"),
+        trap_sql=("SELECT strftime('%m', enrolled_on), COUNT(*)"
+                  " FROM enrolments GROUP BY 1"),
         note="%m alone is the month number with no year attached, so the two"
              " Januaries collapse into one row and you get 7 rows out of a data"
              " set covering 14 months. Grouping by a date always needs every"
              " component down to the level you want. The quickest sanity check"
              " is the row count.",
-        claims=[
-            ("14 months, twice what %m would give",
-             lambda rows, c: len(rows) == 14),
-            ("the counts total every enrolment",
-             lambda rows, c: sum(r[1] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM enrolments").fetchone()[0]),
-        ],
+        claims=[("14 months, twice what %m would give",
+                 lambda rows, c: len(rows) == 14),
+                ("the counts total every enrolment",
+                 lambda rows, c: sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM enrolments").fetchone()[0])],
     ),
     dict(
-        id=19, ledger="Q330", concept="D1", tier="4 - Dates, sets and pivots",
-        title="Deadlines after the term ends",
+        id=16, ledger="Q357", concept="S1", tier="4 - Dates, sets and pivots",
+        title="Billed in a month nobody enrolled",
         prompt=(
-            "Assessments whose due date falls AFTER the end of the term their"
-            " section runs in.\n\n"
-            "The due date is on the assessment; the end date is on the term,"
-            " reached through the section. There are 13.\n\n"
-            "Return: assessment_id, title, due_on, ends_on"
+            "Months in which at least one payment was billed but NO enrolment"
+            " was made. Months are 'YYYY-MM'.\n\n"
+            "Billing runs all year while enrolment clusters around the terms."
+            " Nine months qualify.\n\n"
+            "Return: month"
         ),
-        solution=(
-            "SELECT a.assessment_id, a.title, a.due_on, t.ends_on"
-            " FROM assessments a"
-            " JOIN sections s ON s.section_id = a.section_id"
-            " JOIN terms t ON t.term_id = s.term_id"
-            " WHERE julianday(a.due_on) > julianday(t.ends_on)"
-        ),
-        trap_sql=(
-            "SELECT a.assessment_id, a.title, a.due_on, t.ends_on"
-            " FROM assessments a"
-            " JOIN sections s ON s.section_id = a.section_id"
-            " JOIN terms t ON t.term_id = s.term_id"
-            " WHERE (a.due_on - t.ends_on) > 0"
-        ),
-        note="Two ISO dates compare correctly as plain strings, so"
-             " a.due_on > t.ends_on would also have been right here --"
-             " '2025-12-20' really is greater than '2025-12-13' alphabetically."
-             " What is never right is ARITHMETIC on them. The trap subtracts,"
-             " which coerces both to years and compares 2025 - 2025 = 0,"
-             " finding only the deadlines that crossed into a new year.",
-        claims=[
-            ("13 rows, every one genuinely past its term end",
-             lambda rows, c: len(rows) == 13
-             and all(r[2] > r[3] for r in rows)),
-        ],
+        solution=("SELECT DISTINCT strftime('%Y-%m', billed_on) FROM payments"
+                  " EXCEPT"
+                  " SELECT DISTINCT strftime('%Y-%m', enrolled_on)"
+                  " FROM enrolments"),
+        trap_sql=("SELECT DISTINCT strftime('%Y-%m', enrolled_on)"
+                  " FROM enrolments EXCEPT"
+                  " SELECT DISTINCT strftime('%Y-%m', billed_on) FROM payments"),
+        note="EXCEPT is directional: A EXCEPT B is what is in A and not in B,"
+             " and swapping the two asks the opposite question. The swap here"
+             " returns a different, equally plausible-looking set of months --"
+             " nothing about the result tells you it answered backwards."
+             " EXCEPT also dedupes, so neither DISTINCT is strictly needed.",
+        claims=[("nine months, none with any enrolment",
+                 lambda rows, c: len(rows) == 9
+                 and not {r[0] for r in rows} & {
+                     x[0] for x in c.execute(
+                         "SELECT DISTINCT strftime('%Y-%m', enrolled_on)"
+                         " FROM enrolments")})],
     ),
     dict(
-        id=20, ledger="Q331", concept="S1", tier="4 - Dates, sets and pivots",
-        title="First-year reading that never reappears",
+        id=17, ledger="Q358", concept="S1", tier="4 - Dates, sets and pivots",
+        title="Required reading on a first-year course",
         prompt=(
-            "Textbooks that appear on a LEVEL-1 course's reading list but on no"
-            " LEVEL-3 course's list.\n\n"
-            "Eight books qualify. A book on both a level-1 and a level-3 course"
-            " is excluded, even if the two are in different departments.\n\n"
+            "Textbooks that are BOTH marked required (required = 1) on some"
+            " course AND appear on the reading list of a level-1 course.\n\n"
+            "The two need not be the same course. Eleven books qualify.\n\n"
             "Return: book_id, title"
         ),
-        solution=(
-            "SELECT b.book_id, b.title FROM textbooks b WHERE b.book_id IN ("
-            " SELECT cb.book_id FROM course_books cb"
-            " JOIN courses c ON c.course_id = cb.course_id WHERE c.level = 1"
-            " EXCEPT"
-            " SELECT cb.book_id FROM course_books cb"
-            " JOIN courses c ON c.course_id = cb.course_id WHERE c.level = 3)"
-        ),
-        trap_sql=(
-            "SELECT b.book_id, b.title FROM textbooks b WHERE b.book_id IN ("
-            " SELECT cb.book_id FROM course_books cb"
-            " JOIN courses c ON c.course_id = cb.course_id WHERE c.level = 3"
-            " EXCEPT"
-            " SELECT cb.book_id FROM course_books cb"
-            " JOIN courses c ON c.course_id = cb.course_id WHERE c.level = 1)"
-        ),
-        note="EXCEPT is directional: A EXCEPT B is what is in A and not in B,"
-             " and swapping the two asks the opposite question -- here, books"
-             " on a level-3 list but no level-1 one. That returns a plausible"
-             " number of plausible-looking rows, which is what makes it"
-             " dangerous: nothing about the result says you asked it backwards."
-             " EXCEPT also dedupes, so no DISTINCT is needed.",
-        claims=[
-            ("eight books, none of them on a level-3 list",
-             lambda rows, c: len(rows) == 8
-             and not {r[0] for r in rows} & {
-                 x[0] for x in c.execute(
-                     "SELECT cb.book_id FROM course_books cb JOIN courses c"
-                     " ON c.course_id = cb.course_id WHERE c.level = 3")}),
-        ],
-    ),
-    dict(
-        id=21, ledger="Q332", concept="S1", tier="4 - Dates, sets and pivots",
-        title="Students who have both finished and dropped",
-        prompt=(
-            "Students who have BOTH completed at least one enrolment AND"
-            " withdrawn from at least one.\n\n"
-            "The two need not be the same course. 37 students qualify.\n\n"
-            "Return: student_id, name"
-        ),
-        solution=(
-            "SELECT st.student_id, st.name FROM students st"
-            " WHERE st.student_id IN ("
-            " SELECT student_id FROM enrolments WHERE status = 'completed'"
-            " INTERSECT"
-            " SELECT student_id FROM enrolments WHERE status = 'withdrawn')"
-        ),
-        trap_sql=(
-            "SELECT st.student_id, st.name FROM students st"
-            " WHERE st.student_id IN ("
-            " SELECT student_id FROM enrolments WHERE status = 'completed'"
-            " UNION"
-            " SELECT student_id FROM enrolments WHERE status = 'withdrawn')"
-        ),
+        solution=("SELECT b.book_id, b.title FROM textbooks b"
+                  " WHERE b.book_id IN ("
+                  " SELECT book_id FROM course_books WHERE required = 1"
+                  " INTERSECT"
+                  " SELECT cb.book_id FROM course_books cb"
+                  " JOIN courses c ON c.course_id = cb.course_id"
+                  " WHERE c.level = 1)"),
+        trap_sql=("SELECT b.book_id, b.title FROM textbooks b"
+                  " WHERE b.book_id IN ("
+                  " SELECT book_id FROM course_books WHERE required = 1"
+                  " UNION"
+                  " SELECT cb.book_id FROM course_books cb"
+                  " JOIN courses c ON c.course_id = cb.course_id"
+                  " WHERE c.level = 1)"),
         note="INTERSECT keeps rows present in BOTH sides; UNION keeps rows"
              " present in EITHER. 'And' in English means INTERSECT here even"
              " though the sentence contains an 'and' -- because the two"
-             " conditions apply to the same student, rather than being two"
-             " lists to add together. Both dedupe, so neither needs a DISTINCT.",
-        claims=[
-            ("37 students, each with both a completion and a withdrawal",
-             lambda rows, c: len(rows) == 37 and all(
-                 c.execute("SELECT COUNT(DISTINCT status) FROM enrolments"
-                           " WHERE student_id = ? AND status IN"
-                           " ('completed', 'withdrawn')",
-                           (r[0],)).fetchone()[0] == 2 for r in rows)),
-        ],
+             " conditions apply to the same book, rather than being two lists"
+             " to add together. Both dedupe, so neither needs a DISTINCT.",
+        claims=[("eleven books, each required somewhere",
+                 lambda rows, c: len(rows) == 11 and all(
+                     c.execute("SELECT COUNT(*) FROM course_books"
+                               " WHERE book_id = ? AND required = 1",
+                               (r[0],)).fetchone()[0] > 0 for r in rows))],
     ),
     dict(
-        id=22, ledger="Q333", concept="A1", tier="4 - Dates, sets and pivots",
-        title="Assessment kinds by term",
+        id=18, ledger="Q359", concept="A1", tier="4 - Dates, sets and pivots",
+        title="Enrolment status by term",
         prompt=(
-            "One row per term, with the number of its assessments of each kind"
-            " side by side as columns.\n\n"
-            "All six terms appear, and the four columns together account for"
-            " every assessment.\n\n"
-            "Return: term_id, name, essay, exam, project, practical"
+            "One row per term, with the number of its enrolments in each of the"
+            " three statuses side by side as columns.\n\n"
+            "All six terms appear, and the three columns together account for"
+            " every enrolment.\n\n"
+            "Return: term_id, name, completed, active, withdrawn"
         ),
-        solution=(
-            "SELECT t.term_id, t.name,"
-            " SUM(CASE WHEN a.kind = 'essay' THEN 1 ELSE 0 END),"
-            " SUM(CASE WHEN a.kind = 'exam' THEN 1 ELSE 0 END),"
-            " SUM(CASE WHEN a.kind = 'project' THEN 1 ELSE 0 END),"
-            " SUM(CASE WHEN a.kind = 'practical' THEN 1 ELSE 0 END)"
-            " FROM terms t JOIN sections s ON s.term_id = t.term_id"
-            " JOIN assessments a ON a.section_id = s.section_id"
-            " GROUP BY 1, 2"
-        ),
-        trap_sql=(
-            "SELECT t.term_id, t.name,"
-            " COUNT(CASE WHEN a.kind = 'essay' THEN 1 ELSE 0 END),"
-            " COUNT(CASE WHEN a.kind = 'exam' THEN 1 ELSE 0 END),"
-            " COUNT(CASE WHEN a.kind = 'project' THEN 1 ELSE 0 END),"
-            " COUNT(CASE WHEN a.kind = 'practical' THEN 1 ELSE 0 END)"
-            " FROM terms t JOIN sections s ON s.term_id = t.term_id"
-            " JOIN assessments a ON a.section_id = s.section_id"
-            " GROUP BY 1, 2"
-        ),
+        solution=("SELECT t.term_id, t.name,"
+                  " SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END),"
+                  " SUM(CASE WHEN e.status = 'active' THEN 1 ELSE 0 END),"
+                  " SUM(CASE WHEN e.status = 'withdrawn' THEN 1 ELSE 0 END)"
+                  " FROM terms t JOIN sections s ON s.term_id = t.term_id"
+                  " JOIN enrolments e ON e.section_id = s.section_id"
+                  " GROUP BY 1, 2"),
+        trap_sql=("SELECT t.term_id, t.name,"
+                  " COUNT(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END),"
+                  " COUNT(CASE WHEN e.status = 'active' THEN 1 ELSE 0 END),"
+                  " COUNT(CASE WHEN e.status = 'withdrawn' THEN 1 ELSE 0 END)"
+                  " FROM terms t JOIN sections s ON s.term_id = t.term_id"
+                  " JOIN enrolments e ON e.section_id = s.section_id"
+                  " GROUP BY 1, 2"),
         note="Pick ONE of two shapes and stick to it: SUM(CASE WHEN c THEN 1"
              " ELSE 0 END) or COUNT(CASE WHEN c THEN 1 END). The mixture in the"
              " trap -- COUNT over an ELSE 0 -- counts every row, because 0 is a"
-             " value and COUNT only skips NULL. All four columns come back"
+             " value and COUNT only skips NULL. All three columns come back"
              " identical to the row count, which is the tell.",
-        claims=[
-            ("six terms, and the columns total every assessment",
-             lambda rows, c: len(rows) == 6
-             and sum(r[2] + r[3] + r[4] + r[5] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM assessments").fetchone()[0]),
-        ],
+        claims=[("six terms, columns totalling every enrolment",
+                 lambda rows, c: len(rows) == 6
+                 and sum(r[2] + r[3] + r[4] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM enrolments").fetchone()[0])],
     ),
     # ================================================== 5 Window functions
     dict(
-        id=23, ledger="Q334", concept="W3", tier="5 - Window functions",
-        title="Month on month",
+        id=19, ledger="Q360", concept="W3", tier="5 - Window functions",
+        title="Term on term",
         prompt=(
-            "One row per calendar month in which any enrolment was made: the"
-            " month as 'YYYY-MM', how many were made, and the change from the"
-            " month before.\n\n"
-            "The earliest month has nothing before it, so its change is NULL --"
-            " leave it NULL rather than turning it into 0. 14 months.\n\n"
-            "Return: month, enrolments, change"
+            "One row per term, in term order: the term name, how many"
+            " enrolments were made on its sections, and the change from the"
+            " term before.\n\n"
+            "The first term has nothing before it, so its change is NULL --"
+            " leave it NULL. All six terms appear.\n\n"
+            "Return: term_id, name, enrolments, change"
         ),
-        solution=(
-            "WITH m AS (SELECT strftime('%Y-%m', enrolled_on) AS mth,"
-            " COUNT(*) AS n FROM enrolments GROUP BY 1)"
-            " SELECT mth, n, n - LAG(n) OVER (ORDER BY mth) FROM m"
-        ),
-        trap_sql=(
-            "WITH m AS (SELECT strftime('%Y-%m', enrolled_on) AS mth,"
-            " COUNT(*) AS n FROM enrolments GROUP BY 1)"
-            " SELECT mth, n, n - LAG(n) OVER (PARTITION BY mth ORDER BY mth)"
-            " FROM m"
-        ),
-        note="PARTITION BY mth puts every month in a window of its own, so LAG"
-             " looks for a previous row inside a one-row window and finds"
+        solution=("WITH t AS (SELECT te.term_id, te.name,"
+                  " COUNT(e.enrolment_id) AS n FROM terms te"
+                  " LEFT JOIN sections s ON s.term_id = te.term_id"
+                  " LEFT JOIN enrolments e ON e.section_id = s.section_id"
+                  " GROUP BY 1, 2)"
+                  " SELECT term_id, name, n,"
+                  " n - LAG(n) OVER (ORDER BY term_id) FROM t"),
+        trap_sql=("WITH t AS (SELECT te.term_id, te.name,"
+                  " COUNT(e.enrolment_id) AS n FROM terms te"
+                  " LEFT JOIN sections s ON s.term_id = te.term_id"
+                  " LEFT JOIN enrolments e ON e.section_id = s.section_id"
+                  " GROUP BY 1, 2)"
+                  " SELECT term_id, name, n,"
+                  " n - LAG(n) OVER (PARTITION BY term_id ORDER BY term_id)"
+                  " FROM t"),
+        note="PARTITION BY term_id puts every term in a window of its own, so"
+             " LAG looks for a previous row inside a one-row window and finds"
              " nothing: every change comes back NULL. Partition by what the"
              " rows have in COMMON and order by what separates them. Here there"
              " is one series, so there is no PARTITION at all.",
-        claims=[
-            ("14 months, exactly one NULL change",
-             lambda rows, c: len(rows) == 14
-             and sum(1 for r in rows if r[2] is None) == 1),
-        ],
+        claims=[("six terms, exactly one NULL change",
+                 lambda rows, c: len(rows) == 6
+                 and sum(1 for r in rows if r[3] is None) == 1)],
     ),
     dict(
-        id=24, ledger="Q335", concept="W1", tier="5 - Window functions",
+        id=20, ledger="Q361", concept="W1", tier="5 - Window functions",
         title="Enrolments so far",
         prompt=(
             "One row per term, in term order: the term name, how many"
-            " enrolments were made on its sections, and the running total of"
-            " enrolments up to and including that term.\n\n"
+            " enrolments were made on its sections, and the running total up to"
+            " and including that term.\n\n"
             "The running total on the last term equals every enrolment in the"
-            " table. All six terms appear.\n\n"
+            " table.\n\n"
             "Return: term_id, name, enrolments, running_total"
         ),
-        solution=(
-            "WITH t AS (SELECT te.term_id, te.name, COUNT(e.enrolment_id) AS n"
-            " FROM terms te LEFT JOIN sections s ON s.term_id = te.term_id"
-            " LEFT JOIN enrolments e ON e.section_id = s.section_id"
-            " GROUP BY 1, 2)"
-            " SELECT term_id, name, n, SUM(n) OVER (ORDER BY term_id) FROM t"
-        ),
-        trap_sql=(
-            "WITH t AS (SELECT te.term_id, te.name, COUNT(e.enrolment_id) AS n"
-            " FROM terms te LEFT JOIN sections s ON s.term_id = te.term_id"
-            " LEFT JOIN enrolments e ON e.section_id = s.section_id"
-            " GROUP BY 1, 2)"
-            " SELECT term_id, name, n, SUM(n) OVER () FROM t"
-        ),
+        solution=("WITH t AS (SELECT te.term_id, te.name,"
+                  " COUNT(e.enrolment_id) AS n FROM terms te"
+                  " LEFT JOIN sections s ON s.term_id = te.term_id"
+                  " LEFT JOIN enrolments e ON e.section_id = s.section_id"
+                  " GROUP BY 1, 2)"
+                  " SELECT term_id, name, n,"
+                  " SUM(n) OVER (ORDER BY term_id) FROM t"),
+        trap_sql=("WITH t AS (SELECT te.term_id, te.name,"
+                  " COUNT(e.enrolment_id) AS n FROM terms te"
+                  " LEFT JOIN sections s ON s.term_id = te.term_id"
+                  " LEFT JOIN enrolments e ON e.section_id = s.section_id"
+                  " GROUP BY 1, 2)"
+                  " SELECT term_id, name, n, SUM(n) OVER () FROM t"),
         note="ORDER BY inside OVER() is the whole difference. SUM(x) OVER ()"
              " with no ORDER BY sees every row at once and repeats the same"
              " grand total on every line; SUM(x) OVER (ORDER BY term_id) sees"
              " only rows up to the current one. A running total over positive"
              " numbers can only ever go up -- if yours is flat, there is no"
              " ORDER BY in the window.",
-        claims=[
-            ("six terms, last running total is every enrolment",
-             lambda rows, c: len(rows) == 6
-             and max(r[3] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM enrolments").fetchone()[0]),
-        ],
+        claims=[("six terms, last running total is every enrolment",
+                 lambda rows, c: len(rows) == 6
+                 and max(r[3] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM enrolments").fetchone()[0])],
     ),
     dict(
-        id=25, ledger="Q336", concept="W3", tier="5 - Window functions",
-        title="Share of the billing by status",
+        id=21, ledger="Q362", concept="W3", tier="5 - Window functions",
+        title="Share of the enrolments by faculty",
         prompt=(
-            "One row per payment status: the status, the total amount billed"
-            " under it, and that total as a percentage of everything"
-            " billed.\n\n"
-            "Four statuses, and the four percentages add up to 100.\n\n"
-            "Return: status, billed, pct_of_total"
+            "One row per faculty: the faculty, how many enrolments its"
+            " departments' courses attracted, and that count as a percentage of"
+            " all enrolments.\n\n"
+            "Four faculties, and the four percentages add up to 100.\n\n"
+            "Return: faculty, enrolments, pct_of_total"
         ),
-        solution=(
-            "WITH s AS (SELECT status, SUM(amount) AS amt FROM payments"
-            " GROUP BY 1)"
-            " SELECT status, ROUND(amt, 2),"
-            " ROUND(100.0 * amt / SUM(amt) OVER (), 2) FROM s"
-        ),
-        trap_sql=(
-            "WITH s AS (SELECT status, SUM(amount) AS amt FROM payments"
-            " GROUP BY 1)"
-            " SELECT status, ROUND(amt, 2),"
-            " ROUND(100.0 * amt / SUM(amt) OVER (PARTITION BY status), 2)"
-            " FROM s"
-        ),
-        note="The mirror image of question 24. There you needed the window"
+        solution=("WITH f AS (SELECT d.faculty, COUNT(*) AS n FROM enrolments e"
+                  " JOIN sections s ON s.section_id = e.section_id"
+                  " JOIN courses co ON co.course_id = s.course_id"
+                  " JOIN departments d ON d.department_id = co.department_id"
+                  " GROUP BY 1)"
+                  " SELECT faculty, n,"
+                  " ROUND(100.0 * n / SUM(n) OVER (), 2) FROM f"),
+        trap_sql=("WITH f AS (SELECT d.faculty, COUNT(*) AS n FROM enrolments e"
+                  " JOIN sections s ON s.section_id = e.section_id"
+                  " JOIN courses co ON co.course_id = s.course_id"
+                  " JOIN departments d ON d.department_id = co.department_id"
+                  " GROUP BY 1)"
+                  " SELECT faculty, n,"
+                  " ROUND(100.0 * n / SUM(n) OVER (PARTITION BY faculty), 2)"
+                  " FROM f"),
+        note="The mirror image of question 20. There you needed the window"
              " narrowed by ORDER BY; here you need it wide open. OVER () with"
              " nothing in it is every row, which is exactly the denominator a"
-             " share needs. PARTITION BY status shrinks the window to the row"
-             " itself, so every share comes out as 100%. Write 100.0, not 100 --"
-             " integer division would truncate every answer.",
-        claims=[
-            ("four statuses summing to 100%",
-             lambda rows, c: len(rows) == 4
-             and abs(sum(r[2] for r in rows) - 100) < 0.05),
-        ],
+             " share needs. PARTITION BY faculty shrinks the window to the row"
+             " itself, so every share comes out as 100%. Write 100.0, not 100.",
+        claims=[("four faculties summing to 100%",
+                 lambda rows, c: len(rows) == 4
+                 and abs(sum(r[2] for r in rows) - 100) < 0.05)],
     ),
     dict(
-        id=26, ledger="Q337", concept="W2", tier="5 - Window functions",
-        title="Each student's first enrolment",
+        id=22, ledger="Q363", concept="W2", tier="5 - Window functions",
+        title="The two biggest courses in each faculty",
         prompt=(
-            "For every student who has ever enrolled, their earliest enrolment"
-            " by date. One row per student -- students who never enrolled do"
-            " not appear, so 51 rows.\n\n"
-            "Break ties on date by the lower enrolment_id, so each student's"
-            " first is unambiguous.\n\n"
-            "Return: student_id, enrolment_id, enrolled_on"
+            "For each faculty, the two courses with the most enrolments.\n\n"
+            "Rank within the faculty by enrolment count, highest first, and"
+            " keep ranks 1 and 2. Four faculties, so 8 rows.\n\n"
+            "Return: faculty, code, enrolments"
         ),
-        solution=(
-            "WITH r AS (SELECT student_id, enrolment_id, enrolled_on,"
-            " ROW_NUMBER() OVER (PARTITION BY student_id"
-            " ORDER BY enrolled_on, enrolment_id) AS rn FROM enrolments)"
-            " SELECT student_id, enrolment_id, enrolled_on FROM r WHERE rn = 1"
-        ),
-        trap_sql=(
-            "WITH r AS (SELECT student_id, enrolment_id, enrolled_on,"
-            " ROW_NUMBER() OVER (ORDER BY enrolled_on, enrolment_id) AS rn"
-            " FROM enrolments)"
-            " SELECT student_id, enrolment_id, enrolled_on FROM r WHERE rn = 1"
-        ),
-        note="Without PARTITION BY the numbering runs straight through the"
-             " whole table, so rn = 1 is the single earliest enrolment anywhere"
-             " and you get one row instead of one per student. PARTITION BY"
-             " restarts the count for each student -- it is the GROUP BY of the"
-             " window world, except the detail rows survive.",
-        claims=[
-            ("51 students, one row each",
-             lambda rows, c: len(rows) == 51
-             and len({r[0] for r in rows}) == len(rows)),
-        ],
-    ),
-    dict(
-        id=27, ledger="Q338", concept="W2", tier="5 - Window functions",
-        title="Top of each campus, ties and all",
-        prompt=(
-            "The highest mark achieved by students at each campus, and who got"
-            " it. Only graded enrolments count.\n\n"
-            "Every campus has students tied on its top mark, so the answer is"
-            " 7 rows across 4 campuses, not 4.\n\n"
-            "One student holds their campus top mark on TWO enrolments. They"
-            " are one person, and appear once.\n\n"
-            "Return: campus_id, student_id, name, grade"
-        ),
-        solution=(
-            "WITH g AS (SELECT st.campus_id, st.student_id, st.name, e.grade,"
-            " RANK() OVER (PARTITION BY st.campus_id ORDER BY e.grade DESC) rk"
-            " FROM enrolments e JOIN students st"
-            " ON st.student_id = e.student_id WHERE e.grade IS NOT NULL)"
-            " SELECT DISTINCT campus_id, student_id, name, grade"
-            " FROM g WHERE rk = 1"
-        ),
-        trap_sql=(
-            "WITH g AS (SELECT st.campus_id, st.student_id, st.name, e.grade,"
-            " ROW_NUMBER() OVER (PARTITION BY st.campus_id"
-            " ORDER BY e.grade DESC) rk"
-            " FROM enrolments e JOIN students st"
-            " ON st.student_id = e.student_id WHERE e.grade IS NOT NULL)"
-            " SELECT campus_id, student_id, name, grade FROM g WHERE rk = 1"
-        ),
-        note="ROW_NUMBER hands out 1, 2, 3 with no repeats, so on a tie it"
-             " keeps one row arbitrarily and you silently lose the others. RANK"
-             " gives tied rows the same number. ROW_NUMBER when you want"
-             " exactly one row -- as in question 26 -- and RANK when you want"
-             " everyone who earned the position. The DISTINCT does a"
-             " separate job: one student holds their campus top mark on"
-             " two enrolments, and the question asks who got the mark,"
-             " not how many times. Do not reach for GROUP BY instead --"
-             " it would find the top mark but lose the name.",
-        claims=[
-            ("7 rows across 4 campuses, so every campus is tied",
-             lambda rows, c: len(rows) == 7
-             and len({r[0] for r in rows}) == 4),
-            ("no student appears twice for the same mark",
-             lambda rows, c: len({(r[0], r[1], r[3]) for r in rows})
-             == len(rows)),
-        ],
+        solution=("WITH c AS (SELECT d.faculty, co.code, COUNT(*) AS n"
+                  " FROM enrolments e"
+                  " JOIN sections s ON s.section_id = e.section_id"
+                  " JOIN courses co ON co.course_id = s.course_id"
+                  " JOIN departments d ON d.department_id = co.department_id"
+                  " GROUP BY 1, 2),"
+                  " r AS (SELECT *, RANK() OVER (PARTITION BY faculty"
+                  " ORDER BY n DESC) rk FROM c)"
+                  " SELECT faculty, code, n FROM r WHERE rk <= 2"),
+        trap_sql=("WITH c AS (SELECT d.faculty, co.code, COUNT(*) AS n"
+                  " FROM enrolments e"
+                  " JOIN sections s ON s.section_id = e.section_id"
+                  " JOIN courses co ON co.course_id = s.course_id"
+                  " JOIN departments d ON d.department_id = co.department_id"
+                  " GROUP BY 1, 2),"
+                  " r AS (SELECT *, RANK() OVER (ORDER BY n DESC) rk FROM c)"
+                  " SELECT faculty, code, n FROM r WHERE rk <= 2"),
+        note="Without PARTITION BY the ranking runs across the whole result, so"
+             " rk <= 2 gives the two biggest courses in the COLLEGE rather than"
+             " two per faculty -- and both may come from the same faculty."
+             " PARTITION BY restarts the numbering for each group. Note the"
+             " window's ORDER BY takes an aggregate, COUNT(*), which is legal"
+             " because windows run after GROUP BY.",
+        claims=[("8 rows across 4 faculties",
+                 lambda rows, c: len(rows) == 8
+                 and len({r[0] for r in rows}) == 4)],
     ),
     # ============================================= 6 Grain and correlation
     dict(
-        id=28, ledger="Q339", concept="E2", tier="6 - Grain and correlation",
+        id=23, ledger="Q364", concept="E2", tier="6 - Grain and correlation",
         title="Paid above their own department's average",
         prompt=(
             "Every instructor on a higher hourly_rate than the average for"
-            " THEIR OWN department -- not higher than the average across the"
-            " whole college.\n\n"
+            " THEIR OWN department -- not higher than the college average.\n\n"
             "Seven qualify. Be careful: the college-wide version also returns"
             " seven, so a row count will not tell you which one you wrote.\n\n"
             "Return: instructor_id, name, department_id, hourly_rate"
         ),
-        solution=(
-            "SELECT i.instructor_id, i.name, i.department_id, i.hourly_rate"
-            " FROM instructors i WHERE i.hourly_rate >"
-            " (SELECT AVG(x.hourly_rate) FROM instructors x"
-            " WHERE x.department_id = i.department_id)"
-        ),
-        trap_sql=(
-            "SELECT i.instructor_id, i.name, i.department_id, i.hourly_rate"
-            " FROM instructors i"
-            " WHERE i.hourly_rate > (SELECT AVG(hourly_rate) FROM instructors)"
-        ),
+        solution=("SELECT i.instructor_id, i.name, i.department_id,"
+                  " i.hourly_rate FROM instructors i WHERE i.hourly_rate >"
+                  " (SELECT AVG(x.hourly_rate) FROM instructors x"
+                  " WHERE x.department_id = i.department_id)"),
+        trap_sql=("SELECT i.instructor_id, i.name, i.department_id,"
+                  " i.hourly_rate FROM instructors i WHERE i.hourly_rate >"
+                  " (SELECT AVG(hourly_rate) FROM instructors)"),
         note="The correlation is the single line WHERE x.department_id ="
              " i.department_id. Without it the subquery runs once and everyone"
              " is compared with the same number; with it the subquery is"
              " re-evaluated per row against that row's own department. A"
              " modestly paid instructor in a modestly paid department can beat"
-             " their own average and lose to the college one -- which is"
-             " exactly how two queries return the same COUNT and different"
-             " people.",
-        claims=[
-            ("seven instructors, and the uncorrelated version returns a"
-             " different seven",
-             lambda rows, c: len(rows) == 7
-             and {r[0] for r in rows} != {x[0] for x in c.execute(
-                 "SELECT instructor_id FROM instructors WHERE hourly_rate >"
-                 " (SELECT AVG(hourly_rate) FROM instructors)")}),
-        ],
+             " their own average and lose to the college one -- which is how"
+             " two queries return the same COUNT and different people.",
+        claims=[("seven instructors, a different seven from the global version",
+                 lambda rows, c: len(rows) == 7
+                 and {r[0] for r in rows} != {x[0] for x in c.execute(
+                     "SELECT instructor_id FROM instructors WHERE hourly_rate >"
+                     " (SELECT AVG(hourly_rate) FROM instructors)")})],
     ),
     dict(
-        id=29, ledger="Q340", concept="C2", tier="6 - Grain and correlation",
-        title="Enrolments and payments per student",
+        id=24, ledger="Q365", concept="C2", tier="6 - Grain and correlation",
+        title="Enrolments and assessments per term",
         prompt=(
-            "One row per student: how many enrolments they have made, and how"
-            " many payments have been billed to them.\n\n"
-            "The two are independent -- a student can have many of one and none"
-            " of the other. A student with none of something shows 0, not NULL."
-            " All 60 students appear.\n\n"
-            "Return: student_id, enrolments, payments"
+            "One row per term: how many enrolments were made on its sections,"
+            " and how many assessments those sections set.\n\n"
+            "Both hang off sections, but they are independent of each other."
+            " All six terms appear.\n\n"
+            "Return: term_id, enrolments, assessments"
         ),
-        solution=(
-            "SELECT st.student_id,"
-            " (SELECT COUNT(*) FROM enrolments e"
-            " WHERE e.student_id = st.student_id),"
-            " (SELECT COUNT(*) FROM payments p"
-            " WHERE p.student_id = st.student_id)"
-            " FROM students st"
-        ),
-        trap_sql=(
-            "SELECT st.student_id, COUNT(e.enrolment_id), COUNT(p.payment_id)"
-            " FROM students st"
-            " LEFT JOIN enrolments e ON e.student_id = st.student_id"
-            " LEFT JOIN payments p ON p.student_id = st.student_id"
-            " GROUP BY 1"
-        ),
+        solution=("SELECT t.term_id,"
+                  " (SELECT COUNT(*) FROM enrolments e"
+                  " JOIN sections s ON s.section_id = e.section_id"
+                  " WHERE s.term_id = t.term_id),"
+                  " (SELECT COUNT(*) FROM assessments a"
+                  " JOIN sections s ON s.section_id = a.section_id"
+                  " WHERE s.term_id = t.term_id)"
+                  " FROM terms t"),
+        trap_sql=("SELECT t.term_id, COUNT(e.enrolment_id),"
+                  " COUNT(a.assessment_id) FROM terms t"
+                  " JOIN sections s ON s.term_id = t.term_id"
+                  " LEFT JOIN enrolments e ON e.section_id = s.section_id"
+                  " LEFT JOIN assessments a ON a.section_id = s.section_id"
+                  " GROUP BY 1"),
         note="Joining two child tables to the same parent multiplies them: a"
-             " student with 18 enrolments and 4 payments produces 72 rows, so"
-             " the enrolment count comes out 4x too big and the payment count"
-             " 18x too big. COUNT(DISTINCT ...) would paper over it here, but a"
-             " SUM could not. Two independent measures want two independent"
-             " subqueries -- or two CTEs, each reduced to one row per student"
-             " before they meet.",
-        claims=[
-            ("all 60 students, and both totals match their tables",
-             lambda rows, c: len(rows) == 60
-             and sum(r[1] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM enrolments").fetchone()[0]
-             and sum(r[2] for r in rows) == c.execute(
-                 "SELECT COUNT(*) FROM payments").fetchone()[0]),
-        ],
+             " section with 80 students and 3 assessments produces 240 rows, so"
+             " the enrolment count comes out 3x too big and the assessment"
+             " count 80x too big. COUNT(DISTINCT ...) would paper over it here,"
+             " but a SUM could not. Two independent measures want two"
+             " independent subqueries -- or two CTEs, each reduced to one row"
+             " per term before they meet.",
+        claims=[("six terms, and both totals match their tables",
+                 lambda rows, c: len(rows) == 6
+                 and sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM enrolments").fetchone()[0]
+                 and sum(r[2] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM assessments").fetchone()[0])],
+    ),
+    # ================================================== 7 Query efficiency
+    # These six are graded on their PLAN as well as their rows. Every trap
+    # returns exactly the right answer -- and is rejected for how it got there.
+    dict(
+        id=25, ledger="Q366", concept="X1", tier="7 - Query efficiency",
+        title="A year of enrolments, without scanning the table",
+        prompt=(
+            "How many enrolments were made during the 2025 calendar year.\n\n"
+            "`enrolments.enrolled_on` is indexed. Write this so the index is"
+            " USED -- your plan must say SEARCH, not SCAN. Press F6 to see"
+            " it.\n\n"
+            "Return: one row, one column: the count"
+        ),
+        solution=("SELECT COUNT(*) FROM enrolments"
+                  " WHERE enrolled_on >= '2025-01-01'"
+                  " AND enrolled_on < '2026-01-01'"),
+        trap_sql=("SELECT COUNT(*) FROM enrolments"
+                  " WHERE strftime('%Y', enrolled_on) = '2025'"),
+        plan_forbids=("SCAN",),
+        note="The rule behind all six of these: an index is on the COLUMN, not"
+             " on expressions of it. The moment you wrap enrolled_on in"
+             " strftime() the index cannot be used, because SQLite would have"
+             " to compute the function for every row to find out which ones"
+             " match -- which is precisely the scan you were avoiding. Rewrite"
+             " the test as a RANGE on the bare column and the index works."
+             " Same rows, ten times faster.",
+        claims=[("one row, and it matches the 2025 total",
+                 lambda rows, c: len(rows) == 1 and rows[0][0] == c.execute(
+                     "SELECT COUNT(*) FROM enrolments WHERE"
+                     " strftime('%Y', enrolled_on) = '2025'").fetchone()[0])],
     ),
     dict(
-        id=30, ledger="Q341", concept="C2", tier="6 - Grain and correlation",
-        title="Sections whose marking does not add up",
+        id=26, ledger="Q367", concept="X1", tier="7 - Query efficiency",
+        title="Names beginning with Sofia",
         prompt=(
-            "An assessment's weight is its share of the section's final mark,"
-            " so a section's weights should total 1. Find the sections where"
-            " they do not.\n\n"
-            "Round the total to 2 decimals before comparing. The weights are"
-            " stored to 2 decimals so nothing here needs more, and rounding"
-            " is the habit that stops float arithmetic mattering the day the"
-            " numbers are less tidy. 20 of the 74 sections that have"
-            " assessments are wrong.\n\n"
-            "Return: section_id, total_weight"
+            "Every student whose name starts with 'Sofia'. There are 156.\n\n"
+            "`students.name` is indexed. Write this so the plan says SEARCH,"
+            " not SCAN.\n\n"
+            "Return: student_id, name"
         ),
-        solution=(
-            "SELECT section_id, ROUND(SUM(weight), 2) FROM assessments"
-            " GROUP BY section_id HAVING ROUND(SUM(weight), 2) <> 1.0"
+        solution=("SELECT student_id, name FROM students"
+                  " WHERE name LIKE 'Sofia%'"),
+        trap_sql=("SELECT student_id, name FROM students"
+                  " WHERE substr(name, 1, 5) = 'Sofia'"),
+        plan_forbids=("SCAN",),
+        note="LIKE with a trailing-only wildcard is index-friendly: 'Sofia%'"
+             " becomes the range name >= 'Sofia' AND name < 'Sofib', which is"
+             " exactly what a B-tree does well. Two things break it. A LEADING"
+             " wildcard ('%Sofia') cannot -- no range starts an unknown number"
+             " of characters in. And substr() is a function on the column, so"
+             " it falls foul of question 25's rule. Worth knowing: this index"
+             " is declared COLLATE NOCASE, because LIKE is case-insensitive by"
+             " default and a plain index cannot serve it.",
+        claims=[("156 students, all starting with Sofia",
+                 lambda rows, c: len(rows) == 156
+                 and all(r[1].startswith('Sofia') for r in rows))],
+    ),
+    dict(
+        id=27, ledger="Q368", concept="X2", tier="7 - Query efficiency",
+        title="Ten earliest enrolments, without sorting 67,000 rows",
+        prompt=(
+            "The ten earliest enrolments by date, earliest first. Break ties by"
+            " the lower enrolment_id.\n\n"
+            "`enrolled_on` is indexed, and an index is already in order --"
+            " so this should not need a sort at all. Your plan must NOT contain"
+            " 'TEMP B-TREE'.\n\n"
+            "Return: enrolment_id, enrolled_on"
         ),
-        trap_sql=(
-            "SELECT a.section_id, ROUND(SUM(a.weight), 2) FROM assessments a"
-            " JOIN enrolments e ON e.section_id = a.section_id"
-            " GROUP BY a.section_id HAVING ROUND(SUM(a.weight), 2) <> 1.0"
+        solution=("SELECT enrolment_id, enrolled_on FROM enrolments"
+                  " ORDER BY enrolled_on, enrolment_id LIMIT 10"),
+        trap_sql=("SELECT enrolment_id, enrolled_on FROM enrolments"
+                  " ORDER BY enrolled_on || '', enrolment_id LIMIT 10"),
+        plan_forbids=("TEMP B-TREE",),
+        note="'USE TEMP B-TREE FOR ORDER BY' means SQLite had to build a sorted"
+             " copy of the rows before it could answer -- all 67,000 of them,"
+             " to return 10. An index is already sorted, so ordering by the"
+             " indexed column lets it walk the index and stop after ten. The"
+             " trap sorts by enrolled_on || '', which is a different expression"
+             " from the indexed column even though it has the same value: same"
+             " rule as question 25, different clause.",
+        claims=[("ten rows, in ascending date order",
+                 lambda rows, c: len(rows) == 10
+                 and [r[1] for r in rows] == sorted(r[1] for r in rows))],
+    ),
+    dict(
+        id=28, ledger="Q369", concept="X3", tier="7 - Query efficiency",
+        title="Withdrawals, using the composite index",
+        prompt=(
+            "How many enrolments have status 'withdrawn'.\n\n"
+            "There is an index on enrolments(status, grade) -- status first."
+            " Write this so it is used: the plan must say SEARCH, not SCAN.\n\n"
+            "Return: one row, one column: the count"
         ),
-        note="The question is about assessments only, so bringing enrolments"
-             " into it multiplies every weight by the number of students on the"
-             " section -- the sums explode and a different set of sections"
-             " fails the test. Join only what the answer needs. Note too that"
-             " HAVING is right here: the condition is about the GROUP's total,"
-             " not about any individual row, which is the one thing WHERE"
-             " cannot express.",
-        claims=[
-            ("20 sections, none of them totalling 1",
-             lambda rows, c: len(rows) == 20
-             and all(abs(r[1] - 1.0) > 0.001 for r in rows)),
-            ("74 sections have assessments, so most are fine",
-             lambda rows, c: c.execute(
-                 "SELECT COUNT(DISTINCT section_id) FROM assessments"
-             ).fetchone()[0] == 74),
-        ],
+        solution="SELECT COUNT(*) FROM enrolments WHERE status = 'withdrawn'",
+        trap_sql=("SELECT COUNT(*) FROM enrolments"
+                  " WHERE status || '' = 'withdrawn'"),
+        plan_forbids=("SCAN",),
+        note="A composite index is usable from the LEFT only, like a phone book"
+             " sorted by surname then first name: you can look up everyone"
+             " called Ashworth, but not everyone called Margaret. So"
+             " (status, grade) serves a filter on status, and a filter on grade"
+             " ALONE has to scan -- try it with F6 and watch the plan change."
+             " The trap fails for the older reason: || '' is an expression, and"
+             " the index is on the bare column.",
+        claims=[("one row, matching the withdrawn total",
+                 lambda rows, c: len(rows) == 1 and rows[0][0] == c.execute(
+                     "SELECT COUNT(*) FROM enrolments"
+                     " WHERE status = 'withdrawn'").fetchone()[0])],
+    ),
+    dict(
+        id=29, ledger="Q370", concept="X2", tier="7 - Query efficiency",
+        title="Enrolments per day, without a temporary sort",
+        prompt=(
+            "How many enrolments were made on each distinct date, over the"
+            " whole data set.\n\n"
+            "GROUP BY normally sorts to collect the groups together -- but if"
+            " you group by an INDEXED column it can read them in order instead."
+            " Your plan must NOT contain 'TEMP B-TREE'.\n\n"
+            "Return: enrolled_on, enrolments"
+        ),
+        solution=("SELECT enrolled_on, COUNT(*) FROM enrolments"
+                  " GROUP BY enrolled_on"),
+        trap_sql=("SELECT enrolled_on, COUNT(*) FROM enrolments"
+                  " GROUP BY enrolled_on || ''"),
+        plan_forbids=("TEMP B-TREE",),
+        note="GROUP BY has the same relationship with indexes that ORDER BY"
+             " does, and for the same reason: both need rows brought together"
+             " in order, and an index already holds them that way. When it"
+             " cannot use one you get 'USE TEMP B-TREE FOR GROUP BY' and a"
+             " sort of the whole table. Seven times slower here for an"
+             " identical answer.",
+        claims=[("216 distinct days, and the counts total every enrolment",
+                 lambda rows, c: len(rows) == 216
+                 and sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM enrolments").fetchone()[0])],
+    ),
+    dict(
+        id=30, ledger="Q371", concept="X4", tier="7 - Query efficiency",
+        title="What blocking an index does to a join",
+        prompt=(
+            "How many enrolments belong to students whose name starts with"
+            " 'Sofia'.\n\n"
+            "This is question 26's filter, now driving a join against 67,000"
+            " enrolments. Written so the index on students.name is usable, it"
+            " is over a hundred times faster. Your plan must not contain"
+            " 'SCAN'.\n\n"
+            "Return: one row, one column: the count"
+        ),
+        solution=("SELECT COUNT(*) FROM enrolments e"
+                  " JOIN students s ON s.student_id = e.student_id"
+                  " WHERE s.name LIKE 'Sofia%'"),
+        trap_sql=("SELECT COUNT(*) FROM enrolments e"
+                  " JOIN students s ON s.student_id = e.student_id"
+                  " WHERE upper(s.name) LIKE 'SOFIA%'"),
+        plan_forbids=("SCAN",),
+        note="This is the one that shows why any of it matters. Blocking the"
+             " index does not just slow one lookup down -- it changes the"
+             " STRATEGY. With the index usable, SQLite starts from students,"
+             " finds 156 of them, and seeks their enrolments: 0.08ms. With"
+             " upper() in the way it cannot start there, so it scans all 67,000"
+             " enrolments and looks up each student in turn: 12ms, 150 times"
+             " slower, for the same number. Press F6 on both and compare the"
+             " first line of each plan -- the table named there is the one"
+             " being driven.",
+        claims=[("one row, matching the direct count",
+                 lambda rows, c: len(rows) == 1 and rows[0][0] == c.execute(
+                     "SELECT COUNT(*) FROM enrolments e JOIN students s"
+                     " ON s.student_id = e.student_id"
+                     " WHERE s.name LIKE 'Sofia%'").fetchone()[0])],
     ),
 ]
 
+
 BY_ID = {ex["id"]: ex for ex in EXERCISES}
 TIERS = list(dict.fromkeys(ex["tier"] for ex in EXERCISES))
+
+def query_plan(conn, sql):
+    """The rows of EXPLAIN QUERY PLAN, joined into one searchable string.
+
+    SQLite's plan output is a small tree; the `detail` column carries the text
+    everyone actually reads -- "SCAN enrolments", "SEARCH ... USING INDEX ...",
+    "USE TEMP B-TREE FOR ORDER BY". Joining them gives one string that a
+    question can make assertions about.
+    """
+    return " | ".join(
+        r[3] for r in conn.execute("EXPLAIN QUERY PLAN " + sql).fetchall())
+
+
+def plan_ok(exercise, plan):
+    """(passed, message) for an exercise's plan assertions.
+
+    Efficiency questions cannot be graded on their result, because the slow
+    way and the fast way return exactly the same rows -- that is what makes
+    them worth asking. So they carry `plan_requires` and/or `plan_forbids`,
+    checked against EXPLAIN QUERY PLAN, and a right answer has to be BOTH
+    correct and taken by the intended route.
+
+    Matching is case-insensitive substring, which is coarse on purpose: it
+    should accept any query that reaches the plan the question is about, not
+    just the reference wording.
+    """
+    up = plan.upper()
+    for needle in exercise.get("plan_requires", ()):
+        if needle.upper() not in up:
+            return False, (f"Right rows, but the query plan does not contain"
+                           f" {needle!r}.\n  Plan: {plan}")
+    for needle in exercise.get("plan_forbids", ()):
+        if needle.upper() in up:
+            return False, (f"Right rows, but the query plan contains"
+                           f" {needle!r}, which this question asks you to"
+                           f" avoid.\n  Plan: {plan}")
+    return True, ""
 
 
 def normalise(rows):
