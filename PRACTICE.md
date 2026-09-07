@@ -71,7 +71,7 @@ The tables: `campuses`, `departments`, `instructors`, `students`, `courses`,
   two academic years — so `strftime('%m', ...)` halves the row count.
 - **Assessment weights do not always add up.** 20 of the 74 sections that have
   assessments have weights totalling something other than 1. Deliberate: it is
-  what question 30 looks for, and it needs rounding before comparison.
+  what question 30 looks for.
 - **Sections have two independent children**, and so do students. 5 sections
   have no enrolments and 11 have no assessments — different sets, so joining
   both fans out rather than filtering.
@@ -387,8 +387,11 @@ that set. Five questions, each isolating one part.
     The highest mark achieved by students at each campus, and who got
     it. Only graded enrolments count.
 
-    Every campus has students tied on its top mark, so the answer is 8
+    Every campus has students tied on its top mark, so the answer is 7
     rows across 4 campuses, not 4.
+
+    One student holds their campus top mark on TWO enrolments. They are
+    one person, and appear once.
 
     *Return: campus_id, student_id, name, grade*
 
@@ -426,9 +429,10 @@ only HAVING can express.
     a section's weights should total 1. Find the sections where they do
     not.
 
-    Round the total to 2 decimals before comparing, or floating-point
-    noise will report almost every section. 20 of the 74 sections that
-    have assessments are wrong.
+    Round the total to 2 decimals before comparing. The weights are
+    stored to 2 decimals so nothing here needs more, and rounding is the
+    habit that stops float arithmetic mattering the day the numbers are
+    less tidy. 20 of the 74 sections that have assessments are wrong.
 
     *Return: section_id, total_weight*
 

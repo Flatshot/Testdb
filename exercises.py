@@ -988,8 +988,10 @@ EXERCISES = [
         prompt=(
             "The highest mark achieved by students at each campus, and who got"
             " it. Only graded enrolments count.\n\n"
-            "Every campus has students tied on its top mark, so the answer is 8"
-            " rows across 4 campuses, not 4.\n\n"
+            "Every campus has students tied on its top mark, so the answer is"
+            " 7 rows across 4 campuses, not 4.\n\n"
+            "One student holds their campus top mark on TWO enrolments. They"
+            " are one person, and appear once.\n\n"
             "Return: campus_id, student_id, name, grade"
         ),
         solution=(
@@ -997,7 +999,8 @@ EXERCISES = [
             " RANK() OVER (PARTITION BY st.campus_id ORDER BY e.grade DESC) rk"
             " FROM enrolments e JOIN students st"
             " ON st.student_id = e.student_id WHERE e.grade IS NOT NULL)"
-            " SELECT campus_id, student_id, name, grade FROM g WHERE rk = 1"
+            " SELECT DISTINCT campus_id, student_id, name, grade"
+            " FROM g WHERE rk = 1"
         ),
         trap_sql=(
             "WITH g AS (SELECT st.campus_id, st.student_id, st.name, e.grade,"
@@ -1011,12 +1014,18 @@ EXERCISES = [
              " keeps one row arbitrarily and you silently lose the others. RANK"
              " gives tied rows the same number. ROW_NUMBER when you want"
              " exactly one row -- as in question 26 -- and RANK when you want"
-             " everyone who earned the position. And do not reach for GROUP BY"
-             " here: it would find the top mark but lose the name.",
+             " everyone who earned the position. The DISTINCT does a"
+             " separate job: one student holds their campus top mark on"
+             " two enrolments, and the question asks who got the mark,"
+             " not how many times. Do not reach for GROUP BY instead --"
+             " it would find the top mark but lose the name.",
         claims=[
-            ("8 rows across 4 campuses, so every campus is tied",
-             lambda rows, c: len(rows) == 8
+            ("7 rows across 4 campuses, so every campus is tied",
+             lambda rows, c: len(rows) == 7
              and len({r[0] for r in rows}) == 4),
+            ("no student appears twice for the same mark",
+             lambda rows, c: len({(r[0], r[1], r[3]) for r in rows})
+             == len(rows)),
         ],
     ),
     # ============================================= 6 Grain and correlation
@@ -1108,9 +1117,11 @@ EXERCISES = [
             "An assessment's weight is its share of the section's final mark,"
             " so a section's weights should total 1. Find the sections where"
             " they do not.\n\n"
-            "Round the total to 2 decimals before comparing, or floating-point"
-            " noise will report almost every section. 20 of the 74 sections"
-            " that have assessments are wrong.\n\n"
+            "Round the total to 2 decimals before comparing. The weights are"
+            " stored to 2 decimals so nothing here needs more, and rounding"
+            " is the habit that stops float arithmetic mattering the day the"
+            " numbers are less tidy. 20 of the 74 sections that have"
+            " assessments are wrong.\n\n"
             "Return: section_id, total_weight"
         ),
         solution=(
