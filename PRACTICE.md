@@ -1,456 +1,427 @@
 # SQL practice exercises
 
-Thirty questions on the college schema, re-seeded and **scaled up**. Same
-tables -- see [schema.sql](schema.sql) -- but two orders of magnitude more rows:
+Thirty questions on the college schema, re-seeded and larger again: **83,000
+enrolments** across 964 sections. Same tables -- see [schema.sql](schema.sql).
 
-| | before | now |
-|---|---|---|
-| students | 60 | 4,000 |
-| sections | 85 | 774 |
-| enrolments | 550 | 67,000 |
-| payments | 129 | 7,800 |
+Harder than the last set in two different ways.
 
-**The scale is the point.** At 550 rows every query returns instantly however it
-is written, so there is nothing to learn about cost. At 67,000 a table scan
-takes 10ms where an index seek takes 0.8ms, and a blocked index on a join costs
-150x. You can feel the difference, which means it can be taught.
+**The first 24** keep the shape -- one concept each, the prompt states the grain
+-- but the SQL is longer and the traps are subtler. Several need two CTEs where
+one would have done, and several traps now return a *plausible* answer rather
+than an obviously broken one.
 
-| Stage | Questions | What it is |
-|---|---|---|
-| 1 - Warm-up | 1-4 | one table, no joins |
-| 2 - First joins | 5-9 | two tables, outer joins, EXISTS |
-| 3 - Recursion | 10-13 | the gentlest in the set |
-| 4 - Dates, sets and pivots | 14-18 | |
-| 5 - Window functions | 19-22 | |
-| 6 - Grain and correlation | 23-24 | |
-| 7 - Query efficiency | 25-30 | **new** |
+**The efficiency stage is where the difficulty really moves.** Last time the fast
+form was the obvious form: stop wrapping the column in a function and you were
+done. These six are the opposite -- the naive query is the readable one, and the
+fix is something you would not guess:
 
-Because the tables are now large, the earlier questions aggregate to a dimension
--- per campus, per term, per faculty -- rather than listing rows. "Top mark per
-campus" would return 707 rows at this scale and teach nothing.
-
-## The efficiency stage, and how it is graded
-
-Those six **cannot** be graded on their result: the slow form and the fast form
-return exactly the same rows. That is precisely what makes the mistake worth
-making, and why nothing in the first six stages could have caught it.
-
-So they carry assertions about the **query plan**, checked with
-`EXPLAIN QUERY PLAN`. A right answer has to be correct *and* arrive by the
-intended route. A correct result reached by scanning 67,000 rows is marked
-wrong, and the plan is shown so you can see why:
-
-```
-Right rows, but the query plan contains 'SCAN', which this question asks you
-to avoid.
-  Plan: SCAN enrolments USING COVERING INDEX idx_enrol_date
-```
-
-**Press F6** (or the "Explain plan" button) on any query, at any time, to see its
-plan and how long it took. Three words carry most of the meaning:
-
-| | |
+| # | The fix |
 |---|---|
-| `SCAN` | every row of the table is read |
-| `SEARCH` | an index is used to jump straight to the matching rows |
-| `TEMP B-TREE` | the rows had to be sorted or grouped on the fly |
+| 25 | **add** a predicate that filters nothing, to unlock a composite index |
+| 26 | change which **columns you mention**, to keep the index covering |
+| 27 | reorder an `ORDER BY` to match the index's own column order |
+| 28 | group by the bare column so the index can supply the grouping |
+| 29 | prefer a correlated `NOT EXISTS` **over** a `LEFT JOIN` anti-join |
+| 30 | order by the driving table, not the joined one |
 
-**One rule explains five of the six questions:** an index is on the COLUMN, not
-on expressions of it. `strftime('%Y', enrolled_on)`, `substr(name, 1, 5)`,
-`enrolled_on || ''`, `upper(name)` -- each of these is a different column as far
-as the index is concerned, so SQLite must compute it for every row to find out
-what matches, which is exactly the scan you were trying to avoid. The fix is
-always the same shape: test the **bare column**, usually as a range.
+Question 29 is the one to sit with: it runs directly against the usual advice
+that a correlated subquery should be rewritten as a join. Here the join builds
+83,000 rows to find 572, and the subquery asks one indexed question per student.
+
+Each prompt still names the plan to aim for, so you know when you have arrived.
+What it does not say is how. **Press F6** for the plan and timing.
+
+| Stage | Questions |
+|---|---|
+| 1 - Warm-up | 1-4 |
+| 2 - First joins | 5-9 |
+| 3 - Recursion | 10-13 |
+| 4 - Dates, sets and pivots | 14-18 |
+| 5 - Window functions | 19-22 |
+| 6 - Grain and correlation | 23-24 |
+| 7 - Query efficiency | 25-30 |
 
 ## Things the data does on purpose
 
-- **Two indexes exist so the efficiency questions have something to hit or
-  miss.** `students(name COLLATE NOCASE)` -- the collation is required, because
-  `LIKE` is case-insensitive by default and a plain index cannot serve it. And
-  `enrolments(status, grade)`, a composite, usable from the LEFT only: a filter
-  on `status` seeks, a filter on `grade` alone must scan.
-- **`prerequisites` is a graph, not a tree.** 29 edges over 34 courses; the
-  deepest chain runs 3 hops, and some courses are reachable by two routes --
-  which is why `UNION` vs `UNION ALL` changes the answer in question 13.
-- **A three-level mentoring tree.** The root mentors 3 people directly but 15
-  sit below them, so a single join is visibly short.
-- **`NOT IN` is a trap here.** `instructors.mentor_id` is NULL at the top and
-  `sections.instructor_id` is NULL for unstaffed sections.
-- **`grade` is NULL unless the enrolment completed**, so `AVG` and
-  `SUM/COUNT(*)` disagree by about a third.
-- **Dates are TEXT.** `ends_on - starts_on` coerces to numbers and returns
-  nonsense. Use `julianday()`.
-- **Deliberate gaps**: 5 courses never scheduled, 6 with no online section.
+- **Nine indexes**, several reachable only if a query is restructured. The two
+  composites -- `students(campus_id, funding_band)` and
+  `payments(status, billed_on)` -- are usable from the LEFT only, which is what
+  questions 25 and 27 turn on. `students(name COLLATE NOCASE)` needs the
+  collation because `LIKE` is case-insensitive and a BINARY index cannot serve
+  it.
+- **`grade` is NULL unless the enrolment completed** -- 26,527 of 82,911. Every
+  comparison against those returns NULL, so they fall through every `WHEN` and
+  land in whatever `ELSE` you wrote.
+- **572 students never enrolled**, which is what question 29 counts, and why the
+  anti-join has 83,000 rows to discard.
+- **`prerequisites` is a graph**, but no course is currently reachable by two
+  paths of different lengths -- so `MIN` and `MAX` over hop counts agree, and
+  question 11 asks you to know which you meant rather than punishing you.
+- **Dates are TEXT.** Subtracting coerces to years and returns 0.
 
 ## 1 - Warm-up (4)
 
-Four questions on a single table, no joins. Each isolates one
-behaviour of GROUP BY, CASE or NULL.
+Four questions on a single table. Same idea as before, harder execution --
+a pivot with a NULL column, two aggregate conditions relating to each other,
+a CASE whose ELSE catches what you did not intend.
 
-1. **Funding recorded, and not** (Q342)
+1. **Funding mix by campus** (Q372)
 
-   One row per campus id: how many students it has, and how many of
-   them have a funding band recorded.
+   One row per campus id, with the number of its students on each
+   funding band as columns -- and a fourth column for those with no
+   band recorded.
 
-   Some students have no funding_band, so the two counts differ at
-   every campus. One table, no joins.
+   The four columns must account for every student at that campus. One
+   table, no joins.
 
-   *Return: campus_id, students, with_band*
+   *Return: campus_id, self, grant, sponsor, unrecorded*
 
-2. **Which enrolment statuses were common in 2026** (Q343)
+2. **Busy days that were not all withdrawals** (Q373)
 
-   Counting only enrolments made on or after 2026-01-01, one row per
-   status, keeping the statuses with at least 2,500 of them.
+   Dates on which more than 400 enrolments were made, where fewer than
+   a fifth of them were withdrawn.
 
-   Two of the three statuses clear the bar. One table, no joins.
+   Both conditions are about the day as a whole, not about individual
+   rows. One table, no joins.
 
-   *Return: status, enrolments*
+   *Return: enrolled_on, enrolments, withdrawn*
 
-3. **Sections by size** (Q344)
+3. **Grade bands, including the ungraded** (Q374)
 
-   Put every section into one of three bands by capacity and count
-   them:
+   Put every enrolment into one of four bands and count them:
 
-       'large'  120 or more
-       'medium' 60 up to but not including 120
-       'small'  everything else
+       'distinction' grade 70 or more
+       'pass'        grade 40 to 69
+       'fail'        grade below 40
+       'ungraded'    no grade recorded
 
-   All 774 sections land in exactly one band.
+   All 82,911 enrolments land in exactly one band.
 
-   *Return: band, sections*
+   *Return: band, enrolments*
 
-4. **Average mark, where there is one** (Q345)
+4. **Marks by band, and how many carry one** (Q375)
 
-   One row per campus: how many enrolments its students made, how many
-   of those carry a grade, and the average of the grades that exist.
+   One row per enrolment status: how many enrolments have it, how many
+   carry a grade, the average grade, and the average computed over ALL
+   of that status's rows treating a missing grade as zero.
 
-   Only completed enrolments are graded, so the average must be over
-   the graded ones alone -- not over everyone enrolled.
+   Two of the statuses have no grades at all, so their true average is
+   NULL while their zero-filled average is 0.
 
-   *Return: campus_id, enrolments, graded, avg_grade*
+   *Return: status, enrolments, graded, avg_grade, avg_with_zeros*
 
 ## 2 - First joins (5)
 
-Two tables at a time. Three of the five hinge on the rows that DON'T
-match -- the course nobody scheduled, the course with no online section, the
-instructor nobody reports to.
+Two or three tables. The recurring theme is conditions that cannot be
+expressed as a filter on a row, because they are about a whole set of rows.
 
-5. **Every course, scheduled or not** (Q346)
-
-   One row for every course in the catalogue: its id, code, and how
-   many sections have ever been scheduled for it.
-
-   Five courses have never been scheduled. They must appear with 0, so
-   all 34 courses come back.
-
-   *Return: course_id, code, sections*
-
-6. **Online teaching per course** (Q347)
+5. **Online teaching per course** (Q376)
 
    One row for every course: id, code, and how many of its sections are
    delivered ONLINE.
 
-   Six courses have none -- five were never scheduled at all, and one
-   runs only in person. They must appear with 0, so all 34 courses come
-   back.
+   Six courses have none. They must appear with 0, so all 34 courses
+   come back.
 
    *Return: course_id, code, online_sections*
 
-7. **Courses that sit alongside each other** (Q348)
+6. **Straight to level 4** (Q377)
 
-   Pairs of courses in the same department at the same level.
+   Students who have enrolled on a LEVEL-4 course but never on a
+   level-1 one.
 
-   Each pair once, not twice, and no course paired with itself. Order
-   each pair so that code_a belongs to the LOWER course_id. There are 4
-   pairs.
+   Courses sit under sections, which carry the enrolment. Exactly one
+   student qualifies out of the 2,687 who have taken anything at level
+   4.
+
+   *Return: student_id, name*
+
+7. **Courses that sit alongside each other** (Q378)
+
+   Pairs of courses in the same department at the same level, where the
+   two carry a DIFFERENT number of credits.
+
+   Each pair once, ordered so code_a belongs to the lower course_id.
 
    *Return: department_id, code_a, code_b*
 
-8. **Courses nobody has scheduled** (Q349)
+8. **Courses nobody has scheduled** (Q379)
 
    Every course that has never had a section scheduled.
 
    Write it as an outer join that keeps the non-matches, rather than
-   with NOT IN. There are 5 such courses.
+   with NOT IN. There are 6.
 
    *Return: course_id, code*
 
-9. **Instructors who mentor nobody** (Q350)
+9. **Instructors who mentor nobody** (Q380)
 
    Every instructor who is nobody's mentor. Twelve of the sixteen
    qualify.
 
-   Watch out: one instructor -- the one at the top -- has no mentor
-   themselves, so mentor_id contains a NULL. That is what makes the
-   obvious answer wrong.
+   mentor_id contains a NULL, for the instructor at the top, which is
+   what makes the obvious answer wrong.
 
    *Return: instructor_id, name*
 
 ## 3 - Recursion (4)
 
-The gentlest questions in the set: an anchor that is one obvious row and a
-step that is one join back to the CTE. Four shapes -- down a tree, down a
-straight chain, up a branching one, and one whose anchor is its own answer.
+Now carrying values through the walk, not just collecting ids: a depth
+counter, a hop count, and one query that recurses and then filters what it
+found.
 
-10. **Everyone under Margaret Ashworth** (Q351)
+10. **Everyone under Margaret Ashworth, with their depth** (Q381)
 
-    Margaret Ashworth is the one instructor with no mentor. List
-    everyone below her: the people she mentors, the people they mentor,
-    and so on.
+    Everyone below Margaret Ashworth in the mentoring tree, with how
+    many levels below her they sit.
 
-    Fifteen rows -- everyone except Margaret. Only three are her direct
-    mentees, which is why a single join is not enough.
+    Her direct mentees are 1, their mentees 2, and so on. Fifteen rows;
+    Margaret herself is not among them.
 
-    *Return: instructor_id, name*
+    *Return: instructor_id, name, depth*
 
-11. **What Audit and Assurance needs** (Q352)
+11. **What Machine Learning needs, and how far back** (Q382)
 
-    Course ACC301 'Audit and Assurance' has a prerequisite, and that has
-    one of its own. List every course ACC301 depends on, at any depth.
+    Every course CMP401 depends on, at any depth, with the FEWEST hops
+    from CMP401 to that course.
 
-    This chain is a straight line -- exactly one prerequisite at each
-    hop -- so it is two rows. ACC301 itself is not in the answer.
+    A course reachable both directly and through another counts as 1.
+    CMP401 itself is not in the answer.
 
-    *Return: code, title*
+    *Return: code, hops*
 
-12. **What is blocked by Programming Foundations** (Q353)
+12. **What is blocked by Programming Foundations** (Q383)
 
-    The other way round. Every course that requires CMP101 'Programming
-    Foundations', directly or indirectly.
+    Every course that requires CMP101 'Programming Foundations',
+    directly or indirectly.
 
-    Five courses, and the chain branches: three require it directly, and
-    the rest come through those.
+    Travel the other way along prerequisites from question 11.
 
     *Return: code, title*
 
-13. **A full study plan for Machine Learning** (Q354)
+13. **Courses that depend on nothing** (Q384)
 
-    Everything a student must pass to finish CMP401 'Machine Learning'
-    -- every course it depends on at any depth, AND CMP401 itself.
+    Starting from CMP401 and walking its prerequisites at any depth,
+    which of the courses reached have NO prerequisites of their own --
+    the foundations of its dependency tree.
 
-    Seven courses. This one branches, and some courses are reachable by
-    two different routes but must still appear once.
+    CMP401 itself is excluded.
 
     *Return: code, title*
 
 ## 4 - Dates, sets and pivots (5)
 
-Dates are TEXT in SQLite, and set operators stack results rather than
-joining them.
+Date arithmetic inside an aggregate, two levels of date extraction in one
+query, and integer division quietly destroying a set of percentages.
 
-14. **How long each term runs** (Q355)
+14. **How much of each term had passed** (Q385)
 
-    One row per term: its name, and how many whole days it lasts from
-    starts_on to ends_on.
+    One row per term: its name, its length in whole days, and the
+    average number of whole days INTO the term at which its enrolments
+    were made.
 
-    All six terms appear, and every length is between 70 and 90 days.
+    An enrolment made before the term starts counts as a negative number
+    of days. All six terms appear.
 
-    *Return: term_id, name, days*
+    *Return: term_id, name, term_days, avg_days_in*
 
-15. **Enrolments by month** (Q356)
+15. **The busiest month of each academic year** (Q386)
 
-    One row per calendar month in which any enrolment was made: the
-    month as 'YYYY-MM', and how many were made in it.
+    For each academic year -- taken as the calendar year of the
+    enrolment date -- the single month with the most enrolments.
 
-    The data spans two academic years, so the same month name recurs and
-    the two must not be added together. There are 14 such months.
+    Months are 'YYYY-MM'. One row per year present in the data.
 
-    *Return: month, enrolments*
+    *Return: year, month, enrolments*
 
-16. **Billed in a month nobody enrolled** (Q357)
+16. **Billed in a month nobody enrolled** (Q387)
 
     Months in which at least one payment was billed but NO enrolment was
-    made. Months are 'YYYY-MM'.
-
-    Billing runs all year while enrolment clusters around the terms.
-    Nine months qualify.
+    made. Months are 'YYYY-MM'. Nine qualify.
 
     *Return: month*
 
-17. **Required reading on a first-year course** (Q358)
+17. **Books that changed their status between levels** (Q388)
 
-    Textbooks that are BOTH marked required (required = 1) on some
-    course AND appear on the reading list of a level-1 course.
-
-    The two need not be the same course. Eleven books qualify.
+    Textbooks that are marked REQUIRED on at least one course and merely
+    recommended (required = 0) on at least one other.
 
     *Return: book_id, title*
 
-18. **Enrolment status by term** (Q359)
+18. **Status mix by term, as percentages** (Q389)
 
-    One row per term, with the number of its enrolments in each of the
-    three statuses side by side as columns.
+    One row per term: the term name, and the percentage of its
+    enrolments in each of the three statuses.
 
-    All six terms appear, and the three columns together account for
-    every enrolment.
+    The three percentages on each row add up to 100. All six terms
+    appear.
 
-    *Return: term_id, name, completed, active, withdrawn*
+    *Return: term_id, name, pct_completed, pct_active, pct_withdrawn*
 
 ## 5 - Window functions (4)
 
-A calculation that sees a set of rows around each row without collapsing
-them. PARTITION BY says which rows it may see, ORDER BY orders them inside
-that set.
+Two windows over the same column doing opposite jobs; a percentage change
+that must divide by the previous value; the default frame versus a real one.
 
-19. **Term on term** (Q360)
+19. **Term on term, in percentage terms** (Q390)
 
-    One row per term, in term order: the term name, how many enrolments
-    were made on its sections, and the change from the term before.
+    One row per term in term order: the name, its enrolments, and the
+    percentage change from the term before.
 
-    The first term has nothing before it, so its change is NULL -- leave
-    it NULL. All six terms appear.
+    The first term has nothing before it, so its change is NULL. A fall
+    is negative.
 
-    *Return: term_id, name, enrolments, change*
+    *Return: term_id, name, enrolments, pct_change*
 
-20. **Enrolments so far** (Q361)
+20. **Cumulative share of enrolments** (Q391)
 
-    One row per term, in term order: the term name, how many enrolments
-    were made on its sections, and the running total up to and including
-    that term.
+    One row per term in term order: the name, its enrolments, the
+    running total up to and including it, and that running total as a
+    percentage of all enrolments.
 
-    The running total on the last term equals every enrolment in the
-    table.
+    The last term's percentage is 100.
 
-    *Return: term_id, name, enrolments, running_total*
+    *Return: term_id, name, enrolments, running_total, pct_so_far*
 
-21. **Share of the enrolments by faculty** (Q362)
+21. **The two biggest courses in each faculty** (Q392)
 
-    One row per faculty: the faculty, how many enrolments its
-    departments' courses attracted, and that count as a percentage of
-    all enrolments.
+    For each faculty, the two courses with the most enrolments, with
+    their rank.
 
-    Four faculties, and the four percentages add up to 100.
+    If two courses tie for second, both appear. Rank within the faculty,
+    highest first.
 
-    *Return: faculty, enrolments, pct_of_total*
+    *Return: faculty, code, enrolments, rank*
 
-22. **The two biggest courses in each faculty** (Q363)
+22. **Three-term rolling average** (Q393)
 
-    For each faculty, the two courses with the most enrolments.
+    One row per term in order: the name, its enrolments, and the average
+    over that term and the two before it.
 
-    Rank within the faculty by enrolment count, highest first, and keep
-    ranks 1 and 2. Four faculties, so 8 rows.
+    The first term averages just itself, the second two terms, and every
+    term after that three.
 
-    *Return: faculty, code, enrolments*
+    *Return: term_id, name, enrolments, rolling_avg*
 
 ## 6 - Grain and correlation (2)
 
-A subquery that must run per row, and two child tables that multiply when
-joined together.
+A CTE referenced twice so a row can be compared to its own group, and three
+measures at three grains where COUNT(DISTINCT) rescues one column and hides
+that the other two are wrong.
 
-23. **Paid above their own department's average** (Q364)
+23. **Courses busier than their department's average** (Q394)
 
-    Every instructor on a higher hourly_rate than the average for THEIR
-    OWN department -- not higher than the college average.
+    Courses whose enrolment count is above the average enrolment count
+    of the courses in THEIR OWN department.
 
-    Seven qualify. Be careful: the college-wide version also returns
-    seven, so a row count will not tell you which one you wrote.
+    Only courses with at least one enrolment take part, on both sides of
+    the comparison.
 
-    *Return: instructor_id, name, department_id, hourly_rate*
+    *Return: code, department_id, enrolments*
 
-24. **Enrolments and assessments per term** (Q365)
+24. **Three measures per term** (Q395)
 
-    One row per term: how many enrolments were made on its sections, and
-    how many assessments those sections set.
+    One row per term: how many sections it has, how many enrolments were
+    made on them, and how many assessments those sections set.
 
-    Both hang off sections, but they are independent of each other. All
-    six terms appear.
+    Sections is the parent; the other two are independent children of
+    it. All six terms appear.
 
-    *Return: term_id, enrolments, assessments*
+    *Return: term_id, sections, enrolments, assessments*
 
 ## 7 - Query efficiency (6)
 
-**Graded on the query PLAN, not just the rows.** Every trap in this stage
-returns exactly the right answer and is rejected for how it got there --
-because the slow way and the fast way return identical rows, which is what
-makes the mistake worth making. Press F6 on anything to see its plan and
-timing.
+**Graded on the query PLAN.** Unlike the last set, the fast form is NOT the
+obvious form in any of these -- the naive query is the readable one and the
+fix is something you would not guess. Each prompt names the plan to aim for.
+It does not tell you how to get there. Press F6 and work backwards.
 
-25. **A year of enrolments, without scanning the table** (Q366)
+25. **Make the query longer to make it faster** (Q396)
 
-    How many enrolments were made during the 2025 calendar year.
+    How many students are on the 'grant' funding band.
 
-    `enrolments.enrolled_on` is indexed. Write this so the index is USED
-    -- your plan must say SEARCH, not SCAN. Press F6 to see it.
+    There is an index on students(campus_id, funding_band). The obvious
+    query cannot use it. Your plan must say SEARCH, not SCAN -- and the
+    fix is to ADD something to the WHERE clause, not to change what is
+    there.
 
     *Plan must not contain: `SCAN`*
 
     *Return: one row, one column: the count*
 
-26. **Names beginning with Sofia** (Q367)
+26. **Keep the index covering** (Q397)
 
-    Every student whose name starts with 'Sofia'. There are 156.
+    Every withdrawn enrolment's status and grade.
 
-    `students.name` is indexed. Write this so the plan says SEARCH, not
-    SCAN.
+    There is an index on enrolments(status, grade). Return ONLY what
+    that index already holds and SQLite never has to open the table at
+    all. Your plan must say COVERING INDEX.
 
-    *Plan must not contain: `SCAN`*
+    *Plan must contain: `COVERING INDEX`*
 
-    *Return: student_id, name*
+    *Return: status, grade*
 
-27. **Ten earliest enrolments, without sorting 67,000 rows** (Q368)
+27. **Sort in the order the index is already in** (Q398)
 
-    The ten earliest enrolments by date, earliest first. Break ties by
-    the lower enrolment_id.
+    The first 20 payments ordered by status and then by billing date,
+    returning just the id.
 
-    `enrolled_on` is indexed, and an index is already in order -- so
-    this should not need a sort at all. Your plan must NOT contain 'TEMP
-    B-TREE'.
+    There is an index on payments(status, billed_on). Order by those two
+    columns in the order the index holds them and no sort is needed at
+    all. Your plan must NOT contain 'TEMP B-TREE'.
 
     *Plan must not contain: `TEMP B-TREE`*
 
-    *Return: enrolment_id, enrolled_on*
+    *Return: payment_id*
 
-28. **Withdrawals, using the composite index** (Q369)
+28. **Group in the order the index is already in** (Q399)
 
-    How many enrolments have status 'withdrawn'.
+    How many payments were billed on each distinct date.
 
-    There is an index on enrolments(status, grade) -- status first.
-    Write this so it is used: the plan must say SEARCH, not SCAN.
-
-    *Plan must not contain: `SCAN`*
-
-    *Return: one row, one column: the count*
-
-29. **Enrolments per day, without a temporary sort** (Q370)
-
-    How many enrolments were made on each distinct date, over the whole
-    data set.
-
-    GROUP BY normally sorts to collect the groups together -- but if you
-    group by an INDEXED column it can read them in order instead. Your
-    plan must NOT contain 'TEMP B-TREE'.
+    GROUP BY normally sorts to bring each group together -- but
+    payments(billed_on) is indexed, and an index is already grouped.
+    Your plan must NOT contain 'TEMP B-TREE'.
 
     *Plan must not contain: `TEMP B-TREE`*
 
-    *Return: enrolled_on, enrolments*
+    *Return: billed_on, payments*
 
-30. **What blocking an index does to a join** (Q371)
+29. **The anti-join that should not be a join** (Q400)
 
-    How many enrolments belong to students whose name starts with
-    'Sofia'.
+    How many students have never enrolled on anything.
 
-    This is question 26's filter, now driving a join against 67,000
-    enrolments. Written so the index on students.name is usable, it is
-    over a hundred times faster. Your plan must not contain 'SCAN'.
+    The LEFT JOIN ... IS NULL form works and is three times slower,
+    because it joins 83,000 rows to throw nearly all of them away. Write
+    the form that asks the question per student instead: your plan must
+    contain 'CORRELATED SCALAR SUBQUERY'.
 
-    *Plan must not contain: `SCAN`*
+    *Plan must contain: `CORRELATED SCALAR SUBQUERY`*
 
     *Return: one row, one column: the count*
+
+30. **Order by the table you are driving** (Q401)
+
+    The 20 earliest enrolments that belong to a student, returning the
+    enrolment id.
+
+    Every enrolment has a student, so the join changes nothing about
+    WHICH rows come back -- but ordering by a column of the joined table
+    forces a sort of all 83,000. Order by the driving table's indexed
+    column instead. Your plan must NOT contain 'TEMP B-TREE'.
+
+    *Plan must not contain: `TEMP B-TREE`*
+
+    *Return: enrolment_id*
 ## The one concept with no question here
 
-**Alias scope follows clause order.** Logical order is `FROM` -> `WHERE` ->
-`GROUP BY` -> `HAVING` -> window functions -> `SELECT` -> `ORDER BY` ->
-`LIMIT`, and a name only exists after the step that creates it. Postgres and
-SQL Server reject a SELECT alias in `WHERE`.
-
-There is no graded question because **SQLite will not punish you for it** -- it
-happily accepts an alias in `WHERE`. Keep the rule for portability, and reach
-for a CTE when you want a real column to filter or group by.
+**Alias scope follows clause order.** SQLite accepts a SELECT alias in `WHERE`
+where Postgres and SQL Server do not, so it cannot be graded here. Keep the rule
+for portability, and reach for a CTE when you want a real column to filter on.
 
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-341 retired ones.
+371 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
