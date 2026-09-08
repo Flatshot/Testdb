@@ -196,3 +196,25 @@ CREATE INDEX IF NOT EXISTS idx_payments_stu    ON payments(student_id);
 --                            alone does not
 CREATE INDEX IF NOT EXISTS idx_students_name   ON students(name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_enrol_status    ON enrolments(status, grade);
+
+-- More indexes, several of them usable ONLY if the query is restructured.
+-- That is the point: each of these can be reached, but not by the way the
+-- question is most naturally written.
+--   students(campus_id, funding_band)  a filter on funding_band alone cannot
+--                                      use it; adding a predicate on the
+--                                      LEADING column unlocks it, so making
+--                                      the query longer makes it faster
+--   payments(status, billed_on)        same shape, on a different table
+--   payments(billed_on)                so a date range has its own route
+--   assessments(due_on)                a range that competes with the
+--                                      section_id index -- which one SQLite
+--                                      picks depends on how you filter
+--   sections(delivery)                 low-cardinality: usable, but SQLite
+--                                      will decline it when the filter is not
+--                                      selective enough to be worth it
+CREATE INDEX IF NOT EXISTS idx_students_camp_band
+    ON students(campus_id, funding_band);
+CREATE INDEX IF NOT EXISTS idx_pay_status_date  ON payments(status, billed_on);
+CREATE INDEX IF NOT EXISTS idx_pay_billed       ON payments(billed_on);
+CREATE INDEX IF NOT EXISTS idx_assess_due       ON assessments(due_on);
+CREATE INDEX IF NOT EXISTS idx_sections_deliv   ON sections(delivery);

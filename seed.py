@@ -26,7 +26,7 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 329
+SEED = 365
 
 # How many students to generate. The dimension tables (campuses, departments,
 # courses, instructors, terms, textbooks) stay small because they describe the
