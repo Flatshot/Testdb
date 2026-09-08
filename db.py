@@ -15,21 +15,27 @@ DB_PATH = HERE / "testdb.db"
 SCHEMA_PATH = HERE / "schema.sql"
 
 # A recursive CTE whose step never stops runs forever. busy_timeout does not
-# help -- that governs lock contention, not how long a statement may run -- and
-# the practice queries all finish in single-digit milliseconds, so a ceiling
-# this far above them cannot fire on a legitimate answer.
-QUERY_TIMEOUT_SECONDS = 5.0
+# help -- that governs lock contention, not how long a statement may run.
+# The 30 reference solutions together take about 180ms against the current
+# data, so this is roughly two orders of magnitude above anything legitimate --
+# but it is deliberately generous rather than tight, because exploring a
+# 67,000-row table by hand turns up slow queries that are not mistakes.
+QUERY_TIMEOUT_SECONDS = 15.0
 
 # How many SQLite virtual-machine steps between deadline checks. Small enough
 # that the abort feels immediate, large enough that the callback is noise.
 PROGRESS_STEPS = 10_000
 
 # The timeout alone bounds the spin but not the memory: a runaway CTE feeds
-# fetchall() at a few hundred MB a second, so five seconds is still north of a
-# gigabyte before the deadline fires. Stop reading rows well before that. The
-# largest reference answer in the set is under 100 rows, so this is orders of
-# magnitude above anything a real answer produces.
-MAX_ROWS = 50_000
+# fetchall() at a few hundred MB a second, so fifteen seconds is several
+# gigabytes before the deadline fires. Stop reading rows well before that.
+#
+# This has to sit ABOVE the largest table, not merely above the largest
+# expected ANSWER -- otherwise "SELECT * FROM enrolments" trips a guard meant
+# for runaways. enrolments holds 67,000 rows and fetches in 149ms for 18MB, so
+# 250,000 leaves room to browse any table whole (and to join a couple of them)
+# while still catching an unbounded recursion long before memory matters.
+MAX_ROWS = 250_000
 
 
 def connect(db_path=None):

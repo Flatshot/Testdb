@@ -28,6 +28,13 @@ PROGRESS_PATH = db.HERE / "progress.json"
 FREE = 0  # pseudo-exercise id for the scratch pad
 QUESTION_MAX_LINES = 16
 
+# How many result rows to put in the table widget. Separate from db.MAX_ROWS,
+# which bounds what is FETCHED: grading and the row count use the full result,
+# this only bounds what is drawn. Tk inserts rows one at a time, so a 67,000-row
+# table freezes the window for several seconds -- and nobody reads past the
+# first screen anyway.
+DISPLAY_ROWS = 2_000
+
 # Tk resolves point sizes against the display DPI, and macOS reports 72 where
 # Windows reports 96 -- the same number draws about a quarter smaller here.
 # Every explicit size below derives from this one. It is a FLOOR, not an
@@ -585,7 +592,9 @@ class App(tk.Tk):
                     return None
                 rows = db.fetch_capped(cur)
             self._show_rows(rows, [d[0] for d in cur.description])
-            self._set_status(f"{len(rows)} row(s).", BG_INFO)
+            shown = (f" Showing the first {DISPLAY_ROWS:,}."
+                     if len(rows) > DISPLAY_ROWS else "")
+            self._set_status(f"{len(rows):,} row(s).{shown}", BG_INFO)
             return rows
         except (db.QueryTimeout, db.TooManyRows) as exc:
             self._clear_results()
@@ -684,7 +693,7 @@ class App(tk.Tk):
             self.results.heading(h, text=h)
             self.results.column(h, width=min(max(width * char_w + 24, 70), 340),
                                 anchor="w")
-        for n, row in enumerate(rows):
+        for n, row in enumerate(rows[:DISPLAY_ROWS]):
             self.results.insert("", "end",
                                 values=[self._fmt(v) for v in row],
                                 tags=("odd",) if n % 2 else ())
