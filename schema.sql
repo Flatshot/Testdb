@@ -1,220 +1,155 @@
--- Schema for testdb: a further-education college.
+-- Schema for testdb: a regional railway.
 -- Applied by db.init_db(); every statement is safe to re-run.
 --
--- The shape is chosen to punish specific mistakes, not just to model a college.
--- The central one is GRAIN: a section has TWO independent children, so a
--- question touching both in one query block is a trap.
+-- Chosen to be shaped DIFFERENTLY from the five sets that came before, not
+-- merely to be a different subject. The central fact is an ORDERED SEQUENCE
+-- inside a parent, which none of the earlier schemas had:
 --
---   sections 1--0..n enrolments   who is taking it, one row per student
---   sections 1--0..n assessments  what it is marked on, one row per piece
+--   services 1--n stops   (service_id, stop_seq) is the primary key, so every
+--                         stop knows where it sits in its own journey. That
+--                         makes "the next station", "the first and last stop",
+--                         "the whole route as one string" and "minutes since
+--                         the previous stop" natural questions rather than
+--                         contrived ones -- and they need LAG/LEAD, frame
+--                         clauses, FIRST_VALUE/LAST_VALUE and GROUP_CONCAT.
 --
---        joining enrolments AND assessments multiplies BOTH:
---        20 students x 3 assessments = 60 rows, so COUNT(students) is 3x too
---        big and SUM(weight) is 20x too big. Each branch must be reduced to
---        one row per section BEFORE the two meet.
+-- Other shapes deliberately new to this repo:
 --
---   courses *--* courses via prerequisites
---                                 a real dependency GRAPH, not an org chart:
---                                 a course may require several others, and a
---                                 course may be required by several others.
---                                 Walking it needs a recursive CTE, and the
---                                 depth differs by which path you take.
---   campuses 1--n departments 1--n courses 1--n sections 1--n enrolments
---                                 a five-deep chain; counting departments
---                                 after joining down it needs DISTINCT
---   students 1--0..n enrolments   the other side of the many-to-many
---   students 1--0..n payments     second child of students, so joining
---                                 payments and enrolments fans out too
---   instructors --> instructors   self-reference; mentor_id NULL at the top
---   courses *--* textbooks via course_books   composite key, nullable columns
---   terms                         a closed date dimension, so "every term"
---                                 questions do not need a generated series --
---                                 but "every month" ones still do
---   nullable numeric columns      AVG skips NULLs; NULL eats arithmetic
---   INTEGER measures              integer division truncates in SQLite
+--   station_footfall      a WIDE table: one row per station-year with four
+--                         quarter columns. Turning it long again is an
+--                         unpivot, which SQL has no operator for -- it is
+--                         UNION ALL or nothing.
+--   tickets.price_pence   money as INTEGER, so averages and shares hit
+--                         integer division rather than floating point
+--   tickets.class         a category whose natural order is NOT alphabetical
+--                         ('first' < 'standard' < 'advance' by price), so
+--                         sorting it needs CASE inside ORDER BY
+--   services.run_date     a real calendar of daily runs, for date modifiers
+--                         ('start of month', 'weekday 0', '+1 day')
+--   service_units         many-to-many WITH a payload (position in the train)
+--   staff.reports_to      a hierarchy, kept small -- recursion has had eight
+--                         questions in three sets and is deliberately light
+--                         here
 --
--- Deliberate gaps: some courses are never scheduled, some sections have no
--- students, some have no assessments, some have neither, some sections have no
--- instructor assigned, some enrolments have no grade yet, some students never
--- enrol, some textbooks are on no reading list. Anti-joins and NULL handling
--- need something real to find.
+-- Deliberate gaps: services that were cancelled and so have no stops, stations
+-- no service calls at, staff who manage nobody, tickets with no recorded
+-- destination, incidents with no delay, units never assigned to a service.
 
-CREATE TABLE IF NOT EXISTS campuses (
-    campus_id INTEGER PRIMARY KEY,
-    name      TEXT NOT NULL UNIQUE,
-    city      TEXT NOT NULL,
-    opened_on TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS operators (
+    operator_id INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    since_year  INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS departments (
-    department_id INTEGER PRIMARY KEY,
-    campus_id     INTEGER NOT NULL REFERENCES campuses(campus_id),
-    name          TEXT    NOT NULL,
-    faculty       TEXT    NOT NULL,
-    annual_budget REAL    NOT NULL CHECK (annual_budget > 0)
+CREATE TABLE IF NOT EXISTS lines (
+    line_id INTEGER PRIMARY KEY,
+    name    TEXT NOT NULL UNIQUE,
+    colour  TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS instructors (
-    instructor_id INTEGER PRIMARY KEY,
-    department_id INTEGER NOT NULL REFERENCES departments(department_id),
+CREATE TABLE IF NOT EXISTS stations (
+    station_id INTEGER PRIMARY KEY,
+    name       TEXT    NOT NULL UNIQUE,
+    town       TEXT    NOT NULL,
+    opened_on  TEXT    NOT NULL,
+    -- 1 or 0; NULL where nobody has surveyed the station yet
+    step_free  INTEGER CHECK (step_free IS NULL OR step_free IN (0, 1))
+);
+
+-- One row per station per year, with the four quarters side by side. Wide on
+-- purpose: making it long again is the unpivot question.
+CREATE TABLE IF NOT EXISTS station_footfall (
+    station_id INTEGER NOT NULL REFERENCES stations(station_id),
+    year       INTEGER NOT NULL,
+    q1         INTEGER NOT NULL CHECK (q1 >= 0),
+    q2         INTEGER NOT NULL CHECK (q2 >= 0),
+    q3         INTEGER NOT NULL CHECK (q3 >= 0),
+    q4         INTEGER NOT NULL CHECK (q4 >= 0),
+    PRIMARY KEY (station_id, year)
+);
+
+CREATE TABLE IF NOT EXISTS staff (
+    staff_id      INTEGER PRIMARY KEY,
     name          TEXT    NOT NULL,
+    base_station  INTEGER NOT NULL REFERENCES stations(station_id),
+    role          TEXT    NOT NULL CHECK (role IN ('driver', 'guard',
+                                                   'dispatcher', 'manager')),
     hired_on      TEXT    NOT NULL,
-    -- NULL for the one instructor nobody mentors; a self-reference otherwise
-    mentor_id     INTEGER REFERENCES instructors(instructor_id),
-    hourly_rate   REAL    NOT NULL CHECK (hourly_rate > 0),
-    -- NULL where no formal grade has been assigned yet
-    pay_grade     INTEGER CHECK (pay_grade IS NULL
-                                 OR pay_grade BETWEEN 1 AND 5)
+    -- NULL for the one person at the top
+    reports_to    INTEGER REFERENCES staff(staff_id),
+    -- annual salary in whole pounds
+    salary        INTEGER NOT NULL CHECK (salary > 0)
 );
 
-CREATE TABLE IF NOT EXISTS students (
-    student_id  INTEGER PRIMARY KEY,
-    name        TEXT    NOT NULL,
-    campus_id   INTEGER NOT NULL REFERENCES campuses(campus_id),
-    enrolled_on TEXT    NOT NULL,
-    programme   TEXT    NOT NULL,
-    -- NULL for applicants who have not yet been assigned a funding band
-    funding_band TEXT CHECK (funding_band IS NULL
-                             OR funding_band IN ('self', 'grant', 'sponsor'))
+CREATE TABLE IF NOT EXISTS rolling_stock (
+    unit_id    INTEGER PRIMARY KEY,
+    model      TEXT    NOT NULL,
+    seats      INTEGER NOT NULL CHECK (seats > 0),
+    built_year INTEGER NOT NULL,
+    -- NULL where the unit has never been refurbished
+    refurbished_year INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS courses (
-    course_id     INTEGER PRIMARY KEY,
-    department_id INTEGER NOT NULL REFERENCES departments(department_id),
-    code          TEXT    NOT NULL UNIQUE,
-    title         TEXT    NOT NULL,
-    credits       INTEGER NOT NULL CHECK (credits > 0),
-    level         INTEGER NOT NULL CHECK (level BETWEEN 1 AND 4)
+CREATE TABLE IF NOT EXISTS services (
+    service_id  INTEGER PRIMARY KEY,
+    line_id     INTEGER NOT NULL REFERENCES lines(line_id),
+    operator_id INTEGER NOT NULL REFERENCES operators(operator_id),
+    run_date    TEXT    NOT NULL,
+    -- scheduled departure from the first stop, 'HH:MM'
+    depart_time TEXT    NOT NULL,
+    cancelled   INTEGER NOT NULL DEFAULT 0 CHECK (cancelled IN (0, 1))
 );
 
--- The dependency graph. A course may require many; a course may be required by
--- many. No row ever points a course at itself.
-CREATE TABLE IF NOT EXISTS prerequisites (
-    course_id          INTEGER NOT NULL REFERENCES courses(course_id),
-    requires_course_id INTEGER NOT NULL REFERENCES courses(course_id),
-    PRIMARY KEY (course_id, requires_course_id),
-    CHECK (course_id <> requires_course_id)
+-- The ordered sequence. stop_seq counts from 1 within each service.
+CREATE TABLE IF NOT EXISTS stops (
+    service_id   INTEGER NOT NULL REFERENCES services(service_id),
+    stop_seq     INTEGER NOT NULL CHECK (stop_seq > 0),
+    station_id   INTEGER NOT NULL REFERENCES stations(station_id),
+    sched_arrive TEXT    NOT NULL,
+    -- NULL where the stop was skipped or nothing was recorded
+    actual_arrive TEXT,
+    PRIMARY KEY (service_id, stop_seq)
 );
 
-CREATE TABLE IF NOT EXISTS terms (
-    term_id   INTEGER PRIMARY KEY,
-    name      TEXT NOT NULL UNIQUE,
-    starts_on TEXT NOT NULL,
-    ends_on   TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS service_units (
+    service_id INTEGER NOT NULL REFERENCES services(service_id),
+    unit_id    INTEGER NOT NULL REFERENCES rolling_stock(unit_id),
+    -- 1 is the front of the train
+    position   INTEGER NOT NULL CHECK (position > 0),
+    PRIMARY KEY (service_id, unit_id)
 );
 
-CREATE TABLE IF NOT EXISTS sections (
-    section_id    INTEGER PRIMARY KEY,
-    course_id     INTEGER NOT NULL REFERENCES courses(course_id),
-    term_id       INTEGER NOT NULL REFERENCES terms(term_id),
-    -- NULL where the section is scheduled but not yet staffed
-    instructor_id INTEGER REFERENCES instructors(instructor_id),
-    room          TEXT    NOT NULL,
-    capacity      INTEGER NOT NULL CHECK (capacity > 0),
-    delivery      TEXT    NOT NULL CHECK (delivery IN ('in person', 'online',
-                                                       'blended'))
+CREATE TABLE IF NOT EXISTS tickets (
+    ticket_id    INTEGER PRIMARY KEY,
+    service_id   INTEGER NOT NULL REFERENCES services(service_id),
+    from_station INTEGER NOT NULL REFERENCES stations(station_id),
+    -- NULL for open returns with no destination recorded
+    to_station   INTEGER REFERENCES stations(station_id),
+    class        TEXT    NOT NULL CHECK (class IN ('first', 'standard',
+                                                   'advance')),
+    -- whole pence, so arithmetic on it is integer arithmetic
+    price_pence  INTEGER NOT NULL CHECK (price_pence >= 0),
+    sold_at      TEXT    NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS enrolments (
-    enrolment_id INTEGER PRIMARY KEY,
-    section_id   INTEGER NOT NULL REFERENCES sections(section_id),
-    student_id   INTEGER NOT NULL REFERENCES students(student_id),
-    enrolled_on  TEXT    NOT NULL,
-    status       TEXT    NOT NULL CHECK (status IN ('active', 'completed',
-                                                    'withdrawn')),
-    -- NULL while the enrolment is still active or was withdrawn
-    grade        INTEGER CHECK (grade IS NULL OR grade BETWEEN 0 AND 100),
-    UNIQUE (section_id, student_id)
+CREATE TABLE IF NOT EXISTS incidents (
+    incident_id   INTEGER PRIMARY KEY,
+    service_id    INTEGER NOT NULL REFERENCES services(service_id),
+    reported_at   TEXT    NOT NULL,
+    kind          TEXT    NOT NULL CHECK (kind IN ('signal', 'weather',
+                                                   'fault', 'trespass',
+                                                   'staffing')),
+    -- NULL where the delay was never quantified
+    delay_minutes INTEGER CHECK (delay_minutes IS NULL OR delay_minutes >= 0)
 );
 
-CREATE TABLE IF NOT EXISTS assessments (
-    assessment_id INTEGER PRIMARY KEY,
-    section_id    INTEGER NOT NULL REFERENCES sections(section_id),
-    title         TEXT    NOT NULL,
-    kind          TEXT    NOT NULL CHECK (kind IN ('essay', 'exam', 'project',
-                                                   'practical')),
-    weight        REAL    NOT NULL CHECK (weight > 0 AND weight <= 1),
-    due_on        TEXT    NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS textbooks (
-    book_id    INTEGER PRIMARY KEY,
-    title      TEXT    NOT NULL,
-    publisher  TEXT    NOT NULL,
-    list_price REAL    NOT NULL CHECK (list_price >= 0),
-    -- NULL where nobody has recorded the page count
-    pages      INTEGER CHECK (pages IS NULL OR pages > 0)
-);
-
-CREATE TABLE IF NOT EXISTS course_books (
-    course_id INTEGER NOT NULL REFERENCES courses(course_id),
-    book_id   INTEGER NOT NULL REFERENCES textbooks(book_id),
-    required  INTEGER NOT NULL CHECK (required IN (0, 1)),
-    -- NULL where the department has not set a copy target for the library
-    copies_held INTEGER CHECK (copies_held IS NULL OR copies_held >= 0),
-    PRIMARY KEY (course_id, book_id)
-);
-
-CREATE TABLE IF NOT EXISTS payments (
-    payment_id INTEGER PRIMARY KEY,
-    student_id INTEGER NOT NULL REFERENCES students(student_id),
-    billed_on  TEXT    NOT NULL,
-    amount     REAL    NOT NULL CHECK (amount >= 0),
-    status     TEXT    NOT NULL CHECK (status IN ('PAID', 'DUE', 'LATE',
-                                                  'WAIVED')),
-    -- NULL unless the payment actually settled
-    paid_on    TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_dept_campus     ON departments(campus_id);
-CREATE INDEX IF NOT EXISTS idx_instr_dept      ON instructors(department_id);
-CREATE INDEX IF NOT EXISTS idx_instr_mentor    ON instructors(mentor_id);
-CREATE INDEX IF NOT EXISTS idx_students_campus ON students(campus_id);
-CREATE INDEX IF NOT EXISTS idx_courses_dept    ON courses(department_id);
-CREATE INDEX IF NOT EXISTS idx_prereq_requires ON prerequisites(requires_course_id);
-CREATE INDEX IF NOT EXISTS idx_sections_course ON sections(course_id);
-CREATE INDEX IF NOT EXISTS idx_sections_term   ON sections(term_id);
-CREATE INDEX IF NOT EXISTS idx_sections_instr  ON sections(instructor_id);
-CREATE INDEX IF NOT EXISTS idx_enrol_section   ON enrolments(section_id);
-CREATE INDEX IF NOT EXISTS idx_enrol_student   ON enrolments(student_id);
-CREATE INDEX IF NOT EXISTS idx_enrol_date      ON enrolments(enrolled_on);
-CREATE INDEX IF NOT EXISTS idx_assess_section  ON assessments(section_id);
-CREATE INDEX IF NOT EXISTS idx_books_book      ON course_books(book_id);
-CREATE INDEX IF NOT EXISTS idx_payments_stu    ON payments(student_id);
-
--- Indexes that exist so the efficiency questions have something to hit or
--- miss. Each one can be used or defeated depending on how a query is written,
--- which is the whole point: the index is not the thing that makes a query
--- fast, being ABLE to use it is.
---   students(name COLLATE NOCASE)
---                           a prefix LIKE can seek this; a leading % cannot.
---                           The NOCASE collation is required: LIKE is
---                           case-insensitive by default, so a BINARY index
---                           cannot serve it and SQLite falls back to a scan.
---   enrolments(status,grade) a composite -- usable from the LEFT only, so a
---                            filter on status alone seeks and one on grade
---                            alone does not
-CREATE INDEX IF NOT EXISTS idx_students_name   ON students(name COLLATE NOCASE);
-CREATE INDEX IF NOT EXISTS idx_enrol_status    ON enrolments(status, grade);
-
--- More indexes, several of them usable ONLY if the query is restructured.
--- That is the point: each of these can be reached, but not by the way the
--- question is most naturally written.
---   students(campus_id, funding_band)  a filter on funding_band alone cannot
---                                      use it; adding a predicate on the
---                                      LEADING column unlocks it, so making
---                                      the query longer makes it faster
---   payments(status, billed_on)        same shape, on a different table
---   payments(billed_on)                so a date range has its own route
---   assessments(due_on)                a range that competes with the
---                                      section_id index -- which one SQLite
---                                      picks depends on how you filter
---   sections(delivery)                 low-cardinality: usable, but SQLite
---                                      will decline it when the filter is not
---                                      selective enough to be worth it
-CREATE INDEX IF NOT EXISTS idx_students_camp_band
-    ON students(campus_id, funding_band);
-CREATE INDEX IF NOT EXISTS idx_pay_status_date  ON payments(status, billed_on);
-CREATE INDEX IF NOT EXISTS idx_pay_billed       ON payments(billed_on);
-CREATE INDEX IF NOT EXISTS idx_assess_due       ON assessments(due_on);
-CREATE INDEX IF NOT EXISTS idx_sections_deliv   ON sections(delivery);
+CREATE INDEX IF NOT EXISTS idx_stops_station   ON stops(station_id);
+CREATE INDEX IF NOT EXISTS idx_services_date   ON services(run_date);
+CREATE INDEX IF NOT EXISTS idx_services_line   ON services(line_id, run_date);
+CREATE INDEX IF NOT EXISTS idx_tickets_service ON tickets(service_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_class   ON tickets(class, price_pence);
+CREATE INDEX IF NOT EXISTS idx_tickets_sold    ON tickets(sold_at);
+CREATE INDEX IF NOT EXISTS idx_incidents_svc   ON incidents(service_id);
+CREATE INDEX IF NOT EXISTS idx_staff_reports   ON staff(reports_to);
+CREATE INDEX IF NOT EXISTS idx_staff_name      ON staff(name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_units_unit      ON service_units(unit_id);

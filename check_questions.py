@@ -135,7 +135,7 @@ def main():
     # --- behavioural ------------------------------------------------------
     conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
     traps_by_error = traps_by_result = claims_checked = 0
-    traps_by_plan = plans_checked = 0
+    traps_by_plan = plans_checked = starters_checked = 0
     try:
         for e in ex.EXERCISES:
             rows, err = run(conn, e["solution"])
@@ -167,6 +167,31 @@ def main():
             # reference actually takes the route it demands -- otherwise the
             # question is unanswerable.
             if e.get("plan_requires") or e.get("plan_forbids"):
+                # These open with a slow query already in the editor. It has to
+                # RETURN the right answer -- otherwise the question reads as
+                # broken rather than as slow -- and it has to FAIL the plan
+                # assertion, or there is nothing to improve.
+                starter = e.get("starter_sql")
+                if not starter:
+                    problems.append(
+                        f"exercise {e['id']} asserts a plan but has no "
+                        f"starter_sql to open with")
+                else:
+                    srows, serr = run(conn, starter)
+                    if serr:
+                        problems.append(
+                            f"exercise {e['id']} starter_sql failed: {serr}")
+                    elif not ex.compare([tuple(r) for r in srows],
+                                        [tuple(r) for r in rows])[0]:
+                        problems.append(
+                            f"exercise {e['id']} starter_sql returns the WRONG "
+                            f"rows -- it should be correct but slow")
+                    elif ex.plan_ok(e, ex.query_plan(conn, starter))[0]:
+                        problems.append(
+                            f"exercise {e['id']} starter_sql already satisfies "
+                            f"the plan assertion, so there is nothing to fix")
+                    else:
+                        starters_checked += 1
                 ok, why = ex.plan_ok(e, ex.query_plan(conn, e["solution"]))
                 if not ok:
                     problems.append(
@@ -205,6 +230,7 @@ def main():
           f"({traps_by_error} by SQL error, {traps_by_result} by wrong result, "
           f"{traps_by_plan} by wrong query plan)")
     print(f"plan assertions: {plans_checked} solutions take the route they demand")
+    print(f"starter queries: {starters_checked} correct but rejected on their plan")
     print(f"prompt claims  : {claims_checked} verified against the data")
 
     if problems:
