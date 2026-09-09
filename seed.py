@@ -1,24 +1,22 @@
-"""Populate testdb with practice data for a further-education college.
+"""Populate testdb with practice data for a regional railway.
 
 Deterministic: the RNG is seeded and no wall-clock dates are used, so running
-this twice produces byte-identical data. Safe to re-run -- it drops and
-recreates the tables first, so a schema change is picked up.
+this twice produces byte-identical data. Safe to re-run -- it drops every table
+first, so a schema change is picked up.
 
     python seed.py
 
-The gaps below are deliberate, not sloppiness. Questions about anti-joins,
-NULL handling and COUNT need something real to find:
+The gaps below are deliberate. Questions about anti-joins, NULL handling and
+COUNT need something real to find:
 
-  * courses that are never scheduled, and courses with no prerequisites
-  * sections with enrolments but no assessments, assessments but no
-    enrolments, and neither
-  * sections scheduled but not staffed (instructor_id NULL)
-  * enrolments still active or withdrawn, so grade is NULL
-  * students who never enrol on anything
-  * textbooks on nobody's reading list
-  * instructors with no formal pay grade, students with no funding band
-  * payments waived or still due, so paid_on is NULL
-  * an August gap every year, so "every month" needs a generated series
+  * cancelled services, which have no stops at all
+  * stations no service calls at
+  * stops that were skipped, so actual_arrive is NULL
+  * tickets with no destination recorded (open returns)
+  * incidents whose delay was never quantified
+  * units that have never been assigned to a service
+  * staff who manage nobody, and one who reports to nobody
+  * stations nobody has surveyed for step-free access
 """
 
 import random
@@ -26,440 +24,246 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 365
+SEED = 401
 
-# How many students to generate. The dimension tables (campuses, departments,
-# courses, instructors, terms, textbooks) stay small because they describe the
-# college; the transactional tables scale off this number. It is set high
-# enough that a full table scan of enrolments is measurably slower than an
-# index seek -- efficiency questions need a difference you can actually feel,
-# and at 550 rows every query is instant no matter how it is written.
-N_STUDENTS = 4000
-SECTIONS_PER_COURSE_TERM = 20
+# Services are generated per line per day across this window. stops is the big
+# table -- roughly eight per service -- and it is what the efficiency questions
+# are asked against, so it needs to be large enough that a scan is felt.
+RANGE_START = date(2025, 1, 1)
+RANGE_END = date(2026, 6, 30)
+RUNS_PER_LINE_PER_DAY = 4
 
-# Tables in dependency order; dropped in reverse so foreign keys stay satisfied.
 TABLES = [
-    "campuses",
-    "departments",
-    "instructors",
-    "students",
-    "courses",
-    "prerequisites",
-    "terms",
-    "sections",
-    "enrolments",
-    "assessments",
-    "textbooks",
-    "course_books",
-    "payments",
+    "operators", "lines", "stations", "station_footfall", "staff",
+    "rolling_stock", "services", "stops", "service_units", "tickets",
+    "incidents",
 ]
 
-CAMPUSES = [
-    ("Riverside", "Leeds", "2004-09-01"),
-    ("Northgate", "Sheffield", "2009-09-01"),
-    ("Kingsway", "Nottingham", "2013-09-01"),
-    ("Harbour Point", "Hull", "2018-09-01"),
-]
+OPERATORS = [("Northern Rail", 1997), ("Coastway", 2004),
+             ("Vale Connect", 2012), ("Pennine Express", 1988)]
 
-# (name, faculty, campus index)
-DEPARTMENTS = [
-    ("Computing", "Science & Technology", 0),
-    ("Engineering", "Science & Technology", 0),
-    ("Mathematics", "Science & Technology", 1),
-    ("Business", "Business & Law", 1),
-    ("Accounting", "Business & Law", 2),
-    ("Design", "Arts & Humanities", 2),
-    ("Languages", "Arts & Humanities", 3),
-    ("Health Sciences", "Health & Care", 3),
-    ("Nursing", "Health & Care", 0),
-]
+LINES = [("Coast Line", "blue"), ("Vale Line", "green"),
+         ("Moor Line", "purple"), ("City Loop", "red"),
+         ("Estuary Line", "orange"), ("Dales Line", "brown")]
 
-INSTRUCTOR_NAMES = [
-    "Margaret Ashworth", "Devan Rao", "Sinead Fahey", "Peter Nowak",
-    "Amara Diallo", "Joachim Brandt", "Ruth Ellery", "Yusuf Demir",
-    "Clara Bassett", "Hiro Tanabe", "Ingrid Solberg", "Femi Adeyemi",
-    "Rosalind Vane", "Tomas Kucera", "Bridget Moloney", "Anil Chaudhary",
-]
+TOWNS = ["Ashford", "Brindley", "Carrow", "Dunmere", "Eastgate", "Fenwick",
+         "Garsdale", "Holbeck", "Ilkeston", "Jarrow", "Kirkstall", "Langton",
+         "Marsden", "Netherby", "Oakworth", "Pentre", "Quarrydale", "Rosthorne",
+         "Southwell", "Trentham"]
+SUFFIXES = ["Central", "Parkway", "Bridge", "North", "South", "Halt",
+            "Junction", "Riverside"]
 
-STUDENT_FIRST = [
-    "Alice", "Bilal", "Chloe", "Dmitri", "Esme", "Farhan", "Gemma", "Hugo",
-    "Isla", "Jonah", "Kiera", "Lucas", "Maya", "Niall", "Orla", "Pavel",
-    "Quinn", "Rhys", "Sofia", "Tariq", "Una", "Viktor", "Wren", "Xiomara",
-    "Yannick", "Zara",
-]
-STUDENT_LAST = [
-    "Attwood", "Barrow", "Chandra", "Doherty", "Ekstrom", "Fitzgerald",
-    "Gallagher", "Hollis", "Ibrahim", "Jarvis", "Kowalski", "Lindqvist",
-    "Mensah", "Novak", "Ogilvie", "Pereira", "Quinlan", "Rasmussen",
-    "Sandoval", "Thackeray", "Uddin", "Voss", "Whitlock", "Yates",
-]
+FIRST = ["Alan", "Bernice", "Callum", "Dilys", "Eamon", "Freya", "Gareth",
+         "Heulwen", "Ivan", "Joyce", "Kenan", "Lowri", "Martyn", "Nerys",
+         "Osian", "Petra", "Rhodri", "Sian", "Tomos", "Verity"]
+LAST = ["Ackroyd", "Broadbent", "Cadwallader", "Dewhurst", "Eccleston",
+        "Fothergill", "Greenhalgh", "Hetherington", "Illingworth", "Jepson",
+        "Kirkbride", "Lightfoot", "Micklethwait", "Nuttall", "Ormerod",
+        "Pemberton", "Ravenscroft", "Sedgwick", "Thistlethwaite", "Wainwright"]
 
-PROGRAMMES = [
-    "BSc Computing", "BEng Engineering", "BSc Mathematics",
-    "BA Business", "BA Accounting", "BA Design", "BA Languages",
-    "BSc Health Sciences", "BSc Nursing",
-]
-
-# (department index, level, code stem, title)
-COURSES = [
-    (0, 1, "CMP101", "Programming Foundations"),
-    (0, 1, "CMP110", "Computer Systems"),
-    (0, 2, "CMP201", "Data Structures"),
-    (0, 2, "CMP210", "Databases"),
-    (0, 3, "CMP301", "Algorithms"),
-    (0, 3, "CMP310", "Distributed Systems"),
-    (0, 4, "CMP401", "Machine Learning"),
-    (1, 1, "ENG101", "Statics and Dynamics"),
-    (1, 2, "ENG201", "Thermofluids"),
-    (1, 3, "ENG301", "Control Engineering"),
-    (1, 4, "ENG401", "Systems Design"),
-    (2, 1, "MTH101", "Calculus"),
-    (2, 1, "MTH110", "Linear Algebra"),
-    (2, 2, "MTH201", "Probability"),
-    (2, 3, "MTH301", "Numerical Methods"),
-    (2, 4, "MTH401", "Stochastic Processes"),
-    (3, 1, "BUS101", "Principles of Management"),
-    (3, 2, "BUS201", "Operations"),
-    (3, 3, "BUS301", "Strategy"),
-    (4, 1, "ACC101", "Financial Accounting"),
-    (4, 2, "ACC201", "Management Accounting"),
-    (4, 3, "ACC301", "Audit and Assurance"),
-    (5, 1, "DES101", "Visual Communication"),
-    (5, 2, "DES201", "Typography"),
-    (5, 3, "DES301", "Interaction Design"),
-    (6, 1, "LAN101", "Spanish I"),
-    (6, 2, "LAN201", "Spanish II"),
-    (6, 3, "LAN301", "Translation Studies"),
-    (7, 1, "HSC101", "Human Physiology"),
-    (7, 2, "HSC201", "Public Health"),
-    (7, 3, "HSC301", "Epidemiology"),
-    (8, 1, "NUR101", "Foundations of Nursing"),
-    (8, 2, "NUR201", "Clinical Practice"),
-    (8, 3, "NUR301", "Acute Care"),
-]
-
-TERMS = [
-    ("Autumn 2024", "2024-09-16", "2024-12-13"),
-    ("Spring 2025", "2025-01-13", "2025-04-04"),
-    ("Summer 2025", "2025-04-21", "2025-07-04"),
-    ("Autumn 2025", "2025-09-15", "2025-12-12"),
-    ("Spring 2026", "2026-01-12", "2026-04-02"),
-    ("Summer 2026", "2026-04-20", "2026-07-03"),
-]
-
-ROOMS = ["A1.04", "A2.11", "B1.02", "B3.07", "C2.15", "D1.01", "D4.20",
-         "Lab 1", "Lab 2", "Studio A"]
-DELIVERY = ["in person", "online", "blended"]
-ASSESSMENT_KINDS = ["essay", "exam", "project", "practical"]
-FUNDING = ["self", "grant", "sponsor"]
-
-BOOK_TITLES = [
-    "Foundations of Computation", "The Pragmatic Engineer",
-    "Discrete Mathematics in Practice", "Database Design Handbook",
-    "Algorithms Illustrated", "Statistical Inference",
-    "Thermodynamics for Engineers", "Control Theory Primer",
-    "Management in Context", "Operations and Supply", "Strategy Cases",
-    "Financial Reporting Standards", "Cost and Management Accounting",
-    "Auditing Principles", "Grid Systems in Design", "Type and Layout",
-    "Designing Interfaces", "Spanish Grammar in Use",
-    "Advanced Spanish Composition", "Theories of Translation",
-    "Anatomy and Physiology", "Public Health Foundations",
-    "Epidemiology at a Glance", "Clinical Nursing Skills",
-    "Acute Care Essentials", "Research Methods", "Academic Writing",
-    "Data Visualisation", "Numerical Recipes", "Ethics in Practice",
-]
-PUBLISHERS = ["Aldgate Press", "Brookfield", "Cormorant Academic",
-              "Deverell & Sons", "Eastgate"]
-
-
-def _random_date(rng, start, end):
-    return start + timedelta(days=rng.randrange((end - start).days + 1))
+ROLES = ["driver", "guard", "dispatcher", "manager"]
+MODELS = ["Class 150", "Class 156", "Class 158", "Class 170", "Class 195",
+          "Class 331", "Class 802"]
+CLASSES = ["first", "standard", "advance"]
+KINDS = ["signal", "weather", "fault", "trespass", "staffing"]
 
 
 def _iso(d):
     return d.isoformat()
 
 
+def _hhmm(minutes):
+    return f"{minutes // 60 % 24:02d}:{minutes % 60:02d}"
+
+
 def seed():
     rng = random.Random(SEED)
-
     conn = db.connect()
     try:
         with conn:
-            # Drop rather than DELETE so schema changes are picked up. Drop
-            # EVERY table, not just the ones in TABLES -- when the schema is
-            # replaced wholesale, tables from the previous one are otherwise
-            # left behind in the file and show up in any schema browser.
             conn.execute("PRAGMA foreign_keys=OFF")
-            existing = [r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-                " AND name NOT LIKE 'sqlite_%'")]
-            for table in existing:
-                conn.execute(f'DROP TABLE IF EXISTS "{table}"')
+            for t in [r[0] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    " AND name NOT LIKE 'sqlite_%'")]:
+                conn.execute(f'DROP TABLE IF EXISTS "{t}"')
         conn.executescript(db.SCHEMA_PATH.read_text(encoding="utf-8"))
         conn.execute("PRAGMA foreign_keys=ON")
 
         with conn:
-            # --------------------------------------------------------- campuses
             conn.executemany(
-                "INSERT INTO campuses (campus_id, name, city, opened_on)"
-                " VALUES (?, ?, ?, ?)",
-                [(i, n, c, o) for i, (n, c, o) in enumerate(CAMPUSES, 1)])
-
-            # ------------------------------------------------------ departments
-            dept_rows = []
-            for did, (name, faculty, ci) in enumerate(DEPARTMENTS, 1):
-                budget = round(rng.uniform(180_000, 940_000), 2)
-                dept_rows.append((did, ci + 1, name, faculty, budget))
+                "INSERT INTO operators (operator_id, name, since_year)"
+                " VALUES (?, ?, ?)",
+                [(i, n, y) for i, (n, y) in enumerate(OPERATORS, 1)])
             conn.executemany(
-                "INSERT INTO departments (department_id, campus_id, name,"
-                " faculty, annual_budget) VALUES (?, ?, ?, ?, ?)", dept_rows)
+                "INSERT INTO lines (line_id, name, colour) VALUES (?, ?, ?)",
+                [(i, n, c) for i, (n, c) in enumerate(LINES, 1)])
 
-            # ------------------------------------------------------ instructors
-            # A three-level mentoring tree: one root, three who report to the
-            # root, everyone else under those. Deep enough that a single
-            # self-join cannot reach the bottom.
-            instr_rows = []
-            for iid, name in enumerate(INSTRUCTOR_NAMES, 1):
-                dept = rng.randrange(1, len(DEPARTMENTS) + 1)
-                hired = _random_date(rng, date(2011, 1, 1), date(2024, 6, 30))
-                if iid == 1:
-                    mentor = None
-                elif iid <= 4:
-                    mentor = 1
+            # ------------------------------------------------------- stations
+            station_rows, used = [], set()
+            for sid in range(1, 61):
+                while True:
+                    town = TOWNS[rng.randrange(len(TOWNS))]
+                    name = (town if rng.random() < 0.35
+                            else f"{town} {SUFFIXES[rng.randrange(len(SUFFIXES))]}")
+                    if name not in used:
+                        used.add(name)
+                        break
+                opened = date(1840, 1, 1) + timedelta(
+                    days=rng.randrange(0, 60000))
+                # A tenth have never been surveyed for step-free access.
+                step = None if rng.random() < 0.10 else rng.choice([0, 1])
+                station_rows.append((sid, name, town, _iso(opened), step))
+            conn.executemany(
+                "INSERT INTO stations (station_id, name, town, opened_on,"
+                " step_free) VALUES (?, ?, ?, ?, ?)", station_rows)
+
+            # ----------------------------------------------- station_footfall
+            foot = []
+            for sid in range(1, 61):
+                base = rng.randrange(20_000, 400_000)
+                for year in (2023, 2024, 2025):
+                    qs = [max(0, int(base * rng.uniform(0.18, 0.32)))
+                          for _ in range(4)]
+                    foot.append((sid, year, *qs))
+            conn.executemany(
+                "INSERT INTO station_footfall (station_id, year, q1, q2, q3,"
+                " q4) VALUES (?, ?, ?, ?, ?, ?)", foot)
+
+            # ---------------------------------------------------------- staff
+            staff_rows = []
+            for stid in range(1, 41):
+                name = (FIRST[rng.randrange(len(FIRST))] + " "
+                        + LAST[rng.randrange(len(LAST))])
+                role = "manager" if stid <= 5 else ROLES[rng.randrange(3)]
+                if stid == 1:
+                    boss = None
+                elif stid <= 5:
+                    boss = 1
                 else:
-                    mentor = rng.randrange(2, 5)
-                rate = round(rng.uniform(38.0, 82.0), 2)
-                # A quarter have never been formally graded -- NULL, not 1.
-                grade = None if rng.random() < 0.25 else rng.randrange(1, 6)
-                instr_rows.append((iid, dept, name, _iso(hired), mentor,
-                                   rate, grade))
+                    boss = rng.randrange(2, 6)
+                hired = date(2005, 1, 1) + timedelta(days=rng.randrange(7000))
+                salary = rng.randrange(26_000, 71_000)
+                staff_rows.append((stid, name, rng.randrange(1, 61), role,
+                                   _iso(hired), boss, salary))
             conn.executemany(
-                "INSERT INTO instructors (instructor_id, department_id, name,"
-                " hired_on, mentor_id, hourly_rate, pay_grade)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)", instr_rows)
+                "INSERT INTO staff (staff_id, name, base_station, role,"
+                " hired_on, reports_to, salary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                staff_rows)
 
-            # --------------------------------------------------------- students
-            student_rows = []
-            used = set()
-            for sid in range(1, N_STUDENTS + 1):
-                # 26 x 24 name pairs cannot cover N_STUDENTS uniquely, so a
-                # repeated pair gets a numeric suffix. Names stay realistic and
-                # stay unique, which matters for the LIKE questions.
-                base = (STUDENT_FIRST[rng.randrange(len(STUDENT_FIRST))]
-                        + " "
-                        + STUDENT_LAST[rng.randrange(len(STUDENT_LAST))])
-                name, n = base, 1
-                while name in used:
-                    n += 1
-                    name = f"{base} {n}"
-                used.add(name)
-                campus = rng.randrange(1, len(CAMPUSES) + 1)
-                joined = _random_date(rng, date(2024, 8, 1), date(2026, 4, 1))
-                programme = PROGRAMMES[rng.randrange(len(PROGRAMMES))]
-                # A sixth have no funding band recorded yet.
-                band = None if rng.random() < 0.17 else FUNDING[rng.randrange(3)]
-                student_rows.append((sid, name, campus, _iso(joined),
-                                     programme, band))
+            # -------------------------------------------------- rolling stock
+            stock = []
+            for uid in range(1, 51):
+                built = rng.randrange(1988, 2023)
+                # Older units may have been refurbished; newer ones have not.
+                refurb = (built + rng.randrange(12, 25)
+                          if built < 2005 and rng.random() < 0.7 else None)
+                stock.append((uid, MODELS[rng.randrange(len(MODELS))],
+                              rng.choice([120, 148, 176, 200, 242, 300]),
+                              built, refurb))
             conn.executemany(
-                "INSERT INTO students (student_id, name, campus_id,"
-                " enrolled_on, programme, funding_band)"
-                " VALUES (?, ?, ?, ?, ?, ?)", student_rows)
+                "INSERT INTO rolling_stock (unit_id, model, seats, built_year,"
+                " refurbished_year) VALUES (?, ?, ?, ?, ?)", stock)
 
-            # ---------------------------------------------------------- courses
-            course_rows = []
-            for cid, (di, level, code, title) in enumerate(COURSES, 1):
-                credits = rng.choice([10, 15, 20, 30])
-                course_rows.append((cid, di + 1, code, title, credits, level))
+            # ------------------------------------------- a route per line ----
+            # Each line calls at a fixed ordered list of stations. Five
+            # stations are on no line at all.
+            pool = list(range(1, 56))
+            rng.shuffle(pool)
+            routes, at = {}, 0
+            for lid in range(1, len(LINES) + 1):
+                n = rng.randrange(6, 11)
+                routes[lid] = pool[at:at + n]
+                at += n
+                if at + 10 > len(pool):
+                    at = 0
+
+            # Each line draws its trains from a pool of units. Pools overlap
+            # but no unit works every line, so "used on all six" is a real
+            # question rather than a description of everything.
+            pools = {}
+            for lid in range(1, len(LINES) + 1):
+                start = (lid - 1) * 7
+                pools[lid] = [((start + k) % 45) + 1 for k in range(14)]
+
+            # ------------------------------------------------------- services
+            svc_rows, stop_rows, unit_rows = [], [], []
+            svc = 0
+            day = RANGE_START
+            while day <= RANGE_END:
+                for lid in range(1, len(LINES) + 1):
+                    for run in range(RUNS_PER_LINE_PER_DAY):
+                        svc += 1
+                        dep = 6 * 60 + run * 210 + rng.randrange(0, 40)
+                        cancelled = 1 if rng.random() < 0.03 else 0
+                        svc_rows.append((svc, lid,
+                                         rng.randrange(1, len(OPERATORS) + 1),
+                                         _iso(day), _hhmm(dep), cancelled))
+                        if cancelled:
+                            continue          # cancelled services have no stops
+                        t = dep
+                        for seq, st in enumerate(routes[lid], 1):
+                            t += rng.randrange(4, 15)
+                            # One stop in twenty was skipped or not recorded.
+                            actual = (None if rng.random() < 0.05
+                                      else _hhmm(t + rng.randrange(-1, 9)))
+                            stop_rows.append((svc, seq, st, _hhmm(t), actual))
+                        for pos in range(1, rng.randrange(2, 4)):
+                            unit_rows.append(
+                                (svc, pools[lid][rng.randrange(
+                                    len(pools[lid]))], pos))
+                day += timedelta(days=1)
             conn.executemany(
-                "INSERT INTO courses (course_id, department_id, code, title,"
-                " credits, level) VALUES (?, ?, ?, ?, ?, ?)", course_rows)
-
-            # ---------------------------------------------------- prerequisites
-            # A course may only require STRICTLY lower levels, which makes the
-            # graph acyclic by construction -- a recursive walk always ends.
-            by_dept_level = {}
-            for cid, (di, level, _code, _t) in enumerate(COURSES, 1):
-                by_dept_level.setdefault((di, level), []).append(cid)
-            prereq_rows = []
-            for cid, (di, level, _code, _t) in enumerate(COURSES, 1):
-                if level == 1:
-                    continue
-                # Always require something from the level immediately below, so
-                # chains actually form: a level-4 course reaches level 1 in
-                # three hops, which is what makes a recursive walk necessary
-                # rather than decorative. Sometimes also reach further down,
-                # so not every path from a course is the same length.
-                direct = list(by_dept_level.get((di, level - 1), []))
-                deeper = [c for lv in range(1, level - 1)
-                          for c in by_dept_level.get((di, lv), [])]
-                if direct:
-                    rng.shuffle(direct)
-                    prereq_rows.append((cid, direct[0]))
-                if deeper and rng.random() < 0.45:
-                    rng.shuffle(deeper)
-                    prereq_rows.append((cid, deeper[0]))
-            # Two cross-department requirements, so the graph is not just a set
-            # of independent per-department chains.
-            prereq_rows.append((7, 14))    # Machine Learning <- Probability
-            prereq_rows.append((31, 14))   # Epidemiology     <- Probability
+                "INSERT INTO services (service_id, line_id, operator_id,"
+                " run_date, depart_time, cancelled) VALUES (?, ?, ?, ?, ?, ?)",
+                svc_rows)
             conn.executemany(
-                "INSERT INTO prerequisites (course_id, requires_course_id)"
-                " VALUES (?, ?)", sorted(set(prereq_rows)))
-
-            # ------------------------------------------------------------ terms
+                "INSERT INTO stops (service_id, stop_seq, station_id,"
+                " sched_arrive, actual_arrive) VALUES (?, ?, ?, ?, ?)",
+                stop_rows)
             conn.executemany(
-                "INSERT INTO terms (term_id, name, starts_on, ends_on)"
-                " VALUES (?, ?, ?, ?)",
-                [(i, n, s, e) for i, (n, s, e) in enumerate(TERMS, 1)])
+                "INSERT OR IGNORE INTO service_units (service_id, unit_id,"
+                " position) VALUES (?, ?, ?)", unit_rows)
 
-            # --------------------------------------------------------- sections
-            # Five courses are never scheduled at all, so an anti-join has
-            # something to find.
-            never_scheduled = {6, 16, 22, 28, 34}
-            section_rows = []
-            sid = 0
-            for tid in range(1, len(TERMS) + 1):
-                for cid in range(1, len(COURSES) + 1):
-                    if cid in never_scheduled:
-                        continue
-                    if rng.random() > 0.45:
-                        continue
-                    # A popular course runs several parallel sections in the
-                    # same term, which is what gets the row counts up without
-                    # inventing more courses than a college would have.
-                    for _rep in range(rng.randrange(
-                            1, SECTIONS_PER_COURSE_TERM + 1)):
-                        sid += 1
-                        # One section in nine is scheduled but not yet staffed.
-                        instr = (None if rng.random() < 0.11
-                                 else rng.randrange(
-                                     1, len(INSTRUCTOR_NAMES) + 1))
-                        section_rows.append((
-                            sid, cid, tid, instr,
-                            ROOMS[rng.randrange(len(ROOMS))],
-                            rng.choice([40, 60, 90, 120, 150, 180]),
-                            DELIVERY[rng.randrange(3)]))
+            running = [s[0] for s in svc_rows if not s[5]]
+
+            # -------------------------------------------------------- tickets
+            tick, tid = [], 0
+            for s in rng.sample(running, k=int(len(running) * 0.8)):
+                # A ticket is for a journey this service actually makes, so
+                # from_station and to_station are stations on its own route.
+                route = routes[svc_rows[s - 1][1]]
+                for _ in range(rng.randrange(1, 8)):
+                    tid += 1
+                    cls = CLASSES[rng.randrange(3)]
+                    base = {"first": 2200, "standard": 900,
+                            "advance": 450}[cls]
+                    a = rng.randrange(0, len(route) - 1)
+                    # A twentieth are open returns with no destination.
+                    to = (None if rng.random() < 0.05
+                          else route[rng.randrange(a + 1, len(route))])
+                    tick.append((tid, s, route[a], to, cls,
+                                 base + rng.randrange(0, 900),
+                                 svc_rows[s - 1][3]))
             conn.executemany(
-                "INSERT INTO sections (section_id, course_id, term_id,"
-                " instructor_id, room, capacity, delivery)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)", section_rows)
+                "INSERT INTO tickets (ticket_id, service_id, from_station,"
+                " to_station, class, price_pence, sold_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)", tick)
 
-            term_start = {i: date.fromisoformat(s)
-                          for i, (_n, s, _e) in enumerate(TERMS, 1)}
-
-            # ------------------------------------------------------- enrolments
-            # Eight students never enrol on anything.
-            enrollable = [s for s in range(1, N_STUDENTS + 1) if s % 7 != 3]
-            enrol_rows = []
-            eid = 0
-            for s_id, c_id, t_id, *_rest in section_rows:
-                # A tenth of sections take nobody at all.
-                if rng.random() < 0.10:
-                    continue
-                take = rng.randrange(20, 180)
-                for stu in rng.sample(enrollable, take):
-                    eid += 1
-                    start = term_start[t_id]
-                    when = start + timedelta(days=rng.randrange(-21, 15))
-                    roll = rng.random()
-                    if roll < 0.68:
-                        status, grade = "completed", rng.randrange(35, 99)
-                    elif roll < 0.87:
-                        status, grade = "active", None
-                    else:
-                        status, grade = "withdrawn", None
-                    enrol_rows.append((eid, s_id, stu, _iso(when), status,
-                                       grade))
+            # ------------------------------------------------------ incidents
+            inc, iid = [], 0
+            for s in rng.sample(running, k=int(len(running) * 0.09)):
+                iid += 1
+                # A sixth of incidents were never quantified.
+                delay = (None if rng.random() < 0.17
+                         else rng.randrange(1, 95))
+                inc.append((iid, s, svc_rows[s - 1][3],
+                            KINDS[rng.randrange(len(KINDS))], delay))
             conn.executemany(
-                "INSERT INTO enrolments (enrolment_id, section_id, student_id,"
-                " enrolled_on, status, grade) VALUES (?, ?, ?, ?, ?, ?)",
-                enrol_rows)
-
-            # ------------------------------------------------------ assessments
-            assess_rows = []
-            aid = 0
-            for s_id, _c, t_id, *_rest in section_rows:
-                # A sixth of sections have no assessments recorded, which is a
-                # DIFFERENT set from the ones with no students.
-                if rng.random() < 0.16:
-                    continue
-                n = rng.randrange(2, 5)
-                weights = [round(1.0 / n, 2)] * n
-                for k in range(n):
-                    aid += 1
-                    kind = ASSESSMENT_KINDS[rng.randrange(4)]
-                    due = term_start[t_id] + timedelta(
-                        days=rng.randrange(28, 84))
-                    assess_rows.append((
-                        aid, s_id, f"{kind.title()} {k + 1}", kind,
-                        weights[k], _iso(due)))
-            conn.executemany(
-                "INSERT INTO assessments (assessment_id, section_id, title,"
-                " kind, weight, due_on) VALUES (?, ?, ?, ?, ?, ?)", assess_rows)
-
-            # -------------------------------------------------------- textbooks
-            book_rows = []
-            for bid, title in enumerate(BOOK_TITLES, 1):
-                price = round(rng.uniform(18.0, 145.0), 2)
-                # A few have no page count recorded.
-                pages = None if rng.random() < 0.12 else rng.randrange(180, 940)
-                book_rows.append((bid, title,
-                                  PUBLISHERS[rng.randrange(len(PUBLISHERS))],
-                                  price, pages))
-            conn.executemany(
-                "INSERT INTO textbooks (book_id, title, publisher, list_price,"
-                " pages) VALUES (?, ?, ?, ?, ?)", book_rows)
-
-            # ----------------------------------------------------- course_books
-            # Six textbooks end up on no reading list at all.
-            listable = list(range(1, len(BOOK_TITLES) - 5))
-            cb_rows = set()
-            for cid in range(1, len(COURSES) + 1):
-                if rng.random() < 0.12:
-                    continue
-                for bid in rng.sample(listable, rng.randrange(1, 4)):
-                    cb_rows.add((cid, bid))
-            cb_full = []
-            for cid, bid in sorted(cb_rows):
-                required = 1 if rng.random() < 0.6 else 0
-                # A fifth have no library copy target set.
-                copies = None if rng.random() < 0.20 else rng.randrange(0, 25)
-                cb_full.append((cid, bid, required, copies))
-            conn.executemany(
-                "INSERT INTO course_books (course_id, book_id, required,"
-                " copies_held) VALUES (?, ?, ?, ?)", cb_full)
-
-            # --------------------------------------------------------- payments
-            pay_rows = []
-            pid = 0
-            for stu in range(1, N_STUDENTS + 1):
-                for _ in range(rng.randrange(0, 5)):
-                    pid += 1
-                    billed = _random_date(rng, date(2024, 9, 1),
-                                          date(2026, 6, 30))
-                    amount = round(rng.uniform(120.0, 2400.0), 2)
-                    roll = rng.random()
-                    if roll < 0.62:
-                        status = "PAID"
-                        paid = _iso(billed + timedelta(
-                            days=rng.randrange(1, 75)))
-                    elif roll < 0.80:
-                        status, paid = "DUE", None
-                    elif roll < 0.96:
-                        status, paid = "LATE", None
-                    else:
-                        status, paid = "WAIVED", None
-                    pay_rows.append((pid, stu, _iso(billed), amount, status,
-                                     paid))
-            conn.executemany(
-                "INSERT INTO payments (payment_id, student_id, billed_on,"
-                " amount, status, paid_on) VALUES (?, ?, ?, ?, ?, ?)",
-                pay_rows)
+                "INSERT INTO incidents (incident_id, service_id, reported_at,"
+                " kind, delay_minutes) VALUES (?, ?, ?, ?, ?)", inc)
     finally:
         conn.close()
-
-    return {t: n for t, n in _counts().items()}
+    return _counts()
 
 
 def _counts():
@@ -473,5 +277,5 @@ def _counts():
 
 if __name__ == "__main__":
     for table, n in seed().items():
-        print(f"{table:>14}: {n:>5}")
+        print(f"{table:>18}: {n:>7}")
     print(f"\nseeded {db.DB_PATH}")

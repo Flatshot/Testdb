@@ -24,66 +24,68 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the college schema, re-seeded (SEED 329 -> 365) and larger
-again: 83,000 enrolments across 964 sections.
+Thirty questions on a **new schema**: a regional railway. The college is
+retired after six consecutive sets -- the questions had started to feel alike
+whatever they were about, so this schema is shaped differently rather than
+merely being about something else.
 
-Harder than Q342-Q371 in two different ways. The first 24 keep the same shape --
-one concept each, the prompt states the grain -- but the SQL is longer and the
-traps subtler: a CASE whose ELSE catches NULLs by accident, a percentage change
-that must divide by the previous value, two windows over the same column doing
-opposite jobs, three measures at three grains where `COUNT(DISTINCT)` rescues
-one column and hides that the other two are wrong.
+**The central fact is an ordered sequence inside a parent.** `stops` is keyed on
+(service_id, stop_seq), so every stop knows where it sits in its own journey.
+That makes a whole family of questions natural instead of contrived -- the first
+and last station, the next station, the gap since the previous one, the route as
+a single string -- and they need `LAG`, `LEAD`, frame clauses, `FIRST_VALUE` and
+`GROUP_CONCAT`.
 
-**The efficiency stage is where the difficulty really moves.** In Q366-Q371 the
-fast form was the obvious form -- stop wrapping the column in a function. In
-these six the naive query is the readable one and the fix is something you would
-not guess:
+Three more shapes reach concepts no earlier set covered:
 
-| # | The fix |
-|---|---|
-| 25 | **add** a predicate that filters nothing, to unlock a composite index |
-| 26 | change which **columns you select**, to keep the index covering |
-| 27 | reorder an `ORDER BY` to match the index's own column order |
-| 28 | rewrite `COUNT(DISTINCT)` as a grouped subquery to lose a sort |
-| 29 | prefer a correlated `NOT EXISTS` **over** a `LEFT JOIN` anti-join |
-| 30 | order by the driving table, not the joined one |
+- `station_footfall` is **wide** -- one row per station-year with four quarter
+  columns. Making it long again is an **unpivot**, and SQL has no operator for
+  one: it is `UNION ALL` or nothing.
+- `tickets.price_pence` is money as an **INTEGER**, so shares and averages meet
+  integer division.
+- `tickets.class` has a natural order that is **not alphabetical**, so sorting it
+  needs `CASE` inside `ORDER BY`.
 
-Each still names the plan to aim for, so you know when you have arrived. What it
-does not tell you is how. Five new indexes exist to make these reachable, several
-only if the query is restructured.
+Recursion is deliberately down to one question, from eight across the last three
+sets.
+
+**The efficiency stage now opens filled in.** Each of the last six starts with a
+query already in the editor that returns the right answer by a slow route. There
+is nothing to work out about what to select; the task is only to improve the
+plan. Press F6, change it, press F6 again.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q372 | A1 conditional aggregation | Funding mix by campus | ex 1 | 1 - Warm-up |
-| Q373 | A3 WHERE vs HAVING | Busy days that were not all withdrawals | ex 2 | 1 - Warm-up |
-| Q374 | general | Grade bands, including the ungraded | ex 3 | 1 - Warm-up |
-| Q375 | A2 COUNT and AVG | Marks by band, and how many carry one | ex 4 | 1 - Warm-up |
-| Q376 | J2 outer joins | Online teaching per course | ex 5 | 2 - First joins |
-| Q377 | E1 EXISTS | Students who only ever withdrew | ex 6 | 2 - First joins |
-| Q378 | J1 self-joins | Courses that sit alongside each other | ex 7 | 2 - First joins |
-| Q379 | J2 outer joins | Courses nobody has scheduled | ex 8 | 2 - First joins |
-| Q380 | E1 EXISTS | Instructors who mentor nobody | ex 9 | 2 - First joins |
-| Q381 | R1 recursive CTE | Everyone under Margaret Ashworth, with their depth | ex 10 | 3 - Recursion |
-| Q382 | R1 recursive CTE | What Machine Learning needs, and how far back | ex 11 | 3 - Recursion |
-| Q383 | R1 recursive CTE | What is blocked by Programming Foundations | ex 12 | 3 - Recursion |
-| Q384 | R1 recursive CTE | Courses that depend on nothing | ex 13 | 3 - Recursion |
-| Q385 | D1 dates & gaps | How much of each term had passed | ex 14 | 4 - Dates, sets and pivots |
-| Q386 | D1 dates & gaps | The busiest month of each academic year | ex 15 | 4 - Dates, sets and pivots |
-| Q387 | S1 set operations | Billed in a month nobody enrolled | ex 16 | 4 - Dates, sets and pivots |
-| Q388 | S1 set operations | Books that changed their status between levels | ex 17 | 4 - Dates, sets and pivots |
-| Q389 | A1 conditional aggregation | Status mix by term, as percentages | ex 18 | 4 - Dates, sets and pivots |
-| Q390 | W3 window vs GROUP BY | Term on term, in percentage terms | ex 19 | 5 - Window functions |
-| Q391 | W1 window frames | Cumulative share of enrolments | ex 20 | 5 - Window functions |
-| Q392 | W2 window ranking | The two biggest courses in each faculty | ex 21 | 5 - Window functions |
-| Q393 | W1 window frames | Three-term rolling average | ex 22 | 5 - Window functions |
-| Q394 | E2 correlated subqueries | Courses busier than their department's average | ex 23 | 6 - Grain and correlation |
-| Q395 | C2 grain | Three measures per term | ex 24 | 6 - Grain and correlation |
-| Q396 | X3 composite index order | Make the query longer to make it faster | ex 25 | 7 - Query efficiency |
-| Q397 | X5 covering indexes | Keep the index covering | ex 26 | 7 - Query efficiency |
-| Q398 | X2 sorts and temp b-trees | Sort in the order the index is already in | ex 27 | 7 - Query efficiency |
-| Q399 | X6 aggregate phrasing | Count distinct without the sort | ex 28 | 7 - Query efficiency |
-| Q400 | X7 anti-join shape | The anti-join that should not be a join | ex 29 | 7 - Query efficiency |
-| Q401 | X2 sorts and temp b-trees | Order by the table you are driving | ex 30 | 7 - Query efficiency |
+| Q402 | N1 integer division | Revenue in pounds | ex 1 | 1 - Warm-up |
+| Q403 | N2 CASE in ORDER BY | Classes in price order | ex 2 | 1 - Warm-up |
+| Q404 | C7 NULL | Step-free access, surveyed and not | ex 3 | 1 - Warm-up |
+| Q405 | N3 string functions | Stations named after their town | ex 4 | 1 - Warm-up |
+| Q406 | G1 GROUP_CONCAT | The whole route on one line | ex 5 | 2 - Sequences and strings |
+| Q407 | W2 window ranking | Where each line starts and ends | ex 6 | 2 - Sequences and strings |
+| Q408 | W3 window vs GROUP BY | Minutes between stops | ex 7 | 2 - Sequences and strings |
+| Q409 | W3 window vs GROUP BY | The next station on the journey | ex 8 | 2 - Sequences and strings |
+| Q410 | W1 window frames | How much of the journey is still to come | ex 9 | 2 - Sequences and strings |
+| Q411 | W2 window ranking | Every station's place in the line | ex 10 | 2 - Sequences and strings |
+| Q412 | U1 unpivot | Four columns into four rows | ex 11 | 3 - Unpivot and set ops |
+| Q413 | S1 set operations | Stations that grew two years running | ex 12 | 3 - Unpivot and set ops |
+| Q414 | S1 set operations | Bought from there, never bought to there | ex 13 | 3 - Unpivot and set ops |
+| Q415 | A1 conditional aggregation | And back to wide again | ex 14 | 3 - Unpivot and set ops |
+| Q416 | D2 date modifiers | Services by calendar month | ex 15 | 4 - Dates and times |
+| Q417 | D2 date modifiers | Weekends versus weekdays | ex 16 | 4 - Dates and times |
+| Q418 | D2 date modifiers | How late did it actually arrive | ex 17 | 4 - Dates and times |
+| Q419 | D2 date modifiers | The last service of each month | ex 18 | 4 - Dates and times |
+| Q420 | J2 outer joins | Every station, called at or not | ex 19 | 5 - Joins and grain |
+| Q421 | J2 outer joins | Units that have never run | ex 20 | 5 - Joins and grain |
+| Q422 | E1 EXISTS | Stations a journey begins at | ex 21 | 5 - Joins and grain |
+| Q423 | C2 grain | Three measures per line | ex 22 | 5 - Joins and grain |
+| Q424 | W1 window frames | Revenue accumulating through the year | ex 23 | 6 - Windows and recursion |
+| Q425 | R1 recursive CTE | Everyone under the top manager | ex 24 | 6 - Windows and recursion |
+| Q426 | X6 grouping and indexes | Group the way the index already is | ex 25 | 7 - Query efficiency |
+| Q427 | X1 index vs expression | A year of services, without scanning | ex 26 | 7 - Query efficiency |
+| Q428 | X2 sorts and temp b-trees | Sort the way the index already is | ex 27 | 7 - Query efficiency |
+| Q429 | X5 covering indexes | Keep the index covering | ex 28 | 7 - Query efficiency |
+| Q430 | X1 index vs expression | Names beginning with Alan | ex 29 | 7 - Query efficiency |
+| Q431 | X7 anti-join shape | The anti-join that should not be a join | ex 30 | 7 - Query efficiency |
 
 ## Retired
 
@@ -463,6 +465,36 @@ they still count as asked.
 | Q369 | X3 composite index order | Withdrawals, using the composite index | - | retired |
 | Q370 | X2 sorts and temp b-trees | Enrolments per day, without a temporary sort | - | retired |
 | Q371 | X4 join strategy | What blocking an index does to a join | - | retired |
+| Q372 | A1 conditional aggregation | Funding mix by campus | - | retired |
+| Q373 | A3 WHERE vs HAVING | Busy days that were not all withdrawals | - | retired |
+| Q374 | general | Grade bands, including the ungraded | - | retired |
+| Q375 | A2 COUNT and AVG | Marks by band, and how many carry one | - | retired |
+| Q376 | J2 outer joins | Online teaching per course | - | retired |
+| Q377 | E1 EXISTS | Students who only ever withdrew | - | retired |
+| Q378 | J1 self-joins | Courses that sit alongside each other | - | retired |
+| Q379 | J2 outer joins | Courses nobody has scheduled | - | retired |
+| Q380 | E1 EXISTS | Instructors who mentor nobody | - | retired |
+| Q381 | R1 recursive CTE | Everyone under Margaret Ashworth, with their depth | - | retired |
+| Q382 | R1 recursive CTE | What Machine Learning needs, and how far back | - | retired |
+| Q383 | R1 recursive CTE | What is blocked by Programming Foundations | - | retired |
+| Q384 | R1 recursive CTE | Courses that depend on nothing | - | retired |
+| Q385 | D1 dates & gaps | How much of each term had passed | - | retired |
+| Q386 | D1 dates & gaps | The busiest month of each academic year | - | retired |
+| Q387 | S1 set operations | Billed in a month nobody enrolled | - | retired |
+| Q388 | S1 set operations | Books that changed their status between levels | - | retired |
+| Q389 | A1 conditional aggregation | Status mix by term, as percentages | - | retired |
+| Q390 | W3 window vs GROUP BY | Term on term, in percentage terms | - | retired |
+| Q391 | W1 window frames | Cumulative share of enrolments | - | retired |
+| Q392 | W2 window ranking | The two biggest courses in each faculty | - | retired |
+| Q393 | W1 window frames | Three-term rolling average | - | retired |
+| Q394 | E2 correlated subqueries | Courses busier than their department's average | - | retired |
+| Q395 | C2 grain | Three measures per term | - | retired |
+| Q396 | X3 composite index order | Make the query longer to make it faster | - | retired |
+| Q397 | X5 covering indexes | Keep the index covering | - | retired |
+| Q398 | X2 sorts and temp b-trees | Sort in the order the index is already in | - | retired |
+| Q399 | X6 aggregate phrasing | Count distinct without the sort | - | retired |
+| Q400 | X7 anti-join shape | The anti-join that should not be a join | - | retired |
+| Q401 | X2 sorts and temp b-trees | Order by the table you are driving | - | retired |
 
 ## History
 
@@ -515,3 +547,10 @@ they still count as asked.
   changing the select list, matching an index's column order, and one case
   where a correlated subquery beats the join. Five more indexes added to make
   those reachable.
+- **Q402-Q431** current set, on a NEW schema: a regional railway (11 tables,
+  SEED 401). Chosen for its shape -- an ordered sequence inside a parent, a wide
+  table to unpivot, integer money, a non-alphabetical category. Reaches concepts
+  no earlier set covered: GROUP_CONCAT, CASE in ORDER BY, FIRST_VALUE/LAST_VALUE,
+  forward-looking frames, UNION ALL unpivot, multi-column set operations, date
+  modifiers, HH:MM arithmetic. The efficiency questions now open with a
+  correct-but-slow query already in the editor.

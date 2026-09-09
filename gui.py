@@ -533,7 +533,15 @@ class App(tk.Tk):
     def _select_exercise(self, eid):
         self.current = eid
         self.editor.delete("1.0", "end")
-        self.editor.insert("1.0", self.progress["sql"].get(self._key(eid), ""))
+        saved = self.progress["sql"].get(self._key(eid), "")
+        if not saved and eid != FREE:
+            # Efficiency questions open with a query that already returns the
+            # right answer by a slow route -- the task is to improve the plan,
+            # not to work out what to select. Only used when nothing of yours
+            # is saved for this exercise, so it can never overwrite your work.
+            saved = format_sql(ex.BY_ID[eid].get("starter_sql", "")) \
+                if ex.BY_ID[eid].get("starter_sql") else ""
+        self.editor.insert("1.0", saved)
         self.editor.edit_reset()
 
         if eid == FREE:
