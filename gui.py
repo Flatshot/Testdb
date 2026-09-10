@@ -421,6 +421,12 @@ class App(tk.Tk):
         self.explain_btn.pack(side="left", padx=(6, 0))
         self.solution_btn = ttk.Button(bar, text="Show solution", command=self.show_solution)
         self.solution_btn.pack(side="left", padx=(6, 0))
+        # Only the efficiency questions open with a query already in the editor,
+        # so this is the only place restoring one means anything. Packed and
+        # unpacked in _select_exercise rather than greyed out, so it is absent
+        # rather than merely disabled on the other 24 questions.
+        self.starter_btn = ttk.Button(bar, text="Reset",
+                                      command=self.reset_starter)
         self.progress_var = tk.StringVar()
         ttk.Label(bar, textvariable=self.progress_var,
                   foreground=FG_MUTED).pack(side="right")
@@ -558,6 +564,10 @@ class App(tk.Tk):
 
         self.check_btn.configure(state=state)
         self.solution_btn.configure(state=state)
+        if eid != FREE and ex.BY_ID[eid].get("starter_sql"):
+            self.starter_btn.pack(side="left", padx=(6, 0))
+        else:
+            self.starter_btn.pack_forget()
         self.question.configure(state="normal")
         self.question.delete("1.0", "end")
         self.question.insert("1.0", body)
@@ -670,6 +680,23 @@ class App(tk.Tk):
             f"{n} row(s) in {elapsed:.1f} ms.  SCAN reads every row;"
             f" SEARCH uses an index; TEMP B-TREE means a sort or group was"
             f" built on the fly.", BG_INFO)
+
+    def reset_starter(self):
+        """Put the question's original slow query back in the editor.
+
+        No confirmation: edit_reset is deliberately NOT called, so Ctrl+Z undoes
+        the restore and nothing you had typed is unrecoverable.
+        """
+        if self.current == FREE:
+            return
+        starter = ex.BY_ID[self.current].get("starter_sql")
+        if not starter:
+            return
+        self.editor.delete("1.0", "end")
+        self.editor.insert("1.0", format_sql(starter))
+        self._set_status(
+            "Starter query restored -- it returns the right answer by the wrong"
+            " route. Ctrl+Z undoes this.", BG_INFO)
 
     def show_solution(self):
         if self.current == FREE:
