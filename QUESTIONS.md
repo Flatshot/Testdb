@@ -24,68 +24,65 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on a **new schema**: a regional railway. The college is
-retired after six consecutive sets -- the questions had started to feel alike
-whatever they were about, so this schema is shaped differently rather than
-merely being about something else.
+Thirty questions on the railway schema, re-seeded (SEED 401 -> 437) so no answer
+value from the last set carries over. Same tables, same difficulty.
 
-**The central fact is an ordered sequence inside a parent.** `stops` is keyed on
-(service_id, stop_seq), so every stop knows where it sits in its own journey.
-That makes a whole family of questions natural instead of contrived -- the first
-and last station, the next station, the gap since the previous one, the route as
-a single string -- and they need `LAG`, `LEAD`, frame clauses, `FIRST_VALUE` and
-`GROUP_CONCAT`.
+Two changes in balance. The **efficiency stage drops from six questions to
+four**, and the slots go back to the other tiers -- windows and recursion in
+particular, which had only two questions last time and now has four. And every
+question is new: this set leans on shapes the last one left alone, including
+`LAST_VALUE` and its frame, journey durations, unpivoting to find each station's
+busiest quarter, and a recursive walk that builds a string as it goes.
 
-Three more shapes reach concepts no earlier set covered:
+The four efficiency questions still open with a query already in the editor --
+correct, but slow -- and are graded on their plan. Four different causes:
 
-- `station_footfall` is **wide** -- one row per station-year with four quarter
-  columns. Making it long again is an **unpivot**, and SQL has no operator for
-  one: it is `UNION ALL` or nothing.
-- `tickets.price_pence` is money as an **INTEGER**, so shares and averages meet
-  integer division.
-- `tickets.class` has a natural order that is **not alphabetical**, so sorting it
-  needs `CASE` inside `ORDER BY`.
+| # | The fix |
+|---|---|
+| 27 | **add** a predicate that filters nothing, to reach a composite index |
+| 28 | mixed `ORDER BY` directions cannot walk one index |
+| 29 | here the **join beats `EXISTS`** -- the opposite of Q431 |
+| 30 | `DISTINCT` on a bare column, so the index supplies the deduplication |
 
-Recursion is deliberately down to one question, from eight across the last three
-sets.
-
-**The efficiency stage now opens filled in.** Each of the last six starts with a
-query already in the editor that returns the right answer by a slow route. There
-is nothing to work out about what to select; the task is only to improve the
-plan. Press F6, change it, press F6 again.
+**Question 29 deliberately contradicts the last set.** Q431 taught that a
+correlated `NOT EXISTS` beats a `LEFT JOIN` anti-join and its assertion demanded
+the subquery. This is the same shape on the same schema and the advice reverses,
+because `stops` is indexed on `station_id` alone while the inner condition also
+tests `stop_seq`. The rule was never "prefer `NOT EXISTS`" -- it is "check
+whether the index covers what the subquery asks".
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q402 | N1 integer division | Revenue in pounds | ex 1 | 1 - Warm-up |
-| Q403 | N2 CASE in ORDER BY | Classes in price order | ex 2 | 1 - Warm-up |
-| Q404 | C7 NULL | Step-free access, surveyed and not | ex 3 | 1 - Warm-up |
-| Q405 | N3 string functions | Stations named after their town | ex 4 | 1 - Warm-up |
-| Q406 | G1 GROUP_CONCAT | The whole route on one line | ex 5 | 2 - Sequences and strings |
-| Q407 | W2 window ranking | Where each line starts and ends | ex 6 | 2 - Sequences and strings |
-| Q408 | W3 window vs GROUP BY | Minutes between stops | ex 7 | 2 - Sequences and strings |
-| Q409 | W3 window vs GROUP BY | The next station on the journey | ex 8 | 2 - Sequences and strings |
-| Q410 | W1 window frames | How much of the journey is still to come | ex 9 | 2 - Sequences and strings |
-| Q411 | W2 window ranking | Every station's place in the line | ex 10 | 2 - Sequences and strings |
-| Q412 | U1 unpivot | Four columns into four rows | ex 11 | 3 - Unpivot and set ops |
-| Q413 | S1 set operations | Stations that grew two years running | ex 12 | 3 - Unpivot and set ops |
-| Q414 | S1 set operations | Bought from there, never bought to there | ex 13 | 3 - Unpivot and set ops |
-| Q415 | A1 conditional aggregation | And back to wide again | ex 14 | 3 - Unpivot and set ops |
-| Q416 | D2 date modifiers | Services by calendar month | ex 15 | 4 - Dates and times |
-| Q417 | D2 date modifiers | Weekends versus weekdays | ex 16 | 4 - Dates and times |
-| Q418 | D2 date modifiers | How late did it actually arrive | ex 17 | 4 - Dates and times |
-| Q419 | D2 date modifiers | The last service of each month | ex 18 | 4 - Dates and times |
-| Q420 | J2 outer joins | Every station, called at or not | ex 19 | 5 - Joins and grain |
-| Q421 | J2 outer joins | Units that have never run | ex 20 | 5 - Joins and grain |
-| Q422 | E1 EXISTS | Stations a journey begins at | ex 21 | 5 - Joins and grain |
-| Q423 | C2 grain | Three measures per line | ex 22 | 5 - Joins and grain |
-| Q424 | W1 window frames | Revenue accumulating through the year | ex 23 | 6 - Windows and recursion |
-| Q425 | R1 recursive CTE | Everyone under the top manager | ex 24 | 6 - Windows and recursion |
-| Q426 | X6 grouping and indexes | Group the way the index already is | ex 25 | 7 - Query efficiency |
-| Q427 | X1 index vs expression | A year of services, without scanning | ex 26 | 7 - Query efficiency |
-| Q428 | X2 sorts and temp b-trees | Sort the way the index already is | ex 27 | 7 - Query efficiency |
-| Q429 | X5 covering indexes | Keep the index covering | ex 28 | 7 - Query efficiency |
-| Q430 | X1 index vs expression | Names beginning with Alan | ex 29 | 7 - Query efficiency |
-| Q431 | X7 anti-join shape | The anti-join that should not be a join | ex 30 | 7 - Query efficiency |
+| Q432 | A2 COUNT and AVG | Refurbished, and not | ex 1 | 1 - Warm-up |
+| Q433 | general | Stations by the decade they opened | ex 2 | 1 - Warm-up |
+| Q434 | A3 WHERE vs HAVING | Roles that are numerous and well paid | ex 3 | 1 - Warm-up |
+| Q435 | A2 COUNT and AVG | What a ticket costs, by class | ex 4 | 1 - Warm-up |
+| Q436 | D1 dates & times | The five longest journeys | ex 5 | 2 - Sequences and strings |
+| Q437 | W2 window ranking | Where this service ends up | ex 6 | 2 - Sequences and strings |
+| Q438 | W3 window vs GROUP BY | The five longest waits between stops | ex 7 | 2 - Sequences and strings |
+| Q439 | S1 set operations | Always in the middle | ex 8 | 2 - Sequences and strings |
+| Q440 | STR string aggregation | The first three calls | ex 9 | 2 - Sequences and strings |
+| Q441 | UNP unpivot | Quarterly totals for the whole network | ex 10 | 3 - Unpivot and set ops |
+| Q442 | UNP unpivot | Each station's busiest quarter | ex 11 | 3 - Unpivot and set ops |
+| Q443 | S1 set operations | Arrived at, never departed from | ex 12 | 3 - Unpivot and set ops |
+| Q444 | S1 set operations | Grew in both directions | ex 13 | 3 - Unpivot and set ops |
+| Q445 | D1 dates & times | How far ahead people book | ex 14 | 4 - Dates and times |
+| Q446 | D1 dates & times | The busiest departure hour | ex 15 | 4 - Dates and times |
+| Q447 | D1 dates & times | Cancellations by day of the week | ex 16 | 4 - Dates and times |
+| Q448 | W3 window vs GROUP BY | Months when incidents rose | ex 17 | 4 - Dates and times |
+| Q449 | J2 outer joins | Stations no ticket is bought to | ex 18 | 5 - Joins and grain |
+| Q450 | C2 grain | Revenue by line | ex 19 | 5 - Joins and grain |
+| Q451 | J2 outer joins | Weather incidents per line | ex 20 | 5 - Joins and grain |
+| Q452 | C2 grain | Tickets and incidents per line | ex 21 | 5 - Joins and grain |
+| Q453 | A3 WHERE vs HAVING | Units that get around | ex 22 | 5 - Joins and grain |
+| Q454 | W2 window ranking | Lines ranked by revenue | ex 23 | 6 - Windows and recursion |
+| Q455 | W1 window frames | Three-month rolling average of incidents | ex 24 | 6 - Windows and recursion |
+| Q456 | R1 recursive CTE | The chain of command | ex 25 | 6 - Windows and recursion |
+| Q457 | R1 recursive CTE | How deep the hierarchy runs | ex 26 | 6 - Windows and recursion |
+| Q458 | X3 composite index order | Add a condition to make it faster | ex 27 | 7 - Query efficiency |
+| Q459 | X2 sorts and temp b-trees | One direction or the other, not both | ex 28 | 7 - Query efficiency |
+| Q460 | X7 subquery vs join | When the join beats the subquery | ex 29 | 7 - Query efficiency |
+| Q461 | X6 aggregate phrasing | Let the index do the deduplicating | ex 30 | 7 - Query efficiency |
 
 ## Retired
 
@@ -495,6 +492,36 @@ they still count as asked.
 | Q399 | X6 aggregate phrasing | Count distinct without the sort | - | retired |
 | Q400 | X7 anti-join shape | The anti-join that should not be a join | - | retired |
 | Q401 | X2 sorts and temp b-trees | Order by the table you are driving | - | retired |
+| Q402 | N1 integer division | Revenue in pounds | - | retired |
+| Q403 | N2 CASE in ORDER BY | Classes in price order | - | retired |
+| Q404 | C7 NULL | Step-free access, surveyed and not | - | retired |
+| Q405 | N3 string functions | Stations named after their town | - | retired |
+| Q406 | G1 GROUP_CONCAT | The whole route on one line | - | retired |
+| Q407 | W2 window ranking | Where each line starts and ends | - | retired |
+| Q408 | W3 window vs GROUP BY | Minutes between stops | - | retired |
+| Q409 | W3 window vs GROUP BY | The next station on the journey | - | retired |
+| Q410 | W1 window frames | How much of the journey is still to come | - | retired |
+| Q411 | W2 window ranking | Every station's place in the line | - | retired |
+| Q412 | U1 unpivot | Four columns into four rows | - | retired |
+| Q413 | S1 set operations | Stations that grew two years running | - | retired |
+| Q414 | S1 set operations | Bought from there, never bought to there | - | retired |
+| Q415 | A1 conditional aggregation | And back to wide again | - | retired |
+| Q416 | D2 date modifiers | Services by calendar month | - | retired |
+| Q417 | D2 date modifiers | Weekends versus weekdays | - | retired |
+| Q418 | D2 date modifiers | How late did it actually arrive | - | retired |
+| Q419 | D2 date modifiers | The last service of each month | - | retired |
+| Q420 | J2 outer joins | Every station, called at or not | - | retired |
+| Q421 | J2 outer joins | Units that have never run | - | retired |
+| Q422 | E1 EXISTS | Stations a journey begins at | - | retired |
+| Q423 | C2 grain | Three measures per line | - | retired |
+| Q424 | W1 window frames | Revenue accumulating through the year | - | retired |
+| Q425 | R1 recursive CTE | Everyone under the top manager | - | retired |
+| Q426 | X6 grouping and indexes | Group the way the index already is | - | retired |
+| Q427 | X1 index vs expression | A year of services, without scanning | - | retired |
+| Q428 | X2 sorts and temp b-trees | Sort the way the index already is | - | retired |
+| Q429 | X5 covering indexes | Keep the index covering | - | retired |
+| Q430 | X1 index vs expression | Names beginning with Alan | - | retired |
+| Q431 | X7 anti-join shape | The anti-join that should not be a join | - | retired |
 
 ## History
 
@@ -554,3 +581,7 @@ they still count as asked.
   forward-looking frames, UNION ALL unpivot, multi-column set operations, date
   modifiers, HH:MM arithmetic. The efficiency questions now open with a
   correct-but-slow query already in the editor.
+- **Q432-Q461** current set, railway schema re-seeded (SEED 401 -> 437).
+  Efficiency stage cut from six questions to four, the slots returning to the
+  other tiers. Q460 deliberately inverts Q431's lesson about correlated
+  subqueries versus joins.
