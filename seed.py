@@ -15,7 +15,7 @@ COUNT need something real to find:
   * tickets with no destination recorded (open returns)
   * incidents whose delay was never quantified
   * units that have never been assigned to a service
-  * staff who manage nobody, and one who reports to nobody
+  * a five-deep reporting tree, with staff who manage nobody
   * stations nobody has surveyed for step-free access
 """
 
@@ -24,7 +24,7 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 437
+SEED = 473
 
 # Services are generated per line per day across this window. stops is the big
 # table -- roughly eight per service -- and it is what the efficiency questions
@@ -140,7 +140,15 @@ def seed():
                 elif stid <= 5:
                     boss = 1
                 else:
-                    boss = rng.randrange(2, 6)
+                    # One draw whatever the level, so the rest of the seed
+                    # stream is untouched; the offsets just deepen the tree.
+                    pick = rng.randrange(2, 6)
+                    if stid <= 15:
+                        boss = pick
+                    elif stid <= 25:
+                        boss = pick + 4
+                    else:
+                        boss = pick + 14
                 hired = date(2005, 1, 1) + timedelta(days=rng.randrange(7000))
                 salary = rng.randrange(26_000, 71_000)
                 staff_rows.append((stid, name, rng.randrange(1, 61), role,
