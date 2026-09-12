@@ -2,14 +2,7 @@
 
 Thirty questions on the railway schema, re-seeded so no answer from the previous
 set carries over. Same tables -- see [schema.sql](schema.sql) -- and the same
-difficulty.
-
-**Two changes in balance.** The efficiency stage drops from six questions to
-**four**, and the slots go back to the other tiers: windows and recursion had
-only two questions last time and now has four. And every question is new -- this
-set uses shapes the last one left alone, including `LAST_VALUE` and its frame,
-journey durations, unpivoting to find each station's busiest quarter, and a
-recursive walk that builds a string as it goes.
+difficulty, with one thing raised: **the efficiency questions are harder.**
 
 | Stage | Questions |
 |---|---|
@@ -23,363 +16,386 @@ recursive walk that builds a string as it goes.
 
 ## The efficiency stage
 
-Those four **open with a query already in the editor** — one that returns the
+Those four **open with a query already in the editor** -- one that returns the
 right answer by a slow route. Nothing to work out about what to select; only the
 plan is wrong. **Reset** restores the original if you lose it, and **F6** shows
 the plan and timing for whatever you have written.
 
-| # | The fix |
-|---|---|
-| 27 | **add** a predicate that filters nothing, to reach a composite index |
-| 28 | mixed `ORDER BY` directions cannot walk one index |
-| 29 | here the **join beats `EXISTS`** |
-| 30 | `DISTINCT` on a bare column, so the index supplies the deduplication |
+Previous sets asked these against a single table, so the plan was three lines
+and the expensive one was hard to miss. These four join two or three tables:
 
-**Question 29 contradicts the previous set on purpose.** Q431 taught that a
-correlated `NOT EXISTS` beats a `LEFT JOIN` anti-join, and its plan assertion
-*demanded* the subquery. Q460 is the same shape on the same schema and the advice
-reverses — because `stops` is indexed on `station_id` alone while the inner
-condition also tests `stop_seq`, so every probe seeks to a station and then reads
-thousands of its rows.
+| # | The starter's mistake | What the plan shows |
+|---|---|---|
+| 27 | `strftime('%Y', run_date) = '2025'` instead of a range | the join flips to driving from `tickets` and scans all 40,441 |
+| 28 | `ORDER BY t.sold_at \|\| ''` alongside `LIMIT 20` | `USE TEMP B-TREE`, so 40,441 rows sort to return 20 |
+| 29 | re-formatting a date already stored as `YYYY-MM-DD` | a temp b-tree **and** the join driven from the wrong side |
+| 30 | aggregating every ticket in a CTE, then filtering outside it | `MATERIALIZE` -- 40,441 rows of work to answer about 2,000 |
 
-The rule was never "prefer `NOT EXISTS`". It is: **check whether the index covers
-what the subquery actually asks.**
+**Two of them punish advice that is usually good.** Question 29's `strftime` call
+changes no values whatsoever -- run_date is already in that format. It changes
+the *expression*, and the index is on the column, which is enough to lose it.
+Question 30 lifts an aggregate into a CTE and rewrites a correlated subquery as
+a join, both normally improvements: but a materialised CTE cannot see the outer
+`WHERE`, so it computes the whole table before throwing away 95% of it.
+
+`MATERIALIZE` in a plan is the tell. It means SQLite built a subquery result in
+full before using any of it, and no outer filter reached inside.
 
 ## Things the data does on purpose
 
-- **`stops` is indexed on `station_id` only.** That single omission is what makes
-  question 29 invert the previous set's lesson.
-- **Every ticket is sold on the day of travel**, so booking-window questions have
-  nothing to find — which is why the dates tier uses modifiers instead.
-- **`to_station` is NULL on 2,017 tickets**, so `NOT IN` against it returns
-  nothing at all while `EXCEPT` and an anti-join behave.
-- **54 of 60 stations never start a service**, which is what makes the outer join
-  in question 20 visible rather than theoretical.
-- **`price_pence` is an INTEGER.** Exact until you divide, and `/ 100` truncates.
-- **`||` binds tighter than `*`** in SQLite — question 2 turns on that.
+- **`to_station` is NULL on 1,999 tickets**, so `NOT IN` against it returns
+  nothing at all while `EXCEPT` and `NOT EXISTS` behave. Question 13.
+- **`step_free` is NULL for 4 stations** -- neither step-free nor not, so a
+  two-way CASE loses them. Question 2.
+- **`actual_arrive` is missing on 4,648 stops.** A service can have most of its
+  arrivals logged and still not be fully reported. Question 6.
+- **54 of 60 stations never start a service**, which is what makes the outer
+  join in question 18 visible rather than theoretical.
+- **Every ticket is sold on the day of travel**, so booking-window questions
+  have nothing to find -- which is why the dates tier uses modifiers instead.
+- **The reporting tree is five levels deep**, up from two. Question 25 cannot be
+  answered with a join.
+- **`price_pence` is an INTEGER.** Exact until you divide, and `/ 100`
+  truncates.
 
 ## 1 - Warm-up (4)
 
-Four questions on a single table -- COUNT versus COUNT(col), integer
-arithmetic, two aggregate conditions, and money stored as pence.
+Four questions on one or two tables -- a CASE over a nullable flag, two
+aggregate conditions in different clauses, and integer arithmetic that has to
+survive division.
 
-1. **Refurbished, and not** (Q432)
+1. **Incidents by severity** (Q462)
 
-   One row per model of rolling stock: how many units exist, and how
-   many of those have been refurbished.
+   Put every incident into one of three bands by delay_minutes and count them:
 
-   refurbished_year is NULL for a unit that never has been. One table,
-   no joins.
+   - 'major' 60 or more
+   - 'medium' 20 up to but not including 60
+   - 'minor' everything else
 
-   *Return: model, units, refurbished*
+   All 1,143 incidents land in exactly one band.
 
-2. **Stations by the decade they opened** (Q433)
+   *Return: band, incidents*
 
-   How many stations opened in each decade, as a label like '1890s'.
+2. **Step-free, not step-free, unknown** (Q463)
 
-   opened_on is a date. All 60 stations land in exactly one decade.
+   Classify every station by step_free and count them:
 
-   *Return: decade, stations*
+   - 'yes' step_free is 1
+   - 'no' step_free is 0
+   - 'unknown' step_free is not recorded
 
-3. **Roles that are numerous and well paid** (Q434)
+   All 60 stations land in exactly one class.
 
-   Roles with more than 5 staff whose average salary is above 32000.
+   *Return: access, stations*
+
+3. **Roles with a wide pay spread** (Q464)
+
+   Roles with at least 5 staff where the highest salary is more than 1.8 times
+   the lowest.
 
    Both conditions are about the role as a whole. One table, no joins.
 
-   *Return: role, staff, avg_salary*
+   *Return: role, staff, lowest, highest*
 
-4. **What a ticket costs, by class** (Q435)
+4. **How long until refurbishment** (Q465)
 
-   One row per class: the cheapest, dearest and average ticket price in
-   POUNDS.
+   One row per model: how many units exist, how many have been refurbished,
+   and the average number of years between building and refurbishment for
+   those that have.
 
-   price_pence holds whole pence. Average to two decimals; the min and
-   max are exact.
+   refurbished_year is NULL for a unit that never has been, and those must not
+   drag the average down.
 
-   *Return: class, cheapest, dearest, average*
+   *Return: model, units, refurbished, avg_years*
 
 ## 2 - Sequences and strings (5)
 
-`stops` is keyed on (service_id, stop_seq), so every stop knows where it sits
-in its own journey. Five questions on first, last, next and in-order.
+`stops` is keyed on (service_id, stop_seq), so every stop knows where it sits in
+its own journey. Five questions on ordering inside a group: concatenating in
+order, an all-or-none test, and three different window frames over the same
+sequence.
 
-5. **The five longest journeys** (Q436)
+5. **Every station a line calls at** (Q466)
 
-   The five services that take the longest from their first scheduled
-   arrival to their last, in minutes.
+   For each line, a single comma-separated string of the distinct stations it
+   calls at, in alphabetical order.
 
-   Longest first; break ties by the lower service_id.
+   No spaces around the commas -- the default separator is what you want. Six
+   rows.
 
-   *Return: service_id, minutes*
+   *Return: line_name, stations*
 
-6. **Where this service ends up** (Q437)
+6. **Services reported all the way** (Q467)
 
-   For service 1, every stop with the name of the station the service
-   FINISHES at -- repeated on every row.
+   Services on line 1 during June 2025 where EVERY stop has an actual_arrive
+   recorded.
 
-   *Return: stop_seq, station, destination*
+   A service with one unrecorded stop does not qualify, however many of its
+   other stops were logged.
 
-7. **The five longest waits between stops** (Q438)
+   *Return: service_id*
 
-   Across every service, the five largest gaps between one scheduled
-   arrival and the next on the SAME journey.
+7. **Minutes into the journey** (Q468)
 
-   Report the stop the gap arrives at. Largest first; break ties by
-   service_id then stop_seq.
+   For service 1, each stop with how many minutes after the FIRST scheduled
+   arrival it happens.
 
-   *Return: service_id, stop_seq, minutes*
+   The first stop is 0.
 
-8. **Always in the middle** (Q439)
+   *Return: stop_seq, minutes_in*
 
-   Stations that a service calls at, but which are never the FIRST stop
-   of any service and never the LAST.
+8. **How far through the journey** (Q469)
 
-   *Return: station_id, name*
+   For service 1, each stop with how far through the journey it is, as a
+   percentage of the total number of stops.
 
-9. **The first three calls** (Q440)
+   The last stop is 100. Round to two decimals.
 
-   For service 1, its first THREE stations as a single string joined
-   with ' -> ', in stop order.
+   *Return: stop_seq, pct_through*
 
-   One row, one column.
+9. **The two shortest legs** (Q470)
 
-   *Return: opening_legs*
+   For service 1, the two SHORTEST gaps between consecutive scheduled
+   arrivals, in minutes.
+
+   Report the stop the gap arrives at, shortest first, breaking ties by the
+   lower stop_seq.
+
+   *Return: stop_seq, minutes*
 
 ## 3 - Unpivot and set ops (4)
 
-`station_footfall` is stored WIDE -- four quarter columns per station-year.
-SQL has no unpivot operator, so turning it long is something you build.
+`station_footfall` is one row per station-year with four quarter columns, which
+has to be turned on its side before you can compare quarters. Four questions on
+that and on comparing two row sets.
 
-10. **Quarterly totals for the whole network** (Q441)
+10. **Quarter on quarter, network wide** (Q471)
 
-    Total footfall across ALL stations in each quarter of 2025.
+    Network-wide footfall for each quarter of 2025, with the change from the
+    quarter before.
 
-    The table is wide -- q1 to q4 side by side -- so this needs turning
-    long before it can be grouped. Four rows.
+    Q1 has nothing before it, so its change is NULL. Four rows.
 
-    *Return: quarter, footfall*
+    *Return: quarter, footfall, change*
 
-11. **Each station's busiest quarter** (Q442)
+11. **Busy in both years** (Q472)
 
-    For each station in 2025, which quarter was its busiest.
+    Stations in the ten busiest by total footfall in 2023 AND still in the ten
+    busiest in 2025.
 
-    No station ties for its own maximum. One row per station.
+    Total footfall for a year is its four quarters added up.
 
-    *Return: station_id, quarter, footfall*
+    *Return: station_id*
 
-12. **Arrived at, never departed from** (Q443)
+12. **Towns on more than one line** (Q473)
 
-    Station-and-class pairs that appear as the DESTINATION of a ticket
-    but never as the origin of a ticket of that same class.
+    Towns whose stations are served by more than one line.
 
-    Set operators compare whole rows, so both sides are two columns
-    wide. Tickets with no destination cannot contribute.
+    A town may have several stations; count the DISTINCT lines reaching any of
+    them. 13 towns qualify.
 
-    *Return: station_id, class*
+    *Return: town, lines*
 
-13. **Grew in both directions** (Q444)
+13. **Stations nobody buys a ticket to** (Q474)
 
-    Stations whose Q1 footfall rose from 2024 to 2025 AND whose Q4
-    footfall did too.
+    Stations that are not the destination of a single ticket.
+
+    tickets.to_station is NULL on open tickets, where no destination was
+    chosen. There are 23 such stations -- if you get 0 rows, the NULLs are the
+    reason, and the note explains why.
 
     *Return: station_id*
 
 ## 4 - Dates and times (4)
 
-Dates and times are TEXT. Four questions on arithmetic, extraction and
-modifiers -- including one where the obvious modifier order is wrong on
-exactly one day in seven.
+Dates are TEXT in 'YYYY-MM-DD'. Four questions on pulling parts out, comparing
+against a value the data supplies, and the modifier arithmetic that gets you to
+a month boundary.
 
-14. **Incidents by week** (Q445)
+14. **When tickets are bought** (Q475)
 
-    How many incidents were reported in each week, where a week is
-    labelled by the MONDAY it starts on.
+    How many tickets were sold on each day of the week, named rather than
+    numbered. Seven rows.
 
-    Build that Monday with date modifiers. An incident reported on a
-    Monday belongs to the week starting that same day.
+    *Return: day_name, tickets*
 
-    *Return: week_start, incidents*
+15. **Younger than the oldest station** (Q476)
 
-15. **The busiest departure hour** (Q446)
+    The five stations that opened LONGEST after the network's oldest station,
+    in whole years.
 
-    How many services depart in each hour of the day.
+    Longest first; break ties by station_id.
 
-    depart_time is 'HH:MM'. Report the hour as the two-character text it
-    appears as, so '06' not 6.
+    *Return: station_id, name, years_after*
 
-    *Return: hour, services*
+16. **Services on the last day of the month** (Q477)
 
-16. **Cancellations by day of the week** (Q447)
+    How many services ran on the final calendar day of each month.
 
-    For each day of the week, how many services ran and how many were
-    cancelled.
+    Build that day with date modifiers rather than assuming 30 or 31. One row
+    per month that has any.
 
-    Name the day rather than numbering it. cancelled is 1 or 0. Seven
-    rows.
+    *Return: month, services*
 
-    *Return: day_name, services, cancelled*
+17. **Early or late in the month** (Q478)
 
-17. **Months when incidents rose** (Q448)
+    How many incidents were reported in the first half of a month (day 1 to
+    15) and how many in the second.
 
-    One row per month in which any incident was reported: the month as
-    'YYYY-MM', how many there were, and how many more or fewer than the
-    month before.
+    Two rows.
 
-    The first month has nothing before it, so its change is NULL.
-
-    *Return: month, incidents, change*
+    *Return: half, incidents*
 
 ## 5 - Joins and grain (5)
 
-What one row means. Anti-joins, conditions that belong in ON, two children of
-one parent, and COUNT(DISTINCT) counting the right thing.
+Five questions where the join is not the difficulty -- what one row of the
+result MEANS is. Two of them fan out and one deliberately does not.
 
-18. **Stations no ticket is bought to** (Q449)
+18. **Step-free stations nobody calls at** (Q479)
 
-    Every station that is never the destination of a ticket.
+    Stations recorded as step-free that no service ever calls at.
 
-    Write it as an outer join that keeps the non-matches, rather than
-    with NOT IN.
+    Write the 'never called at' part as an outer join that keeps the non-
+    matches.
 
     *Return: station_id, name*
 
-19. **Revenue by line** (Q450)
+19. **Seats offered by each line** (Q480)
 
-    One row per line: its name and the total ticket revenue in POUNDS,
-    to two decimals.
+    One row per line: the total number of seats it has run, counting every
+    unit on every service.
 
-    Tickets belong to services, services to lines. All six lines have
-    revenue.
+    A service may be formed of more than one unit, and each unit has its own
+    seat count.
 
-    *Return: line_name, revenue*
+    *Return: line_name, seats*
 
-20. **Where journeys begin, counted** (Q451)
+20. **Staff based at each station** (Q481)
 
-    One row for every station: its name, and how many services START
-    there -- that is, have it as their first stop.
+    One row for every station: its name, and how many staff are based there.
 
-    Most stations never start a service. They must appear with 0, so all
-    60 stations come back.
+    Most stations have none. They must appear with 0, so all 60 stations come
+    back.
 
-    *Return: name, services_starting*
+    *Return: name, staff*
 
-21. **Tickets and incidents per line** (Q452)
+21. **Tickets and incidents per operator** (Q482)
 
-    One row per line: how many tickets were sold on its services, and
-    how many incidents were reported on them.
+    One row per operator: how many tickets were sold on its services, and how
+    many incidents were reported on them.
 
-    Both hang off services but are independent of each other. All six
-    lines appear.
+    Both hang off services but are independent of each other.
 
-    *Return: line_name, tickets, incidents*
+    *Return: operator_name, tickets, incidents*
 
-22. **Units that get around** (Q453)
+22. **Units that have run in both positions** (Q483)
 
-    Rolling stock units that have worked on more than one LINE.
+    Units that have run in position 1 AND also in position 2.
 
-    A unit is linked to services through service_units, and a service
-    belongs to a line.
-
-    *Return: unit_id, lines_worked*
+    *Return: unit_id*
 
 ## 6 - Windows and recursion (4)
 
-Four this time rather than two: ranking, a rolling frame, and two recursive
-walks -- one carrying a counter, one building a string as it goes.
+Running totals, shares of a partition, quartiles, and a walk down a reporting
+tree that is five levels deep, so a single join reaches only the first of them.
 
-23. **Lines ranked by revenue** (Q454)
+23. **Ticket sales accumulating** (Q484)
 
-    The six lines ranked by total ticket revenue in pence, highest
-    first, with their rank.
+    One row per month in which any ticket was sold: the month as 'YYYY-MM',
+    how many were sold, and the running total up to and including that month.
 
-    If two lines tied they would share a rank.
+    The last month's running total is every ticket.
 
-    *Return: line_name, revenue_pence, rank*
+    *Return: month, tickets, running_total*
 
-24. **Three-month rolling average of incidents** (Q455)
+24. **Each unit's share of its model's work** (Q485)
 
-    One row per month in which any incident was reported: the month, the
-    count, and the average over that month and the two before it.
+    One row per unit that has ever run: its id, its model, how many service-
+    slots it has filled, and that as a percentage of all slots filled by units
+    of the SAME model.
 
-    The first month averages just itself, the second two months.
+    Within each model the percentages add up to 100.
 
-    *Return: month, incidents, rolling_avg*
+    *Return: unit_id, model, slots, pct_of_model*
 
-25. **The chain of command** (Q456)
+25. **Everyone under one manager** (Q486)
 
-    For every member of staff, their reporting line from the very top
-    down to them, as one string joined with ' > '.
+    Every member of staff below Nerys Fothergill in the reporting tree --
+    their reports, their reports' reports, and so on.
 
-    The person with no manager is just their own name. Everyone else is
-    their manager's chain with their own name on the end.
+    They are not in the answer. Only three of the 18 report to them directly,
+    which is why a single join is not enough.
 
-    *Return: staff_id, chain*
+    *Return: staff_id, name*
 
-26. **How deep the hierarchy runs** (Q457)
+26. **Stations by footfall quartile** (Q487)
 
-    Every member of staff with how many levels below the top they sit.
+    Every station's 2025 total footfall, with which quarter of the network it
+    falls into: 1 for the busiest quarter, 4 for the quietest.
 
-    The person with no manager is 0, their direct reports 1, and so on.
-    All 40 appear.
+    60 stations split evenly into four groups of 15.
 
-    *Return: staff_id, name, level*
+    *Return: station_id, footfall, quartile*
 
 ## 7 - Query efficiency (4)
 
-**Graded on the query PLAN.** Each opens with a query already in the editor
-that is correct and slow; the **Reset** button puts it back. Four different
-causes -- and question 29 deliberately contradicts the last set.
+Graded on the plan, not just the rows. Each of these is a join or an aggregate
+over two or three tables, so the plan runs to four or five lines -- the work is
+finding WHICH line is expensive.
 
-27. **Add a condition to make it faster** (Q458)
+27. **One function, three tables slower** (Q488)
 
-    How many tickets cost more than 90 pounds.
+    Total ticket revenue in pence for each line, counting only services that
+    ran during 2025.
 
-    There is an index on tickets(class, price_pence) -- class first. The
-    editor's query cannot use it. Make the plan say SEARCH instead of
-    SCAN, by ADDING to the WHERE clause rather than changing what is
-    there.
+    The editor's query is correct and reads all 40,441 tickets to do it.
+    services.run_date is indexed. Look at the FIRST line of the plan -- it
+    says which table the whole join is driven from, and fixing the filter
+    changes it. Your plan must not contain 'SCAN'.
 
     *Plan must not contain: `SCAN`*
 
-    *Return: one row, one column: the count*
+    *Return: line_name, revenue_pence*
 
-28. **One direction or the other, not both** (Q459)
+28. **Twenty rows, forty thousand sorted** (Q489)
 
-    Every ticket id, ordered by class descending and price descending.
+    The 20 earliest-sold ticket ids, of tickets attached to a service.
 
-    The editor's query sorts all 40,702 rows. An index can be walked
-    forwards or backwards, but not one column each way. Your plan must
-    NOT contain 'TEMP B-TREE'.
+    Every ticket has a service, so the join changes nothing about which rows
+    qualify -- but the editor's query still sorts all 40,441 to return 20.
+    tickets.sold_at is indexed. Your plan must not contain 'TEMP B-TREE'.
 
     *Plan must not contain: `TEMP B-TREE`*
 
     *Return: ticket_id*
 
-29. **When the join beats the subquery** (Q460)
+29. **Reformatting a date that was already formatted** (Q490)
 
-    How many stations are the FIRST stop of at least one service.
+    Daily ticket revenue: one row per run_date with the total pence taken on
+    services running that day.
 
-    The editor's NOT EXISTS-style query is correct and slow. stops is
-    indexed on station_id alone, and the inner test also checks stop_seq
-    -- so each probe reads thousands of rows. Rewrite it as a join. Your
-    plan must NOT contain 'CORRELATED'.
-
-    *Plan must not contain: `CORRELATED`*
-
-    *Return: one row, one column: the count*
-
-30. **Let the index do the deduplicating** (Q461)
-
-    The distinct ticket classes.
-
-    tickets(class, price_pence) is indexed, and an index is already
-    grouped by its leading column -- so the deduplication is free if you
-    let it happen. Your plan must NOT contain 'TEMP B-TREE'.
+    run_date is already stored as 'YYYY-MM-DD', and it is indexed. The
+    editor's query formats it again before grouping, which costs both a sort
+    and the chance to drive the join from services. Same 546 rows either way.
+    Your plan must not contain 'TEMP B-TREE'.
 
     *Plan must not contain: `TEMP B-TREE`*
 
-    *Return: class*
+    *Return: run_date, revenue_pence*
+
+30. **The CTE that computes too much** (Q491)
+
+    For every service on line 2, how many tickets it sold -- 0 if none.
+
+    The editor's query aggregates the WHOLE ticket table in a CTE and then
+    joins one line's worth of it. A materialised CTE cannot see the outer
+    filter, so it does 40,441 rows of work to answer a question about 2,000.
+    Your plan must not contain 'MATERIALIZE'.
+
+    *Plan must not contain: `MATERIALIZE`*
+
+    *Return: service_id, tickets*
+
 ## The one concept with no question here
 
 **Alias scope follows clause order.** SQLite accepts a `SELECT` alias in `WHERE`
@@ -389,7 +405,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-431 retired ones.
+461 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
