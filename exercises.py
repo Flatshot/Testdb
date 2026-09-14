@@ -21,7 +21,7 @@ The fix is still one edit; finding it is the work.
 Question 30 is the one worth sitting with. Pulling an aggregate into a CTE is
 usually good practice; here it is the slow path, because a materialised CTE
 cannot see the outer query's filter and computes 40,000 rows to answer a
-question about 2,184. The correlated subquery -- normally the thing you are
+question about 1,792. The correlated subquery -- normally the thing you are
 told to rewrite -- wins by 4x.
 
 The other 26 lean on parts of the schema the last two sets left alone:
@@ -57,7 +57,7 @@ EXERCISES = [
             "  'major'  60 or more\n"
             "  'medium' 20 up to but not including 60\n"
             "  'minor'  everything else\n\n"
-            "All 1,143 incidents land in exactly one band.\n\n"
+            "All 966 incidents land in exactly one band.\n\n"
             "Return: band, incidents"
         ),
         solution=("SELECT CASE WHEN delay_minutes >= 60 THEN 'major'"
@@ -70,10 +70,11 @@ EXERCISES = [
              " taste. Test the narrowest band first: put the 20 test ahead of"
              " the 60 test and every major incident matches it on the way past,"
              " leaving 'major' unreachable. The check is arithmetic -- do the"
-             " bands sum to 1,143?",
-        claims=[("three bands covering all 1,143 incidents",
+             " bands sum to 966?",
+        claims=[("three bands covering every incident",
                  lambda rows, c: len(rows) == 3
-                 and sum(r[1] for r in rows) == 1143)],
+                 and sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM incidents").fetchone()[0])],
     ),
     dict(
         id=2, ledger="Q463", concept="C7", tier="1 - Warm-up",
@@ -217,10 +218,10 @@ EXERCISES = [
              " away, and a service survives as long as ONE of its rows passes."
              " ALL-type conditions are written as a double negative instead:"
              " there does not exist a stop of this service that breaks the"
-             " rule. 117 services have a recorded arrival somewhere; only 88"
+             " rule. 128 services have a recorded arrival somewhere; only 98"
              " have one everywhere.",
-        claims=[("88 services",
-                 lambda rows, c: len(rows) == 88),
+        claims=[("98 services",
+                 lambda rows, c: len(rows) == 98),
                 ("none of them has an unrecorded stop",
                  lambda rows, c: not c.execute(
                      "SELECT 1 FROM stops WHERE actual_arrive IS NULL"
@@ -423,7 +424,7 @@ EXERCISES = [
         note="NOT IN over a list containing NULL returns no rows at all. 'x is"
              " not in this list' is answered by testing x <> each entry, and"
              " x <> NULL is NULL, not true -- so SQLite can never conclude the"
-             " station is absent. One unknown destination among 40,441 tickets"
+             " station is absent. One unknown destination among 34,457 tickets"
              " silences the whole query. EXCEPT does not work that way: it"
              " compares values and treats NULL as an ordinary one, so it"
              " simply never matches a station_id. NOT EXISTS is safe for the"
@@ -464,7 +465,8 @@ EXERCISES = [
              " plausible until you count the rows.",
         claims=[("seven days covering every ticket",
                  lambda rows, c: len(rows) == 7
-                 and sum(r[1] for r in rows) == 40441)],
+                 and sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM tickets").fetchone()[0])],
     ),
     dict(
         id=15, ledger="Q476", concept="D1", tier="4 - Dates and times",
@@ -517,7 +519,13 @@ EXERCISES = [
         claims=[("every month in the data appears",
                  lambda rows, c: len(rows) == c.execute(
                      "SELECT COUNT(DISTINCT strftime('%Y-%m', run_date))"
-                     " FROM services").fetchone()[0])],
+                     " FROM services").fetchone()[0]),
+                # Without this the question grades nothing: when every day
+                # carries the same number of services, asking for the 15th
+                # returns the same counts as asking for the last day, and only
+                # the row count separates right from wrong.
+                ("the counts differ from month to month",
+                 lambda rows, c: len({r[1] for r in rows}) > 1)],
     ),
     dict(
         id=17, ledger="Q478", concept="D1", tier="4 - Dates and times",
@@ -540,9 +548,10 @@ EXERCISES = [
              " CAST the text to an integer or compare against a quoted"
              " zero-padded string. The zero padding is why '9' <= '15' would"
              " also be wrong as plain text.",
-        claims=[("two halves covering all 1,143 incidents",
+        claims=[("two halves covering every incident",
                  lambda rows, c: len(rows) == 2
-                 and sum(r[1] for r in rows) == 1143)],
+                 and sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM incidents").fetchone()[0])],
     ),
     # ====================================================== 5 Joins and grain
     dict(
@@ -664,8 +673,10 @@ EXERCISES = [
              " not. Two independent measures want two independent subqueries.",
         claims=[("four operators, both totals matching their tables",
                  lambda rows, c: len(rows) == 4
-                 and sum(r[1] for r in rows) == 40441
-                 and sum(r[2] for r in rows) == 1143)],
+                 and sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM tickets").fetchone()[0]
+                 and sum(r[2] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM incidents").fetchone()[0])],
     ),
     dict(
         id=22, ledger="Q483", concept="S1", tier="5 - Joins and grain",
@@ -714,7 +725,8 @@ EXERCISES = [
              " the current row. A running total over positive numbers can only"
              " ever go up -- if yours is flat, the ORDER BY is missing.",
         claims=[("the last running total is every ticket",
-                 lambda rows, c: max(r[2] for r in rows) == 40441)],
+                 lambda rows, c: max(r[2] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM tickets").fetchone()[0])],
     ),
     dict(
         id=24, ledger="Q485", concept="W3", tier="6 - Windows and recursion",
@@ -824,7 +836,7 @@ EXERCISES = [
         prompt=(
             "Total ticket revenue in pence for each line, counting only"
             " services that ran during 2025.\n\n"
-            "The editor's query is correct and reads all 40,441 tickets to do"
+            "The editor's query is correct and reads all 34,457 tickets to do"
             " it. services.run_date is indexed. Look at the FIRST line of the"
             " plan -- it says which table the whole join is driven from, and"
             " fixing the filter changes it. Your plan must not contain"
@@ -848,7 +860,7 @@ EXERCISES = [
         note="Blocking an index does not merely slow one lookup -- it changes"
              " the STRATEGY. With strftime() wrapped round run_date there is no"
              " seekable range, so SQLite cannot start from services; it scans"
-             " all 40,441 tickets instead and looks each service up. Rewrite"
+             " all 34,457 tickets instead and looks each service up. Rewrite"
              " the filter as a range on the bare column and services becomes"
              " the driving table, with tickets reached by index. The first line"
              " of the plan is the one to read.",
@@ -864,13 +876,13 @@ EXERCISES = [
     ),
     dict(
         id=28, ledger="Q489", concept="X2", tier="7 - Query efficiency",
-        title="Twenty rows, forty thousand sorted",
+        title="Twenty rows, the whole table sorted",
         prompt=(
             "The 20 earliest-sold ticket ids, of tickets attached to a"
             " service.\n\n"
             "Every ticket has a service, so the join changes nothing about"
             " which rows qualify -- but the editor's query still sorts all"
-            " 40,441 to return 20. tickets.sold_at is indexed. Your plan must"
+            " 34,457 to return 20. tickets.sold_at is indexed. Your plan must"
             " not contain 'TEMP B-TREE'.\n\n"
             "Return: ticket_id"
         ),
@@ -924,7 +936,9 @@ EXERCISES = [
              " Worth checking any format call: if the column is already in the"
              " shape you want, the call is pure cost.",
         claims=[("546 days, totalling every ticket's price",
-                 lambda rows, c: len(rows) == 546
+                 lambda rows, c: len(rows) == c.execute(
+                     "SELECT COUNT(DISTINCT run_date) FROM services"
+                 ).fetchone()[0]
                  and sum(r[1] for r in rows) == c.execute(
                      "SELECT SUM(price_pence) FROM tickets").fetchone()[0])],
     ),
@@ -936,8 +950,8 @@ EXERCISES = [
             " none.\n\n"
             "The editor's query aggregates the WHOLE ticket table in a CTE and"
             " then joins one line's worth of it. A materialised CTE cannot see"
-            " the outer filter, so it does 40,441 rows of work to answer a"
-            " question about 2,000. Your plan must not contain 'MATERIALIZE'."
+            " the outer filter, so it does 34,457 rows of work to answer a"
+            " question about 1,800. Your plan must not contain 'MATERIALIZE'."
             "\n\nReturn: service_id, tickets"
         ),
         solution=("SELECT s.service_id, (SELECT COUNT(*) FROM tickets t"

@@ -26,10 +26,10 @@ and the expensive one was hard to miss. These four join two or three tables:
 
 | # | The starter's mistake | What the plan shows |
 |---|---|---|
-| 27 | `strftime('%Y', run_date) = '2025'` instead of a range | the join flips to driving from `tickets` and scans all 40,441 |
-| 28 | `ORDER BY t.sold_at \|\| ''` alongside `LIMIT 20` | `USE TEMP B-TREE`, so 40,441 rows sort to return 20 |
+| 27 | `strftime('%Y', run_date) = '2025'` instead of a range | the join flips to driving from `tickets` and scans all 34,457 |
+| 28 | `ORDER BY t.sold_at \|\| ''` alongside `LIMIT 20` | `USE TEMP B-TREE`, so 34,457 rows sort to return 20 |
 | 29 | re-formatting a date already stored as `YYYY-MM-DD` | a temp b-tree **and** the join driven from the wrong side |
-| 30 | aggregating every ticket in a CTE, then filtering outside it | `MATERIALIZE` -- 40,441 rows of work to answer about 2,000 |
+| 30 | aggregating every ticket in a CTE, then filtering outside it | `MATERIALIZE` -- 34,457 rows of work to answer about 1,792 |
 
 **Two of them punish advice that is usually good.** Question 29's `strftime` call
 changes no values whatsoever -- run_date is already in that format. It changes
@@ -43,16 +43,20 @@ full before using any of it, and no outer filter reached inside.
 
 ## Things the data does on purpose
 
-- **`to_station` is NULL on 1,999 tickets**, so `NOT IN` against it returns
+- **`to_station` is NULL on 1,716 tickets**, so `NOT IN` against it returns
   nothing at all while `EXCEPT` and `NOT EXISTS` behave. Question 13.
 - **`step_free` is NULL for 4 stations** -- neither step-free nor not, so a
   two-way CASE loses them. Question 2.
-- **`actual_arrive` is missing on 4,648 stops.** A service can have most of its
+- **`actual_arrive` is missing on 3,954 stops.** A service can have most of its
   arrivals logged and still not be fully reported. Question 6.
 - **54 of 60 stations never start a service**, which is what makes the outer
   join in question 18 visible rather than theoretical.
 - **Every ticket is sold on the day of travel**, so booking-window questions
   have nothing to find -- which is why the dates tier uses modifiers instead.
+- **The timetable is not flat.** Services per day run from 6 to 27, thinner at
+  weekends and in winter. A fixed daily count would make question 16
+  ungradeable: asking for the 15th would return the same numbers as asking for
+  the last day.
 - **The reporting tree is five levels deep**, up from two. Question 25 cannot be
   answered with a join.
 - **`price_pence` is an INTEGER.** Exact until you divide, and `/ 100`
@@ -72,7 +76,7 @@ survive division.
    - 'medium' 20 up to but not including 60
    - 'minor' everything else
 
-   All 1,143 incidents land in exactly one band.
+   All 966 incidents land in exactly one band.
 
    *Return: band, incidents*
 
@@ -348,7 +352,7 @@ finding WHICH line is expensive.
     Total ticket revenue in pence for each line, counting only services that
     ran during 2025.
 
-    The editor's query is correct and reads all 40,441 tickets to do it.
+    The editor's query is correct and reads all 34,457 tickets to do it.
     services.run_date is indexed. Look at the FIRST line of the plan -- it
     says which table the whole join is driven from, and fixing the filter
     changes it. Your plan must not contain 'SCAN'.
@@ -357,12 +361,12 @@ finding WHICH line is expensive.
 
     *Return: line_name, revenue_pence*
 
-28. **Twenty rows, forty thousand sorted** (Q489)
+28. **Twenty rows, the whole table sorted** (Q489)
 
     The 20 earliest-sold ticket ids, of tickets attached to a service.
 
     Every ticket has a service, so the join changes nothing about which rows
-    qualify -- but the editor's query still sorts all 40,441 to return 20.
+    qualify -- but the editor's query still sorts all 34,457 to return 20.
     tickets.sold_at is indexed. Your plan must not contain 'TEMP B-TREE'.
 
     *Plan must not contain: `TEMP B-TREE`*
@@ -389,7 +393,7 @@ finding WHICH line is expensive.
 
     The editor's query aggregates the WHOLE ticket table in a CTE and then
     joins one line's worth of it. A materialised CTE cannot see the outer
-    filter, so it does 40,441 rows of work to answer a question about 2,000.
+    filter, so it does 34,457 rows of work to answer a question about 1,800.
     Your plan must not contain 'MATERIALIZE'.
 
     *Plan must not contain: `MATERIALIZE`*

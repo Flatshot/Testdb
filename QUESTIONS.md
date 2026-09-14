@@ -37,9 +37,9 @@ usually sound:
 | # | The starter's mistake | What the plan shows |
 |---|---|---|
 | 27 | `strftime('%Y', run_date) = '2025'` instead of a range | the whole join flips to driving from `tickets` |
-| 28 | `ORDER BY t.sold_at \|\| ''` with `LIMIT 20` | `USE TEMP B-TREE`, so all 40,441 rows sort to return 20 |
+| 28 | `ORDER BY t.sold_at \|\| ''` with `LIMIT 20` | `USE TEMP B-TREE`, so all 34,457 rows sort to return 20 |
 | 29 | re-formatting a date that is already `YYYY-MM-DD` | temp b-tree **and** the join drives from the wrong side |
-| 30 | aggregating all tickets in a CTE, then filtering | `MATERIALIZE`, computing 40,441 rows to use 2,000 |
+| 30 | aggregating all tickets in a CTE, then filtering | `MATERIALIZE`, computing 34,457 rows to use 1,792 |
 
 **Questions 29 and 30 deliberately contradict good habits.** 29 punishes a
 `strftime` call that changes no values at all -- only the expression, which is
@@ -52,6 +52,13 @@ an internal `ORDER BY`, `NOT IN` against a column containing NULL, a three-way
 CASE over a nullable flag, percentage-through-journey with `MAX() OVER ()`,
 `NTILE` quartiles, and a recursive walk down a reporting tree that is now five
 levels deep.
+
+The timetable itself was also reworked. It used to run a fixed 24 services every
+single day, which made question 16 ungradeable -- with every day identical,
+asking for the 15th of the month returned exactly the counts that asking for the
+last day did, and only the row count separated right from wrong. Services per
+day now run from 6 to 27, thinner at weekends and in winter, and the question
+carries a claim asserting the counts differ so this cannot regress unnoticed.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
@@ -82,7 +89,7 @@ levels deep.
 | Q486 | R1 recursive CTE | Everyone under one manager | ex 25 | 6 - Windows and recursion |
 | Q487 | W2 window ranking | Stations by footfall quartile | ex 26 | 6 - Windows and recursion |
 | Q488 | X1 index vs expression | One function, three tables slower | ex 27 | 7 - Query efficiency |
-| Q489 | X2 sorts and temp b-trees | Twenty rows, forty thousand sorted | ex 28 | 7 - Query efficiency |
+| Q489 | X2 sorts and temp b-trees | Twenty rows, the whole table sorted | ex 28 | 7 - Query efficiency |
 | Q490 | X6 grouping and indexes | Reformatting a date that was already formatted | ex 29 | 7 - Query efficiency |
 | Q491 | X7 subquery vs join | The CTE that computes too much | ex 30 | 7 - Query efficiency |
 
@@ -622,5 +629,7 @@ they still count as asked.
   join or aggregate across two or three tables, so the plan runs to four or five
   lines and the question is which line to read. Two of them punish advice that
   is usually good -- reformatting an already-formatted date, and lifting an
-  aggregate into a CTE. The staff hierarchy in `seed.py` was deepened from two
-  levels to five so the recursion question needs recursion.
+  aggregate into a CTE. Two `seed.py` changes: the staff hierarchy was deepened
+  from two levels to five so the recursion question needs recursion, and the
+  timetable stopped running a flat 24 services a day, which had made Q477
+  ungradeable.
