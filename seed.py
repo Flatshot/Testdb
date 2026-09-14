@@ -24,14 +24,22 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 473
+SEED = 509
 
 # Services are generated per line per day across this window. stops is the big
 # table -- roughly eight per service -- and it is what the efficiency questions
 # are asked against, so it needs to be large enough that a scan is felt.
 RANGE_START = date(2025, 1, 1)
 RANGE_END = date(2026, 6, 30)
-RUNS_PER_LINE_PER_DAY = 4
+# A flat timetable makes a whole class of question ungradeable: with the same
+# number of services every day, "the last day of the month" and "the 15th" give
+# identical counts, so a wrong query still matches. Runs per line vary by day of
+# the week and by season instead.
+RUNS_WEEKDAY = 4
+RUNS_SATURDAY = 3
+RUNS_SUNDAY = 2
+SUMMER = (6, 7, 8)          # an extra working on the busier lines
+WINTER = (1, 2)             # and one fewer in the quiet months
 
 TABLES = [
     "operators", "lines", "stations", "station_footfall", "staff",
@@ -198,8 +206,22 @@ def seed():
             svc = 0
             day = RANGE_START
             while day <= RANGE_END:
+                weekday = day.weekday()          # 0 Monday .. 6 Sunday
                 for lid in range(1, len(LINES) + 1):
-                    for run in range(RUNS_PER_LINE_PER_DAY):
+                    if weekday == 6:
+                        runs = RUNS_SUNDAY
+                    elif weekday == 5:
+                        runs = RUNS_SATURDAY
+                    else:
+                        runs = RUNS_WEEKDAY
+                    if day.month in SUMMER and lid % 2 == 1:
+                        runs += 1
+                    elif day.month in WINTER and runs > 1:
+                        runs -= 1
+                    # A line drops the odd working at short notice.
+                    if runs > 1 and rng.random() < 0.08:
+                        runs -= 1
+                    for run in range(runs):
                         svc += 1
                         dep = 6 * 60 + run * 210 + rng.randrange(0, 40)
                         cancelled = 1 if rng.random() < 0.03 else 0

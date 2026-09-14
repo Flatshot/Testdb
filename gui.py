@@ -35,6 +35,15 @@ QUESTION_MAX_LINES = 16
 # first screen anyway.
 DISPLAY_ROWS = 2_000
 
+# The status bar wraps rather than scrolls, so an unbounded message grows
+# upward until it covers the editor. Six lines is enough for the longest
+# message any caller sends and small enough to stay out of the way.
+STATUS_MAX_LINES = 6
+
+# A single result cell wider than this cannot be read in the results pane --
+# the column stops at 340px -- so the rest is replaced with its length.
+CELL_DISPLAY_CHARS = 300
+
 # Tk resolves point sizes against the display DPI, and macOS reports 72 where
 # Windows reports 96 -- the same number draws about a quarter smaller here.
 # Every explicit size below derives from this one. It is a FLOOR, not an
@@ -342,6 +351,7 @@ class App(tk.Tk):
         # FIRST and anchored to the bottom. pack allocates in order: if the
         # expanding pane went first it would claim everything and Tk would
         # unmap the status bar entirely at small window sizes.
+        self._status_text = "Ready"
         self.status = tk.Label(self, text="Ready", anchor="w", justify="left",
                                padx=8, pady=4, wraplength=1100,
                                background=BG_INFO, foreground="white")
@@ -463,8 +473,7 @@ class App(tk.Tk):
         self.results.tag_configure("odd", background=BG_STRIPE)
 
         # keep the wrap width in step with the window
-        self.bind("<Configure>",
-                  lambda e: self.status.configure(wraplength=max(self.winfo_width() - 40, 400)))
+        self.bind("<Configure>", self._on_resize)
 
         self.bind("<F5>", lambda e: (self.run_query(), "break")[1])
         self.bind("<F6>", lambda e: (self.explain_plan(), "break")[1])
@@ -739,10 +748,46 @@ class App(tk.Tk):
             return "NULL"
         if isinstance(v, float):
             return f"{v:,.2f}"
-        return str(v)
+        s = str(v)
+        # The column is capped at 340px regardless, so anything past this is
+        # invisible -- but Tk still measures and stores it, and a GROUP_CONCAT
+        # that forgot its DISTINCT arrives here at 300,000 characters a cell.
+        if len(s) > CELL_DISPLAY_CHARS:
+            s = s[:CELL_DISPLAY_CHARS] + f"... ({len(s):,} chars)"
+        return s
+
+    def _on_resize(self, _event):
+        """Keep the wrap width, and the clipping that depends on it, in step."""
+        self.status.configure(
+            wraplength=max(self.winfo_width() - 40, 400),
+            text=self._clip_status(self._status_text))
 
     def _set_status(self, text, colour):
-        self.status.configure(text=text, background=colour)
+        self._status_text = text
+        self.status.configure(text=self._clip_status(text), background=colour)
+
+    def _clip_status(self, text):
+        """Trim a status message to a few lines' worth of characters.
+
+        The status label wraps and grows DOWNWARD, and pack gives it what it
+        asks for -- so a long message does not scroll, it pushes the editor and
+        the results off the top of the window. Everything that reaches the bar
+        is clipped here rather than in each caller, because the long ones
+        arrive from three different places: SQLite error text, grading feedback
+        holding a sample row, and result values that can themselves be enormous
+        (a GROUP_CONCAT with no DISTINCT is happily 300,000 characters).
+        """
+        width = max(self.winfo_width() - 40, 400)
+        per_line = max(width // 7, 40)   # ~7px a character in the default font
+        lines = text.split("\n")
+        if len(lines) > STATUS_MAX_LINES:
+            hidden = len(lines) - STATUS_MAX_LINES + 1
+            lines = lines[:STATUS_MAX_LINES - 1] + [f"... ({hidden} more lines)"]
+        out = "\n".join(lines)
+        budget = per_line * STATUS_MAX_LINES
+        if len(out) > budget:
+            out = out[:budget - 3] + "..."
+        return out
 
     def _refresh_progress_label(self):
         # Count only the CURRENT set. progress.json also holds solved ledger ids
