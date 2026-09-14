@@ -1027,6 +1027,29 @@ def normalise(rows):
     return sorted(out, key=lambda r: [(v is None, str(v)) for v in r])
 
 
+CELL_CHARS = 70          # per value in a sample row
+SAMPLE_CHARS = 300       # per sample row, after the per-value trim
+
+
+def brief(row):
+    """One sample row, short enough to sit in a one-line status bar.
+
+    A wrong GROUP_CONCAT can hold every value in the table -- 300,000
+    characters in a single cell -- so the feedback has to be trimmed at the
+    point it is built, not left to whatever displays it.
+    """
+    parts = []
+    for v in row:
+        s = repr(v)
+        if len(s) > CELL_CHARS:
+            s = s[:CELL_CHARS - 4] + "..." + s[-1]
+        parts.append(s)
+    out = "(" + ", ".join(parts) + ")"
+    if len(out) > SAMPLE_CHARS:
+        out = out[:SAMPLE_CHARS - 3] + "..."
+    return out
+
+
 def compare(user_rows, expected_rows):
     """Return (passed, message) describing how the two result sets line up."""
     got, want = normalise(user_rows), normalise(expected_rows)
@@ -1053,8 +1076,8 @@ def compare(user_rows, expected_rows):
     unexpected = [r for r in got if r not in want]
     detail = ""
     if missing:
-        detail += f"\n  Expected but missing:  {missing[0]}"
+        detail += f"\n  Expected but missing:  {brief(missing[0])}"
     if unexpected:
-        detail += f"\n  Returned but wrong:    {unexpected[0]}"
+        detail += f"\n  Returned but wrong:    {brief(unexpected[0])}"
     return False, (f"Right row count ({len(got)}), but the values differ "
                    f"in {len(missing)} row(s).{detail}")
