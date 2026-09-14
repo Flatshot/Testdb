@@ -135,7 +135,7 @@ def main():
     # --- behavioural ------------------------------------------------------
     conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
     traps_by_error = traps_by_result = claims_checked = 0
-    traps_by_plan = plans_checked = starters_checked = 0
+    traps_by_plan = plans_checked = starters_checked = flat_checked = 0
     try:
         for e in ex.EXERCISES:
             rows, err = run(conn, e["solution"])
@@ -144,6 +144,21 @@ def main():
                 continue
             if not rows:
                 problems.append(f"exercise {e['id']} solution returns no rows")
+
+            # A value column that is the same on every row means the question
+            # cannot tell a right answer from a wrong one -- Q477 asked for the
+            # last day of the month against a timetable running an identical 24
+            # services every day, so asking for the 15th graded as correct. Only
+            # the row count differed, which is why trap_sql alone did not catch
+            # it. Two rows can legitimately tie, so this starts at three.
+            if len(rows) > 2 and len(rows[0]) > 1:
+                for col in range(1, len(rows[0])):
+                    if len({r[col] for r in rows}) == 1:
+                        problems.append(
+                            f"exercise {e['id']} ({e['title']}): column {col}"
+                            f" is {rows[0][col]!r} on all {len(rows)} rows, so"
+                            f" the question grades nothing but the row count")
+                        flat_checked += 1
 
             # Claims assert that what the PROMPT says about the data is actually
             # true -- a stated range, a row count, a "these appear with 0" case.
@@ -232,6 +247,9 @@ def main():
     print(f"plan assertions: {plans_checked} solutions take the route they demand")
     print(f"starter queries: {starters_checked} correct but rejected on their plan")
     print(f"prompt claims  : {claims_checked} verified against the data")
+    print(f"answer spread  : "
+          f"{len(ex.EXERCISES) - flat_checked} of {len(ex.EXERCISES)}"
+          f" have no value column that is constant on every row")
 
     if problems:
         print(f"\n{len(problems)} problem(s):")

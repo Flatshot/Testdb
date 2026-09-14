@@ -951,7 +951,7 @@ EXERCISES = [
             "The editor's query aggregates the WHOLE ticket table in a CTE and"
             " then joins one line's worth of it. A materialised CTE cannot see"
             " the outer filter, so it does 34,457 rows of work to answer a"
-            " question about 1,800. Your plan must not contain 'MATERIALIZE'."
+            " question about 1,792. Your plan must not contain 'MATERIALIZE'."
             "\n\nReturn: service_id, tickets"
         ),
         solution=("SELECT s.service_id, (SELECT COUNT(*) FROM tickets t"
