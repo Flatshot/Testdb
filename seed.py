@@ -24,7 +24,7 @@ from datetime import date, timedelta
 
 import db
 
-SEED = 473
+SEED = 509
 
 # Services are generated per line per day across this window. stops is the big
 # table -- roughly eight per service -- and it is what the efficiency questions
