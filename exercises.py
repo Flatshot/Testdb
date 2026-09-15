@@ -140,12 +140,13 @@ EXERCISES = [
         id=5, ledger="Q496", concept="W1", tier="2 - Sequences and strings",
         title="Where each service finishes",
         prompt=(
-            "For the first service of each line on 2025-03-05, every stop"
-            " alongside the name of the station that service TERMINATES at --"
+            "Take the service with the LOWEST service_id on each line for"
+            " 2025-03-05 -- six services in all. For every stop of those six,"
+            " give the name of the station that service TERMINATES at,"
             " repeated on each of its rows.\n\n"
-            "Six services, each with its own terminus. The answer is the last"
-            " row of each service's own sequence, so you need a window that"
-            " can see past the current row.\n\n"
+            "Each of the six has its own terminus. The answer is the last row"
+            " of that service's own sequence, so you need a window that can"
+            " see past the current row.\n\n"
             "Return: service_id, stop_seq, terminus"
         ),
         solution=("SELECT sp.service_id, sp.stop_seq, LAST_VALUE(st.name) OVER"
@@ -207,8 +208,8 @@ EXERCISES = [
         id=7, ledger="Q498", concept="E2", tier="2 - Sequences and strings",
         title="Origin and destination",
         prompt=(
-            "For the first service of each line, the station it starts from"
-            " and the station it ends at.\n\n"
+            "For the lowest-numbered service on each line -- six services --"
+            " the station it starts from and the station it ends at.\n\n"
             "Both come from `stops`, at opposite ends of the same sequence."
             " Six rows.\n\n"
             "Return: service_id, origin, destination"

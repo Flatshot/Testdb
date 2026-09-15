@@ -138,13 +138,13 @@ without using one.
 
 5. **Where each service finishes** (Q496)
 
-   For the first service of each line on 2025-03-05, every stop alongside the
-   name of the station that service TERMINATES at -- repeated on each of its
-   rows.
+   Take the service with the LOWEST service_id on each line for 2025-03-05 --
+   six services in all. For every stop of those six, give the name of the
+   station that service TERMINATES at, repeated on each of its rows.
 
-   Six services, each with its own terminus. The answer is the last row of
-   each service's own sequence, so you need a window that can see past the
-   current row.
+   Each of the six has its own terminus. The answer is the last row of that
+   service's own sequence, so you need a window that can see past the current
+   row.
 
    *Return: service_id, stop_seq, terminus*
 
@@ -160,8 +160,8 @@ without using one.
 
 7. **Origin and destination** (Q498)
 
-   For the first service of each line, the station it starts from and the
-   station it ends at.
+   For the lowest-numbered service on each line -- six services -- the station
+   it starts from and the station it ends at.
 
    Both come from `stops`, at opposite ends of the same sequence. Six rows.
 
