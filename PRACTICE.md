@@ -2,370 +2,354 @@
 
 Thirty questions on the railway schema, re-seeded so no answer from the previous
 set carries over. Same tables -- see [schema.sql](schema.sql) -- and the same
-difficulty, with the balance shifted: **ten of the thirty are window
-functions**, up from six.
+difficulty. **Twenty are shapes you have practised; ten use mechanisms no
+earlier set did.**
 
 | Stage | Questions |
 |---|---|
 | 1 - Warm-up | 1-3 |
 | 2 - Sequences and strings | 4-7 |
-| 3 - Unpivot and set ops | 8-10 |
+| 3 - Pivot and set ops | 8-10 |
 | 4 - Dates and times | 11-14 |
 | 5 - Joins and grain | 15-18 |
 | 6 - Window functions | 19-26 |
 | 7 - Query efficiency | 27-30 |
 
-## The window stage
+## The ten new shapes
 
-Eight of the ten window questions sit in stage 6, and no two want the same
-thing. If one of them feels like a repeat of another, look again at the frame:
-
-| # | What it needs |
+| # | Mechanism |
 |---|---|
-| 19 | a frame ending at the current row, and an aggregate nested in a window |
-| 20 | a fixed trailing frame, where `2 PRECEDING` covers three rows |
-| 21 | `RANK` against `DENSE_RANK`, on data with real ties |
-| 22 | `PARTITION BY` deciding which total the percentage is out of |
-| 23 | `CUME_DIST`, which is not `PERCENT_RANK` |
-| 24 | `SUM(COUNT(*)) OVER ()` -- a window running over grouped rows |
-| 25 | `ROW_NUMBER` inside a subquery, because a window cannot go in `WHERE` |
-| 26 | a frame that looks FORWARD |
+| 8 | **Pivot** -- rows into columns by conditional aggregation |
+| 9 | **`FILTER (WHERE ...)`** -- the same idea, readable, and it composes with `DISTINCT` |
+| 11 | **A date spine** -- generate the calendar so days with nothing appear as 0 |
+| 12 | **A `CROSS JOIN` spine** -- every line x kind x quarter, zeros included |
+| 16 | **Gaps and islands** -- date minus `ROW_NUMBER` is constant across a run |
+| 21 | **`RANGE` frames** -- a frame measured in values, not rows |
+| 22 | **`EXCLUDE`** -- dropping the current row and its peers from a frame |
+| 23 | **Named windows** -- `WINDOW w AS (...)` used by three functions |
+| 24 | **Islands, partitioned** -- the same trick per group |
+| 25 | **A median** -- SQLite has none, and even-sized groups need both middles |
 
-The other two are in stage 2, where the sequence is a journey rather than a
-series: `LEAD` in question 4, and `LAST_VALUE` in question 5. Question 7 is the
-control -- the same answer a window would give, written without one.
+Two of these come in pairs. **11 then 12** is a spine in one dimension, then
+two. **16 then 24** is island-finding over one series, then per group. Solve
+each pair in order; the second is the first plus a `PARTITION BY` or a
+`CROSS JOIN`.
 
-Two defaults cause most window bugs, and both appear here. **`OVER ()` with no
-`ORDER BY` sees the whole partition on every row**, so it gives a grand total
-where you wanted a running one. **`OVER (ORDER BY x)` with no frame stops at
-the current row**, which is why `FIRST_VALUE` works out of the box and
-`LAST_VALUE` silently returns the row it is standing on.
+The single idea behind 11 and 12 is worth stating plainly: **a `GROUP BY` can
+only return groups the data contains.** A day with no incidents has no row to
+group, so no amount of rewriting will produce it. You have to generate the rows
+you want and `LEFT JOIN` the data onto them -- and then count a column from the
+right-hand table, because `COUNT(*)` would count the spine row itself and report
+1 where you wanted 0.
 
 ## The efficiency stage
 
 Those four **open with a query already in the editor** -- correct, but slow.
-Nothing to work out about what to select; only the plan is wrong. **Reset**
-restores the original and **F6** shows the plan and timing for what you have
-written.
+**Reset** restores the original and **F6** shows the plan and timing.
 
 | # | The starter's mistake | Measured |
 |---|---|---|
-| 27 | `COALESCE` wrapped round the JOIN KEY | 3,742 ms -> 1.0 ms |
-| 28 | a correlated `EXISTS` that cannot reach the selective filter | 30.9 ms -> 3.1 ms |
-| 29 | `GROUP BY` before an `ORDER BY ... LIMIT 50` | 7.9 ms -> 0.05 ms |
-| 30 | a join that adds no column but multiplies the rows | 57.5 ms -> 3.8 ms |
+| 27 | an aggregate subquery correlated to the row | 4,376 ms -> 5.3 ms |
+| 28 | a correlation added to an `IN` that did not need one | 2.0 ms -> 0.19 ms |
+| 29 | a TEXT date compared as a number | 2.4 ms -> 0.68 ms |
+| 30 | a join that does not fan out, but costs the covering index | 2.0 ms -> 0.88 ms |
 
-**27 is the biggest gap this practice set has produced.** Everyone learns that a
-function on a filtered column blocks the index. The same slip on a *join key*
-costs four thousand times rather than a few, because a filter is evaluated once
-per row while a join key is probed once per row of the other table.
+**27 reverses Q491 on purpose.** There, lifting an aggregate into a CTE was the
+mistake, because the CTE computed far more than the outer query needed. Here it
+is the fix, because it computes three numbers that every row wants. Neither
+"use a CTE" nor "avoid one" is the rule -- ask what the subquery costs and how
+often it runs.
 
-**28 and 29 argue opposite sides on purpose.** 28 punishes a correlated
-subquery: it is locked to the correlation you gave it, and the selective filter
-lives in a third table it cannot start from. 29 rewards one, because removing
-the `GROUP BY` is what lets the index supply the order so the `LIMIT` can stop
-early. Neither "prefer joins" nor "prefer subqueries" is the rule. The question
-is always which table the work is allowed to start from.
+**30 is not the fan-out of question 17.** The row count is identical and nothing
+is double-counted. The join's only damage is that `idx_tickets_class` stops
+being a *covering* index, so each of the 2,680 matches needs a second read into
+the table. Both plans name the same index; only the word COVERING differs, and
+that word is the whole cost.
 
 ## Things the data does on purpose
 
-- **`to_station` is NULL on 1,703 tickets**, so `NOT IN` against it returns
-  nothing at all while `EXCEPT` and `NOT EXISTS` behave. Question 9.
-- **`step_free` is NULL for 4 stations**, which makes `= 1`, `<> 0` and
-  `IS NOT 0` three different questions. Question 18.
-- **`delay_minutes` is missing on many incidents**, so `COUNT(*)` and
-  `COUNT(delay_minutes)` disagree and `AVG` quietly ignores them. Question 1.
-- **`seats` has heavy ties** -- 14 units share one value -- which is what
-  makes `RANK` and `DENSE_RANK` diverge in question 21.
+- **`to_station` is NULL on many tickets**, so `NOT IN` against it returns
+  nothing while `EXCEPT` and `NOT EXISTS` behave.
+- **Lines share no stations**, but their rolling-stock pools overlap -- which is
+  what makes the set operations in 7 and 10 have an answer.
+- **Every line has had every kind of incident**, so questions about what a line
+  has escaped need a finer grain than kind.
 - **55 of 60 stations never start a service.**
+- **Every ticket is sold on the day of travel**, so there is no booking window
+  to measure.
 - **The timetable is not flat.** Services per day run from 6 to 27, thinner at
-  weekends and in winter, so question 11 has a shape to find and question 12
-  lands on a different count each month.
+  weekends and in winter.
 - **`price_pence` is an INTEGER.** Exact until you divide, and `/ 100`
   truncates.
 
 ## 1 - Warm-up (3)
 
-Three questions on a single table -- COUNT(*) against COUNT(col), integer
-arithmetic that has to survive a division, and a CASE whose branches overlap.
+Three questions on a single table -- rounding to a stated number of places, a
+condition about a group rather than a row, and integer division.
 
-1. **Delay by kind of incident** (Q492)
+1. **How full the trains are** (Q522)
 
-   One row per kind of incident: how many there were, how many have a delay
-   recorded, and the average delay in minutes.
+   One row per model of rolling stock: how many units, the smallest and
+   largest seat count, and the average.
 
-   delay_minutes is NULL when nobody logged one. Those incidents still count
-   in the first column. Round the average to two decimals.
+   Round the average to one decimal.
 
-   *Return: kind, incidents, recorded, avg_delay*
+   *Return: model, units, fewest, most, avg_seats*
 
-2. **What a ticket costs** (Q493)
+2. **Busy roles** (Q523)
 
-   One row per class: how many tickets, and the cheapest and dearest price in
-   POUNDS.
+   Roles with more than five staff, and their average salary to the nearest
+   pound.
 
-   price_pence holds whole pence. Give the pounds to two decimals.
+   The condition is about the role as a whole, not about any one person.
 
-   *Return: class, tickets, cheapest, dearest*
+   *Return: role, staff, avg_salary*
 
-3. **Units by size** (Q494)
+3. **Revenue by class in pounds** (Q524)
 
-   Put every unit of rolling stock into a size band by its seat count and
-   count them:
+   One row per class: how many tickets and the total revenue in POUNDS, to two
+   decimals.
 
-   - 'large' 250 or more
-   - 'medium' 150 up to but not including 250
-   - 'small' everything else
+   price_pence holds whole pence.
 
-   All 50 units land in exactly one band.
-
-   *Return: band, units*
+   *Return: class, tickets, revenue*
 
 ## 2 - Sequences and strings (4)
 
 `stops` is keyed on (service_id, stop_seq), so every stop knows where it sits in
-its own journey. Two window functions that reach along that sequence, one string
-question, and one that asks for the same answer a window would give you --
-without using one.
+its own journey. Gaps between consecutive rows, ordering inside an aggregate, a
+frame default, and a set operation.
 
-4. **The next station** (Q495)
+4. **How long between stops** (Q525)
 
-   For service 100, every stop with the name of the station it calls at NEXT.
+   For service 200, the gap in minutes between each stop's scheduled arrival
+   and the one before it.
 
-   The last stop has nothing after it, so its next station is NULL. Ten rows.
+   Stop 1 has no predecessor, so report NULL for it.
 
-   *Return: stop_seq, station, next_station*
+   *Return: stop_seq, gap_minutes*
 
-5. **Where each service finishes** (Q496)
+5. **The calling pattern, backwards** (Q526)
 
-   Take the service with the LOWEST service_id on each line for 2025-03-05 --
-   six services in all. For every stop of those six, give the name of the
-   station that service TERMINATES at, repeated on each of its rows.
+   For service 200, its stations as one string in REVERSE calling order --
+   terminus first -- joined with ' > '.
 
-   Each of the six has its own terminus. The answer is the last row of that
-   service's own sequence, so you need a window that can see past the current
-   row.
+   One row, one column.
 
-   *Return: service_id, stop_seq, terminus*
+   *Return: pattern*
 
-6. **Stations named after their town** (Q497)
+6. **Where each service came from** (Q527)
 
-   Stations whose name STARTS WITH their town but is not simply the town on
-   its own -- 'Marsden Riverside' in Marsden qualifies, plain 'Marsden' does
-   not.
+   Take the lowest-numbered service on each line -- six services. For every
+   stop of those six, give the station that service started from, repeated on
+   each of its rows.
 
-   Report what follows the town, with no leading space: 'Riverside'.
+   *Return: service_id, stop_seq, origin*
 
-   *Return: station_id, name, suffix*
+7. **Models both lines use** (Q528)
 
-7. **Origin and destination** (Q498)
+   Models of rolling stock that have worked on line 1 AND on line 6.
 
-   For the lowest-numbered service on each line -- six services -- the station
-   it starts from and the station it ends at.
+   Four of the seven models qualify.
 
-   Both come from `stops`, at opposite ends of the same sequence. Six rows.
+   *Return: model*
 
-   *Return: service_id, origin, destination*
+## 3 - Pivot and set ops (3)
 
-## 3 - Unpivot and set ops (3)
+Turning rows into columns -- the reverse of the unpivot you have done before --
+with CASE and then with the FILTER clause, plus two questions where the answer
+is a comparison between two whole result sets rather than a filter on one.
 
-`station_footfall` is one row per station-year with four quarter columns, which
-has to be turned on its side before you can compare them. Three questions on
-that, on NULL in a NOT IN, and on counting distinct things rather than rows.
+8. **Classes across the top** (Q529)
 
-8. **Each station's busiest quarter** (Q499)
+   One row per line with THREE columns of counts -- advance, first and
+   standard -- rather than three rows per line.
 
-   For 2025, which quarter each station was busiest in, and the figure.
+   This is the reverse of unpivoting: values that were rows in the `class`
+   column become columns of their own. Six rows.
 
-   station_footfall stores q1..q4 as four COLUMNS of one row, so they have to
-   become four rows before you can compare them. Report the quarter as
-   'q1'..'q4'. Sixty rows.
+   *Return: line_name, advance, first, standard*
 
-   *Return: station_id, quarter, footfall*
+9. **Filtered aggregates** (Q530)
 
-9. **Travelled from, never travelled to** (Q500)
+   One row per line: how many DISTINCT services sold at least one first-class
+   ticket, and how many sold any ticket at all.
 
-   Stations that appear as a ticket's origin but never as any ticket's
-   destination.
+   Both are counts of distinct services over the same joined rows, differing
+   only in which rows each one is allowed to see. SQLite has a clause for
+   exactly that.
 
-   to_station is NULL on open tickets. Five stations qualify -- if you get
-   none, that is why.
+   *Return: line_name, services_with_first, services_selling*
 
-   *Return: station_id*
+10. **Units line 1 keeps to itself** (Q531)
 
-10. **Models that do not get everywhere** (Q501)
+    Units that have worked on line 1 but never on line 2.
 
-    Models of rolling stock that have worked on some lines but not all six,
-    with how many lines they have worked.
+    Seven units qualify.
 
-    A model that has worked all six does not qualify. Do not hard code the
-    six.
-
-    *Return: model, lines*
+    *Return: unit_id*
 
 ## 4 - Dates and times (4)
 
-Dates are TEXT in 'YYYY-MM-DD' and times are 'HH:MM'. Four questions on pulling
-parts out, on chaining modifiers to reach a particular weekday, and on the
-difference between elapsed years and calendar ones.
+Two questions on generating the calendar rather than grouping it, so that days
+and combinations with no data still appear; two on modifier chains and on why
+subtracting dates as numbers does not work.
 
-11. **The week's shape** (Q502)
+11. **Every day of March, including the quiet ones** (Q532)
 
-    How many services ran on each day of the week, Monday first.
+    Every date in March 2025 with the number of incidents reported that day --
+    including the days with none, which must appear as 0.
 
-    Label the days 'Mon' through 'Sun'. The timetable is thinner at weekends,
-    so the numbers should fall away at the end.
+    Thirty-one rows. The days with no incidents are not in the incidents table
+    at all, so grouping it can never produce them: you have to generate the
+    calendar and hang the data off it.
 
-    *Return: day, services*
+    *Return: day, incidents*
 
-12. **The last Friday of each month** (Q503)
+12. **Every line, every kind, every quarter** (Q533)
 
-    How many services ran on the last FRIDAY of each month.
+    For each line, each kind of incident and each quarter of 2025, how many
+    incidents there were -- including the combinations that never happened, as
+    0.
 
-    Build that date with modifiers rather than assuming which day it falls on.
-    One row per month.
+    Label quarters '2025Q1' to '2025Q4'. Six lines x five kinds x four
+    quarters, so 120 rows whatever the data does.
+
+    *Return: line_id, kind, quarter, incidents*
+
+13. **The first Monday of each month** (Q534)
+
+    How many services ran on the first MONDAY of each month.
+
+    Build that date with modifiers. One row per month, all eighteen.
 
     *Return: month, services*
 
-13. **The longest-serving staff** (Q504)
+14. **How long staff have served** (Q535)
 
-    The five longest-serving members of staff as at 2026-06-30, in whole
-    years.
+    Staff bucketed by length of service as at 2026-06-30: 'under 5 years', '5
+    to 15', 'over 15'.
 
-    Longest first; break ties by staff_id.
-
-    *Return: staff_id, name, years*
-
-14. **When services depart** (Q505)
-
-    How many services depart in each hour of the day.
-
-    depart_time is TEXT in 'HH:MM'. Report the hour as a two-digit string, in
-    order.
-
-    *Return: hour, services*
+    *Return: band, staff*
 
 ## 5 - Joins and grain (4)
 
-Four questions where the join is not the difficulty -- what one row of the
-result MEANS is. Question 15 fans out and 17 deliberately does not; they are
-worth reading side by side.
+What one row of the result MEANS. An outer join that must not count its own
+NULLs, a run of consecutive dates collapsed into islands, a fan-out that
+DISTINCT cannot repair, and an all-or-none test.
 
-15. **Tickets and incidents per line** (Q506)
+15. **Every station, tickets or not** (Q536)
 
-    One row per line: how many tickets it sold and how many incidents it had.
+    Every station with the number of tickets bought TO it. Stations nobody
+    travels to must appear with 0, so all 60 come back.
 
-    Both hang off `services`, so a service with tickets AND incidents produces
-    a row for every combination. The counts must survive that.
+    *Return: station_id, name, tickets*
 
-    *Return: line_name, tickets, incidents*
+16. **The longest quiet spell** (Q537)
 
-16. **Stations nobody travels from** (Q507)
+    The three longest runs of CONSECUTIVE days on which line 1 had no incident
+    at all.
 
-    Stations that are not the origin of a single ticket.
+    Only count days the timetable actually ran. Longest first, then earliest.
 
-    Write it as an outer join that keeps the non-matches rather than as a
-    subquery.
+    *Return: days, started, ended*
 
-    *Return: station_id, name*
+17. **Revenue and incidents together** (Q538)
 
-17. **Seats each line has run** (Q508)
+    One row per operator: total ticket revenue in pence and the number of
+    incidents.
 
-    One row per line: the total seats it has run, counting every unit on every
-    service.
+    Both hang off `services`. A SUM cannot be rescued by DISTINCT, so the fan-
+    out has to be avoided rather than undone.
 
-    A service may be formed of more than one unit and each unit has its own
-    seat count. Four tables, and no fan-out to undo.
+    *Return: operator, revenue, incidents*
 
-    *Return: line_name, seats*
+18. **Units that only ever work one line** (Q539)
 
-18. **Staff at step-free stations** (Q509)
+    Units of rolling stock that have run, and have only ever run on a single
+    line -- with that line.
 
-    Staff whose base station is recorded as step-free, with the station's
-    name.
-
-    *Return: staff_id, name, station*
+    *Return: unit_id, line_id*
 
 ## 6 - Window functions (8)
 
-The centre of this set. Eight questions, eight mechanisms: a frame that ends at
-the current row and one that starts there, a fixed trailing frame, ties under
-RANK and DENSE_RANK, a PARTITION BY that decides a denominator, a percentile, an
-aggregate nested inside a window, and ROW_NUMBER doing work that WHERE cannot.
+Eight questions, eight mechanisms: a running frame, top-N per group, a frame
+measured in values rather than rows, EXCLUDE, a window named once and used three
+times, islands per partition, a median built by hand, and PARTITION BY choosing
+a denominator.
 
-19. **Revenue accumulating** (Q510)
+19. **Revenue month by month, accumulating** (Q540)
 
-    Ticket revenue by month, with a running total alongside.
-
-    The running total on the last row should equal every ticket ever sold.
-    Eighteen rows.
+    Ticket revenue by month with a running total.
 
     *Return: month, revenue, running_total*
 
-20. **A three-month view of incidents** (Q511)
+20. **The best-earning service on each line** (Q541)
 
-    Incidents by month, with the average over that month and the two before
-    it.
+    For each line, the single service that took the most money.
 
-    The first month averages just itself, the second averages two. Round to
-    two decimals.
-
-    *Return: month, incidents, rolling_avg*
-
-21. **Two ways to rank a tie** (Q512)
-
-    The twenty units with the most seats, each with its position by both RANK
-    and DENSE_RANK.
-
-    Several units share a seat count, which is the entire point -- the two
-    columns must differ somewhere. Most seats first, ties broken by unit_id.
-
-    *Return: unit_id, seats, rank, dense_rank*
-
-22. **Each unit's share of its model** (Q513)
-
-    For every unit, how many services it has worked and what percentage that
-    is of its MODEL's total workings.
-
-    Within each model the percentages add to 100. Round to two decimals.
-
-    *Return: unit_id, model, workings, pct_of_model*
-
-23. **Where a station sits in the network** (Q514)
-
-    Every station's total 2025 footfall, with the fraction of stations at or
-    below it -- quietest first, so the busiest station scores 1.0.
-
-    Round to three decimals. Sixty rows.
-
-    *Return: station_id, footfall, cume_dist*
-
-24. **Each line's share of the timetable** (Q515)
-
-    One row per line: how many services it ran, and what percentage of all
-    services that is.
-
-    The percentages add to 100. Round to two decimals.
-
-    *Return: line_name, services, pct*
-
-25. **The two best days each line had** (Q516)
-
-    For each line, its two highest-earning services by ticket revenue.
-
-    Twelve rows. Break ties by the lower service_id. A window function cannot
-    go in WHERE, which shapes the whole query.
+    Ties broken by the lower service_id. Six rows.
 
     *Return: line_id, service_id, revenue*
 
-26. **Stops still to come** (Q517)
+21. **Units of a similar size** (Q542)
 
-    For service 100, each stop and how many stops remain after it.
+    For each unit, how many units in the whole fleet have a seat count within
+    20 of its own -- itself included.
 
-    The last stop has 0 remaining. This needs a frame that looks FORWARD,
-    which is not what ORDER BY gives you by default.
+    'Within 20' is about the VALUES, not about neighbouring rows, so the frame
+    has to be measured in seats rather than in positions. Fifty rows.
 
-    *Return: stop_seq, remaining*
+    *Return: unit_id, seats, similar_units*
+
+22. **Everyone but your equals** (Q543)
+
+    For each unit: its seat count, how many units its MODEL has, and how many
+    of those are not on the same seat count as it.
+
+    The last column is the model's fleet minus this unit's tied group. There
+    is a frame clause for that -- no arithmetic needed.
+
+    *Return: unit_id, seats, model_units, others*
+
+23. **One window, three questions** (Q544)
+
+    Incidents by month, with a running total, a running average and the
+    running maximum.
+
+    All three use the same window. Define it ONCE in a WINDOW clause and refer
+    to it by name rather than repeating it. Round the average to two decimals.
+
+    *Return: month, incidents, running_total, running_avg, running_max*
+
+24. **Each line's best quiet streak** (Q545)
+
+    For every line, the length of its longest run of consecutive timetabled
+    days with no incident.
+
+    Six rows. Same island-finding as question 16, but partitioned -- each line
+    has to be numbered separately.
+
+    *Return: line_id, longest_streak*
+
+25. **The median unit** (Q546)
+
+    The MEDIAN seat count for each model of rolling stock.
+
+    SQLite has no median function. Several models have an even number of
+    units, and for those the median is the average of the two middle values --
+    not either one of them.
+
+    *Return: model, median_seats*
+
+26. **Share of the line's revenue** (Q547)
+
+    For every service that sold tickets, its revenue and what percentage of
+    its LINE's revenue that is.
+
+    Within a line the percentages add to 100. Round to four decimals.
+
+    *Return: service_id, line_id, revenue, pct_of_line*
 
 ## 7 - Query efficiency (4)
 
@@ -373,55 +357,60 @@ Graded on the plan, not just the rows. Each is a join or an aggregate over two
 or three tables, so the plan runs to four or five lines and the work is finding
 WHICH line is expensive.
 
-27. **A guard that costs four seconds** (Q518)
+27. **An average recalculated thirty thousand times** (Q548)
 
-    How many tickets were sold on lines 3 and 4, one row per line.
+    How many tickets on lines 1 and 2 cost more than the average for their own
+    class, one row per line.
 
-    The editor's query wraps the ticket side of the JOIN in COALESCE --
-    defensive, harmless-looking, and it takes about four SECONDS.
-    tickets.service_id is indexed. Your plan must not contain 'SCAN'.
+    The editor's query asks for that average inside the WHERE clause, where it
+    is correlated to the row -- so it is worked out again for every ticket,
+    and the query takes about four SECONDS. Your plan must not contain
+    'CORRELATED'.
 
-    *Plan must not contain: `SCAN`*
+    *Plan must not contain: `CORRELATED`*
 
     *Return: line_id, tickets*
 
-28. **When EXISTS is the slow one** (Q519)
+28. **A correlation that buys nothing** (Q549)
 
-    The stations that line 2 calls at.
+    How many services have had at least one incident.
 
-    The editor's query uses a correlated EXISTS, which is normally the tidy
-    way to write this. Here it is ten times slower than the join it replaced.
-    Your plan must not contain 'CORRELATED SCALAR SUBQUERY'.
+    The editor's query uses IN with a subquery, and has added a condition
+    tying the subquery back to the outer row. It returns the right answer.
+    Take the condition out -- IN already compares the value -- and the
+    subquery can be evaluated once instead of per row. Your plan must not
+    contain 'CORRELATED'.
 
-    *Plan must not contain: `CORRELATED SCALAR SUBQUERY`*
+    *Plan must not contain: `CORRELATED`*
 
-    *Return: station_id, name*
+    *Return: one row, one column: the count*
 
-29. **Fifty rows after grouping eleven thousand** (Q520)
+29. **A date treated as a number** (Q550)
 
-    The 50 most recent services with a count of the tickets each sold. Most
-    recent first, ties broken by service_id.
+    How many tickets were sold on services running in 2026 or later.
 
-    The editor's query groups all 11,107 services and sorts the lot to hand
-    back 50. services.run_date is indexed. Your plan must not contain 'B-TREE
-    FOR ORDER BY'.
+    run_date is TEXT in 'YYYY-MM-DD' and is indexed. The editor's query
+    compares it as a number, which gets the right answer and loses the index.
+    Your plan must not contain 'SCAN'.
 
-    *Plan must not contain: `B-TREE FOR ORDER BY`*
+    *Plan must not contain: `SCAN`*
 
-    *Return: service_id, run_date, tickets*
+    *Return: one row, one column: the count*
 
-30. **The join that pays for itself twice** (Q521)
+30. **The join that costs a covering index** (Q551)
 
-    Tickets sold per line, one row per line.
+    The class and price of every first-class ticket over 2900 pence, cheapest
+    first, ties by ticket_id.
 
-    The editor's query joins `stops` as well -- it adds no column to the
-    result, but it multiplies every service by its seven or eight stops, and
-    the COUNT(DISTINCT) then exists only to undo that. Your plan must not
-    contain 'count(DISTINCT)'.
+    The editor's query joins `services`. It adds no column, and because every
+    ticket has a service it removes no row either -- but idx_tickets_class
+    holds only class and price_pence, so reaching service_id forces a lookup
+    into the table for all 2,680 matches. Your plan must contain 'COVERING
+    INDEX'.
 
-    *Plan must not contain: `count(DISTINCT)`*
+    *Plan must contain: `COVERING INDEX`*
 
-    *Return: line_name, tickets*
+    *Return: class, price_pence*
 
 ## The one concept with no question here
 
@@ -432,7 +421,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-491 retired ones.
+521 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

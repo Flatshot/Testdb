@@ -24,85 +24,81 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the railway schema, re-seeded (SEED 473 -> 509) so no answer
-value from the last set carries over. Same tables, same difficulty, with the
-balance shifted where it was asked for: **ten of the thirty are window
-functions**, up from six.
+Thirty questions on the railway schema, re-seeded (SEED 509 -> 545) so no answer
+value from the last set carries over. **Twenty are shapes already practised;
+ten are mechanisms no previous set has used** -- marked **(new)** in the table.
 
-The point of ten is coverage, not repetition -- each one is a different
-mechanism rather than the same running total four times:
+### The ten new ones
 
-| # | What it needs |
+| # | Mechanism |
 |---|---|
-| 4 | `LEAD` to reach the next row -- and the NULL lands at the END |
-| 5 | `LAST_VALUE`, which needs an explicit frame or it returns the current row |
-| 19 | a frame ending at the current row, plus an aggregate nested in a window |
-| 20 | a fixed-width trailing frame, where `2 PRECEDING` means three rows |
-| 21 | `RANK` against `DENSE_RANK` on data with real ties |
-| 22 | `PARTITION BY` deciding the denominator |
-| 23 | `CUME_DIST`, which is not `PERCENT_RANK` |
-| 24 | `SUM(COUNT(*)) OVER ()` -- a window over already-grouped rows |
-| 25 | `ROW_NUMBER` in a subquery, because a window cannot live in `WHERE` |
-| 26 | a frame that looks FORWARD, which the default never does |
+| 8 | **Pivot** -- rows into columns by conditional aggregation, the reverse of the unpivot |
+| 9 | **`FILTER (WHERE ...)`** -- the readable form of that, and it composes with `DISTINCT` |
+| 11 | **A date spine** -- generate the calendar with a recursive CTE so empty days appear as 0 |
+| 12 | **A `CROSS JOIN` spine** -- every line x kind x quarter, including the 0 combinations |
+| 16 | **Gaps and islands** -- date minus `ROW_NUMBER` is constant across a consecutive run |
+| 21 | **`RANGE` frames** -- a frame measured in VALUES rather than in rows |
+| 22 | **`EXCLUDE`** -- the four ways to drop the current row and its peers from a frame |
+| 23 | **Named windows** -- `WINDOW w AS (...)` defined once, used by three functions |
+| 24 | **Islands, partitioned** -- the same trick per group, where `PARTITION BY` is the fix |
+| 25 | **A median** -- SQLite has none, and the even-sized case needs both middle rows |
 
-Question 7 sits deliberately just outside that list: it asks for the first and
-last station of a service, which `FIRST_VALUE` and `LAST_VALUE` would answer,
-and shows the correlated-subquery form instead. Worth solving both ways.
+16 and 24 are the same technique at two levels, and 11 and 12 likewise: one
+dimension then two. Solving each pair in order is the intended route.
 
 ### The efficiency stage
 
-Four multi-table plan puzzles as before, none repeating a mechanism from
-Q488-Q491:
+Four multi-table plan puzzles on four mechanisms none of Q488-Q491 or
+Q518-Q521 used:
 
 | # | The starter's mistake | Measured |
 |---|---|---|
-| 27 | `COALESCE` wrapped round the JOIN KEY | 3,742 ms -> 1.0 ms |
-| 28 | a correlated `EXISTS` that cannot reach the selective filter | 30.9 ms -> 3.1 ms |
-| 29 | `GROUP BY` before an `ORDER BY ... LIMIT 50` | 7.9 ms -> 0.05 ms |
-| 30 | a join that adds no column but multiplies the rows | 57.5 ms -> 3.8 ms |
+| 27 | an aggregate subquery correlated to the row | 4,376 ms -> 5.3 ms |
+| 28 | a correlation added to an `IN` that did not need one | 2.0 ms -> 0.19 ms |
+| 29 | a TEXT date compared as a number | 2.4 ms -> 0.68 ms |
+| 30 | a join that does not fan out, but costs the covering index | 2.0 ms -> 0.88 ms |
 
-**28 and 29 are deliberately opposite.** 28 punishes a correlated subquery,
-because it is locked to its correlation and the selectivity lives in a third
-table. 29 rewards one, because dropping the `GROUP BY` is what lets the index
-supply the order and the `LIMIT` stop early. The rule is not "prefer joins" or
-"prefer subqueries" -- it is which table the work can start from.
+**27 deliberately reverses Q491**, where pulling an aggregate into a CTE was the
+mistake. There the CTE computed far more than the outer query needed; here it
+computes three numbers every row wants. The question is never which syntax was
+used -- it is what the subquery costs and how often it runs.
 
-27 is the largest gap the practice set has produced: everyone learns that a
-function on a filtered column blocks the index, and the same slip on a join key
-costs four thousand times rather than a few.
+**30 is not the fan-out of question 17.** The row count is identical and nothing
+is double-counted; the join's only damage is that `idx_tickets_class` stops
+being covering, so every matching row needs a second read.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q492 | A2 COUNT and AVG | Delay by kind of incident | ex 1 | 1 - Warm-up |
-| Q493 | N1 integer division | What a ticket costs | ex 2 | 1 - Warm-up |
-| Q494 | C7 CASE bands | Units by size | ex 3 | 1 - Warm-up |
-| Q495 | W2 window ranking | The next station | ex 4 | 2 - Sequences and strings |
-| Q496 | W1 window frames | Where each service finishes | ex 5 | 2 - Sequences and strings |
-| Q497 | STR string functions | Stations named after their town | ex 6 | 2 - Sequences and strings |
-| Q498 | E2 correlated subqueries | Origin and destination | ex 7 | 2 - Sequences and strings |
-| Q499 | UNP unpivot | Each station's busiest quarter | ex 8 | 3 - Unpivot and set ops |
-| Q500 | S1 set operations | Travelled from, never travelled to | ex 9 | 3 - Unpivot and set ops |
-| Q501 | A3 WHERE vs HAVING | Models that do not get everywhere | ex 10 | 3 - Unpivot and set ops |
-| Q502 | D1 dates & times | The week's shape | ex 11 | 4 - Dates and times |
-| Q503 | D2 date modifiers | The last Friday of each month | ex 12 | 4 - Dates and times |
-| Q504 | D1 dates & times | The longest-serving staff | ex 13 | 4 - Dates and times |
-| Q505 | D1 dates & times | When services depart | ex 14 | 4 - Dates and times |
-| Q506 | C2 grain | Tickets and incidents per line | ex 15 | 5 - Joins and grain |
-| Q507 | J2 outer joins | Stations nobody travels from | ex 16 | 5 - Joins and grain |
-| Q508 | C2 grain | Seats each line has run | ex 17 | 5 - Joins and grain |
-| Q509 | J1 joins and NULL | Staff at step-free stations | ex 18 | 5 - Joins and grain |
-| Q510 | W1 window frames | Revenue accumulating | ex 19 | 6 - Window functions |
-| Q511 | W1 window frames | A three-month view of incidents | ex 20 | 6 - Window functions |
-| Q512 | W2 window ranking | Two ways to rank a tie | ex 21 | 6 - Window functions |
-| Q513 | W3 window vs GROUP BY | Each unit's share of its model | ex 22 | 6 - Window functions |
-| Q514 | W2 window ranking | Where a station sits in the network | ex 23 | 6 - Window functions |
-| Q515 | W3 window vs GROUP BY | Each line's share of the timetable | ex 24 | 6 - Window functions |
-| Q516 | W2 window ranking | The two best days each line had | ex 25 | 6 - Window functions |
-| Q517 | W1 window frames | Stops still to come | ex 26 | 6 - Window functions |
-| Q518 | X1 index vs expression | A guard that costs four seconds | ex 27 | 7 - Query efficiency |
-| Q519 | X7 subquery vs join | When EXISTS is the slow one | ex 28 | 7 - Query efficiency |
-| Q520 | X2 sorts and temp b-trees | Fifty rows after grouping eleven thousand | ex 29 | 7 - Query efficiency |
-| Q521 | C2 grain | The join that pays for itself twice | ex 30 | 7 - Query efficiency |
+| Q522 | A2 COUNT and AVG | How full the trains are | ex 1 | 1 - Warm-up |
+| Q523 | C1 WHERE vs HAVING | Busy roles | ex 2 | 1 - Warm-up |
+| Q524 | N1 integer division | Revenue by class in pounds | ex 3 | 1 - Warm-up |
+| Q525 | W3 window vs GROUP BY | How long between stops | ex 4 | 2 - Sequences and strings |
+| Q526 | STR string aggregation | The calling pattern, backwards | ex 5 | 2 - Sequences and strings |
+| Q527 | W2 window ranking | Where each service came from | ex 6 | 2 - Sequences and strings |
+| Q528 | S1 set operations | Models both lines use | ex 7 | 2 - Sequences and strings |
+| Q529 | PIV pivot | Classes across the top **(new)** | ex 8 | 3 - Pivot and set ops |
+| Q530 | FIL FILTER clause | Filtered aggregates **(new)** | ex 9 | 3 - Pivot and set ops |
+| Q531 | S1 set operations | Units line 1 keeps to itself | ex 10 | 3 - Pivot and set ops |
+| Q532 | SPN date spine | Every day of March, including the quiet ones **(new)** | ex 11 | 4 - Dates and times |
+| Q533 | SPN date spine | Every line, every kind, every quarter **(new)** | ex 12 | 4 - Dates and times |
+| Q534 | D2 date modifiers | The first Monday of each month | ex 13 | 4 - Dates and times |
+| Q535 | D1 dates & times | How long staff have served | ex 14 | 4 - Dates and times |
+| Q536 | J2 outer joins | Every station, tickets or not | ex 15 | 5 - Joins and grain |
+| Q537 | GAP gaps and islands | The longest quiet spell **(new)** | ex 16 | 5 - Joins and grain |
+| Q538 | C2 grain | Revenue and incidents together | ex 17 | 5 - Joins and grain |
+| Q539 | E1 all-or-none | Units that only ever work one line | ex 18 | 5 - Joins and grain |
+| Q540 | W1 window frames | Revenue month by month, accumulating | ex 19 | 6 - Window functions |
+| Q541 | W2 window ranking | The best-earning service on each line | ex 20 | 6 - Window functions |
+| Q542 | RNG RANGE frames | Units of a similar size **(new)** | ex 21 | 6 - Window functions |
+| Q543 | EXC frame EXCLUDE | Everyone but your equals **(new)** | ex 22 | 6 - Window functions |
+| Q544 | WIN named windows | One window, three questions **(new)** | ex 23 | 6 - Window functions |
+| Q545 | GAP gaps and islands | Each line's best quiet streak **(new)** | ex 24 | 6 - Window functions |
+| Q546 | MED median | The median unit **(new)** | ex 25 | 6 - Window functions |
+| Q547 | W3 window vs GROUP BY | Share of the line's revenue | ex 26 | 6 - Window functions |
+| Q548 | X8 correlated aggregate | An average recalculated thirty thousand times | ex 27 | 7 - Query efficiency |
+| Q549 | X9 needless correlation | A correlation that buys nothing | ex 28 | 7 - Query efficiency |
+| Q550 | X1 index vs expression | A date treated as a number | ex 29 | 7 - Query efficiency |
+| Q551 | X5 covering indexes | The join that costs a covering index | ex 30 | 7 - Query efficiency |
 
 ## Retired
 
@@ -171,6 +167,36 @@ they still count as asked.
 | Q489 | X2 sorts and temp b-trees | Twenty rows, the whole table sorted | - | retired |
 | Q490 | X6 grouping and indexes | Reformatting a date that was already formatted | - | retired |
 | Q491 | X7 subquery vs join | The CTE that computes too much | - | retired |
+| Q492 | A2 COUNT and AVG | Delay by kind of incident | - | retired |
+| Q493 | N1 integer division | What a ticket costs | - | retired |
+| Q494 | C7 CASE bands | Units by size | - | retired |
+| Q495 | W2 window ranking | The next station | - | retired |
+| Q496 | W1 window frames | Where each service finishes | - | retired |
+| Q497 | STR string functions | Stations named after their town | - | retired |
+| Q498 | E2 correlated subqueries | Origin and destination | - | retired |
+| Q499 | UNP unpivot | Each station's busiest quarter | - | retired |
+| Q500 | S1 set operations | Travelled from, never travelled to | - | retired |
+| Q501 | A3 WHERE vs HAVING | Models that do not get everywhere | - | retired |
+| Q502 | D1 dates & times | The week's shape | - | retired |
+| Q503 | D2 date modifiers | The last Friday of each month | - | retired |
+| Q504 | D1 dates & times | The longest-serving staff | - | retired |
+| Q505 | D1 dates & times | When services depart | - | retired |
+| Q506 | C2 grain | Tickets and incidents per line | - | retired |
+| Q507 | J2 outer joins | Stations nobody travels from | - | retired |
+| Q508 | C2 grain | Seats each line has run | - | retired |
+| Q509 | J1 joins and NULL | Staff at step-free stations | - | retired |
+| Q510 | W1 window frames | Revenue accumulating | - | retired |
+| Q511 | W1 window frames | A three-month view of incidents | - | retired |
+| Q512 | W2 window ranking | Two ways to rank a tie | - | retired |
+| Q513 | W3 window vs GROUP BY | Each unit's share of its model | - | retired |
+| Q514 | W2 window ranking | Where a station sits in the network | - | retired |
+| Q515 | W3 window vs GROUP BY | Each line's share of the timetable | - | retired |
+| Q516 | W2 window ranking | The two best days each line had | - | retired |
+| Q517 | W1 window frames | Stops still to come | - | retired |
+| Q518 | X1 index vs expression | A guard that costs four seconds | - | retired |
+| Q519 | X7 subquery vs join | When EXISTS is the slow one | - | retired |
+| Q520 | X2 sorts and temp b-trees | Fifty rows after grouping eleven thousand | - | retired |
+| Q521 | C2 grain | The join that pays for itself twice | - | retired |
 | Q042 | C2 grain | Revenue per category | - | retired |
 | Q162 | R1 recursive CTE | The whole chain, written out | - | retired |
 | Q163 | R1 recursive CTE | Everyone above Nadia Kaur | - | retired |
@@ -674,10 +700,16 @@ they still count as asked.
   from two levels to five so the recursion question needs recursion, and the
   timetable stopped running a flat 24 services a day, which had made Q477
   ungradeable.
-- **Q492-Q521** current set, railway schema re-seeded (SEED 473 -> 509). Window
+- **Q492-Q521** railway schema re-seeded (SEED 473 -> 509). Window
   functions raised from six questions to ten, each a distinct mechanism --
   LEAD, LAST_VALUE's frame, a trailing frame, a forward frame, RANK against
   DENSE_RANK, PARTITION BY, CUME_DIST, a nested aggregate, and ROW_NUMBER in a
   subquery. The efficiency stage keeps four multi-table puzzles on four new
   mechanisms, two of which (28 and 29) argue opposite sides of the same
   correlated-subquery question on purpose.
+- **Q522-Q551** current set, railway schema re-seeded (SEED 509 -> 545). Twenty
+  familiar shapes and ten mechanisms no earlier set used: pivot and FILTER,
+  recursive date spines in one and two dimensions, gaps and islands plain and
+  partitioned, RANGE frames, frame EXCLUDE, named WINDOW clauses, and a median
+  computed by hand. The efficiency stage takes four more new mechanisms, with
+  Q548 reversing Q491's lesson about lifting an aggregate into a CTE.
