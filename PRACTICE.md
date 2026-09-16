@@ -22,12 +22,16 @@ instead is triggers, views, transactions with savepoints, upsert, and DML driven
 by subqueries -- and each of questions 23 to 30 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
-in a throwaway in-memory copy of the database. Nothing you write can reach the
-real file, and every Run starts from the same pristine state -- so there is no
-Reset to remember. Then the question's *probe* query reads the result, and that
-is what the results pane shows and what Check answer compares. The status bar
-reports how many statements ran and how many rows changed; on question 23 that
-count is the difference between right and wrong.
+in a private in-memory copy of the database. Nothing you write can reach the
+real file. The copy **persists across Runs of the same question** -- so you can
+run an `UPDATE`, then a `SELECT`, and see what it did -- and **Reset** throws it
+away and starts again from the seeded data. Moving to another question also
+starts fresh, so no question depends on what another one wrote. If your
+script ends in a `SELECT`, the results pane shows that; otherwise it shows the
+question's *probe* query, which is what **Check answer** compares. Check always
+grades a fresh copy, so nothing you ran earlier can affect the grade. The status
+bar reports how many statements ran and how many rows changed; on question 23
+that count is the difference between right and wrong.
 
 **Driver statements.** Questions 27 and 28 run statements of their own *after*
 yours -- three inserts that your trigger should let through or refuse, three

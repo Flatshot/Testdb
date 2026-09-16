@@ -113,9 +113,9 @@ def sandbox(db_path=None):
     The writable questions ask for INSERT, UPDATE, DELETE, triggers and views,
     and those have to run somewhere that is not the practice database. This
     copies the whole file into memory -- a few milliseconds for 11MB -- so
-    every Run starts from the same pristine state and nothing the script does
-    can outlive it. Cheaper and safer than a Reset button: there is nothing to
-    reset.
+    nothing a script does can outlive the copy. The GUI keeps one per
+    question across Runs and drops it on Reset or a change of question;
+    grading always takes a fresh one.
 
     ATTACH is denied so a script cannot reach the real file by name. Foreign
     keys are on, as in connect(), so a DELETE that would orphan rows fails the

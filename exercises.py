@@ -14,12 +14,15 @@ runs. They cover what SQLite has in place of a procedural language --
   * a view, and the fan-out that makes a view lie
   * a generated column
 
-Each of those runs in a throwaway in-memory copy of the database, so nothing
-you write can reach the real file, and every Run starts from the same
-pristine state. The question's `probe_sql` then reads the result, and that
-is what is compared with the reference. A `driver_sql`, where present, is
-what the question itself runs AFTER your script -- the inserts that should
-fire your trigger, or be refused by it.
+Each of those runs in a private in-memory copy of the database, so nothing
+you write can reach the real file. The copy persists across Runs of one
+question -- run an UPDATE, then a SELECT to see what it did -- and is
+discarded by Reset or by moving to another question, so no question can
+depend on what another one wrote. Check answer always grades a FRESH copy.
+The question's `probe_sql` then reads the result, and that is what is
+compared with the reference. A `driver_sql`, where present, is what the
+question itself runs AFTER your script -- the inserts that should fire your
+trigger, or be refused by it.
 """
 
 import sqlite3

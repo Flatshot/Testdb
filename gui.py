@@ -208,6 +208,14 @@ class App(tk.Tk):
         self._scale_named_fonts()
         self.current = FREE
         self.progress = self._load_progress()
+        # The writable questions' scratch database: a private in-memory copy
+        # that persists across Runs of ONE question, so an UPDATE can be
+        # followed by a SELECT to see what it did. Discarded on Reset and
+        # whenever the exercise changes, so nothing carries between questions.
+        # Check answer never uses it -- grading always starts from a fresh
+        # copy -- so nothing run here can affect the grade.
+        self.sandbox = None
+        self.sandbox_runs = 0
 
         self._build_ui()
         self._populate_exercises()
@@ -436,7 +444,7 @@ class App(tk.Tk):
         # unpacked in _select_exercise rather than greyed out, so it is absent
         # rather than merely disabled on the other 24 questions.
         self.starter_btn = ttk.Button(bar, text="Reset",
-                                      command=self.reset_starter)
+                                      command=self.reset_clicked)
         self.progress_var = tk.StringVar()
         ttk.Label(bar, textvariable=self.progress_var,
                   foreground=FG_MUTED).pack(side="right")
@@ -547,6 +555,7 @@ class App(tk.Tk):
 
     def _select_exercise(self, eid):
         self.current = eid
+        self._drop_sandbox()
         self.editor.delete("1.0", "end")
         saved = self.progress["sql"].get(self._key(eid), "")
         if not saved and eid != FREE:
@@ -576,7 +585,7 @@ class App(tk.Tk):
         self.solution_btn.configure(state=state)
         script = eid != FREE and ex.is_script(ex.BY_ID[eid])
         self.explain_btn.configure(state="disabled" if script else "normal")
-        if eid != FREE and ex.BY_ID[eid].get("starter_sql"):
+        if eid != FREE and (ex.BY_ID[eid].get("starter_sql") or script):
             self.starter_btn.pack(side="left", padx=(6, 0))
         else:
             self.starter_btn.pack_forget()
@@ -637,45 +646,120 @@ class App(tk.Tk):
             self._set_status(f"SQL error: {exc}", BG_BAD)
             return None
 
-    def run_script(self, sql):
-        """Run a writable question's script in a sandbox and show the probe.
+    def _drop_sandbox(self):
+        if self.sandbox is not None:
+            self.sandbox.close()
+        self.sandbox = None
+        self.sandbox_runs = 0
 
-        Nothing here touches the practice database: the script runs against a
-        fresh in-memory copy, then the question's probe query reads the
-        result and that is what the results pane shows. Every Run starts
-        from the same pristine state, so there is no Reset to remember.
+    def reset_clicked(self):
+        """Reset for a writable question drops its sandbox; otherwise it
+        restores the starter query."""
+        if self.current != FREE and ex.is_script(ex.BY_ID[self.current]):
+            self._drop_sandbox()
+            self._clear_results()
+            self._set_status(
+                "Sandbox reset -- the database is back to the seeded data."
+                " Your editor text is unchanged.", BG_INFO)
+        else:
+            self.reset_starter()
+
+    def run_script(self, sql):
+        """Run a writable question's script in its sandbox and show the probe.
+
+        Nothing here touches the practice database. The script runs against
+        the question's in-memory copy, which persists across Runs until Reset
+        or a change of question -- so run an UPDATE, then a SELECT, and see
+        what it did. If the script's last statement returns rows, those are
+        shown; otherwise the question's probe query is, exactly as Check
+        answer would read it. The question's driver statements run inside a
+        savepoint that is rolled back, so their effects are visible in the
+        probe but never accumulate.
         """
         e = ex.BY_ID[self.current]
-        rows, err, info = ex.script_result(e, sql)
-        if err:
+        if self.sandbox is None:
+            self.sandbox = db.sandbox()
+        conn = self.sandbox
+        try:
+            n, changed, last_rows, last_headers = db.run_script(conn, sql)
+        except (db.QueryTimeout, db.TooManyRows) as exc:
             self._clear_results()
-            self._set_status(err, BG_BAD)
+            self._set_status(str(exc), BG_BAD)
             return None
-        self._show_rows(rows, info["headers"])
+        except sqlite3.Error as exc:
+            self._clear_results()
+            self._set_status(f"SQL error: {exc}", BG_BAD)
+            return None
+        self.sandbox_runs += 1
+        since = (f" Sandbox holds {self.sandbox_runs} run(s) since reset."
+                 if self.sandbox_runs > 1 else "")
+        if last_rows is not None:
+            self._show_rows(last_rows, last_headers)
+            self._set_status(
+                f"Script ran: {n} statement(s), {changed:,} row(s) changed."
+                f" Showing your final SELECT -- {len(last_rows):,} row(s)."
+                f"{since}", BG_INFO)
+            return last_rows
+        rejected = []
+        try:
+            conn.execute("SAVEPOINT probe")
+            for stmt in db.split_statements(e.get("driver_sql", "")):
+                try:
+                    with db.time_limit(conn):
+                        conn.execute(stmt)
+                except sqlite3.Error as exc:
+                    rejected.append(str(exc))
+            with db.time_limit(conn):
+                cur = conn.execute(e["probe_sql"])
+                headers = [d[0] for d in cur.description]
+                rows = db.fetch_capped(cur)
+        except (db.QueryTimeout, db.TooManyRows, sqlite3.Error) as exc:
+            self._clear_results()
+            self._set_status(f"probe failed: {exc}", BG_BAD)
+            return None
+        finally:
+            try:
+                conn.execute("ROLLBACK TO probe")
+                conn.execute("RELEASE probe")
+            except sqlite3.Error:
+                pass
+        self._show_rows(rows, headers)
         note = ""
-        if info["rejected"]:
+        if rejected:
             note = "  %d statement(s) the question ran afterwards were REFUSED: %s" % (
-                len(info["rejected"]),
-                "; ".join(why for _, why in info["rejected"]))
+                len(rejected), "; ".join(rejected))
         self._set_status(
-            f"Script ran: {info['statements']} statement(s),"
-            f" {info['changes']:,} row(s) changed. Showing the check query"
-            f" -- {len(rows):,} row(s).{note}", BG_INFO)
-        return rows
+            f"Script ran: {n} statement(s), {changed:,} row(s) changed."
+            f" Showing the check query -- {len(rows):,} row(s).{note}{since}",
+            BG_INFO)
+        return [tuple(r) for r in rows]
 
     def check_answer(self):
         if self.current == FREE:
             return
-        rows = self.run_query()
-        if rows is None:
-            return
         e = ex.BY_ID[self.current]
         if ex.is_script(e):
+            # Never grade the persistent sandbox: whatever earlier Runs left
+            # there would count for or against this script. Both sides go
+            # through the same fresh-copy pipeline.
+            sql = self._sql()
+            if not sql:
+                self._set_status("Nothing to check.", BG_INFO)
+                return
+            rows, err, info = ex.script_result(e, sql)
+            if err:
+                self._clear_results()
+                self._set_status(err, BG_BAD)
+                return
+            self._show_rows(rows, info["headers"])
             expected, err, _ = ex.script_result(e, e["solution"])
             if err:
                 self._set_status(f"reference script failed: {err}", BG_BAD)
                 return
         else:
+            rows = self.run_query()
+            if rows is None:
+                return
             expected = self.conn.execute(e["solution"]).fetchall()
         passed, msg = ex.compare([tuple(r) for r in rows], [tuple(r) for r in expected])
         if passed and (e.get("plan_requires") or e.get("plan_forbids")):
@@ -838,6 +922,7 @@ class App(tk.Tk):
     def _on_close(self):
         self._stash_sql()
         self._save_progress()
+        self._drop_sandbox()
         self.conn.close()
         self.destroy()
 
