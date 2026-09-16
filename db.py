@@ -107,6 +107,77 @@ def time_limit(conn, seconds=QUERY_TIMEOUT_SECONDS):
         conn.set_progress_handler(None, 0)
 
 
+def sandbox(db_path=None):
+    """A private, writable, in-memory copy of the database.
+
+    The writable questions ask for INSERT, UPDATE, DELETE, triggers and views,
+    and those have to run somewhere that is not the practice database. This
+    copies the whole file into memory -- a few milliseconds for 11MB -- so
+    nothing a script does can outlive the copy. The GUI keeps one per
+    question across Runs and drops it on Reset or a change of question;
+    grading always takes a fresh one.
+
+    ATTACH is denied so a script cannot reach the real file by name. Foreign
+    keys are on, as in connect(), so a DELETE that would orphan rows fails the
+    way it should rather than silently succeeding.
+    """
+    src = sqlite3.connect(f"file:{db_path or DB_PATH}?mode=ro", uri=True)
+    try:
+        # isolation_level=None is autocommit: the module opens no transaction
+        # of its own, so a script's BEGIN, SAVEPOINT, ROLLBACK and COMMIT run
+        # exactly as written instead of colliding with an implicit one.
+        conn = sqlite3.connect(":memory:", isolation_level=None)
+        src.backup(conn)
+    finally:
+        src.close()
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.set_authorizer(
+        lambda action, *_: sqlite3.SQLITE_DENY
+        if action == sqlite3.SQLITE_ATTACH else sqlite3.SQLITE_OK)
+    return conn
+
+
+def split_statements(script):
+    """Split a script into complete statements, respecting trigger bodies.
+
+    Splitting on ';' breaks CREATE TRIGGER, whose BEGIN ... END holds
+    semicolons of its own. sqlite3.complete_statement knows the grammar, so
+    lines are accumulated until it says the buffer is a whole statement.
+    """
+    out, buf = [], ""
+    for line in script.splitlines(keepends=True):
+        buf += line
+        if sqlite3.complete_statement(buf):
+            out.append(buf.strip())
+            buf = ""
+    if buf.strip():
+        out.append(buf.strip().rstrip(";") + ";")
+    return [s for s in out if s.strip(";").strip()]
+
+
+def run_script(conn, script, seconds=QUERY_TIMEOUT_SECONDS):
+    """Run each statement of `script` on conn, under the time limit.
+
+    Returns (statements, changes, last_rows, last_headers): how many
+    statements ran, how many rows the DML touched, and the result of the last
+    statement if it produced one -- so a script that ends in a SELECT shows
+    what it did. Errors propagate: a failed statement is the caller's news.
+    """
+    statements = split_statements(script)
+    before = conn.total_changes
+    last_rows, last_headers = None, None
+    for stmt in statements:
+        with time_limit(conn, seconds):
+            cur = conn.execute(stmt)
+            if cur.description is not None:
+                last_headers = [d[0] for d in cur.description]
+                last_rows = fetch_capped(cur)
+            else:
+                last_rows, last_headers = None, None
+    return len(statements), conn.total_changes - before, last_rows, last_headers
+
+
 @contextmanager
 def transaction(db_path=None):
     """Connection that commits on clean exit and rolls back on exception."""
