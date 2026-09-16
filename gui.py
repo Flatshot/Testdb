@@ -554,8 +554,9 @@ class App(tk.Tk):
             # right answer by a slow route -- the task is to improve the plan,
             # not to work out what to select. Only used when nothing of yours
             # is saved for this exercise, so it can never overwrite your work.
-            saved = format_sql(ex.BY_ID[eid].get("starter_sql", "")) \
-                if ex.BY_ID[eid].get("starter_sql") else ""
+            starter = ex.BY_ID[eid].get("starter_sql", "")
+            saved = (starter if ex.is_script(ex.BY_ID[eid])
+                     else format_sql(starter)) if starter else ""
         self.editor.insert("1.0", saved)
         self.editor.edit_reset()
 
@@ -573,6 +574,8 @@ class App(tk.Tk):
 
         self.check_btn.configure(state=state)
         self.solution_btn.configure(state=state)
+        script = eid != FREE and ex.is_script(ex.BY_ID[eid])
+        self.explain_btn.configure(state="disabled" if script else "normal")
         if eid != FREE and ex.BY_ID[eid].get("starter_sql"):
             self.starter_btn.pack(side="left", padx=(6, 0))
         else:
@@ -609,6 +612,8 @@ class App(tk.Tk):
         if not sql:
             self._set_status("Nothing to run.", BG_INFO)
             return None
+        if self.current != FREE and ex.is_script(ex.BY_ID[self.current]):
+            return self.run_script(sql)
         try:
             # fetchall() is inside the limit too: a runaway recursive CTE does
             # not hang on execute(), it hangs while the rows pile up.
@@ -632,6 +637,32 @@ class App(tk.Tk):
             self._set_status(f"SQL error: {exc}", BG_BAD)
             return None
 
+    def run_script(self, sql):
+        """Run a writable question's script in a sandbox and show the probe.
+
+        Nothing here touches the practice database: the script runs against a
+        fresh in-memory copy, then the question's probe query reads the
+        result and that is what the results pane shows. Every Run starts
+        from the same pristine state, so there is no Reset to remember.
+        """
+        e = ex.BY_ID[self.current]
+        rows, err, info = ex.script_result(e, sql)
+        if err:
+            self._clear_results()
+            self._set_status(err, BG_BAD)
+            return None
+        self._show_rows(rows, info["headers"])
+        note = ""
+        if info["rejected"]:
+            note = "  %d statement(s) the question ran afterwards were REFUSED: %s" % (
+                len(info["rejected"]),
+                "; ".join(why for _, why in info["rejected"]))
+        self._set_status(
+            f"Script ran: {info['statements']} statement(s),"
+            f" {info['changes']:,} row(s) changed. Showing the check query"
+            f" -- {len(rows):,} row(s).{note}", BG_INFO)
+        return rows
+
     def check_answer(self):
         if self.current == FREE:
             return
@@ -639,7 +670,13 @@ class App(tk.Tk):
         if rows is None:
             return
         e = ex.BY_ID[self.current]
-        expected = self.conn.execute(e["solution"]).fetchall()
+        if ex.is_script(e):
+            expected, err, _ = ex.script_result(e, e["solution"])
+            if err:
+                self._set_status(f"reference script failed: {err}", BG_BAD)
+                return
+        else:
+            expected = self.conn.execute(e["solution"]).fetchall()
         passed, msg = ex.compare([tuple(r) for r in rows], [tuple(r) for r in expected])
         if passed and (e.get("plan_requires") or e.get("plan_forbids")):
             # An efficiency question cannot be graded on its result -- the slow
@@ -701,11 +738,11 @@ class App(tk.Tk):
         starter = ex.BY_ID[self.current].get("starter_sql")
         if not starter:
             return
+        e = ex.BY_ID[self.current]
         self.editor.delete("1.0", "end")
-        self.editor.insert("1.0", format_sql(starter))
+        self.editor.insert("1.0", starter if ex.is_script(e) else format_sql(starter))
         self._set_status(
-            "Starter query restored -- it returns the right answer by the wrong"
-            " route. Ctrl+Z undoes this.", BG_INFO)
+            "Starter restored. Ctrl+Z undoes this.", BG_INFO)
 
     def show_solution(self):
         if self.current == FREE:
@@ -715,8 +752,10 @@ class App(tk.Tk):
             "This replaces your editor contents with the reference answer.\n\nReveal it?",
         ):
             return
+        e = ex.BY_ID[self.current]
         self.editor.delete("1.0", "end")
-        self.editor.insert("1.0", format_sql(ex.BY_ID[self.current]["solution"]))
+        self.editor.insert("1.0", e["solution"] if ex.is_script(e)
+                           else format_sql(e["solution"]))
         self._set_status("Reference solution shown -- it is one valid answer, not the only one.",
                          BG_INFO)
 

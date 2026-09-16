@@ -20,6 +20,9 @@ Behavioural checks (against testdb.db, read-only):
   * every claim a prompt makes about the data actually holds -- stated ranges,
     row counts, "these rows appear with 0". trap_sql proves a query wrong; only
     this catches a prompt that describes data the database does not contain
+  * every writable (kind="script") question's reference script runs in a
+    sandbox, changes the state its probe_sql reads, and its trap leaves a
+    state the probe can tell apart
 
     py check_questions.py
 """
@@ -95,8 +98,11 @@ def main():
             problems.append(
                 f"exercise {e['id']} prompt is {wrapped} lines wrapped at 76 cols; "
                 f"the GUI panel would hide the tail, including the Return: line")
-        if "Return:" not in e["prompt"]:
-            problems.append(f"exercise {e['id']} prompt never says what to Return")
+        # A query prompt ends by naming the columns to Return; a script prompt
+        # ends by saying what the probe Checks, since it returns nothing.
+        tail = "Checked:" if ex.is_script(e) else "Return:"
+        if tail not in e["prompt"]:
+            problems.append(f"exercise {e['id']} prompt never says {tail[:-1]}")
 
         for field in ("concept", "trap_sql", "note"):
             if not e.get(field):
@@ -136,8 +142,63 @@ def main():
     conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
     traps_by_error = traps_by_result = claims_checked = 0
     traps_by_plan = plans_checked = starters_checked = flat_checked = 0
+    scripts_checked = 0
     try:
         for e in ex.EXERCISES:
+            if ex.is_script(e):
+                # A writable question is graded on the database AFTER the
+                # script, read through probe_sql. So: the reference must run,
+                # it must CHANGE what the probe sees (or the question tests
+                # nothing), and the trap must leave a different state.
+                rows, err, _ = ex.script_result(e, e["solution"])
+                if err:
+                    problems.append(f"exercise {e['id']} solution failed: {err}")
+                    continue
+                # The probe may not even run on the untouched database -- a
+                # table or view the script is meant to create does not exist
+                # yet -- and that is itself proof the solution changes things.
+                untouched, _, _ = ex.script_result(e, "")
+                if untouched is not None and ex.compare(rows, untouched)[0]:
+                    problems.append(
+                        f"exercise {e['id']} ({e['title']}): the probe sees the"
+                        f" same state whether or not the solution runs, so the"
+                        f" question grades nothing")
+                trap_rows, trap_err, _ = ex.script_result(e, e["trap_sql"])
+                if trap_err:
+                    traps_by_error += 1
+                elif ex.compare(trap_rows, rows)[0]:
+                    problems.append(
+                        f"exercise {e['id']} ({e['title']}): trap_sql grades as"
+                        f" CORRECT, so the question does not actually test its"
+                        f" concept")
+                else:
+                    traps_by_result += 1
+                # Claims see the sandbox as the solution left it.
+                sb = db.sandbox()
+                try:
+                    db.run_script(sb, e["solution"])
+                    for stmt in db.split_statements(e.get("driver_sql", "")):
+                        try:
+                            sb.execute(stmt)
+                        except sqlite3.Error:
+                            pass
+                    for says, holds in e.get("claims", ()):
+                        try:
+                            if not holds(rows, sb):
+                                problems.append(
+                                    f"exercise {e['id']} ({e['title']}): prompt"
+                                    f" claim is FALSE -- {says}")
+                            else:
+                                claims_checked += 1
+                        except Exception as exc:
+                            problems.append(
+                                f"exercise {e['id']} claim {says!r} could not"
+                                f" be evaluated: {exc}")
+                finally:
+                    sb.close()
+                scripts_checked += 1
+                continue
+
             rows, err = run(conn, e["solution"])
             if err:
                 problems.append(f"exercise {e['id']} solution failed: {err}")
@@ -247,6 +308,8 @@ def main():
     print(f"plan assertions: {plans_checked} solutions take the route they demand")
     print(f"starter queries: {starters_checked} correct but rejected on their plan")
     print(f"prompt claims  : {claims_checked} verified against the data")
+    print(f"script checks  : {scripts_checked} writable questions change the"
+          f" state their probe reads, and reject their trap")
     print(f"answer spread  : "
           f"{len(ex.EXERCISES) - flat_checked} of {len(ex.EXERCISES)}"
           f" have no value column that is constant on every row")
