@@ -239,8 +239,13 @@ group condition that only HAVING can express.
 
 18. **Services formed of two units** (Q569)
 
-    Services on 2025-06-02 formed of exactly two units, with the two unit ids
-    in position order as 'front+rear'.
+    Which services running on 2025-06-02 are made up of exactly two units?
+    Leave out services with one unit, or with three or more.
+
+    For each, build one text column called formation: the two unit ids joined
+    by a plus sign, front unit first. In service_units, position 1 is the
+    front of the train, so a service with unit 3 at position 1 and unit 7 at
+    position 2 shows as 3+7.
 
     *Return: service_id, formation*
 
