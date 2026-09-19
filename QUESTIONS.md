@@ -24,11 +24,10 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the railway schema, re-seeded (SEED 581 -> 611). Twenty-two
-are SELECT questions across the usual tiers, at the same level as the last set.
-**The last eight are writable**, graded on the state of the database after a
-script runs -- and every one of them takes a different construct from the
-previous set's eight.
+Thirty questions on the railway schema, re-seeded (SEED 611 -> 641). Twenty-two
+are SELECT questions across the usual tiers, at the same level as the last two
+sets. **The last eight are writable**, graded on the state of the database
+after a script runs -- and each takes a construct neither earlier set did.
 
 ### The writable stage
 
@@ -39,14 +38,14 @@ or by changing question, and is never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 23 | `DELETE` with a `NOT IN` subquery | row and station counts |
-| 24 | `UPDATE` with a correlated subquery in `SET` | delay totals and counts by kind |
-| 25 | `INSERT ... SELECT`, and INTEGER affinity | rows, totals and `typeof()` by year |
-| 26 | nested `SAVEPOINT`s, `RELEASE` versus `ROLLBACK TO` | salary totals by role |
-| 27 | an `INSTEAD OF INSERT` trigger on a view | the open-return count and the driven row |
-| 28 | an `AFTER DELETE` trigger, `OLD` only | the bin after three driven deletes |
-| 29 | a view with a computed column and a NULL filter | aggregates over the view |
-| 30 | `ALTER TABLE` rename, add with default, drop | three rows and the column count |
+| 23 | `DELETE` in foreign-key order, with `RETURNING` | unit count and orphan count |
+| 24 | `UPDATE ... FROM` a grouped subquery | incident counts and delay totals |
+| 25 | `WITH ... INSERT` into a constrained table | the summary table |
+| 26 | two transactions, one committed and one rolled back | salary totals by role |
+| 27 | a summary-maintaining trigger gated by `WHEN` | the count table after three driven updates |
+| 28 | a `BEFORE UPDATE` policy trigger with `RAISE()` | three salaries after three driven updates |
+| 29 | an unpivot saved as a view | aggregates over the view |
+| 30 | a recursive CTE feeding an `INSERT` | row count, first and last day |
 
 27 and 28 carry a `driver_sql`: statements the question runs after yours to
 exercise the trigger. A refusal is reported in the status bar, not treated as
@@ -54,36 +53,36 @@ an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q582 | A2 COUNT and AVG | Seats by model | ex 1 | 1 - Warm-up |
-| Q583 | N1 integer division | Takings per operator, in pounds | ex 2 | 1 - Warm-up |
-| Q584 | A3 WHERE vs HAVING | Common, roomy models | ex 3 | 1 - Warm-up |
-| Q585 | W3 window vs GROUP BY | The shortest leg of each service | ex 4 | 2 - Sequences and strings |
-| Q586 | STR string functions | Surnames on the payroll | ex 5 | 2 - Sequences and strings |
-| Q587 | W3 window vs GROUP BY | Lateness, stop by stop | ex 6 | 2 - Sequences and strings |
-| Q588 | S1 set operations | Days with trouble but no cancellations | ex 7 | 2 - Sequences and strings |
-| Q589 | UNP unpivot | Station 5, quarter by quarter | ex 8 | 3 - Unpivot and set ops |
-| Q590 | J1 self-joins | Opened in the same year | ex 9 | 3 - Unpivot and set ops |
-| Q591 | S1 set operations | Formations both lines have used | ex 10 | 3 - Unpivot and set ops |
-| Q592 | D1 dates & times | Incidents by quarter | ex 11 | 4 - Dates and times |
-| Q593 | D1 dates & times | Journey time by line | ex 12 | 4 - Dates and times |
-| Q594 | D1 dates & times | How old each station is | ex 13 | 4 - Dates and times |
-| Q595 | D2 date modifiers | The last week of each month | ex 14 | 4 - Dates and times |
-| Q596 | J2 outer joins | Drivers based in each town | ex 15 | 5 - Joins and grain |
-| Q597 | C2 grain | Takings and delay per operator | ex 16 | 5 - Joins and grain |
-| Q598 | N1 NULLs and NOT IN | Staff who manage nobody | ex 17 | 5 - Joins and grain |
-| Q599 | E1 all-or-none | Lost time at every stop | ex 18 | 5 - Joins and grain |
-| Q600 | W1 window frames | The week's tickets, rolling | ex 19 | 6 - Window functions |
-| Q601 | W2 window ranking | Pay rank within the role | ex 20 | 6 - Window functions |
-| Q602 | W3 window vs GROUP BY | Each kind's share of the line's delay | ex 21 | 6 - Window functions |
-| Q603 | W2 window ranking | The three latest incidents on each line | ex 22 | 6 - Window functions |
-| Q604 | DML update & delete | Footfall for stations nobody calls at **(script)** | ex 23 | 7 - Changing the data |
-| Q605 | DML update & delete | Fill in the unquantified delays **(script)** | ex 24 | 7 - Changing the data |
-| Q606 | INS insert ... select | Next year's budget **(script)** | ex 25 | 7 - Changing the data |
-| Q607 | TXN savepoints | Two savepoints, one raise **(script)** | ex 26 | 7 - Changing the data |
-| Q608 | TRG triggers | A view you can insert through **(script)** | ex 27 | 7 - Changing the data |
-| Q609 | TRG triggers | A recycle bin for incidents **(script)** | ex 28 | 7 - Changing the data |
-| Q610 | VIEW views | A view of lateness **(script)** | ex 29 | 7 - Changing the data |
-| Q611 | ALT ALTER TABLE | Reshape the fleet table **(script)** | ex 30 | 7 - Changing the data |
+| Q612 | C7 CASE bands | The fleet by decade | ex 1 | 1 - Warm-up |
+| Q613 | A2 COUNT and AVG | Delay by line | ex 2 | 1 - Warm-up |
+| Q614 | A3 WHERE vs HAVING | Well-served towns | ex 3 | 1 - Warm-up |
+| Q615 | W2 window ranking | Where each service lost the most time | ex 4 | 2 - Sequences and strings |
+| Q616 | STR string functions | Counting the words in a name | ex 5 | 2 - Sequences and strings |
+| Q617 | W2 window ranking | Until the next departure | ex 6 | 2 - Sequences and strings |
+| Q618 | S1 set operations | Everyone with authority | ex 7 | 2 - Sequences and strings |
+| Q619 | UNP unpivot | Each quarter's share of its year | ex 8 | 3 - Unpivot and set ops |
+| Q620 | J1 self-joins | Pairs of stations in the same town | ex 9 | 3 - Unpivot and set ops |
+| Q621 | S1 set operations | On two lines, never on a third | ex 10 | 3 - Unpivot and set ops |
+| Q622 | D1 dates & times | Cancellation rate by month | ex 11 | 4 - Dates and times |
+| Q623 | D1 dates & times | Departures by time of day | ex 12 | 4 - Dates and times |
+| Q624 | D1 dates & times | Days since the previous opening | ex 13 | 4 - Dates and times |
+| Q625 | D2 date modifiers | The first full week of each month | ex 14 | 4 - Dates and times |
+| Q626 | J2 outer joins | Every unit's June 2025 | ex 15 | 5 - Joins and grain |
+| Q627 | C2 grain | Seats offered and tickets sold, per line | ex 16 | 5 - Joins and grain |
+| Q628 | J2 outer joins | Services that sold nothing | ex 17 | 5 - Joins and grain |
+| Q629 | E1 all-or-none | Sold only one class | ex 18 | 5 - Joins and grain |
+| Q630 | W1 window frames | A centred three-month average | ex 19 | 6 - Window functions |
+| Q631 | W2 window ranking | The two hardest-working units of each model | ex 20 | 6 - Window functions |
+| Q632 | W3 window vs GROUP BY | Each station's share of its town | ex 21 | 6 - Window functions |
+| Q633 | W2 window ranking | Running order for the day | ex 22 | 6 - Window functions |
+| Q634 | DML update & delete | Scrap a unit that has worked **(script)** | ex 23 | 7 - Changing the data |
+| Q635 | DML update & delete | Borrow a delay from the timetable **(script)** | ex 24 | 7 - Changing the data |
+| Q636 | INS insert ... select | A summary table, built from a CTE **(script)** | ex 25 | 7 - Changing the data |
+| Q637 | TXN transactions | Commit one, roll back the other **(script)** | ex 26 | 7 - Changing the data |
+| Q638 | TRG triggers | A count that keeps itself right **(script)** | ex 27 | 7 - Changing the data |
+| Q639 | TRG triggers | No pay cuts **(script)** | ex 28 | 7 - Changing the data |
+| Q640 | VIEW views | The footfall table, long **(script)** | ex 29 | 7 - Changing the data |
+| Q641 | R1 recursive CTE | A calendar table for July **(script)** | ex 30 | 7 - Changing the data |
 
 ## Retired
 
@@ -242,6 +241,36 @@ they still count as asked.
 | Q579 | TRG triggers | An audit trail for pay changes | - | retired |
 | Q580 | VIEW views | A view that does not lie | - | retired |
 | Q581 | GEN generated columns | A column that computes itself | - | retired |
+| Q582 | A2 COUNT and AVG | Seats by model | - | retired |
+| Q583 | N1 integer division | Takings per operator, in pounds | - | retired |
+| Q584 | A3 WHERE vs HAVING | Common, roomy models | - | retired |
+| Q585 | W3 window vs GROUP BY | The shortest leg of each service | - | retired |
+| Q586 | STR string functions | Surnames on the payroll | - | retired |
+| Q587 | W3 window vs GROUP BY | Lateness, stop by stop | - | retired |
+| Q588 | S1 set operations | Days with trouble but no cancellations | - | retired |
+| Q589 | UNP unpivot | Station 5, quarter by quarter | - | retired |
+| Q590 | J1 self-joins | Opened in the same year | - | retired |
+| Q591 | S1 set operations | Formations both lines have used | - | retired |
+| Q592 | D1 dates & times | Incidents by quarter | - | retired |
+| Q593 | D1 dates & times | Journey time by line | - | retired |
+| Q594 | D1 dates & times | How old each station is | - | retired |
+| Q595 | D2 date modifiers | The last week of each month | - | retired |
+| Q596 | J2 outer joins | Drivers based in each town | - | retired |
+| Q597 | C2 grain | Takings and delay per operator | - | retired |
+| Q598 | N1 NULLs and NOT IN | Staff who manage nobody | - | retired |
+| Q599 | E1 all-or-none | Lost time at every stop | - | retired |
+| Q600 | W1 window frames | The week's tickets, rolling | - | retired |
+| Q601 | W2 window ranking | Pay rank within the role | - | retired |
+| Q602 | W3 window vs GROUP BY | Each kind's share of the line's delay | - | retired |
+| Q603 | W2 window ranking | The three latest incidents on each line | - | retired |
+| Q604 | DML update & delete | Footfall for stations nobody calls at | - | retired |
+| Q605 | DML update & delete | Fill in the unquantified delays | - | retired |
+| Q606 | INS insert ... select | Next year's budget | - | retired |
+| Q607 | TXN savepoints | Two savepoints, one raise | - | retired |
+| Q608 | TRG triggers | A view you can insert through | - | retired |
+| Q609 | TRG triggers | A recycle bin for incidents | - | retired |
+| Q610 | VIEW views | A view of lateness | - | retired |
+| Q611 | ALT ALTER TABLE | Reshape the fleet table | - | retired |
 | Q042 | C2 grain | Revenue per category | - | retired |
 | Q162 | R1 recursive CTE | The whole chain, written out | - | retired |
 | Q163 | R1 recursive CTE | Everyone above Nadia Kaur | - | retired |
@@ -765,10 +794,17 @@ they still count as asked.
   runs in a sandbox copy. The tool gained the sandbox, statement splitting
   that respects trigger bodies, driver statements, and a checker path for
   script questions.
-- **Q582-Q611** current set, railway schema re-seeded (SEED 581 -> 611). Same
+- **Q582-Q611** railway schema re-seeded (SEED 581 -> 611). Same
   shape and level as the previous set: twenty-two SELECT questions over the
   same six tiers, and a writable stage of eight that takes a different
   construct in every slot -- DELETE and correlated UPDATE by subquery, INSERT
   ... SELECT and type affinity, nested savepoints with RELEASE, an INSTEAD OF
   trigger on a view, an AFTER DELETE trigger, a filtered computed view, and
   ALTER TABLE.
+- **Q612-Q641** current set, railway schema re-seeded (SEED 611 -> 641). Same
+  shape and level again: twenty-two SELECT questions over the six tiers, and
+  a writable stage whose eight constructs repeat neither earlier set --
+  DELETE in foreign-key order with RETURNING, UPDATE ... FROM, WITH ...
+  INSERT into a constrained table, two transactions, a summary-maintaining
+  trigger, a BEFORE UPDATE policy trigger, an unpivot view, and a recursive
+  CTE feeding an INSERT.

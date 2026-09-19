@@ -3,16 +3,16 @@
 Twenty-two are SELECT questions across the usual tiers, graded on the rows
 they return. The last eight are WRITABLE questions, graded on the state of the
 database after your script runs. They cover what SQLite has in place of a
-procedural language, and this set takes a different construct in each slot
-from the last one --
+procedural language, and this set takes constructs neither earlier set did --
 
-  * DELETE and UPDATE driven by subqueries, one of them correlated
-  * INSERT ... SELECT, and the type affinity that decides what gets stored
-  * nested SAVEPOINTs, and what RELEASE does and does not do
-  * an INSTEAD OF trigger that makes a view writable
-  * an AFTER DELETE trigger, where only OLD exists
-  * a view with a computed column and a filter its users must not forget
-  * ALTER TABLE: rename, add with a default, drop
+  * DELETE in foreign-key order, with RETURNING
+  * UPDATE ... FROM a grouped subquery
+  * a CTE in front of an INSERT, into a table with real constraints
+  * two transactions: one committed, one rolled back
+  * a trigger that maintains a summary table, gated by WHEN on OLD and NEW
+  * a BEFORE UPDATE trigger that enforces a policy with RAISE()
+  * an unpivot saved as a view
+  * a recursive CTE feeding an INSERT
 
 Each of those runs in a private in-memory copy of the database, so nothing
 you write can reach the real file. The copy persists across Runs of one
@@ -21,8 +21,8 @@ discarded by Reset or by moving to another question, so no question can
 depend on what another one wrote. Check answer always grades a FRESH copy.
 The question's `probe_sql` then reads the result, and that is what is
 compared with the reference. A `driver_sql`, where present, is what the
-question itself runs AFTER your script -- the insert that should go through
-your view, or the delete your trigger should catch.
+question itself runs AFTER your script -- the updates your trigger should
+count, or refuse.
 """
 
 import sqlite3
@@ -30,648 +30,658 @@ import sqlite3
 EXERCISES = [
     # ========================================================== 1 Warm-up
     dict(
-        id=1, ledger="Q582", concept="A2", tier="1 - Warm-up",
-        title="Seats by model",
+        id=1, ledger="Q612", concept="C7", tier="1 - Warm-up",
+        title="The fleet by decade",
         prompt=(
-            "One row per model of rolling stock: how many units, the seats"
-            " across all of them, and the average seats per unit to the"
-            " nearest seat.\n\n"
-            "Return: model, units, total_seats, avg_seats"
+            "How many units were built in each decade, with their average"
+            " seats to the nearest seat. Label the decade by its first year:"
+            " 1990, 2000, 2010.\n\n"
+            "Return: decade, units, avg_seats"
         ),
-        solution=("SELECT model, COUNT(*), SUM(seats), ROUND(AVG(seats))"
+        solution=("SELECT built_year / 10 * 10, COUNT(*), ROUND(AVG(seats))"
                   " FROM rolling_stock GROUP BY 1"),
-        trap_sql=("SELECT model, COUNT(*), SUM(seats),"
-                  " ROUND(SUM(seats) / COUNT(*)) FROM rolling_stock"
+        trap_sql=("SELECT built_year / 10, COUNT(*), ROUND(AVG(seats))"
+                  " FROM rolling_stock GROUP BY 1"),
+        note="Integer division is the tool here, on purpose: 1997 / 10 is"
+             " 199, and multiplying back by 10 gives 1990. The trap stops"
+             " halfway and labels the decades 199 and 200 -- the grouping is"
+             " right and the labels are not, which is the usual way a"
+             " banding slips. Grouping by the expression is fine in SQLite;"
+             " GROUP BY 1 refers to the first output column.",
+        claims=[("a handful of decades, each a multiple of ten",
+                 lambda rows, c: 3 <= len(rows) <= 6
+                 and all(r[0] % 10 == 0 for r in rows))],
+    ),
+    dict(
+        id=2, ledger="Q613", concept="A2", tier="1 - Warm-up",
+        title="Delay by line",
+        prompt=(
+            "One row per line: how many incidents, how many of them have a"
+            " quantified delay, and the average delay of those to one"
+            " decimal.\n\n"
+            "Incidents whose delay was never quantified must not pull the"
+            " average down.\n\n"
+            "Return: line_id, incidents, quantified, avg_delay"
+        ),
+        solution=("SELECT s.line_id, COUNT(*), COUNT(i.delay_minutes),"
+                  " ROUND(AVG(i.delay_minutes), 1) FROM incidents i"
+                  " JOIN services s ON s.service_id = i.service_id"
                   " GROUP BY 1"),
-        note="SUM(seats) / COUNT(*) is one integer divided by another, so it"
-             " truncates BEFORE ROUND ever sees it: 2478 / 13 is 190, and"
-             " ROUND(190) is 190, where the average is 190.6 and rounds to"
-             " 191. AVG returns a REAL however integer its input, which is"
-             " exactly why it exists as a separate function.",
-        claims=[("seven models, every average a whole number",
-                 lambda rows, c: len(rows) == 7
-                 and all(r[3] == int(r[3]) for r in rows))],
+        trap_sql=("SELECT s.line_id, COUNT(*), COUNT(i.delay_minutes),"
+                  " ROUND(AVG(COALESCE(i.delay_minutes, 0)), 1) FROM incidents i"
+                  " JOIN services s ON s.service_id = i.service_id"
+                  " GROUP BY 1"),
+        note="COUNT(*) counts rows; COUNT(column) counts rows where the"
+             " column is not NULL -- that difference IS the quantified"
+             " count. AVG skips NULLs the same way, so the untouched column"
+             " gives the right average. The trap turns every unknown delay"
+             " into a delay of zero, and averages drop by nearly ten"
+             " minutes on every line.",
+        claims=[("six lines, quantified fewer than incidents on each",
+                 lambda rows, c: len(rows) == 6
+                 and all(r[2] < r[1] for r in rows))],
     ),
     dict(
-        id=2, ledger="Q583", concept="N1", tier="1 - Warm-up",
-        title="Takings per operator, in pounds",
+        id=3, ledger="Q614", concept="A3", tier="1 - Warm-up",
+        title="Well-served towns",
         prompt=(
-            "One row per operator: how many tickets were sold on its"
-            " services, and the revenue in POUNDS to two decimals.\n\n"
-            "price_pence is an integer.\n\n"
-            "Return: operator, tickets, revenue_pounds"
+            "Towns with three or more stations, at least one of which is"
+            " step-free, with the station count and the step-free count.\n\n"
+            "Both conditions describe the town.\n\n"
+            "Return: town, stations, step_free_stations"
         ),
-        solution=("SELECT o.name, COUNT(*), ROUND(SUM(t.price_pence) / 100.0, 2)"
-                  " FROM operators o JOIN services s"
-                  " ON s.operator_id = o.operator_id JOIN tickets t"
-                  " ON t.service_id = s.service_id GROUP BY o.name"),
-        trap_sql=("SELECT o.name, COUNT(*), ROUND(SUM(t.price_pence) / 100, 2)"
-                  " FROM operators o JOIN services s"
-                  " ON s.operator_id = o.operator_id JOIN tickets t"
-                  " ON t.service_id = s.service_id GROUP BY o.name"),
-        note="14871697 pence / 100 is 148716 -- integer division drops the"
-             " 97p, and ROUND(148716, 2) has nothing to restore. Divide by"
-             " 100.0 and the whole expression is REAL. The join runs"
-             " operators -> services -> tickets; a ticket belongs to one"
-             " service and a service to one operator, so nothing fans out.",
-        claims=[("four operators, and the revenue carries pence",
-                 lambda rows, c: len(rows) == 4
-                 and any(r[2] != int(r[2]) for r in rows))],
-    ),
-    dict(
-        id=3, ledger="Q584", concept="A3", tier="1 - Warm-up",
-        title="Common, roomy models",
-        prompt=(
-            "Models with at least 5 units whose average seats per unit is"
-            " above 200, with the unit count and that average to the nearest"
-            " seat.\n\n"
-            "Both conditions describe the model as a whole, not any one"
-            " unit.\n\n"
-            "Return: model, units, avg_seats"
-        ),
-        solution=("SELECT model, COUNT(*), ROUND(AVG(seats)) FROM rolling_stock"
-                  " GROUP BY model HAVING COUNT(*) >= 5 AND AVG(seats) > 200"),
-        trap_sql=("SELECT model, COUNT(*), ROUND(AVG(seats)) FROM rolling_stock"
-                  " WHERE seats > 200 GROUP BY model HAVING COUNT(*) >= 5"),
-        note="WHERE seats > 200 throws away the small units before the"
-             " average is taken, so every model's average rises and the"
-             " count is of big units only -- a different question with"
-             " tidy-looking answers. A condition on an aggregate belongs in"
-             " HAVING, which sees each group whole.",
-        claims=[("every model returned satisfies both conditions",
-                 lambda rows, c: len(rows) > 0
-                 and all(r[1] >= 5 and r[2] > 200 for r in rows))],
+        solution=("SELECT town, COUNT(*), SUM(step_free = 1) FROM stations"
+                  " GROUP BY town HAVING COUNT(*) >= 3 AND SUM(step_free = 1) >= 1"),
+        trap_sql=("SELECT town, COUNT(*), SUM(step_free = 1) FROM stations"
+                  " WHERE step_free = 1 GROUP BY town HAVING COUNT(*) >= 3"),
+        note="'At least one step-free' sounds like a WHERE, but putting it"
+             " there filters the STATIONS, and then the count of three is a"
+             " count of step-free stations only -- the trap keeps two towns"
+             " where thirteen qualify. SUM of a comparison counts the rows"
+             " where it holds, NULL surveys contributing nothing, and both"
+             " tests then sit in HAVING where they see the whole town.",
+        claims=[("every town returned meets both conditions",
+                 lambda rows, c: len(rows) > 5
+                 and all(r[1] >= 3 and r[2] >= 1 for r in rows))],
     ),
     # ========================================== 2 Sequences and strings
     dict(
-        id=4, ledger="Q585", concept="W3", tier="2 - Sequences and strings",
-        title="The shortest leg of each service",
+        id=4, ledger="Q615", concept="W2", tier="2 - Sequences and strings",
+        title="Where each service lost the most time",
         prompt=(
-            "For every service that ran on 2025-03-03: the fewest minutes"
-            " between one scheduled call and the next.\n\n"
-            "A leg belongs to one service. The gap must never be measured"
-            " from the previous service's last stop to this one's first.\n\n"
-            "Return: service_id, shortest_leg"
+            "For every service that ran on 2025-04-07: the stop at which it"
+            " was latest -- actual arrival minus scheduled, in minutes -- and"
+            " by how much. One row per service; when two stops tie, the"
+            " earlier one.\n\n"
+            "Unrecorded arrivals do not count.\n\n"
+            "Return: service_id, stop_seq, late_minutes"
         ),
-        solution=("SELECT service_id, MIN(gap) FROM (SELECT service_id,"
-                  " (strftime('%s', sched_arrive) - strftime('%s',"
-                  " LAG(sched_arrive) OVER (PARTITION BY service_id"
-                  " ORDER BY stop_seq))) / 60 gap FROM stops"
-                  " WHERE service_id IN (SELECT service_id FROM services"
-                  " WHERE run_date = '2025-03-03')) GROUP BY service_id"),
-        trap_sql=("SELECT service_id, MIN(gap) FROM (SELECT service_id,"
-                  " (strftime('%s', sched_arrive) - strftime('%s',"
-                  " LAG(sched_arrive) OVER (ORDER BY service_id, stop_seq)))"
-                  " / 60 gap FROM stops"
-                  " WHERE service_id IN (SELECT service_id FROM services"
-                  " WHERE run_date = '2025-03-03')) GROUP BY service_id"),
-        note="LAG needs a PARTITION BY as well as an ORDER BY when the"
-             " sequence restarts. Ordered by (service_id, stop_seq) alone,"
-             " the first stop of each service looks back at the previous"
-             " service's last stop -- a gap of several hours, or negative"
-             " when the next service departs earlier -- and MIN picks that"
-             " up. The window function has to sit in a subquery because MIN"
-             " runs after it.",
-        claims=[("services that ran that day, every leg a few minutes",
-                 lambda rows, c: len(rows) > 10
-                 and all(0 < r[1] < 30 for r in rows))],
+        solution=("SELECT service_id, stop_seq, late FROM (SELECT sp.service_id,"
+                  " sp.stop_seq, (strftime('%s', sp.actual_arrive)"
+                  " - strftime('%s', sp.sched_arrive)) / 60 late, ROW_NUMBER()"
+                  " OVER (PARTITION BY sp.service_id ORDER BY"
+                  " strftime('%s', sp.actual_arrive) - strftime('%s',"
+                  " sp.sched_arrive) DESC, sp.stop_seq) rn FROM stops sp"
+                  " JOIN services s ON s.service_id = sp.service_id"
+                  " WHERE s.run_date = '2025-04-07'"
+                  " AND sp.actual_arrive IS NOT NULL) WHERE rn = 1"),
+        trap_sql=("SELECT service_id, stop_seq, late FROM (SELECT sp.service_id,"
+                  " sp.stop_seq, (strftime('%s', sp.actual_arrive)"
+                  " - strftime('%s', sp.sched_arrive)) / 60 late, RANK()"
+                  " OVER (PARTITION BY sp.service_id ORDER BY"
+                  " strftime('%s', sp.actual_arrive) - strftime('%s',"
+                  " sp.sched_arrive) DESC) rn FROM stops sp"
+                  " JOIN services s ON s.service_id = sp.service_id"
+                  " WHERE s.run_date = '2025-04-07'"
+                  " AND sp.actual_arrive IS NOT NULL) WHERE rn = 1"),
+        note="Top-1 per group with ties resolved: ROW_NUMBER with a second"
+             " sort key. RANK hands the same number to tied stops and the"
+             " trap returns thirty-two rows for twenty-two services -- ties"
+             " at eight minutes are common when lateness is a small"
+             " integer. 'The earlier one' in the prompt is the tiebreak,"
+             " and it belongs inside the OVER.",
+        claims=[("one row per running service that day",
+                 lambda rows, c: len(rows) == len({r[0] for r in rows})
+                 and len(rows) == c.execute(
+                     "SELECT COUNT(*) FROM services WHERE run_date"
+                     " = '2025-04-07' AND cancelled = 0").fetchone()[0])],
     ),
     dict(
-        id=5, ledger="Q586", concept="STR", tier="2 - Sequences and strings",
-        title="Surnames on the payroll",
+        id=5, ledger="Q616", concept="STR", tier="2 - Sequences and strings",
+        title="Counting the words in a name",
         prompt=(
-            "How many staff share each surname. Every name is exactly two"
-            " words; the surname is the second.\n\n"
-            "Most common first, ties by surname.\n\n"
-            "Return: surname, staff"
+            "Every station with the length of its name in characters and in"
+            " words. There is no split function: count the spaces.\n\n"
+            "Return: station_id, chars, words"
         ),
-        solution=("SELECT SUBSTR(name, INSTR(name, ' ') + 1), COUNT(*)"
-                  " FROM staff GROUP BY 1 ORDER BY 2 DESC, 1"),
-        trap_sql=("SELECT SUBSTR(name, INSTR(name, ' ')), COUNT(*)"
-                  " FROM staff GROUP BY 1 ORDER BY 2 DESC, 1"),
-        note="INSTR returns the position of the space, and SUBSTR from"
-             " THERE keeps it: ' Jepson' with a leading blank. The counts"
-             " are all right and the strings all wrong, which the grader"
-             " notices and an eye does not. Start one character past the"
-             " separator. This only works because every name has one space;"
-             " question 5 of the last set had the idiom for the general case.",
-        claims=[("forty staff counted, no surname starting with a space",
-                 lambda rows, c: sum(r[1] for r in rows) == 40
-                 and not any(r[0].startswith(' ') for r in rows))],
+        solution=("SELECT station_id, LENGTH(name),"
+                  " LENGTH(name) - LENGTH(REPLACE(name, ' ', '')) + 1"
+                  " FROM stations"),
+        trap_sql=("SELECT station_id, LENGTH(name),"
+                  " LENGTH(name) - LENGTH(REPLACE(name, ' ', ''))"
+                  " FROM stations"),
+        note="The idiom: the length of the string minus its length with the"
+             " separator removed is the number of separators, and words are"
+             " one more than that. The trap counts the spaces and calls it"
+             " words, so every single-word station has none. It works"
+             " because station names have single spaces and no leading or"
+             " trailing ones; TRIM first when that is not guaranteed.",
+        claims=[("sixty stations, one or two words each",
+                 lambda rows, c: len(rows) == 60
+                 and {r[2] for r in rows} == {1, 2})],
     ),
     dict(
-        id=6, ledger="Q587", concept="W3", tier="2 - Sequences and strings",
-        title="Lateness, stop by stop",
+        id=6, ledger="Q617", concept="W2", tier="2 - Sequences and strings",
+        title="Until the next departure",
         prompt=(
-            "For service 311, each stop's lateness in minutes -- actual"
-            " arrival minus scheduled -- and how much that changed since the"
-            " previous stop.\n\n"
-            "A stop with no recorded arrival has NULL lateness and NULL"
-            " change, and so does the stop after it. The first stop's change"
-            " is NULL.\n\n"
-            "Return: stop_seq, late_minutes, change"
+            "Line 2's services on 2025-04-07 in departure order, each with"
+            " the NEXT one's departure time and the minutes until it. The"
+            " last service of the day has neither.\n\n"
+            "Return: service_id, depart_time, next_depart, minutes_until"
         ),
-        solution=("SELECT stop_seq, late, late - LAG(late) OVER"
-                  " (ORDER BY stop_seq) FROM (SELECT stop_seq,"
-                  " (strftime('%s', actual_arrive) - strftime('%s',"
-                  " sched_arrive)) / 60 late FROM stops WHERE service_id = 311)"),
-        trap_sql=("SELECT stop_seq, late, late - LAG(late) OVER"
-                  " (ORDER BY stop_seq) FROM (SELECT stop_seq,"
-                  " CAST(strftime('%M', actual_arrive) AS INTEGER)"
-                  " - CAST(strftime('%M', sched_arrive) AS INTEGER) late"
-                  " FROM stops WHERE service_id = 311)"),
-        note="Subtracting the minute fields alone is right until an arrival"
-             " crosses the hour: scheduled 07:58, actual 08:03, is 3 - 58 ="
-             " -55 instead of 5. strftime('%s') turns either time into"
-             " seconds since midnight and the difference is honest. NULL"
-             " arithmetic does the rest for free -- NULL minus anything is"
-             " NULL, so an unrecorded stop blanks its own change and the"
-             " next stop's.",
-        claims=[("first change NULL, exactly one unrecorded stop",
-                 lambda rows, c: rows[0][2] is None
-                 and sum(1 for r in rows if r[1] is None) == 1)],
+        solution=("SELECT service_id, depart_time, LEAD(depart_time) OVER w,"
+                  " (strftime('%s', LEAD(depart_time) OVER w)"
+                  " - strftime('%s', depart_time)) / 60 FROM services"
+                  " WHERE line_id = 2 AND run_date = '2025-04-07'"
+                  " WINDOW w AS (ORDER BY depart_time)"),
+        trap_sql=("SELECT service_id, depart_time, LAG(depart_time) OVER w,"
+                  " (strftime('%s', depart_time) - strftime('%s',"
+                  " LAG(depart_time) OVER w)) / 60 FROM services"
+                  " WHERE line_id = 2 AND run_date = '2025-04-07'"
+                  " WINDOW w AS (ORDER BY depart_time)"),
+        note="LEAD looks forward, LAG back. The trap is consistent with"
+             " itself -- previous departure, minutes since -- and answers"
+             " the mirror question, with the NULL on the first row instead"
+             " of the last. A named WINDOW saves writing the same OVER"
+             " twice; SQLite supports it. strftime('%s') on a bare 'HH:MM'"
+             " gives seconds from midnight, which is all a same-day gap"
+             " needs.",
+        claims=[("the last row has no next, the others a positive gap",
+                 lambda rows, c: len(rows) >= 3 and rows[-1][2] is None
+                 and all(r[3] > 0 for r in rows[:-1]))],
     ),
     dict(
-        id=7, ledger="Q588", concept="S1", tier="2 - Sequences and strings",
-        title="Days with trouble but no cancellations",
+        id=7, ledger="Q618", concept="S1", tier="2 - Sequences and strings",
+        title="Everyone with authority",
         prompt=(
-            "Dates on which at least one incident was reported but NO"
-            " service was cancelled.\n\n"
-            "Incidents are dated by reported_at, cancellations by run_date."
-            " One column, one row per date.\n\n"
-            "Return: day"
+            "Staff who are managers by role OR who have someone reporting"
+            " to them -- each person once, whichever way they qualify."
+            " Ordered by staff_id.\n\n"
+            "Some managers also have reports; they must not appear"
+            " twice.\n\n"
+            "Return: staff_id, name"
         ),
-        solution=("SELECT reported_at FROM incidents EXCEPT SELECT run_date"
-                  " FROM services WHERE cancelled = 1"),
-        trap_sql=("SELECT DISTINCT s.run_date FROM services s JOIN incidents i"
-                  " ON i.service_id = s.service_id WHERE s.cancelled = 0"),
-        note="The trap asks whether the incident's OWN service was cancelled"
-             " -- never, since a cancelled service runs nothing that can go"
-             " wrong -- and so returns every date with an incident. 'No"
-             " service was cancelled that day' is a statement about the"
-             " whole day, which is a set of dates to take away: EXCEPT. It"
-             " deduplicates as it goes, so DISTINCT is not needed.",
-        claims=[("many days, none with a cancellation",
-                 lambda rows, c: len(rows) > 100 and not c.execute(
-                     "SELECT 1 FROM services WHERE cancelled = 1"
-                     " AND run_date IN (%s) LIMIT 1"
-                     % ",".join("'%s'" % r[0] for r in rows)).fetchall())],
+        solution=("SELECT staff_id, name FROM staff WHERE role = 'manager'"
+                  " UNION SELECT s.staff_id, s.name FROM staff s WHERE EXISTS"
+                  " (SELECT 1 FROM staff r WHERE r.reports_to = s.staff_id)"
+                  " ORDER BY 1"),
+        trap_sql=("SELECT staff_id, name FROM staff WHERE role = 'manager'"
+                  " UNION ALL SELECT s.staff_id, s.name FROM staff s WHERE EXISTS"
+                  " (SELECT 1 FROM staff r WHERE r.reports_to = s.staff_id)"
+                  " ORDER BY 1"),
+        note="UNION removes duplicates; UNION ALL keeps them. Every manager"
+             " here also manages someone, so the trap lists all five of them"
+             " twice. UNION ALL is the right default when the two sides"
+             " cannot overlap, because deduplicating costs a sort -- but"
+             " when they can, 'each person once' is a UNION. The same"
+             " result is a single SELECT with OR in the WHERE; the set"
+             " form is what generalises to two different tables.",
+        claims=[("no staff_id twice, and every manager included",
+                 lambda rows, c: len(rows) == len({r[0] for r in rows})
+                 and {r[0] for r in rows} >= {r[0] for r in c.execute(
+                     "SELECT staff_id FROM staff WHERE role = 'manager'")})],
     ),
     # ============================================ 3 Unpivot and set ops
     dict(
-        id=8, ledger="Q589", concept="UNP", tier="3 - Unpivot and set ops",
-        title="Station 5, quarter by quarter",
+        id=8, ledger="Q619", concept="UNP", tier="3 - Unpivot and set ops",
+        title="Each quarter's share of its year",
         prompt=(
-            "Station 5's footfall as one ROW per quarter, across every year"
-            " it has a row for, labelled like '2024-q3'. Twelve rows,"
-            " earliest first.\n\n"
-            "Return: period, footfall"
+            "Network-wide footfall for each quarter of each year as ROWS,"
+            " with the percentage of that YEAR's total it is, to two"
+            " decimals. Twelve rows, labelled q1 to q4.\n\n"
+            "Return: year, quarter, footfall, pct_of_year"
         ),
-        solution=("SELECT year || '-q1', q1 FROM station_footfall"
-                  " WHERE station_id = 5 UNION ALL SELECT year || '-q2', q2"
-                  " FROM station_footfall WHERE station_id = 5"
-                  " UNION ALL SELECT year || '-q3', q3 FROM station_footfall"
-                  " WHERE station_id = 5 UNION ALL SELECT year || '-q4', q4"
-                  " FROM station_footfall WHERE station_id = 5 ORDER BY 1"),
-        trap_sql=("SELECT year || '-q1', q1 FROM station_footfall"
-                  " WHERE station_id = 5 UNION ALL SELECT year || '-q2', q2"
-                  " FROM station_footfall WHERE station_id = 5"
-                  " UNION ALL SELECT year || '-q3', q2 FROM station_footfall"
-                  " WHERE station_id = 5 UNION ALL SELECT year || '-q4', q4"
-                  " FROM station_footfall WHERE station_id = 5 ORDER BY 1"),
-        note="Three years times four quarters is twelve rows from four"
-             " branches, because each branch returns one row per YEAR. The"
-             " label is built from the year column so it comes out right for"
-             " every year without being typed. The trap is the usual"
-             " copy-and-paste slip: the q3 branch selects q2. An ORDER BY"
-             " on a compound SELECT applies to the whole result and goes"
-             " last.",
-        claims=[("twelve distinct periods, totalling the station's footfall",
-                 lambda rows, c: len(rows) == 12
-                 and len({r[0] for r in rows}) == 12
-                 and sum(r[1] for r in rows) == c.execute(
-                     "SELECT SUM(q1 + q2 + q3 + q4) FROM station_footfall"
-                     " WHERE station_id = 5").fetchone()[0])],
+        solution=("SELECT year, quarter, footfall, ROUND(100.0 * footfall"
+                  " / SUM(footfall) OVER (PARTITION BY year), 2) FROM"
+                  " (SELECT year, 'q1' quarter, SUM(q1) footfall"
+                  " FROM station_footfall GROUP BY year UNION ALL"
+                  " SELECT year, 'q2', SUM(q2) FROM station_footfall GROUP BY year"
+                  " UNION ALL SELECT year, 'q3', SUM(q3) FROM station_footfall"
+                  " GROUP BY year UNION ALL SELECT year, 'q4', SUM(q4)"
+                  " FROM station_footfall GROUP BY year)"),
+        trap_sql=("SELECT year, quarter, footfall, ROUND(100.0 * footfall"
+                  " / SUM(footfall) OVER (), 2) FROM"
+                  " (SELECT year, 'q1' quarter, SUM(q1) footfall"
+                  " FROM station_footfall GROUP BY year UNION ALL"
+                  " SELECT year, 'q2', SUM(q2) FROM station_footfall GROUP BY year"
+                  " UNION ALL SELECT year, 'q3', SUM(q3) FROM station_footfall"
+                  " GROUP BY year UNION ALL SELECT year, 'q4', SUM(q4)"
+                  " FROM station_footfall GROUP BY year)"),
+        note="Unpivot first, then window. Once the four columns are rows,"
+             " 'share of the year' is an ordinary partitioned SUM over"
+             " them; on the wide table it would take four expressions"
+             " each dividing by the sum of all four. The trap divides by"
+             " the grand total across three years, so its twelve shares"
+             " add to 100 once rather than three times.",
+        claims=[("twelve rows, each year's shares summing to 100",
+                 lambda rows, c: len(rows) == 12 and all(
+                     abs(sum(r[3] for r in rows if r[0] == y) - 100) < 0.05
+                     for y in {r[0] for r in rows}))],
     ),
     dict(
-        id=9, ledger="Q590", concept="J1", tier="3 - Unpivot and set ops",
-        title="Opened in the same year",
+        id=9, ledger="Q620", concept="J1", tier="3 - Unpivot and set ops",
+        title="Pairs of stations in the same town",
         prompt=(
-            "Pairs of stations that opened in the same calendar year, with"
-            " the year. Each pair once, the lower station_id first.\n\n"
-            "Return: station_a, station_b, year"
+            "For every town with at least two stations, how many PAIRS of"
+            " stations it has -- a town with three stations has three pairs,"
+            " one with four has six.\n\n"
+            "Return: town, pairs"
         ),
-        solution=("SELECT a.station_id, b.station_id, strftime('%Y', a.opened_on)"
-                  " FROM stations a JOIN stations b"
-                  " ON strftime('%Y', b.opened_on) = strftime('%Y', a.opened_on)"
-                  " AND b.station_id > a.station_id"),
-        trap_sql=("SELECT a.station_id, b.station_id, strftime('%Y', a.opened_on)"
-                  " FROM stations a JOIN stations b"
-                  " ON strftime('%Y', b.opened_on) = strftime('%Y', a.opened_on)"
-                  " AND b.station_id <> a.station_id"),
-        note="A self-join on a derived value -- the year -- rather than a"
-             " key. <> keeps a station from pairing with itself but still"
-             " produces (2, 33) AND (33, 2), so the trap returns every pair"
-             " twice. a < b is the standard way to get each unordered pair"
-             " once. Three stations in one year give three pairs, which is"
-             " right.",
-        claims=[("more than ten pairs, each with the lower id first",
-                 lambda rows, c: len(rows) > 10
-                 and all(r[0] < r[1] for r in rows))],
+        solution=("SELECT a.town, COUNT(*) FROM stations a JOIN stations b"
+                  " ON b.town = a.town AND b.station_id > a.station_id"
+                  " GROUP BY a.town"),
+        trap_sql=("SELECT a.town, COUNT(*) FROM stations a JOIN stations b"
+                  " ON b.town = a.town AND b.station_id <> a.station_id"
+                  " GROUP BY a.town"),
+        note="A self-join on a plain column, then a count. b > a keeps each"
+             " unordered pair once; <> keeps both orders and the trap"
+             " doubles every count. The towns with one station drop out"
+             " on their own, because an inner join with no partner"
+             " produces no row -- the same fact that makes an outer join"
+             " necessary when you DO want them.",
+        claims=[("only towns with two or more stations, pairs matching n(n-1)/2",
+                 lambda rows, c: len(rows) > 10 and all(
+                     r[1] == n * (n - 1) // 2 for r, n in (
+                         (r, c.execute("SELECT COUNT(*) FROM stations"
+                                       " WHERE town = ?", (r[0],)).fetchone()[0])
+                         for r in rows)))],
     ),
     dict(
-        id=10, ledger="Q591", concept="S1", tier="3 - Unpivot and set ops",
-        title="Formations both lines have used",
+        id=10, ledger="Q621", concept="S1", tier="3 - Unpivot and set ops",
+        title="On two lines, never on a third",
         prompt=(
-            "Two-unit formations -- the front unit and the rear unit, in"
-            " that order -- that have run on both line 1 and line 2.\n\n"
-            "A formation is ordered: unit 9 leading unit 8 is not the same"
-            " as unit 8 leading unit 9. Position 1 is the front.\n\n"
-            "Return: front_unit, rear_unit"
+            "Units that have worked on BOTH line 2 and line 3 but have"
+            " never worked on line 1.\n\n"
+            "Return: unit_id"
         ),
-        solution=("SELECT f.unit_id, r.unit_id FROM service_units f"
-                  " JOIN service_units r ON r.service_id = f.service_id"
-                  " AND r.position = 2 JOIN services s"
-                  " ON s.service_id = f.service_id WHERE f.position = 1"
-                  " AND s.line_id = 1 INTERSECT SELECT f.unit_id, r.unit_id"
-                  " FROM service_units f JOIN service_units r"
-                  " ON r.service_id = f.service_id AND r.position = 2"
-                  " JOIN services s ON s.service_id = f.service_id"
-                  " WHERE f.position = 1 AND s.line_id = 2"),
-        trap_sql=("SELECT a.unit_id, b.unit_id FROM service_units a"
-                  " JOIN service_units b ON b.service_id = a.service_id"
-                  " AND b.unit_id > a.unit_id JOIN services s"
-                  " ON s.service_id = a.service_id WHERE s.line_id = 1"
-                  " INTERSECT SELECT a.unit_id, b.unit_id FROM service_units a"
-                  " JOIN service_units b ON b.service_id = a.service_id"
-                  " AND b.unit_id > a.unit_id JOIN services s"
-                  " ON s.service_id = a.service_id WHERE s.line_id = 2"),
-        note="Two mechanisms at once. The self-join on service_units pairs"
-             " the front row with the rear row of the same service; then"
-             " INTERSECT keeps the (front, rear) pairs that appear in both"
-             " lines' sets -- set operations compare whole rows, however"
-             " many columns. The trap pairs by unit_id order, which folds"
-             " (9, 8) into (8, 9) and halves the answer: the formation, not"
-             " the pair of units, is what the question asked for.",
-        claims=[("dozens of formations, no unit leading itself",
-                 lambda rows, c: len(rows) > 10
-                 and all(r[0] != r[1] for r in rows))],
+        solution=("SELECT su.unit_id FROM service_units su JOIN services s"
+                  " ON s.service_id = su.service_id WHERE s.line_id = 2"
+                  " INTERSECT SELECT su.unit_id FROM service_units su"
+                  " JOIN services s ON s.service_id = su.service_id"
+                  " WHERE s.line_id = 3 EXCEPT SELECT su.unit_id"
+                  " FROM service_units su JOIN services s"
+                  " ON s.service_id = su.service_id WHERE s.line_id = 1"),
+        trap_sql=("SELECT DISTINCT su.unit_id FROM service_units su"
+                  " JOIN services s ON s.service_id = su.service_id"
+                  " WHERE s.line_id IN (2, 3) AND s.line_id <> 1"),
+        note="Three sets and two operators: (line 2 INTERSECT line 3)"
+             " EXCEPT line 1, evaluated left to right, which is what the"
+             " question says in order. The trap reasons row by row -- a"
+             " workingIS on line 2 or 3, and a working on line 2 is trivially"
+             " not on line 1 -- so it returns every unit that has touched"
+             " either line, three times too many. 'Both' and 'never' are"
+             " statements about a unit's whole history, and only sets see"
+             " that.",
+        claims=[("several units, each on lines 2 and 3 and never on 1",
+                 lambda rows, c: len(rows) > 3 and all(
+                     c.execute("SELECT COUNT(DISTINCT s.line_id) FILTER"
+                               " (WHERE s.line_id IN (2, 3)) = 2 AND"
+                               " COUNT(*) FILTER (WHERE s.line_id = 1) = 0"
+                               " FROM service_units su JOIN services s"
+                               " ON s.service_id = su.service_id"
+                               " WHERE su.unit_id = ?", (r[0],)).fetchone()[0]
+                     for r in rows))],
     ),
     # ================================================= 4 Dates and times
     dict(
-        id=11, ledger="Q592", concept="D1", tier="4 - Dates and times",
-        title="Incidents by quarter",
+        id=11, ledger="Q622", concept="D1", tier="4 - Dates and times",
+        title="Cancellation rate by month",
         prompt=(
-            "How many incidents were reported in each calendar quarter,"
-            " labelled like '2025-Q3', earliest first. Six quarters.\n\n"
-            "strftime has no quarter code: build it from the month.\n\n"
-            "Return: quarter, incidents"
+            "For each month of the timetable: services scheduled, services"
+            " cancelled, and the cancellation rate as a percentage to one"
+            " decimal. Eighteen rows -- January 2025 and January 2026 are"
+            " different months.\n\n"
+            "Return: month, services, cancelled, pct"
         ),
-        solution=("SELECT strftime('%Y', reported_at) || '-Q'"
-                  " || ((CAST(strftime('%m', reported_at) AS INTEGER) + 2) / 3),"
-                  " COUNT(*) FROM incidents GROUP BY 1 ORDER BY 1"),
-        trap_sql=("SELECT strftime('%Y', reported_at) || '-Q'"
-                  " || (CAST(strftime('%m', reported_at) AS INTEGER) / 3),"
-                  " COUNT(*) FROM incidents GROUP BY 1 ORDER BY 1"),
-        note="Months 1-3 are quarter 1, so (month + 2) / 3 with integer"
-             " division: 3/3 = 1, 5/3 = 1, 6/3 = 2. Plain month / 3 puts"
-             " January and February in a 'Q0' and December in its own Q4,"
-             " eight labels for six quarters. strftime returns TEXT, so"
-             " CAST before doing arithmetic -- '03' + 2 does coerce in"
-             " SQLite, but not everywhere.",
-        claims=[("six quarters labelled Q1 to Q4, totalling every incident",
-                 lambda rows, c: len(rows) == 6
-                 and all(r[0][-2:] in ('Q1', 'Q2', 'Q3', 'Q4') for r in rows)
-                 and sum(r[1] for r in rows) == c.execute(
-                     "SELECT COUNT(*) FROM incidents").fetchone()[0])],
+        solution=("SELECT strftime('%Y-%m', run_date), COUNT(*), SUM(cancelled),"
+                  " ROUND(100.0 * SUM(cancelled) / COUNT(*), 1) FROM services"
+                  " GROUP BY 1"),
+        trap_sql=("SELECT strftime('%m', run_date), COUNT(*), SUM(cancelled),"
+                  " ROUND(100.0 * SUM(cancelled) / COUNT(*), 1) FROM services"
+                  " GROUP BY 1"),
+        note="'%m' is the month number and nothing else, so the trap folds"
+             " the two Januaries into one row and returns twelve months for"
+             " eighteen. Group by '%Y-%m' whenever the range crosses a year"
+             " -- and it nearly always will, eventually. SUM of a 0/1"
+             " column is a count of the ones; 100.0 keeps the division"
+             " real.",
+        claims=[("eighteen months, rates a few percent",
+                 lambda rows, c: len(rows) == 18
+                 and all(0 < r[3] < 10 for r in rows))],
     ),
     dict(
-        id=12, ledger="Q593", concept="D1", tier="4 - Dates and times",
-        title="Journey time by line",
+        id=12, ledger="Q623", concept="D1", tier="4 - Dates and times",
+        title="Departures by time of day",
         prompt=(
-            "For each line, the average scheduled journey in minutes, to one"
-            " decimal: from the service's departure to its LAST scheduled"
-            " call.\n\n"
-            "The departure time is in `services`; the calls are in `stops`."
-            " Cancelled services have no stops and must not count.\n\n"
-            "Return: line_id, avg_minutes"
+            "How many services depart in the morning (before 10:00), at"
+            " midday (10:00 up to but not including 14:00) and later.\n\n"
+            "Three rows, labelled 'morning', 'midday', 'later'.\n\n"
+            "Return: band, services"
         ),
-        solution=("SELECT s.line_id, ROUND(AVG((strftime('%s', x.last_call)"
-                  " - strftime('%s', s.depart_time)) / 60.0), 1)"
-                  " FROM services s JOIN (SELECT service_id,"
-                  " MAX(sched_arrive) last_call FROM stops GROUP BY 1) x"
-                  " ON x.service_id = s.service_id GROUP BY 1"),
-        trap_sql=("SELECT s.line_id, ROUND(AVG((strftime('%s', x.last_call)"
-                  " - strftime('%s', x.first_call)) / 60.0), 1)"
-                  " FROM services s JOIN (SELECT service_id,"
-                  " MAX(sched_arrive) last_call, MIN(sched_arrive) first_call"
-                  " FROM stops GROUP BY 1) x"
-                  " ON x.service_id = s.service_id GROUP BY 1"),
-        note="The trap measures first call to last call, which leaves out"
-             " the run from the origin -- nine minutes on average, every"
-             " line about nine short. The departure is a column of"
-             " `services`, so the journey has to reach both tables. MAX of"
-             " an 'HH:MM' string is the latest time because the format is"
-             " fixed-width; the inner join drops the cancelled services on"
-             " its own, since they have no stops to aggregate.",
-        claims=[("six lines, all between fifty and two hundred minutes",
-                 lambda rows, c: len(rows) == 6
-                 and all(50 < r[1] < 200 for r in rows))],
+        solution=("SELECT CASE WHEN depart_time < '10:00' THEN 'morning'"
+                  " WHEN depart_time < '14:00' THEN 'midday' ELSE 'later' END,"
+                  " COUNT(*) FROM services GROUP BY 1"),
+        trap_sql=("SELECT CASE WHEN strftime('%H', depart_time) < 10"
+                  " THEN 'morning' WHEN strftime('%H', depart_time) < 14"
+                  " THEN 'midday' ELSE 'later' END, COUNT(*) FROM services"
+                  " GROUP BY 1"),
+        note="'HH:MM' is fixed-width and zero-padded, so comparing it as"
+             " text IS comparing it as time. The trap compares the TEXT"
+             " '06' with the INTEGER 10, and in SQLite every number sorts"
+             " before every string -- '06' < 10 is false, as is '13' < 14,"
+             " so all eleven thousand services land in 'later'. Compare"
+             " text with text, or CAST the hour.",
+        claims=[("three bands, morning the largest",
+                 lambda rows, c: len(rows) == 3
+                 and max(rows, key=lambda r: r[1])[0] == 'morning')],
     ),
     dict(
-        id=13, ledger="Q594", concept="D1", tier="4 - Dates and times",
-        title="How old each station is",
+        id=13, ledger="Q624", concept="D1", tier="4 - Dates and times",
+        title="Days since the previous opening",
         prompt=(
-            "Every station's age in completed years on 2026-06-30.\n\n"
-            "A station opened on 1952-11-18 is 73 that day, not 74: its"
-            " anniversary has not come round yet.\n\n"
-            "Return: station_id, age"
+            "Every station in the order it opened, with the number of days"
+            " since the previous station opened. The first has none. Two"
+            " stations opened on the same day; order those by station_id,"
+            " and the second shows 0.\n\n"
+            "Return: station_id, opened_on, days_since_previous"
         ),
-        solution=("SELECT station_id, strftime('%Y', '2026-06-30')"
-                  " - strftime('%Y', opened_on) - (strftime('%m-%d', '2026-06-30')"
-                  " < strftime('%m-%d', opened_on)) FROM stations"),
-        trap_sql=("SELECT station_id, strftime('%Y', '2026-06-30')"
-                  " - strftime('%Y', opened_on) FROM stations"),
-        note="Year minus year is right only for stations whose anniversary"
-             " has passed. The fix is to subtract one when the month-day of"
-             " the opening is later in the year than today's -- and a"
-             " comparison in SQLite is 0 or 1, so it can be subtracted"
-             " directly. Dividing julianday differences by 365.25 gets"
-             " within a day of this and is wrong on some of those days.",
-        claims=[("sixty stations, and the naive year difference overstates some",
-                 lambda rows, c: len(rows) == 60
-                 and sum(r[1] for r in rows) < c.execute(
-                     "SELECT SUM(strftime('%Y', '2026-06-30')"
-                     " - strftime('%Y', opened_on)) FROM stations"
-                 ).fetchone()[0])],
+        solution=("SELECT station_id, opened_on, julianday(opened_on)"
+                  " - julianday(LAG(opened_on) OVER (ORDER BY opened_on,"
+                  " station_id)) FROM stations ORDER BY opened_on, station_id"),
+        trap_sql=("SELECT station_id, opened_on, opened_on"
+                  " - LAG(opened_on) OVER (ORDER BY opened_on, station_id)"
+                  " FROM stations ORDER BY opened_on, station_id"),
+        note="Two dates cannot be subtracted as text. SQLite reads the"
+             " leading digits of each -- the year -- and the trap returns"
+             " the difference in YEARS, mostly 0 and 1, with no error."
+             " julianday turns a date into a day count, and the difference"
+             " of two is days. The LAG's ORDER BY carries the tiebreak so"
+             " that 'previous' is well defined on the day two stations"
+             " share.",
+        claims=[("sixty rows, the first blank, the rest non-negative and one zero",
+                 lambda rows, c: len(rows) == 60 and rows[0][2] is None
+                 and all(r[2] >= 0 for r in rows[1:])
+                 and sum(1 for r in rows[1:] if r[2] == 0) == 1)],
     ),
     dict(
-        id=14, ledger="Q595", concept="D2", tier="4 - Dates and times",
-        title="The last week of each month",
+        id=14, ledger="Q625", concept="D2", tier="4 - Dates and times",
+        title="The first full week of each month",
         prompt=(
-            "How many services ran in the last seven days of each month --"
-            " the 25th to the 31st of a 31-day month, the 22nd to the 28th"
-            " of February 2026. Eighteen months.\n\n"
-            "Build the window with date modifiers, not a day-of-month"
-            " number.\n\n"
+            "How many services ran in the first full week of each month:"
+            " the first Monday through the Sunday after it. Eighteen"
+            " months.\n\n"
+            "Modifiers: 'start of month', then 'weekday 1' for the Monday,"
+            " which stays put if the 1st already is one.\n\n"
             "Return: month, services"
         ),
         solution=("SELECT strftime('%Y-%m', run_date), COUNT(*) FROM services"
-                  " WHERE run_date >= date(run_date, 'start of month',"
-                  " '+1 month', '-7 days') GROUP BY 1"),
+                  " WHERE run_date BETWEEN date(run_date, 'start of month',"
+                  " 'weekday 1') AND date(run_date, 'start of month',"
+                  " 'weekday 1', '+6 days') GROUP BY 1"),
         trap_sql=("SELECT strftime('%Y-%m', run_date), COUNT(*) FROM services"
-                  " WHERE CAST(strftime('%d', run_date) AS INTEGER) >= 25"
-                  " GROUP BY 1"),
-        note="'start of month', '+1 month' is the first of NEXT month, and"
-             " '-7 days' from there is the first of the last seven. The"
-             " trap's >= 25 is right in every 31-day month and short by one"
-             " or three days in the others, which is the kind of wrong that"
-             " survives a glance at the output. Modifiers apply left to"
-             " right, so the order matters.",
-        claims=[("eighteen months with varying counts",
+                  " WHERE run_date BETWEEN date(run_date, 'start of month',"
+                  " 'weekday 1') AND date(run_date, 'start of month',"
+                  " 'weekday 1', '+7 days') GROUP BY 1"),
+        note="Monday plus six days is Sunday; BETWEEN is inclusive at both"
+             " ends, so '+7 days' takes the following Monday too and every"
+             " month is one weekday heavy. Off-by-one on an inclusive"
+             " range is the commonest date bug there is. Both bounds are"
+             " computed from the row's own date, so no month needs to be"
+             " named.",
+        claims=[("eighteen months, each a week's worth of services",
                  lambda rows, c: len(rows) == 18
-                 and len({r[1] for r in rows}) > 5)],
+                 and all(50 < r[1] < 250 for r in rows))],
     ),
     # ================================================= 5 Joins and grain
     dict(
-        id=15, ledger="Q596", concept="J2", tier="5 - Joins and grain",
-        title="Drivers based in each town",
+        id=15, ledger="Q626", concept="J2", tier="5 - Joins and grain",
+        title="Every unit's June 2025",
         prompt=(
-            "Every town with the number of DRIVERS based at its stations."
-            " Towns with none must appear with 0, so all 20 towns come"
-            " back.\n\n"
-            "Return: town, drivers"
+            "Every unit of rolling stock with the number of services it"
+            " worked in June 2025. Units that worked none -- and the five"
+            " that have never worked at all -- must appear with 0, so all"
+            " 50 rows come back.\n\n"
+            "Return: unit_id, workings"
         ),
-        solution=("SELECT st.town, COUNT(sf.staff_id) FROM stations st"
-                  " LEFT JOIN staff sf ON sf.base_station = st.station_id"
-                  " AND sf.role = 'driver' GROUP BY st.town"),
-        trap_sql=("SELECT st.town, COUNT(sf.staff_id) FROM stations st"
-                  " LEFT JOIN staff sf ON sf.base_station = st.station_id"
-                  " WHERE sf.role = 'driver' GROUP BY st.town"),
-        note="A condition on the RIGHT table of an outer join goes in ON,"
-             " not WHERE. In WHERE it runs after the join, and a town with"
-             " no drivers has sf.role NULL there -- which is not 'driver',"
-             " so the row is dropped and the outer join has been turned"
-             " back into an inner one. In ON, the condition decides what"
-             " matches; unmatched towns are kept with NULLs, and COUNT of a"
-             " right-table column counts them as 0.",
-        claims=[("all twenty towns, some with none, totalling the drivers",
-                 lambda rows, c: len(rows) == 20
+        solution=("SELECT r.unit_id, COUNT(s.service_id) FROM rolling_stock r"
+                  " LEFT JOIN service_units su ON su.unit_id = r.unit_id"
+                  " LEFT JOIN services s ON s.service_id = su.service_id"
+                  " AND s.run_date BETWEEN '2025-06-01' AND '2025-06-30'"
+                  " GROUP BY r.unit_id"),
+        trap_sql=("SELECT r.unit_id, COUNT(s.service_id) FROM rolling_stock r"
+                  " LEFT JOIN service_units su ON su.unit_id = r.unit_id"
+                  " LEFT JOIN services s ON s.service_id = su.service_id"
+                  " WHERE s.run_date BETWEEN '2025-06-01' AND '2025-06-30'"
+                  " GROUP BY r.unit_id"),
+        note="Two outer joins in a chain, and the date filter has to sit in"
+             " the ON of the second one. In WHERE it runs after both joins,"
+             " and a unit with no June working has s.run_date NULL there,"
+             " which fails the BETWEEN and drops the row -- the trap"
+             " returns 45 units. COUNT(s.service_id) counts only real"
+             " matches, so the kept rows read 0.",
+        claims=[("fifty units, some with none",
+                 lambda rows, c: len(rows) == 50
                  and any(r[1] == 0 for r in rows)
-                 and sum(r[1] for r in rows) == c.execute(
-                     "SELECT COUNT(*) FROM staff WHERE role = 'driver'"
-                 ).fetchone()[0])],
+                 and any(r[1] > 0 for r in rows))],
     ),
     dict(
-        id=16, ledger="Q597", concept="C2", tier="5 - Joins and grain",
-        title="Takings and delay per operator",
+        id=16, ledger="Q627", concept="C2", tier="5 - Joins and grain",
+        title="Seats offered and tickets sold, per line",
         prompt=(
-            "For each operator: total ticket revenue in pence, and total"
-            " quantified delay minutes, across its services.\n\n"
-            "Tickets and incidents both hang off `services`. Joining both at"
-            " once multiplies every ticket by the service's incidents, and"
-            " the other way round.\n\n"
-            "Return: operator, revenue, delay_minutes"
+            "For each line: the total seats it has run -- every unit on"
+            " every service -- and the total tickets sold on it.\n\n"
+            "Units and tickets both hang off `services`, at different"
+            " grains. Joined together they multiply.\n\n"
+            "Return: line_id, seats, tickets"
         ),
-        solution=("WITH rev AS (SELECT s.operator_id, SUM(t.price_pence) r"
-                  " FROM services s JOIN tickets t ON t.service_id = s.service_id"
-                  " GROUP BY 1), dly AS (SELECT s.operator_id,"
-                  " SUM(i.delay_minutes) d FROM services s JOIN incidents i"
-                  " ON i.service_id = s.service_id GROUP BY 1)"
-                  " SELECT o.name, rev.r, dly.d FROM operators o"
-                  " JOIN rev ON rev.operator_id = o.operator_id"
-                  " JOIN dly ON dly.operator_id = o.operator_id"),
-        trap_sql=("SELECT o.name, SUM(t.price_pence), SUM(i.delay_minutes)"
-                  " FROM operators o JOIN services s"
-                  " ON s.operator_id = o.operator_id JOIN tickets t"
-                  " ON t.service_id = s.service_id JOIN incidents i"
-                  " ON i.service_id = s.service_id GROUP BY o.name"),
-        note="Two sums over two children of the same parent. Joined"
-             " together, a service with 4 tickets and 1 incident yields 4"
-             " rows -- its delay counted four times -- and a service with"
-             " tickets but no incident vanishes from the inner join"
-             " altogether. Aggregate each child to the operator on its own,"
-             " then join the two small results. COUNT(DISTINCT) rescues a"
-             " count from this; nothing rescues a SUM.",
-        claims=[("four operators, both totals matching their tables",
-                 lambda rows, c: len(rows) == 4
-                 and sum(r[1] for r in rows) == c.execute(
-                     "SELECT SUM(price_pence) FROM tickets").fetchone()[0]
+        solution=("WITH seats AS (SELECT s.line_id, SUM(r.seats) k"
+                  " FROM services s JOIN service_units su"
+                  " ON su.service_id = s.service_id JOIN rolling_stock r"
+                  " ON r.unit_id = su.unit_id GROUP BY 1), tk AS"
+                  " (SELECT s.line_id, COUNT(*) n FROM services s"
+                  " JOIN tickets t ON t.service_id = s.service_id GROUP BY 1)"
+                  " SELECT seats.line_id, seats.k, tk.n FROM seats"
+                  " JOIN tk ON tk.line_id = seats.line_id"),
+        trap_sql=("SELECT s.line_id, SUM(r.seats), COUNT(t.ticket_id)"
+                  " FROM services s JOIN service_units su"
+                  " ON su.service_id = s.service_id JOIN rolling_stock r"
+                  " ON r.unit_id = su.unit_id JOIN tickets t"
+                  " ON t.service_id = s.service_id GROUP BY 1"),
+        note="A service with two units and five tickets is ten rows in the"
+             " trap: the seats counted five times and the tickets twice."
+             " Neither aggregate survives -- COUNT(DISTINCT ticket_id) would"
+             " repair the count but nothing repairs the SUM. Aggregate each"
+             " child to the line separately and join the two small"
+             " results; the CTEs are the same shape as question 16 of the"
+             " last set.",
+        claims=[("six lines, tickets matching the ticket table",
+                 lambda rows, c: len(rows) == 6
                  and sum(r[2] for r in rows) == c.execute(
-                     "SELECT SUM(delay_minutes) FROM incidents").fetchone()[0])],
+                     "SELECT COUNT(*) FROM tickets").fetchone()[0])],
     ),
     dict(
-        id=17, ledger="Q598", concept="N1", tier="5 - Joins and grain",
-        title="Staff who manage nobody",
+        id=17, ledger="Q628", concept="J2", tier="5 - Joins and grain",
+        title="Services that sold nothing",
         prompt=(
-            "Members of staff to whom nobody reports.\n\n"
-            "The one person at the top reports to nobody -- reports_to is"
-            " NULL there -- and that single row is enough to make one"
-            " obvious phrasing return nothing at all.\n\n"
-            "Return: staff_id, name"
+            "Services scheduled on 2025-05-08 that sold no tickets at all."
+            " Write it with an outer join.\n\n"
+            "Return: service_id, line_id"
         ),
-        solution=("SELECT s.staff_id, s.name FROM staff s WHERE NOT EXISTS"
-                  " (SELECT 1 FROM staff r WHERE r.reports_to = s.staff_id)"),
-        trap_sql=("SELECT staff_id, name FROM staff WHERE staff_id NOT IN"
-                  " (SELECT reports_to FROM staff)"),
-        note="NOT IN (list) is 'not equal to every item', and 'not equal to"
-             " NULL' is unknown -- so with one NULL in the list, no row can"
-             " ever be true and the trap returns nothing. NOT EXISTS has no"
-             " such hole: the subquery either finds a row or does not."
-             " Filtering the NULL out of the subquery (WHERE reports_to IS"
-             " NOT NULL) also works; the anti-join from question 17 of the"
-             " last set is the third way.",
-        claims=[("most of the staff, none of whom appears as a reports_to",
-                 lambda rows, c: 20 < len(rows) < 40
-                 and not c.execute(
-                     "SELECT 1 FROM staff WHERE reports_to IN (%s) LIMIT 1"
+        solution=("SELECT s.service_id, s.line_id FROM services s"
+                  " LEFT JOIN tickets t ON t.service_id = s.service_id"
+                  " WHERE s.run_date = '2025-05-08' AND t.ticket_id IS NULL"),
+        trap_sql=("SELECT s.service_id, s.line_id FROM services s"
+                  " JOIN tickets t ON t.service_id = s.service_id"
+                  " WHERE s.run_date = '2025-05-08' GROUP BY s.service_id"
+                  " HAVING COUNT(t.ticket_id) = 0"),
+        note="An inner join cannot find an absence: a service with no"
+             " tickets produces no joined row, so there is nothing to count"
+             " and the trap's HAVING COUNT = 0 is never true -- zero rows,"
+             " no error. The anti-join keeps every service and tests the"
+             " right side for NULL; the same HAVING would work on a LEFT"
+             " JOIN, because then the service is present with a NULL"
+             " ticket.",
+        claims=[("a handful of services, none with a ticket",
+                 lambda rows, c: 2 < len(rows) < 10 and not c.execute(
+                     "SELECT 1 FROM tickets WHERE service_id IN (%s) LIMIT 1"
                      % ",".join(str(int(r[0])) for r in rows)).fetchall())],
     ),
     dict(
-        id=18, ledger="Q599", concept="E1", tier="5 - Joins and grain",
-        title="Lost time at every stop",
+        id=18, ledger="Q629", concept="E1", tier="5 - Joins and grain",
+        title="Sold only one class",
         prompt=(
-            "Services on 2025-01-10 that arrived later than scheduled at"
-            " EVERY stop, with their number of stops.\n\n"
-            "A stop with no recorded arrival is not a late one, so a"
-            " service with an unrecorded stop does not qualify.\n\n"
-            "Return: service_id, stops"
+            "Services in January 2025 that sold at least four tickets, all"
+            " of the same class -- with the ticket count and that class.\n\n"
+            "Return: service_id, tickets, class"
         ),
-        solution=("SELECT sp.service_id, COUNT(*) FROM stops sp JOIN services s"
-                  " ON s.service_id = sp.service_id"
-                  " WHERE s.run_date = '2025-01-10' GROUP BY sp.service_id"
-                  " HAVING COUNT(*) = SUM(sp.actual_arrive > sp.sched_arrive)"),
-        trap_sql=("SELECT sp.service_id, COUNT(*) FROM stops sp JOIN services s"
-                  " ON s.service_id = sp.service_id"
-                  " WHERE s.run_date = '2025-01-10'"
-                  " AND sp.actual_arrive > sp.sched_arrive"
-                  " GROUP BY sp.service_id"),
-        note="'Every stop' is a property of the group: the number of late"
-             " stops equals the number of stops. The trap filters to late"
-             " stops first and then counts them, which finds every service"
-             " with at least ONE late stop -- and reports a stop count that"
-             " is really a late-stop count. SUM of a comparison counts the"
-             " rows where it is true; a NULL arrival compares as NULL and"
-             " adds nothing, which is exactly the exclusion the question"
-             " wants.",
-        claims=[("a handful of services, each late at every stop",
-                 lambda rows, c: 1 < len(rows) < 10 and all(
-                     c.execute("SELECT COUNT(*) = SUM(actual_arrive"
-                               " > sched_arrive) FROM stops WHERE service_id"
-                               " = ?", (r[0],)).fetchone()[0] for r in rows))],
+        solution=("SELECT s.service_id, COUNT(*), MIN(t.class) FROM services s"
+                  " JOIN tickets t ON t.service_id = s.service_id"
+                  " WHERE s.run_date BETWEEN '2025-01-01' AND '2025-01-31'"
+                  " GROUP BY s.service_id HAVING COUNT(*) >= 4"
+                  " AND COUNT(DISTINCT t.class) = 1"),
+        trap_sql=("SELECT s.service_id, COUNT(*), t.class FROM services s"
+                  " JOIN tickets t ON t.service_id = s.service_id"
+                  " WHERE s.run_date BETWEEN '2025-01-01' AND '2025-01-31'"
+                  " GROUP BY s.service_id, t.class HAVING COUNT(*) >= 4"),
+        note="'All the same class' is COUNT(DISTINCT class) = 1 -- a"
+             " statement about the group. The trap groups by service AND"
+             " class, so it finds services that sold four of SOME class,"
+             " whatever else they sold, and returns fifty rows for six."
+             " MIN(class) is the idiom for 'the value, which is the same"
+             " on every row': a bare column would do in SQLite but is not"
+             " portable.",
+        claims=[("a few services, each with one class only",
+                 lambda rows, c: 2 < len(rows) < 20 and all(
+                     c.execute("SELECT COUNT(DISTINCT class) FROM tickets"
+                               " WHERE service_id = ?", (r[0],)).fetchone()[0]
+                     == 1 for r in rows))],
     ),
     # ================================================= 6 Window functions
     dict(
-        id=19, ledger="Q600", concept="W1", tier="6 - Window functions",
-        title="The week's tickets, rolling",
+        id=19, ledger="Q630", concept="W1", tier="6 - Window functions",
+        title="A centred three-month average",
         prompt=(
-            "For each day of January 2025: tickets sold that day, and the"
-            " total over the seven days ending that day -- for the first"
-            " six days, over as many days as there are.\n\n"
-            "Return: day, tickets, seven_day_total"
+            "Tickets sold per month, each with the average of that month,"
+            " the one before and the one after, to one decimal. At the two"
+            " ends, average what is there.\n\n"
+            "Return: month, tickets, centred_avg"
         ),
-        solution=("SELECT sold_at, COUNT(*), SUM(COUNT(*)) OVER (ORDER BY"
-                  " sold_at ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)"
-                  " FROM tickets WHERE sold_at < '2025-02-01' GROUP BY 1"),
-        trap_sql=("SELECT sold_at, COUNT(*), SUM(COUNT(*)) OVER (ORDER BY"
-                  " sold_at ROWS BETWEEN 7 PRECEDING AND CURRENT ROW)"
-                  " FROM tickets WHERE sold_at < '2025-02-01' GROUP BY 1"),
-        note="Seven days ending today is today plus the six before it, so"
-             " the frame is 6 PRECEDING, not 7 -- an off-by-one that shows"
-             " only from the eighth row on, where the trap's totals are one"
-             " day too heavy. ROWS is safe here because every day sold"
-             " tickets, so one row is one day; a day with no sales would"
-             " need a RANGE frame or a date spine.",
-        claims=[("31 days, the seventh total the sum of the first seven",
-                 lambda rows, c: len(rows) == 31
-                 and rows[6][2] == sum(r[1] for r in rows[:7])
-                 and rows[7][2] == sum(r[1] for r in rows[1:8]))],
-    ),
-    dict(
-        id=20, ledger="Q601", concept="W2", tier="6 - Window functions",
-        title="Pay rank within the role",
-        prompt=(
-            "Every member of staff with their salary's rank within their"
-            " ROLE -- 1 for the best paid -- and how many pounds behind that"
-            " role's top salary they are.\n\n"
-            "Return: staff_id, role, salary, rank_in_role, behind_top"
-        ),
-        solution=("SELECT staff_id, role, salary, RANK() OVER (PARTITION BY"
-                  " role ORDER BY salary DESC), MAX(salary) OVER (PARTITION BY"
-                  " role) - salary FROM staff"),
-        trap_sql=("SELECT staff_id, role, salary, RANK() OVER (ORDER BY"
-                  " salary DESC), MAX(salary) OVER () - salary FROM staff"),
-        note="Two windows, both partitioned by role: a rank and an"
-             " aggregate. Without PARTITION BY the rank runs across all"
-             " forty people and the gap is to the best-paid person anywhere,"
-             " so only one row in the company reads 1 and 0. An aggregate"
-             " with OVER is not grouped -- every row keeps its own salary"
-             " and gains the partition's maximum beside it.",
-        claims=[("forty rows, one rank-1 per role, each 0 behind",
-                 lambda rows, c: len(rows) == 40
-                 and sum(1 for r in rows if r[3] == 1) == 4
-                 and all(r[4] == 0 for r in rows if r[3] == 1))],
-    ),
-    dict(
-        id=21, ledger="Q602", concept="W3", tier="6 - Window functions",
-        title="Each kind's share of the line's delay",
-        prompt=(
-            "For every line and kind of incident: the quantified delay"
-            " minutes, and what percentage of THAT LINE's delay minutes it"
-            " is, to two decimals.\n\n"
-            "Each line's five percentages add to 100.\n\n"
-            "Return: line_id, kind, delay_minutes, pct_of_line"
-        ),
-        solution=("SELECT s.line_id, i.kind, SUM(i.delay_minutes),"
-                  " ROUND(100.0 * SUM(i.delay_minutes) / SUM(SUM(i.delay_minutes))"
-                  " OVER (PARTITION BY s.line_id), 2) FROM incidents i"
-                  " JOIN services s ON s.service_id = i.service_id"
-                  " GROUP BY 1, 2"),
-        trap_sql=("SELECT s.line_id, i.kind, SUM(i.delay_minutes),"
-                  " ROUND(100.0 * SUM(i.delay_minutes) / SUM(SUM(i.delay_minutes))"
-                  " OVER (), 2) FROM incidents i"
-                  " JOIN services s ON s.service_id = i.service_id"
-                  " GROUP BY 1, 2"),
-        note="SUM(SUM(x)) OVER (PARTITION BY line) adds up the grouped sums"
-             " within one line, which is the denominator a share OF THE LINE"
-             " needs. OVER () with no partition is the network total, and"
-             " the trap's thirty percentages add to 100 once, across"
-             " everything, instead of six times. Incidents with no quantified"
-             " delay contribute nothing to either sum.",
-        claims=[("thirty rows, each line's shares summing to 100",
-                 lambda rows, c: len(rows) == 30 and all(
-                     abs(sum(r[3] for r in rows if r[0] == lid) - 100) < 0.05
-                     for lid in {r[0] for r in rows}))],
-    ),
-    dict(
-        id=22, ledger="Q603", concept="W2", tier="6 - Window functions",
-        title="The three latest incidents on each line",
-        prompt=(
-            "For each line, its three most recently reported incidents."
-            " Eighteen rows. When two were reported on the same day, the"
-            " higher incident_id is the more recent.\n\n"
-            "Return: line_id, incident_id, reported_at"
-        ),
-        solution=("SELECT line_id, incident_id, reported_at FROM (SELECT"
-                  " s.line_id, i.incident_id, i.reported_at, ROW_NUMBER() OVER"
-                  " (PARTITION BY s.line_id ORDER BY i.reported_at DESC,"
-                  " i.incident_id DESC) rn FROM incidents i JOIN services s"
-                  " ON s.service_id = i.service_id) WHERE rn <= 3"),
-        trap_sql=("SELECT line_id, incident_id, reported_at FROM (SELECT"
-                  " s.line_id, i.incident_id, i.reported_at, ROW_NUMBER() OVER"
-                  " (PARTITION BY s.line_id ORDER BY i.reported_at,"
-                  " i.incident_id DESC) rn FROM incidents i JOIN services s"
-                  " ON s.service_id = i.service_id) WHERE rn <= 3"),
-        note="Top-N per group again, and the ORDER BY inside OVER decides"
-             " which end 'top' is: DESC for the latest. The trap numbers"
-             " from the oldest, so it returns the three EARLIEST incidents"
-             " per line with perfect confidence. Two sort keys, both"
-             " descending, because several incidents share a date and the"
-             " tiebreak is part of the question.",
-        claims=[("three per line, none older than the line's fourth-latest",
+        solution=("SELECT m, n, ROUND(AVG(n) OVER (ORDER BY m ROWS BETWEEN"
+                  " 1 PRECEDING AND 1 FOLLOWING), 1) FROM (SELECT"
+                  " strftime('%Y-%m', sold_at) m, COUNT(*) n FROM tickets"
+                  " GROUP BY 1)"),
+        trap_sql=("SELECT m, n, ROUND(AVG(n) OVER (ORDER BY m ROWS BETWEEN"
+                  " 2 PRECEDING AND CURRENT ROW), 1) FROM (SELECT"
+                  " strftime('%Y-%m', sold_at) m, COUNT(*) n FROM tickets"
+                  " GROUP BY 1)"),
+        note="A frame can reach forward: 1 PRECEDING AND 1 FOLLOWING is"
+             " three rows centred on the current one. The trap is a"
+             " TRAILING three-month average -- the same width, shifted one"
+             " month late -- which is a fine thing to compute and not what"
+             " was asked. AVG over a frame that runs off the end averages"
+             " the rows that exist, which is what the prompt wants at the"
+             " edges.",
+        claims=[("eighteen months, the middle rows a three-month mean",
                  lambda rows, c: len(rows) == 18 and all(
-                     sum(1 for r in rows if r[0] == lid) == 3
-                     for lid in {r[0] for r in rows}))],
+                     abs(rows[i][2] - (rows[i-1][1] + rows[i][1]
+                                       + rows[i+1][1]) / 3) < 0.06
+                     for i in range(1, 17)))],
+    ),
+    dict(
+        id=20, ledger="Q631", concept="W2", tier="6 - Window functions",
+        title="The two hardest-working units of each model",
+        prompt=(
+            "For each model, its two units with the most workings -- rows"
+            " in service_units -- and the count. Fourteen rows; ties by the"
+            " lower unit_id.\n\n"
+            "Return: model, unit_id, workings"
+        ),
+        solution=("SELECT model, unit_id, w FROM (SELECT r.model, r.unit_id,"
+                  " COUNT(*) w, ROW_NUMBER() OVER (PARTITION BY r.model"
+                  " ORDER BY COUNT(*) DESC, r.unit_id) rn FROM rolling_stock r"
+                  " JOIN service_units su ON su.unit_id = r.unit_id"
+                  " GROUP BY r.unit_id) WHERE rn <= 2"),
+        trap_sql=("SELECT model, unit_id, w FROM (SELECT r.model, r.unit_id,"
+                  " COUNT(*) w, ROW_NUMBER() OVER ("
+                  " ORDER BY COUNT(*) DESC, r.unit_id) rn FROM rolling_stock r"
+                  " JOIN service_units su ON su.unit_id = r.unit_id"
+                  " GROUP BY r.unit_id) WHERE rn <= 2"),
+        note="Without PARTITION BY model the numbering runs across the"
+             " whole fleet, and rn <= 2 is the two busiest units anywhere"
+             " -- two rows, not fourteen. The window's ORDER BY uses the"
+             " aggregate directly, because windows are evaluated after"
+             " GROUP BY; the tiebreak on unit_id makes the answer"
+             " deterministic, which any top-N question needs.",
+        claims=[("two per model",
+                 lambda rows, c: len(rows) == 14 and all(
+                     sum(1 for r in rows if r[0] == m) == 2
+                     for m in {r[0] for r in rows}))],
+    ),
+    dict(
+        id=21, ledger="Q632", concept="W3", tier="6 - Window functions",
+        title="Each station's share of its town",
+        prompt=(
+            "Every station's 2025 footfall and what percentage of its"
+            " TOWN's 2025 footfall that is, to two decimals. A town with"
+            " one station reads 100.\n\n"
+            "Return: station_id, town, footfall, pct_of_town"
+        ),
+        solution=("SELECT st.station_id, st.town, f.q1 + f.q2 + f.q3 + f.q4,"
+                  " ROUND(100.0 * (f.q1 + f.q2 + f.q3 + f.q4)"
+                  " / SUM(f.q1 + f.q2 + f.q3 + f.q4) OVER (PARTITION BY st.town),"
+                  " 2) FROM stations st JOIN station_footfall f"
+                  " ON f.station_id = st.station_id AND f.year = 2025"),
+        trap_sql=("SELECT st.station_id, st.town, f.q1 + f.q2 + f.q3 + f.q4,"
+                  " ROUND(100.0 * (f.q1 + f.q2 + f.q3 + f.q4)"
+                  " / SUM(f.q1 + f.q2 + f.q3 + f.q4) OVER (), 2)"
+                  " FROM stations st JOIN station_footfall f"
+                  " ON f.station_id = st.station_id AND f.year = 2025"),
+        note="No GROUP BY at all: one row per station, and the window"
+             " supplies the town's total beside each. The trap's OVER ()"
+             " is the network total, so the shares are all small and the"
+             " single-station towns do not read 100 -- the check the prompt"
+             " hands you. The year condition sits in the ON so the join"
+             " itself is one row per station.",
+        claims=[("sixty stations, every town summing to 100",
+                 lambda rows, c: len(rows) == 60 and all(
+                     abs(sum(r[3] for r in rows if r[1] == t) - 100) < 0.05
+                     for t in {r[1] for r in rows}))],
+    ),
+    dict(
+        id=22, ledger="Q633", concept="W2", tier="6 - Window functions",
+        title="Running order for the day",
+        prompt=(
+            "Every service scheduled on 2025-04-07, cancelled or not,"
+            " numbered in departure order from 1. Two pairs depart at the"
+            " same minute; number those by service_id, so the numbers run"
+            " 1 to 24 with no gaps or repeats.\n\n"
+            "Return: position, service_id, depart_time"
+        ),
+        solution=("SELECT ROW_NUMBER() OVER (ORDER BY depart_time, service_id),"
+                  " service_id, depart_time FROM services"
+                  " WHERE run_date = '2025-04-07'"),
+        trap_sql=("SELECT RANK() OVER (ORDER BY depart_time),"
+                  " service_id, depart_time FROM services"
+                  " WHERE run_date = '2025-04-07'"),
+        note="ROW_NUMBER never repeats; RANK repeats on a tie and then"
+             " skips, so the trap numbers two services 5 and none 6. Which"
+             " function is right depends on what the number is FOR: a"
+             " running order wants every slot filled, a league table wants"
+             " ties shared. The tiebreak in the ORDER BY is what makes"
+             " ROW_NUMBER's answer reproducible.",
+        claims=[("positions 1 to 24 exactly once each",
+                 lambda rows, c: sorted(r[0] for r in rows)
+                 == list(range(1, 25)))],
     ),
     # ================================================ 7 Changing the data
     # Writable questions. The editor's script runs in a sandbox copy of the
@@ -679,348 +689,331 @@ EXERCISES = [
     # reference. driver_sql, where present, is run by the question after the
     # script -- to fire a trigger, or to be refused by one.
     dict(
-        id=23, ledger="Q604", concept="DML", tier="7 - Changing the data",
+        id=23, ledger="Q634", concept="DML", tier="7 - Changing the data",
         kind="script",
-        title="Footfall for stations nobody calls at",
+        title="Scrap a unit that has worked",
         prompt=(
-            "Some stations are on no line's route, yet they have footfall"
-            " rows. Delete the footfall rows of every station that no service"
-            " has ever called at. 21 rows go, for 7 stations.\n\n"
-            "One DELETE, with a subquery that finds the stations.\n\n"
-            "Checked: how many footfall rows remain, and for how many"
-            " stations"
+            "Unit 12 is being scrapped. Delete it from `rolling_stock` --"
+            " but it has hundreds of rows in `service_units`, and with"
+            " foreign keys on, a referenced row cannot go. Remove those"
+            " first, then the unit.\n\n"
+            "Add RETURNING unit_id, model to the second DELETE so the results"
+            " pane shows what went.\n\n"
+            "Checked: how many units remain, and how many service_units rows"
+            " still name unit 12"
         ),
-        solution=("DELETE FROM station_footfall\n"
-                  "WHERE station_id NOT IN (SELECT station_id FROM stops);"),
-        trap_sql=("DELETE FROM station_footfall\n"
-                  "WHERE station_id NOT IN\n"
-                  "      (SELECT station_id FROM stops WHERE stop_seq = 1);"),
-        probe_sql=("SELECT COUNT(*), COUNT(DISTINCT station_id)"
-                   " FROM station_footfall"),
-        note="A DELETE takes the same WHERE a SELECT would, so write the"
-             " SELECT first and look at what it returns -- the trap's"
-             " subquery finds stations no service STARTS at, which is nearly"
-             " all of them, and 162 rows go. NOT IN is safe here because"
-             " stops.station_id is NOT NULL; against a column that allows"
-             " NULL it would delete nothing, silently, for the reason"
-             " question 17 gives.",
-        claims=[("three rows per remaining station, all of them called at",
-                 lambda rows, c: rows[0][0] == 3 * rows[0][1]
-                 and rows[0][1] == c.execute(
-                     "SELECT COUNT(DISTINCT station_id) FROM stops"
-                 ).fetchone()[0])],
+        solution=("DELETE FROM service_units WHERE unit_id = 12;\n"
+                  "DELETE FROM rolling_stock WHERE unit_id = 12\n"
+                  "RETURNING unit_id, model;"),
+        trap_sql=("DELETE FROM rolling_stock WHERE unit_id = 12\n"
+                  "RETURNING unit_id, model;\n"
+                  "DELETE FROM service_units WHERE unit_id = 12;"),
+        probe_sql=("SELECT (SELECT COUNT(*) FROM rolling_stock),"
+                   " (SELECT COUNT(*) FROM service_units WHERE unit_id = 12)"),
+        note="Children before parents. With PRAGMA foreign_keys=ON the"
+             " trap's first statement fails -- FOREIGN KEY constraint"
+             " failed -- and the script stops there. SQLite ships with"
+             " foreign keys OFF, in which case the same DELETE succeeds and"
+             " leaves orphaned rows, which is worse. RETURNING (3.35+)"
+             " makes a DELETE, UPDATE or INSERT hand back rows, so the"
+             " results pane shows the unit that went; it changes nothing"
+             " about what the statement does.",
+        claims=[("one unit fewer, and nothing left pointing at it",
+                 lambda rows, c: rows == [(49, 0)])],
     ),
     dict(
-        id=24, ledger="Q605", concept="DML", tier="7 - Changing the data",
+        id=24, ledger="Q635", concept="DML", tier="7 - Changing the data",
         kind="script",
-        title="Fill in the unquantified delays",
+        title="Borrow a delay from the timetable",
         prompt=(
-            "174 incidents have no delay_minutes. Fill each one in with the"
-            " average delay of the quantified incidents of the SAME kind,"
-            " rounded to a whole minute.\n\n"
-            "One UPDATE, with a subquery that depends on the row being"
-            " updated.\n\n"
-            "Checked: total delay minutes and how many incidents are"
-            " quantified, per kind"
+            "163 incidents have no delay_minutes. For each, use the worst"
+            " lateness recorded at any stop of its service -- actual arrival"
+            " minus scheduled, in whole minutes -- as the delay. Incidents"
+            " that already have a delay keep it.\n\n"
+            "One UPDATE ... FROM, with the per-service worst lateness as a"
+            " grouped subquery in the FROM.\n\n"
+            "Checked: incidents, how many are quantified, the delay total,"
+            " and how many delays are under ten minutes"
         ),
         solution=("UPDATE incidents\n"
-                  "SET delay_minutes = (SELECT ROUND(AVG(i2.delay_minutes))\n"
-                  "                     FROM incidents i2\n"
-                  "                     WHERE i2.kind = incidents.kind)\n"
-                  "WHERE delay_minutes IS NULL;"),
+                  "SET delay_minutes = x.worst\n"
+                  "FROM (SELECT service_id,\n"
+                  "             MAX((strftime('%s', actual_arrive)"
+                  " - strftime('%s', sched_arrive)) / 60) AS worst\n"
+                  "      FROM stops GROUP BY service_id) AS x\n"
+                  "WHERE x.service_id = incidents.service_id\n"
+                  "  AND incidents.delay_minutes IS NULL;"),
         trap_sql=("UPDATE incidents\n"
-                  "SET delay_minutes = (SELECT ROUND(AVG(delay_minutes))\n"
-                  "                     FROM incidents)\n"
-                  "WHERE delay_minutes IS NULL;"),
-        probe_sql=("SELECT kind, SUM(delay_minutes), COUNT(delay_minutes)"
-                   " FROM incidents GROUP BY 1 ORDER BY 1"),
-        note="A correlated subquery in SET: the outer table is named without"
-             " an alias, so `incidents.kind` inside refers to the row being"
-             " updated. AVG skips NULLs, so the unquantified rows do not"
-             " drag the average down. The trap fills every kind with one"
-             " network-wide figure -- off by a minute or two per row, a"
-             " hundred rows at a time. UPDATE ... FROM a grouped subquery"
-             " says the same thing with the read done first; both give the"
-             " same rows here.",
-        claims=[("every kind fully quantified",
-                 lambda rows, c: len(rows) == 5 and all(
-                     r[2] == c.execute("SELECT COUNT(*) FROM incidents"
-                                       " WHERE kind = ?", (r[0],)).fetchone()[0]
-                     for r in rows))],
+                  "SET delay_minutes = x.worst\n"
+                  "FROM (SELECT service_id,\n"
+                  "             MAX((strftime('%s', actual_arrive)"
+                  " - strftime('%s', sched_arrive)) / 60) AS worst\n"
+                  "      FROM stops GROUP BY service_id) AS x\n"
+                  "WHERE x.service_id = incidents.service_id;"),
+        probe_sql=("SELECT COUNT(*), COUNT(delay_minutes), SUM(delay_minutes),"
+                   " SUM(delay_minutes < 10) FROM incidents"),
+        note="UPDATE ... FROM (3.33+) joins the target to another table or"
+             " subquery and takes the new value from the join -- SQLite's"
+             " form of the T-SQL UPDATE ... FROM and the Postgres one. The"
+             " subquery is grouped to one row per service, so each"
+             " incident meets exactly one match; the trap drops the IS NULL"
+             " guard and overwrites all 971 delays with single-digit"
+             " numbers. 'Rows changed: 971' against 163 is the tell.",
+        claims=[("every incident quantified, and only the blanks filled",
+                 lambda rows, c: rows[0][1] == rows[0][0]
+                 and rows[0][2] > 38000)],
     ),
     dict(
-        id=25, ledger="Q606", concept="INS", tier="7 - Changing the data",
+        id=25, ledger="Q636", concept="INS", tier="7 - Changing the data",
         kind="script",
-        title="Next year's budget",
+        title="A summary table, built from a CTE",
         prompt=(
-            "Give every station a 2026 footfall row in which each quarter is"
-            " its 2025 figure up 10%, rounded to a whole number. Sixty new"
-            " rows from one INSERT ... SELECT.\n\n"
-            "The quarter columns are INTEGER. What you insert should be"
-            " stored as integers, not as 25801.6.\n\n"
-            "Checked: per year, the rows, the total footfall, and how many"
-            " q1 values are stored as integers"
+            "Create `line_summary (line_id INTEGER PRIMARY KEY, services,"
+            " tickets, revenue_pence)`, all NOT NULL, and fill it: per line,"
+            " how many services it scheduled, how many tickets it sold and"
+            " the revenue. Every line has all three.\n\n"
+            "Use a WITH clause in front of the INSERT to compute the rows,"
+            " and mind the grain: services with no tickets still count as"
+            " services.\n\n"
+            "Checked: SELECT * FROM line_summary"
         ),
-        solution=("INSERT INTO station_footfall (station_id, year, q1, q2, q3, q4)\n"
-                  "SELECT station_id, 2026, ROUND(q1 * 1.1), ROUND(q2 * 1.1),\n"
-                  "       ROUND(q3 * 1.1), ROUND(q4 * 1.1)\n"
-                  "FROM station_footfall\n"
-                  "WHERE year = 2025;"),
-        trap_sql=("INSERT INTO station_footfall (station_id, year, q1, q2, q3, q4)\n"
-                  "SELECT station_id, 2026, q1 * 1.1, q2 * 1.1, q3 * 1.1, q4 * 1.1\n"
-                  "FROM station_footfall\n"
-                  "WHERE year = 2025;"),
-        probe_sql=("SELECT year, COUNT(*), SUM(q1 + q2 + q3 + q4),"
-                   " SUM(typeof(q1) = 'integer') FROM station_footfall"
-                   " GROUP BY 1 ORDER BY 1"),
-        note="INSERT ... SELECT copies rows through a query, and the query"
-             " may compute anything. The twist is type AFFINITY: an INTEGER"
-             " column accepts a REAL, and stores it as a REAL unless the"
-             " value happens to be whole. ROUND returns 25802.0, which is"
-             " whole, so it lands as the integer 25802; the trap's 25801.6"
-             " stays a REAL in an 'integer' column, and typeof() says so."
-             " SQLite will not refuse it -- that is the lesson.",
-        claims=[("sixty 2026 rows, all integers, ten percent up",
-                 lambda rows, c: [r[0] for r in rows] == [2023, 2024, 2025, 2026]
-                 and rows[3][1] == 60 and rows[3][3] == 60
-                 and abs(rows[3][2] - 1.1 * rows[2][2]) < 60)],
+        solution=("CREATE TABLE line_summary (line_id INTEGER PRIMARY KEY,"
+                  " services INTEGER NOT NULL,\n"
+                  "                           tickets INTEGER NOT NULL,"
+                  " revenue_pence INTEGER NOT NULL);\n"
+                  "WITH totals AS (\n"
+                  "  SELECT s.line_id, COUNT(DISTINCT s.service_id) AS services,\n"
+                  "         COUNT(t.ticket_id) AS tickets,"
+                  " COALESCE(SUM(t.price_pence), 0) AS revenue_pence\n"
+                  "  FROM services s LEFT JOIN tickets t ON t.service_id = s.service_id\n"
+                  "  GROUP BY s.line_id)\n"
+                  "INSERT INTO line_summary SELECT * FROM totals;"),
+        trap_sql=("CREATE TABLE line_summary (line_id INTEGER PRIMARY KEY,"
+                  " services INTEGER NOT NULL,\n"
+                  "                           tickets INTEGER NOT NULL,"
+                  " revenue_pence INTEGER NOT NULL);\n"
+                  "WITH totals AS (\n"
+                  "  SELECT s.line_id, COUNT(s.service_id) AS services,\n"
+                  "         COUNT(t.ticket_id) AS tickets,"
+                  " COALESCE(SUM(t.price_pence), 0) AS revenue_pence\n"
+                  "  FROM services s LEFT JOIN tickets t ON t.service_id = s.service_id\n"
+                  "  GROUP BY s.line_id)\n"
+                  "INSERT INTO line_summary SELECT * FROM totals;"),
+        probe_sql="SELECT * FROM line_summary ORDER BY 1",
+        note="A CTE can front an INSERT, UPDATE or DELETE, not only a"
+             " SELECT; the INSERT then reads it like a table. The join is"
+             " one row per TICKET, so COUNT(s.service_id) counts a service"
+             " once per ticket -- the trap reports six thousand services"
+             " per line for nineteen hundred. COUNT(DISTINCT) repairs it,"
+             " and the LEFT JOIN keeps ticketless services in that count."
+             " Unlike CREATE TABLE AS, this way the table has a primary"
+             " key and NOT NULLs.",
+        claims=[("six lines, services summing to the timetable",
+                 lambda rows, c: len(rows) == 6
+                 and sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM services").fetchone()[0]
+                 and sum(r[2] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM tickets").fetchone()[0])],
     ),
     dict(
-        id=26, ledger="Q607", concept="TXN", tier="7 - Changing the data",
+        id=26, ledger="Q637", concept="TXN", tier="7 - Changing the data",
         kind="script",
-        title="Two savepoints, one raise",
+        title="Commit one, roll back the other",
         prompt=(
-            "In one transaction: give every guard a 2% raise; set a"
-            " savepoint; give every dispatcher 2%; set a second savepoint;"
-            " give every manager 2%; RELEASE the second savepoint; roll back"
-            " to the first; commit.\n\n"
-            "Whole pounds: CAST(ROUND(salary * 1.02) AS INTEGER). Only the"
-            " guards' raise should survive -- releasing a savepoint does not"
-            " commit what came after it.\n\n"
+            "Two separate transactions. In the first, give every driver a 5%"
+            " raise and COMMIT. In the second, give every guard 5% -- then"
+            " think better of it and ROLLBACK.\n\n"
+            "Whole pounds: CAST(ROUND(salary * 1.05) AS INTEGER). Each"
+            " transaction needs its own BEGIN; there is no such thing as"
+            " rolling back a statement that was never inside one.\n\n"
             "Checked: total salary by role"
         ),
         solution=("BEGIN;\n"
-                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.02) AS INTEGER)"
+                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.05) AS INTEGER)"
+                  " WHERE role = 'driver';\n"
+                  "COMMIT;\n"
+                  "BEGIN;\n"
+                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.05) AS INTEGER)"
                   " WHERE role = 'guard';\n"
-                  "SAVEPOINT office;\n"
-                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.02) AS INTEGER)"
-                  " WHERE role = 'dispatcher';\n"
-                  "SAVEPOINT top;\n"
-                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.02) AS INTEGER)"
-                  " WHERE role = 'manager';\n"
-                  "RELEASE top;\n"
-                  "ROLLBACK TO office;\n"
-                  "COMMIT;"),
+                  "ROLLBACK;"),
         trap_sql=("BEGIN;\n"
-                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.02) AS INTEGER)"
+                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.05) AS INTEGER)"
+                  " WHERE role = 'driver';\n"
+                  "COMMIT;\n"
+                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.05) AS INTEGER)"
                   " WHERE role = 'guard';\n"
-                  "SAVEPOINT office;\n"
-                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.02) AS INTEGER)"
-                  " WHERE role = 'dispatcher';\n"
-                  "SAVEPOINT top;\n"
-                  "UPDATE staff SET salary = CAST(ROUND(salary * 1.02) AS INTEGER)"
-                  " WHERE role = 'manager';\n"
-                  "RELEASE top;\n"
-                  "RELEASE office;\n"
-                  "COMMIT;"),
+                  "ROLLBACK;"),
         probe_sql="SELECT role, SUM(salary) FROM staff GROUP BY 1",
-        note="Savepoints nest. RELEASE top merges the managers' raise into"
-             " the enclosing savepoint -- it does not commit anything -- so"
-             " ROLLBACK TO office then undoes the managers' raise along with"
-             " the dispatchers'. The trap releases both, which keeps all"
-             " three; only COMMIT makes anything permanent. This is the"
-             " point where T-SQL's SAVE TRANSACTION differs least and"
-             " confuses most: there, too, a savepoint is a mark, not a"
-             " commit.",
-        claims=[("guards up two percent, the other roles untouched",
-                 lambda rows, c: dict(rows) == {'guard': 494428,
-                                                'dispatcher': 767816,
-                                                'driver': 556221,
-                                                'manager': 274668})],
+        note="COMMIT ends the transaction. Anything after it runs in"
+             " autocommit -- each statement its own transaction, committed"
+             " the instant it finishes -- so the trap's guards' raise is"
+             " permanent before the ROLLBACK is reached, and the ROLLBACK"
+             " itself fails: 'no transaction is active'. A second BEGIN is"
+             " what makes the second change undoable. T-SQL behaves the"
+             " same way; only the keyword differs.",
+        claims=[("drivers up five percent, guards unchanged",
+                 lambda rows, c: dict(rows)['driver'] == 466776
+                 and dict(rows)['guard'] == 732540)],
     ),
     dict(
-        id=27, ledger="Q608", concept="TRG", tier="7 - Changing the data",
+        id=27, ledger="Q638", concept="TRG", tier="7 - Changing the data",
         kind="script",
-        title="A view you can insert through",
+        title="A count that keeps itself right",
         prompt=(
-            "Create a view `open_returns` over `tickets` -- ticket_id,"
-            " service_id, from_station, class, price_pence, sold_at -- for"
-            " tickets with no destination. Then make it writable: a trigger"
-            " so that an INSERT into the view lands in `tickets` with"
-            " to_station NULL.\n\n"
-            "After your script, the question inserts one ticket through the"
-            " view: service 1, from station 25, 'standard', 1200 pence, sold"
-            " 2025-01-01.\n\n"
-            "Checked: how many open returns there are, and the newest"
-            " ticket's destination, price and class"
+            "Create `line_cancellations (line_id INTEGER PRIMARY KEY,"
+            " cancelled INTEGER NOT NULL)` filled with each line's current"
+            " cancellation count, then a trigger that adds one whenever a"
+            " service's cancelled flag goes from 0 to 1 -- and does nothing"
+            " when a service already cancelled is 'cancelled' again.\n\n"
+            "After your script, the question cancels services 5 and 6 (line"
+            " 2), then re-cancels service 79 (line 3), which already was.\n\n"
+            "Checked: the table, in line order"
         ),
-        solution=("CREATE VIEW open_returns AS\n"
-                  "SELECT ticket_id, service_id, from_station, class, price_pence, sold_at\n"
-                  "FROM tickets\n"
-                  "WHERE to_station IS NULL;\n"
-                  "CREATE TRIGGER open_returns_insert\n"
-                  "INSTEAD OF INSERT ON open_returns\n"
+        solution=("CREATE TABLE line_cancellations (line_id INTEGER PRIMARY KEY,"
+                  " cancelled INTEGER NOT NULL);\n"
+                  "INSERT INTO line_cancellations\n"
+                  "SELECT line_id, SUM(cancelled) FROM services GROUP BY line_id;\n"
+                  "CREATE TRIGGER count_cancellation\n"
+                  "AFTER UPDATE OF cancelled ON services\n"
+                  "WHEN NEW.cancelled = 1 AND OLD.cancelled = 0\n"
                   "BEGIN\n"
-                  "  INSERT INTO tickets (service_id, from_station, to_station,"
-                  " class, price_pence, sold_at)\n"
-                  "  VALUES (NEW.service_id, NEW.from_station, NULL,"
-                  " NEW.class, NEW.price_pence, NEW.sold_at);\n"
+                  "  UPDATE line_cancellations SET cancelled = cancelled + 1\n"
+                  "  WHERE line_id = NEW.line_id;\n"
                   "END;"),
-        trap_sql=("CREATE VIEW open_returns AS\n"
-                  "SELECT ticket_id, service_id, from_station, class, price_pence, sold_at\n"
-                  "FROM tickets\n"
-                  "WHERE to_station IS NULL;\n"
-                  "CREATE TRIGGER open_returns_insert\n"
-                  "BEFORE INSERT ON open_returns\n"
+        trap_sql=("CREATE TABLE line_cancellations (line_id INTEGER PRIMARY KEY,"
+                  " cancelled INTEGER NOT NULL);\n"
+                  "INSERT INTO line_cancellations\n"
+                  "SELECT line_id, SUM(cancelled) FROM services GROUP BY line_id;\n"
+                  "CREATE TRIGGER count_cancellation\n"
+                  "AFTER UPDATE OF cancelled ON services\n"
                   "BEGIN\n"
-                  "  INSERT INTO tickets (service_id, from_station, to_station,"
-                  " class, price_pence, sold_at)\n"
-                  "  VALUES (NEW.service_id, NEW.from_station, NULL,"
-                  " NEW.class, NEW.price_pence, NEW.sold_at);\n"
+                  "  UPDATE line_cancellations SET cancelled = cancelled + 1\n"
+                  "  WHERE line_id = NEW.line_id;\n"
                   "END;"),
-        driver_sql=("INSERT INTO open_returns (service_id, from_station, class,"
-                    " price_pence, sold_at)"
-                    " VALUES (1, 25, 'standard', 1200, '2025-01-01');"),
-        probe_sql=("SELECT (SELECT COUNT(*) FROM open_returns), to_station,"
-                   " price_pence, class FROM tickets"
-                   " ORDER BY ticket_id DESC LIMIT 1"),
-        note="A view has no rows of its own, so an INSERT into one has"
-             " nowhere to go -- unless an INSTEAD OF trigger says where."
-             " That is the only kind of trigger a view accepts: BEFORE and"
-             " AFTER are for tables, and the trap is refused at CREATE"
-             " TRIGGER. NEW holds the row as it was written to the view, so"
-             " the trigger reshapes it for the base table; the column the"
-             " view hides is supplied here. This is how an updatable view is"
-             " built in SQLite, and in Postgres.",
-        claims=[("one more open return, with no destination",
-                 lambda rows, c: rows[0][1] is None and rows[0][2] == 1200
-                 and rows[0][0] == c.execute(
-                     "SELECT COUNT(*) FROM tickets WHERE to_station IS NULL"
+        driver_sql=("UPDATE services SET cancelled = 1 WHERE service_id IN (5, 6);\n"
+                    "UPDATE services SET cancelled = 1 WHERE service_id = 79;"),
+        probe_sql="SELECT line_id, cancelled FROM line_cancellations ORDER BY 1",
+        note="A trigger maintaining a summary -- the pattern behind"
+             " counters, balances and denormalised totals. The WHEN clause"
+             " is the whole difficulty: UPDATE OF cancelled fires on any"
+             " write to the column, including 1 -> 1, and only OLD versus"
+             " NEW can tell a real cancellation from a repeat. The trap"
+             " counts line 3 up for a service that was already cancelled."
+             " The trigger runs once per row, so the two-service UPDATE"
+             " adds two.",
+        claims=[("line 2 up by two, line 3 unchanged",
+                 lambda rows, c: dict(rows)[2] == 54 and dict(rows)[3] == 50)],
+    ),
+    dict(
+        id=28, ledger="Q639", concept="TRG", tier="7 - Changing the data",
+        kind="script",
+        title="No pay cuts",
+        prompt=(
+            "Write a trigger that refuses any UPDATE that would LOWER a"
+            " member of staff's salary. Raises go through; so does setting"
+            " a salary to the value it already has.\n\n"
+            "After your script, the question runs three updates: staff 2 to"
+            " 50000 (a raise), staff 3 to 30000 (a cut), staff 4 to its"
+            " current 40713. Exactly one should be refused.\n\n"
+            "Checked: the three salaries"
+        ),
+        solution=("CREATE TRIGGER no_pay_cuts\n"
+                  "BEFORE UPDATE OF salary ON staff\n"
+                  "WHEN NEW.salary < OLD.salary\n"
+                  "BEGIN\n"
+                  "  SELECT RAISE(ABORT, 'salaries may not be cut');\n"
+                  "END;"),
+        trap_sql=("CREATE TRIGGER no_pay_cuts\n"
+                  "BEFORE UPDATE OF salary ON staff\n"
+                  "WHEN NEW.salary > OLD.salary\n"
+                  "BEGIN\n"
+                  "  SELECT RAISE(ABORT, 'salaries may not be cut');\n"
+                  "END;"),
+        driver_sql=("UPDATE staff SET salary = 50000 WHERE staff_id = 2;\n"
+                    "UPDATE staff SET salary = 30000 WHERE staff_id = 3;\n"
+                    "UPDATE staff SET salary = 40713 WHERE staff_id = 4;"),
+        probe_sql=("SELECT staff_id, salary FROM staff"
+                   " WHERE staff_id IN (2, 3, 4) ORDER BY 1"),
+        note="An UPDATE trigger has both rows: OLD is the salary now, NEW"
+             " the one being written, and the rule is a comparison of the"
+             " two. The trap has them the wrong way round and refuses the"
+             " raise while waving the cut through -- a trigger that"
+             " enforces the opposite of its policy, with a message that"
+             " says otherwise. The unchanged salary passes either way,"
+             " because neither < nor > holds when they are equal.",
+        claims=[("the raise landed, the cut did not",
+                 lambda rows, c: rows == [(2, 50000), (3, 39212), (4, 40713)])],
+    ),
+    dict(
+        id=29, ledger="Q640", concept="VIEW", tier="7 - Changing the data",
+        kind="script",
+        title="The footfall table, long",
+        prompt=(
+            "Create a view `footfall_long (station_id, year, quarter,"
+            " footfall)` that presents station_footfall one row per quarter,"
+            " with quarter as the number 1 to 4. 720 rows when selected.\n\n"
+            "Checked: COUNT(*), SUM(footfall) and COUNT(DISTINCT quarter)"
+            " over the view"
+        ),
+        solution=("CREATE VIEW footfall_long AS\n"
+                  "SELECT station_id, year, 1 AS quarter, q1 AS footfall"
+                  " FROM station_footfall\n"
+                  "UNION ALL SELECT station_id, year, 2, q2 FROM station_footfall\n"
+                  "UNION ALL SELECT station_id, year, 3, q3 FROM station_footfall\n"
+                  "UNION ALL SELECT station_id, year, 4, q4 FROM station_footfall;"),
+        trap_sql=("CREATE VIEW footfall_long AS\n"
+                  "SELECT station_id, year, 1 AS quarter, q1 AS footfall"
+                  " FROM station_footfall\n"
+                  "UNION ALL SELECT station_id, year, 2, q2 FROM station_footfall\n"
+                  "UNION ALL SELECT station_id, year, 3, q2 FROM station_footfall\n"
+                  "UNION ALL SELECT station_id, year, 4, q4 FROM station_footfall;"),
+        probe_sql=("SELECT COUNT(*), SUM(footfall), COUNT(DISTINCT quarter)"
+                   " FROM footfall_long"),
+        note="An unpivot saved as a view: every quarterly question from"
+             " here on is a plain GROUP BY over it instead of four UNION"
+             " branches. A compound SELECT takes its column names from"
+             " the FIRST branch, so only that one needs the aliases. The"
+             " trap is the copy-and-paste slip again -- the q3 branch"
+             " reads q2 -- and a view hides it more thoroughly than a"
+             " query does, because nobody re-reads a view.",
+        claims=[("720 rows, four quarters, the table's total",
+                 lambda rows, c: rows[0][0] == 720 and rows[0][2] == 4
+                 and rows[0][1] == c.execute(
+                     "SELECT SUM(q1 + q2 + q3 + q4) FROM station_footfall"
                  ).fetchone()[0])],
     ),
     dict(
-        id=28, ledger="Q609", concept="TRG", tier="7 - Changing the data",
+        id=30, ledger="Q641", concept="R1", tier="7 - Changing the data",
         kind="script",
-        title="A recycle bin for incidents",
+        title="A calendar table for July",
         prompt=(
-            "Create a table `incidents_bin` with the same five columns as"
-            " `incidents`, and a trigger so that every incident deleted from"
-            " `incidents` is copied into it first.\n\n"
-            "After your script, the question deletes the three incidents"
-            " reported on 2025-01-02.\n\n"
-            "Checked: that none of those three remain, and what the bin"
-            " holds"
+            "Create a table `days (day TEXT PRIMARY KEY)` and fill it with"
+            " every date in July 2025, generated -- not typed -- by a"
+            " recursive CTE feeding an INSERT. 31 rows.\n\n"
+            "Checked: how many rows, the first and the last"
         ),
-        solution=("CREATE TABLE incidents_bin (incident_id INTEGER, service_id INTEGER,\n"
-                  "                            reported_at TEXT, kind TEXT,"
-                  " delay_minutes INTEGER);\n"
-                  "CREATE TRIGGER bin_incident\n"
-                  "AFTER DELETE ON incidents\n"
-                  "BEGIN\n"
-                  "  INSERT INTO incidents_bin\n"
-                  "  VALUES (OLD.incident_id, OLD.service_id, OLD.reported_at,"
-                  " OLD.kind, OLD.delay_minutes);\n"
-                  "END;"),
-        trap_sql=("CREATE TABLE incidents_bin (incident_id INTEGER, service_id INTEGER,\n"
-                  "                            reported_at TEXT, kind TEXT,"
-                  " delay_minutes INTEGER);\n"
-                  "CREATE TRIGGER bin_incident\n"
-                  "AFTER UPDATE ON incidents\n"
-                  "BEGIN\n"
-                  "  INSERT INTO incidents_bin\n"
-                  "  VALUES (OLD.incident_id, OLD.service_id, OLD.reported_at,"
-                  " OLD.kind, OLD.delay_minutes);\n"
-                  "END;"),
-        driver_sql="DELETE FROM incidents WHERE reported_at = '2025-01-02';",
-        probe_sql=("SELECT (SELECT COUNT(*) FROM incidents"
-                   " WHERE reported_at = '2025-01-02'), incident_id, kind,"
-                   " delay_minutes FROM incidents_bin ORDER BY incident_id"),
-        note="A DELETE trigger sees only OLD -- there is no NEW row, and"
-             " naming one is an error. The trigger fires once per deleted"
-             " row, so a DELETE of three rows makes three inserts. The trap"
-             " watches the wrong event and never fires, so the bin stays"
-             " empty and the rows are simply gone. A NULL delay_minutes"
-             " copies across as NULL; the bin's columns allow it because"
-             " nothing said otherwise.",
-        claims=[("three incidents binned, none left in the table",
-                 lambda rows, c: len(rows) == 3
-                 and all(r[0] == 0 for r in rows))],
-    ),
-    dict(
-        id=29, ledger="Q610", concept="VIEW", tier="7 - Changing the data",
-        kind="script",
-        title="A view of lateness",
-        prompt=(
-            "Create a view `late_stops (service_id, stop_seq, station_id,"
-            " late_minutes)`: each recorded arrival's lateness in whole"
-            " minutes, actual minus scheduled.\n\n"
-            "Stops with no recorded arrival must not appear in it at all --"
-            " a NULL lateness is not a lateness. Just under five thousand"
-            " stops are like that.\n\n"
-            "Checked: COUNT(*), SUM, MIN and MAX of late_minutes over the"
-            " view"
-        ),
-        solution=("CREATE VIEW late_stops AS\n"
-                  "SELECT service_id, stop_seq, station_id,\n"
-                  "       (strftime('%s', actual_arrive) - strftime('%s', sched_arrive))"
-                  " / 60 AS late_minutes\n"
-                  "FROM stops\n"
-                  "WHERE actual_arrive IS NOT NULL;"),
-        trap_sql=("CREATE VIEW late_stops AS\n"
-                  "SELECT service_id, stop_seq, station_id,\n"
-                  "       (strftime('%s', actual_arrive) - strftime('%s', sched_arrive))"
-                  " / 60 AS late_minutes\n"
-                  "FROM stops;"),
-        probe_sql=("SELECT COUNT(*), SUM(late_minutes), MIN(late_minutes),"
-                   " MAX(late_minutes) FROM late_stops"),
-        note="A view with a computed column: whoever selects from it gets"
-             " the arithmetic done. The trap's SUM, MIN and MAX are"
-             " identical -- aggregates skip NULL -- and only COUNT(*) gives"
-             " it away, by counting 4,725 rows of NULL lateness as rows."
-             " The filter belongs in the view, because every user of it"
-             " would otherwise have to remember it. Name the column with AS"
-             " or the view's callers get a formula for a heading.",
-        claims=[("one row per recorded arrival, lateness a few minutes either way",
-                 lambda rows, c: rows[0][0] == c.execute(
-                     "SELECT COUNT(*) FROM stops WHERE actual_arrive"
-                     " IS NOT NULL").fetchone()[0]
-                 and -5 < rows[0][2] < 0 < rows[0][3] < 15)],
-    ),
-    dict(
-        id=30, ledger="Q611", concept="ALT", tier="7 - Changing the data",
-        kind="script",
-        title="Reshape the fleet table",
-        prompt=(
-            "Three ALTER TABLE statements on `rolling_stock`: rename `seats`"
-            " to `seat_count`; add `in_service INTEGER NOT NULL`, which must"
-            " be 1 for every existing unit; drop `refurbished_year`.\n\n"
-            "A NOT NULL column added to a table that already has rows needs"
-            " something to put in them.\n\n"
-            "Checked: unit_id, seat_count and in_service for units 1 to 3,"
-            " and how many columns the table has"
-        ),
-        solution=("ALTER TABLE rolling_stock RENAME COLUMN seats TO seat_count;\n"
-                  "ALTER TABLE rolling_stock ADD COLUMN in_service INTEGER"
-                  " NOT NULL DEFAULT 1;\n"
-                  "ALTER TABLE rolling_stock DROP COLUMN refurbished_year;"),
-        trap_sql=("ALTER TABLE rolling_stock RENAME COLUMN seats TO seat_count;\n"
-                  "ALTER TABLE rolling_stock ADD COLUMN in_service INTEGER"
-                  " NOT NULL;\n"
-                  "ALTER TABLE rolling_stock DROP COLUMN refurbished_year;"),
-        probe_sql=("SELECT unit_id, seat_count, in_service,"
-                   " (SELECT COUNT(*) FROM pragma_table_info('rolling_stock'))"
-                   " FROM rolling_stock WHERE unit_id <= 3"),
-        note="SQLite's ALTER TABLE does four things -- rename table, rename"
-             " column, add column, drop column -- and nothing else; changing"
-             " a type or a constraint means rebuilding the table. ADD COLUMN"
-             " with NOT NULL is refused unless there is a non-NULL DEFAULT,"
-             " because the existing rows would violate it at once; the trap"
-             " stops at the second statement, with the rename already done."
-             " DROP COLUMN (3.35+) refuses columns an index, constraint or"
-             " generated column depends on -- none here.",
-        claims=[("three units, all in service, five columns",
-                 lambda rows, c: rows == [(1, 300, 1, 5), (2, 200, 1, 5),
-                                          (3, 200, 1, 5)])],
+        solution=("CREATE TABLE days (day TEXT PRIMARY KEY);\n"
+                  "WITH RECURSIVE d(day) AS (\n"
+                  "  SELECT '2025-07-01'\n"
+                  "  UNION ALL\n"
+                  "  SELECT date(day, '+1 day') FROM d WHERE day < '2025-07-31')\n"
+                  "INSERT INTO days SELECT day FROM d;"),
+        trap_sql=("CREATE TABLE days (day TEXT PRIMARY KEY);\n"
+                  "WITH RECURSIVE d(day) AS (\n"
+                  "  SELECT '2025-07-01'\n"
+                  "  UNION ALL\n"
+                  "  SELECT date(day, '+1 day') FROM d WHERE day < '2025-07-30')\n"
+                  "INSERT INTO days SELECT day FROM d;"),
+        probe_sql="SELECT COUNT(*), MIN(day), MAX(day) FROM days",
+        note="A date spine, made permanent. The recursive step produces the"
+             " NEXT day from the current one, so the stop condition is on"
+             " the day being read, not the day being produced: WHERE day <"
+             " '2025-07-31' still emits the 31st, and the trap's 30th stops"
+             " one short. The WITH goes before the INSERT, exactly as it"
+             " would before a SELECT. Left-join anything to this table and"
+             " quiet days appear as zeros instead of vanishing.",
+        claims=[("thirty-one days, the first and last of July",
+                 lambda rows, c: rows == [(31, '2025-07-01', '2025-07-31')])],
     ),
 ]
 

@@ -2,9 +2,9 @@
 
 Thirty questions on the railway schema, re-seeded so no answer from the previous
 set carries over. Twenty-two are SELECT questions across the usual tiers, at the
-same level as the last set. **The last eight are writable** -- graded on the
-state of the database after your script runs, not on what a query returns --
-and each takes a construct the previous set did not.
+same level as the last two sets. **The last eight are writable** -- graded on
+the state of the database after your script runs, not on what a query returns
+-- and each takes a construct neither earlier set did.
 
 | Stage | Questions |
 |---|---|
@@ -19,8 +19,8 @@ and each takes a construct the previous set did not.
 ## The writable stage
 
 SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
-instead is triggers, views, transactions with savepoints, and DML driven by
-subqueries -- and each of questions 23 to 30 is one of those.
+instead is triggers, views, transactions, and DML driven by subqueries and CTEs
+-- and each of questions 23 to 30 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -28,374 +28,354 @@ real file. The copy **persists across Runs of the same question** -- so you can
 run an `UPDATE`, then a `SELECT`, and see what it did -- and **Reset** throws it
 away and starts again from the seeded data. Moving to another question also
 starts fresh, so no question depends on what another one wrote. If your
-script ends in a `SELECT`, the results pane shows that; otherwise it shows the
-question's *probe* query, which is what **Check answer** compares. Check always
-grades a fresh copy, so nothing you ran earlier can affect the grade. The status
-bar reports how many statements ran and how many rows changed.
+script ends in a statement that returns rows -- a `SELECT`, or a `DELETE ...
+RETURNING` -- the results pane shows that; otherwise it shows the question's
+*probe* query, which is what **Check answer** compares. Check always grades a
+fresh copy, so nothing you ran earlier can affect the grade. The status bar
+reports how many statements ran and how many rows changed; on question 24 that
+count is the difference between right and wrong.
 
 **Driver statements.** Questions 27 and 28 run statements of their own *after*
-yours -- one insert that should pass through your view's trigger, and one
-delete that your trigger should catch. A refusal is reported in the status bar
-as what it is, not as an error.
+yours -- two cancellations and a repeat that your counter must ignore, and
+three salary updates of which your trigger must refuse exactly one. A refusal
+is reported in the status bar as what it is, not as an error.
 
 | # | Construct |
 |---|---|
-| 23 | `DELETE` with a `NOT IN` subquery -- and why the subquery's column must be NOT NULL |
-| 24 | `UPDATE` with a correlated subquery in `SET` |
-| 25 | `INSERT ... SELECT`, and the type affinity that lets a REAL into an INTEGER column |
-| 26 | nested `SAVEPOINT`s -- `RELEASE` merges, it does not commit |
-| 27 | an `INSTEAD OF INSERT` trigger, the only kind a view accepts |
-| 28 | an `AFTER DELETE` trigger, where `OLD` is all there is |
-| 29 | a view with a computed column, and the filter it must carry |
-| 30 | `ALTER TABLE` -- rename, add with a default, drop -- and what it refuses |
+| 23 | `DELETE` in foreign-key order, with `RETURNING` -- children before parents |
+| 24 | `UPDATE ... FROM` a grouped subquery, and the guard that keeps it to the blanks |
+| 25 | `WITH ... INSERT` into a table with a primary key and NOT NULLs, minding the grain |
+| 26 | two transactions -- `COMMIT` ends one, and a `ROLLBACK` outside any is an error |
+| 27 | a trigger that maintains a summary count, gated by `WHEN` on `OLD` and `NEW` |
+| 28 | a `BEFORE UPDATE` trigger with `RAISE()`, where `OLD` and `NEW` must not be swapped |
+| 29 | an unpivot saved as a view, and the copy-paste slip a view hides |
+| 30 | a recursive CTE feeding an `INSERT`, and where its stop condition lands |
 
 **A trigger runs once per row.** `NEW` is the row being written, `OLD` the row
-being replaced or removed; an INSERT trigger has only `NEW`, a DELETE trigger
-only `OLD`. On a view, only `INSTEAD OF` is allowed -- the view has no rows for
-a BEFORE or AFTER to be before or after.
+being replaced or removed; an UPDATE trigger has both, and the `WHEN` clause
+compares them. `RAISE(ABORT, 'message')` is a function; a `SELECT` that
+produces a row executes it, so the `WHERE` or `WHEN` is the condition.
 
 ## Things the data does on purpose
 
-- **7 stations are on no line's route** and still have footfall rows,
-  which is what question 23 deletes.
-- **174 incidents have no quantified delay**, and question 24 fills
-  them in by kind.
-- **Every station has 2023, 2024 and 2025 footfall rows** and no 2026 row, so
-  question 25's insert collides with nothing.
-- **Service 1 ran on 2025-01-01 and first calls at station 25**, which is the
-  ticket question 27 drives through the view.
-- **Three incidents were reported on 2025-01-02**, the ones question 28
-  deletes.
-- **4,725 stops have no recorded arrival**, and question 29's view must
-  leave them out.
+- **Unit 12 has 399 rows in `service_units`**, which is why question 23
+  cannot delete it first.
+- **163 incidents have no quantified delay**, and question 24 fills
+  them from the timetable.
+- **Some services sold no tickets** -- question 25's LEFT JOIN is what keeps
+  them in the service count.
+- **Service 79 is already cancelled**, and question 27 re-cancels it to see
+  whether your counter notices.
+- **Staff 4 earns 40,713**, the salary question 28 sets it to again.
+- **Two stations opened on the same day** (question 13), and **two pairs of
+  services depart at the same minute on 2025-04-07** (questions 4 and 22), so
+  the tiebreaks are real.
 - **The timetable is not flat.** Services per day run from 6 to
   27, thinner at weekends and in winter.
-- **`price_pence` and the footfall quarters are INTEGER.** Exact until you
-  divide, and a REAL written into one stays a REAL.
 
 ## 1 - Warm-up (3)
 
-Three questions on one or two tables: an average that must not be a truncated
-division, pence into pounds, and a pair of conditions that belong in HAVING.
+Three questions on one or two tables: a decade band from integer division,
+COUNT(*) against COUNT(column), and two conditions that belong in HAVING.
 
-1. **Seats by model** (Q582)
+1. **The fleet by decade** (Q612)
 
-   One row per model of rolling stock: how many units, the seats across all of
-   them, and the average seats per unit to the nearest seat.
+   How many units were built in each decade, with their average seats to the
+   nearest seat. Label the decade by its first year: 1990, 2000, 2010.
 
-   *Return: model, units, total_seats, avg_seats*
+   *Return: decade, units, avg_seats*
 
-2. **Takings per operator, in pounds** (Q583)
+2. **Delay by line** (Q613)
 
-   One row per operator: how many tickets were sold on its services, and the
-   revenue in POUNDS to two decimals.
+   One row per line: how many incidents, how many of them have a quantified
+   delay, and the average delay of those to one decimal.
 
-   price_pence is an integer.
+   Incidents whose delay was never quantified must not pull the average down.
 
-   *Return: operator, tickets, revenue_pounds*
+   *Return: line_id, incidents, quantified, avg_delay*
 
-3. **Common, roomy models** (Q584)
+3. **Well-served towns** (Q614)
 
-   Models with at least 5 units whose average seats per unit is above 200,
-   with the unit count and that average to the nearest seat.
+   Towns with three or more stations, at least one of which is step-free, with
+   the station count and the step-free count.
 
-   Both conditions describe the model as a whole, not any one unit.
+   Both conditions describe the town.
 
-   *Return: model, units, avg_seats*
+   *Return: town, stations, step_free_stations*
 
 ## 2 - Sequences and strings (4)
 
-`stops` is keyed on (service_id, stop_seq). LAG along that sequence twice --
-once where the partition matters, once where NULL does -- a surname split, and a
-set difference between two kinds of day.
+`stops` is keyed on (service_id, stop_seq). Top-1 per service with a tiebreak, a
+word count with no split function, LEAD along a day's departures, and a UNION
+that must not double anyone.
 
-4. **The shortest leg of each service** (Q585)
+4. **Where each service lost the most time** (Q615)
 
-   For every service that ran on 2025-03-03: the fewest minutes between one
-   scheduled call and the next.
+   For every service that ran on 2025-04-07: the stop at which it was latest
+   -- actual arrival minus scheduled, in minutes -- and by how much. One row
+   per service; when two stops tie, the earlier one.
 
-   A leg belongs to one service. The gap must never be measured from the
-   previous service's last stop to this one's first.
+   Unrecorded arrivals do not count.
 
-   *Return: service_id, shortest_leg*
+   *Return: service_id, stop_seq, late_minutes*
 
-5. **Surnames on the payroll** (Q586)
+5. **Counting the words in a name** (Q616)
 
-   How many staff share each surname. Every name is exactly two words; the
-   surname is the second.
+   Every station with the length of its name in characters and in words. There
+   is no split function: count the spaces.
 
-   Most common first, ties by surname.
+   *Return: station_id, chars, words*
 
-   *Return: surname, staff*
+6. **Until the next departure** (Q617)
 
-6. **Lateness, stop by stop** (Q587)
+   Line 2's services on 2025-04-07 in departure order, each with the NEXT
+   one's departure time and the minutes until it. The last service of the day
+   has neither.
 
-   For service 311, each stop's lateness in minutes -- actual arrival minus
-   scheduled -- and how much that changed since the previous stop.
+   *Return: service_id, depart_time, next_depart, minutes_until*
 
-   A stop with no recorded arrival has NULL lateness and NULL change, and so
-   does the stop after it. The first stop's change is NULL.
+7. **Everyone with authority** (Q618)
 
-   *Return: stop_seq, late_minutes, change*
+   Staff who are managers by role OR who have someone reporting to them --
+   each person once, whichever way they qualify. Ordered by staff_id.
 
-7. **Days with trouble but no cancellations** (Q588)
+   Some managers also have reports; they must not appear twice.
 
-   Dates on which at least one incident was reported but NO service was
-   cancelled.
-
-   Incidents are dated by reported_at, cancellations by run_date. One column,
-   one row per date.
-
-   *Return: day*
+   *Return: staff_id, name*
 
 ## 3 - Unpivot and set ops (3)
 
-Twelve quarters as rows, a self-join on a derived value, and a two-column
-INTERSECT over ordered pairs.
+Twelve quarters as rows with a share of the year, a self-join counted per town,
+and INTERSECT then EXCEPT across three lines.
 
-8. **Station 5, quarter by quarter** (Q589)
+8. **Each quarter's share of its year** (Q619)
 
-   Station 5's footfall as one ROW per quarter, across every year it has a row
-   for, labelled like '2024-q3'. Twelve rows, earliest first.
+   Network-wide footfall for each quarter of each year as ROWS, with the
+   percentage of that YEAR's total it is, to two decimals. Twelve rows,
+   labelled q1 to q4.
 
-   *Return: period, footfall*
+   *Return: year, quarter, footfall, pct_of_year*
 
-9. **Opened in the same year** (Q590)
+9. **Pairs of stations in the same town** (Q620)
 
-   Pairs of stations that opened in the same calendar year, with the year.
-   Each pair once, the lower station_id first.
+   For every town with at least two stations, how many PAIRS of stations it
+   has -- a town with three stations has three pairs, one with four has six.
 
-   *Return: station_a, station_b, year*
+   *Return: town, pairs*
 
-10. **Formations both lines have used** (Q591)
+10. **On two lines, never on a third** (Q621)
 
-    Two-unit formations -- the front unit and the rear unit, in that order --
-    that have run on both line 1 and line 2.
+    Units that have worked on BOTH line 2 and line 3 but have never worked on
+    line 1.
 
-    A formation is ordered: unit 9 leading unit 8 is not the same as unit 8
-    leading unit 9. Position 1 is the front.
-
-    *Return: front_unit, rear_unit*
+    *Return: unit_id*
 
 ## 4 - Dates and times (4)
 
-A quarter built from the month, journey times across two tables, ages in
-completed years, and a modifier chain to the last week of the month.
+A month key that survives a year boundary, text against integer in a CASE,
+julianday for days between dates, and a modifier chain to the first full week.
 
-11. **Incidents by quarter** (Q592)
+11. **Cancellation rate by month** (Q622)
 
-    How many incidents were reported in each calendar quarter, labelled like
-    '2025-Q3', earliest first. Six quarters.
+    For each month of the timetable: services scheduled, services cancelled,
+    and the cancellation rate as a percentage to one decimal. Eighteen rows --
+    January 2025 and January 2026 are different months.
 
-    strftime has no quarter code: build it from the month.
+    *Return: month, services, cancelled, pct*
 
-    *Return: quarter, incidents*
+12. **Departures by time of day** (Q623)
 
-12. **Journey time by line** (Q593)
+    How many services depart in the morning (before 10:00), at midday (10:00
+    up to but not including 14:00) and later.
 
-    For each line, the average scheduled journey in minutes, to one decimal:
-    from the service's departure to its LAST scheduled call.
+    Three rows, labelled 'morning', 'midday', 'later'.
 
-    The departure time is in `services`; the calls are in `stops`. Cancelled
-    services have no stops and must not count.
+    *Return: band, services*
 
-    *Return: line_id, avg_minutes*
+13. **Days since the previous opening** (Q624)
 
-13. **How old each station is** (Q594)
+    Every station in the order it opened, with the number of days since the
+    previous station opened. The first has none. Two stations opened on the
+    same day; order those by station_id, and the second shows 0.
 
-    Every station's age in completed years on 2026-06-30.
+    *Return: station_id, opened_on, days_since_previous*
 
-    A station opened on 1952-11-18 is 73 that day, not 74: its anniversary has
-    not come round yet.
+14. **The first full week of each month** (Q625)
 
-    *Return: station_id, age*
+    How many services ran in the first full week of each month: the first
+    Monday through the Sunday after it. Eighteen months.
 
-14. **The last week of each month** (Q595)
-
-    How many services ran in the last seven days of each month -- the 25th to
-    the 31st of a 31-day month, the 22nd to the 28th of February 2026.
-    Eighteen months.
-
-    Build the window with date modifiers, not a day-of-month number.
+    Modifiers: 'start of month', then 'weekday 1' for the Monday, which stays
+    put if the 1st already is one.
 
     *Return: month, services*
 
 ## 5 - Joins and grain (4)
 
-A filter that must live in ON, two children of one parent summed, a NOT IN that
-a single NULL empties, and a group condition that only HAVING can express.
+A date filter that must live in ON, two children of one parent at different
+grains, an absence an inner join cannot find, and COUNT(DISTINCT) as an all-or-
+none test.
 
-15. **Drivers based in each town** (Q596)
+15. **Every unit's June 2025** (Q626)
 
-    Every town with the number of DRIVERS based at its stations. Towns with
-    none must appear with 0, so all 20 towns come back.
+    Every unit of rolling stock with the number of services it worked in June
+    2025. Units that worked none -- and the five that have never worked at all
+    -- must appear with 0, so all 50 rows come back.
 
-    *Return: town, drivers*
+    *Return: unit_id, workings*
 
-16. **Takings and delay per operator** (Q597)
+16. **Seats offered and tickets sold, per line** (Q627)
 
-    For each operator: total ticket revenue in pence, and total quantified
-    delay minutes, across its services.
+    For each line: the total seats it has run -- every unit on every service
+    -- and the total tickets sold on it.
 
-    Tickets and incidents both hang off `services`. Joining both at once
-    multiplies every ticket by the service's incidents, and the other way
-    round.
+    Units and tickets both hang off `services`, at different grains. Joined
+    together they multiply.
 
-    *Return: operator, revenue, delay_minutes*
+    *Return: line_id, seats, tickets*
 
-17. **Staff who manage nobody** (Q598)
+17. **Services that sold nothing** (Q628)
 
-    Members of staff to whom nobody reports.
+    Services scheduled on 2025-05-08 that sold no tickets at all. Write it
+    with an outer join.
 
-    The one person at the top reports to nobody -- reports_to is NULL there --
-    and that single row is enough to make one obvious phrasing return nothing
-    at all.
+    *Return: service_id, line_id*
 
-    *Return: staff_id, name*
+18. **Sold only one class** (Q629)
 
-18. **Lost time at every stop** (Q599)
+    Services in January 2025 that sold at least four tickets, all of the same
+    class -- with the ticket count and that class.
 
-    Services on 2025-01-10 that arrived later than scheduled at EVERY stop,
-    with their number of stops.
-
-    A stop with no recorded arrival is not a late one, so a service with an
-    unrecorded stop does not qualify.
-
-    *Return: service_id, stops*
+    *Return: service_id, tickets, class*
 
 ## 6 - Window functions (4)
 
-A seven-day rolling frame, a rank and an aggregate over the same partition, a
-share of a partition, and top-N per group from the other end.
+A centred frame, top-2 per model, a share of a town without a GROUP BY, and
+ROW_NUMBER against RANK when the number is a running order.
 
-19. **The week's tickets, rolling** (Q600)
+19. **A centred three-month average** (Q630)
 
-    For each day of January 2025: tickets sold that day, and the total over
-    the seven days ending that day -- for the first six days, over as many
-    days as there are.
+    Tickets sold per month, each with the average of that month, the one
+    before and the one after, to one decimal. At the two ends, average what is
+    there.
 
-    *Return: day, tickets, seven_day_total*
+    *Return: month, tickets, centred_avg*
 
-20. **Pay rank within the role** (Q601)
+20. **The two hardest-working units of each model** (Q631)
 
-    Every member of staff with their salary's rank within their ROLE -- 1 for
-    the best paid -- and how many pounds behind that role's top salary they
-    are.
+    For each model, its two units with the most workings -- rows in
+    service_units -- and the count. Fourteen rows; ties by the lower unit_id.
 
-    *Return: staff_id, role, salary, rank_in_role, behind_top*
+    *Return: model, unit_id, workings*
 
-21. **Each kind's share of the line's delay** (Q602)
+21. **Each station's share of its town** (Q632)
 
-    For every line and kind of incident: the quantified delay minutes, and
-    what percentage of THAT LINE's delay minutes it is, to two decimals.
+    Every station's 2025 footfall and what percentage of its TOWN's 2025
+    footfall that is, to two decimals. A town with one station reads 100.
 
-    Each line's five percentages add to 100.
+    *Return: station_id, town, footfall, pct_of_town*
 
-    *Return: line_id, kind, delay_minutes, pct_of_line*
+22. **Running order for the day** (Q633)
 
-22. **The three latest incidents on each line** (Q603)
+    Every service scheduled on 2025-04-07, cancelled or not, numbered in
+    departure order from 1. Two pairs depart at the same minute; number those
+    by service_id, so the numbers run 1 to 24 with no gaps or repeats.
 
-    For each line, its three most recently reported incidents. Eighteen rows.
-    When two were reported on the same day, the higher incident_id is the more
-    recent.
-
-    *Return: line_id, incident_id, reported_at*
+    *Return: position, service_id, depart_time*
 
 ## 7 - Changing the data (8)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. DELETE and UPDATE by subquery, INSERT
-... SELECT, nested savepoints, a trigger on a view, a trigger on a delete, a
-computed view and ALTER TABLE -- what SQLite has instead of a procedural
-language.
+question's probe query reads the result. DELETE in foreign-key order, UPDATE ...
+FROM, a CTE feeding an INSERT, two transactions, two triggers, an unpivot view
+and a recursive INSERT -- what SQLite has instead of a procedural language.
 
-23. **Footfall for stations nobody calls at** (Q604)
+23. **Scrap a unit that has worked** (Q634)
 
-    Some stations are on no line's route, yet they have footfall rows. Delete
-    the footfall rows of every station that no service has ever called at. 21
-    rows go, for 7 stations.
+    Unit 12 is being scrapped. Delete it from `rolling_stock` -- but it has
+    hundreds of rows in `service_units`, and with foreign keys on, a
+    referenced row cannot go. Remove those first, then the unit.
 
-    One DELETE, with a subquery that finds the stations.
+    Add RETURNING unit_id, model to the second DELETE so the results pane
+    shows what went.
 
-    *Checked: how many footfall rows remain, and for how many stations*
+    *Checked: how many units remain, and how many service_units rows still name unit 12*
 
-24. **Fill in the unquantified delays** (Q605)
+24. **Borrow a delay from the timetable** (Q635)
 
-    174 incidents have no delay_minutes. Fill each one in with the average
-    delay of the quantified incidents of the SAME kind, rounded to a whole
-    minute.
+    163 incidents have no delay_minutes. For each, use the worst lateness
+    recorded at any stop of its service -- actual arrival minus scheduled, in
+    whole minutes -- as the delay. Incidents that already have a delay keep
+    it.
 
-    One UPDATE, with a subquery that depends on the row being updated.
+    One UPDATE ... FROM, with the per-service worst lateness as a grouped
+    subquery in the FROM.
 
-    *Checked: total delay minutes and how many incidents are quantified, per kind*
+    *Checked: incidents, how many are quantified, the delay total, and how many delays are under ten minutes*
 
-25. **Next year's budget** (Q606)
+25. **A summary table, built from a CTE** (Q636)
 
-    Give every station a 2026 footfall row in which each quarter is its 2025
-    figure up 10%, rounded to a whole number. Sixty new rows from one INSERT
-    ... SELECT.
+    Create `line_summary (line_id INTEGER PRIMARY KEY, services, tickets,
+    revenue_pence)`, all NOT NULL, and fill it: per line, how many services it
+    scheduled, how many tickets it sold and the revenue. Every line has all
+    three.
 
-    The quarter columns are INTEGER. What you insert should be stored as
-    integers, not as 25801.6.
+    Use a WITH clause in front of the INSERT to compute the rows, and mind the
+    grain: services with no tickets still count as services.
 
-    *Checked: per year, the rows, the total footfall, and how many q1 values are stored as integers*
+    *Checked: SELECT * FROM line_summary*
 
-26. **Two savepoints, one raise** (Q607)
+26. **Commit one, roll back the other** (Q637)
 
-    In one transaction: give every guard a 2% raise; set a savepoint; give
-    every dispatcher 2%; set a second savepoint; give every manager 2%;
-    RELEASE the second savepoint; roll back to the first; commit.
+    Two separate transactions. In the first, give every driver a 5% raise and
+    COMMIT. In the second, give every guard 5% -- then think better of it and
+    ROLLBACK.
 
-    Whole pounds: CAST(ROUND(salary * 1.02) AS INTEGER). Only the guards'
-    raise should survive -- releasing a savepoint does not commit what came
-    after it.
+    Whole pounds: CAST(ROUND(salary * 1.05) AS INTEGER). Each transaction
+    needs its own BEGIN; there is no such thing as rolling back a statement
+    that was never inside one.
 
     *Checked: total salary by role*
 
-27. **A view you can insert through** (Q608)
+27. **A count that keeps itself right** (Q638)
 
-    Create a view `open_returns` over `tickets` -- ticket_id, service_id,
-    from_station, class, price_pence, sold_at -- for tickets with no
-    destination. Then make it writable: a trigger so that an INSERT into the
-    view lands in `tickets` with to_station NULL.
+    Create `line_cancellations (line_id INTEGER PRIMARY KEY, cancelled INTEGER
+    NOT NULL)` filled with each line's current cancellation count, then a
+    trigger that adds one whenever a service's cancelled flag goes from 0 to 1
+    -- and does nothing when a service already cancelled is 'cancelled' again.
 
-    After your script, the question inserts one ticket through the view:
-    service 1, from station 25, 'standard', 1200 pence, sold 2025-01-01.
+    After your script, the question cancels services 5 and 6 (line 2), then
+    re-cancels service 79 (line 3), which already was.
 
-    *Checked: how many open returns there are, and the newest ticket's destination, price and class*
+    *Checked: the table, in line order*
 
-28. **A recycle bin for incidents** (Q609)
+28. **No pay cuts** (Q639)
 
-    Create a table `incidents_bin` with the same five columns as `incidents`,
-    and a trigger so that every incident deleted from `incidents` is copied
-    into it first.
+    Write a trigger that refuses any UPDATE that would LOWER a member of
+    staff's salary. Raises go through; so does setting a salary to the value
+    it already has.
 
-    After your script, the question deletes the three incidents reported on
-    2025-01-02.
+    After your script, the question runs three updates: staff 2 to 50000 (a
+    raise), staff 3 to 30000 (a cut), staff 4 to its current 40713. Exactly
+    one should be refused.
 
-    *Checked: that none of those three remain, and what the bin holds*
+    *Checked: the three salaries*
 
-29. **A view of lateness** (Q610)
+29. **The footfall table, long** (Q640)
 
-    Create a view `late_stops (service_id, stop_seq, station_id,
-    late_minutes)`: each recorded arrival's lateness in whole minutes, actual
-    minus scheduled.
+    Create a view `footfall_long (station_id, year, quarter, footfall)` that
+    presents station_footfall one row per quarter, with quarter as the number
+    1 to 4. 720 rows when selected.
 
-    Stops with no recorded arrival must not appear in it at all -- a NULL
-    lateness is not a lateness. Just under five thousand stops are like that.
+    *Checked: COUNT(*), SUM(footfall) and COUNT(DISTINCT quarter) over the view*
 
-    *Checked: COUNT(*), SUM, MIN and MAX of late_minutes over the view*
+30. **A calendar table for July** (Q641)
 
-30. **Reshape the fleet table** (Q611)
+    Create a table `days (day TEXT PRIMARY KEY)` and fill it with every date
+    in July 2025, generated -- not typed -- by a recursive CTE feeding an
+    INSERT. 31 rows.
 
-    Three ALTER TABLE statements on `rolling_stock`: rename `seats` to
-    `seat_count`; add `in_service INTEGER NOT NULL`, which must be 1 for every
-    existing unit; drop `refurbished_year`.
-
-    A NOT NULL column added to a table that already has rows needs something
-    to put in them.
-
-    *Checked: unit_id, seat_count and in_service for units 1 to 3, and how many columns the table has*
+    *Checked: how many rows, the first and the last*
 
 ## The one concept with no question here
 
@@ -406,7 +386,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-581 retired ones.
+611 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
