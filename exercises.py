@@ -75,8 +75,8 @@ EXERCISES = [
              " column is not NULL -- that difference IS the quantified"
              " count. AVG skips NULLs the same way, so the untouched column"
              " gives the right average. The trap turns every unknown delay"
-             " into a delay of zero, and averages drop by nearly ten"
-             " minutes on every line.",
+             " into a delay of zero, and every line's average drops"
+             " by six to nine minutes.",
         claims=[("six lines, quantified fewer than incidents on each",
                  lambda rows, c: len(rows) == 6
                  and all(r[2] < r[1] for r in rows))],
@@ -136,7 +136,7 @@ EXERCISES = [
                   " AND sp.actual_arrive IS NOT NULL) WHERE rn = 1"),
         note="Top-1 per group with ties resolved: ROW_NUMBER with a second"
              " sort key. RANK hands the same number to tied stops and the"
-             " trap returns thirty-two rows for twenty-two services -- ties"
+             " trap returns thirty-five rows for twenty-two services -- ties"
              " at eight minutes are common when lateness is a small"
              " integer. 'The earlier one' in the prompt is the tiebreak,"
              " and it belongs inside the OVER.",
