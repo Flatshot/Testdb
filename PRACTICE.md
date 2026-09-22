@@ -1,26 +1,27 @@
 # SQL practice exercises
 
 Thirty questions on the railway schema, re-seeded so no answer from the previous
-set carries over. Twenty-two are SELECT questions across the usual tiers, at the
-same level as the last three sets. **The last eight are writable** -- graded on
-the state of the database after your script runs, not on what a query returns
--- and each takes a construct none of the earlier sets did.
+set carries over. This set changes the buckets: after three warm-ups, sixteen
+questions cover four areas no earlier set touched -- **JSON**, **hierarchies**,
+**NULL logic and subquery forms**, and **distributions** -- then three familiar
+shapes, and **the eight writable questions** on constructs none of the four
+earlier writable stages used.
 
 | Stage | Questions |
 |---|---|
 | 1 - Warm-up | 1-3 |
-| 2 - Sequences and strings | 4-7 |
-| 3 - Unpivot and set ops | 8-10 |
-| 4 - Dates and times | 11-14 |
-| 5 - Joins and grain | 15-18 |
-| 6 - Window functions | 19-22 |
+| 2 - JSON | 4-7 |
+| 3 - Hierarchies | 8-11 |
+| 4 - NULL logic and subqueries | 12-15 |
+| 5 - Distributions | 16-19 |
+| 6 - Familiar mix | 20-22 |
 | 7 - Changing the data | 23-30 |
 
 ## The writable stage
 
 SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
-instead is triggers, views, transactions with conflict clauses, and DML driven
-by subqueries -- and each of questions 23 to 30 is one of those.
+instead is constraints, triggers, views, conflict clauses and DML driven by
+expressions -- and each of questions 23 to 30 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -35,343 +36,370 @@ affect the grade. The status bar reports how many statements ran and how many
 rows changed; on question 24 that count is the difference between right and
 wrong.
 
-**Driver statements.** Questions 27 and 28 run statements of their own *after*
-yours -- a delete your trigger must cascade, and two inserts of which your
-trigger must fill in exactly one. A refusal is reported in the status bar as
-what it is, not as an error.
+**Driver statements.** Questions 25, 27, 29 and 30 run statements of their own
+*after* yours -- inserts that your constraint, trigger, index or STRICT table
+should refuse, or let through. A refusal is reported in the status bar as what
+it is, not as an error.
 
 | # | Construct |
 |---|---|
-| 23 | `UPDATE` against `INSERT OR REPLACE` -- and what "replace" really does to a row |
-| 24 | `DELETE` driven by `ROW_NUMBER` in a subquery: a keep list for top-N per group |
-| 25 | a multi-row `INSERT` with named columns, an assigned id and a defaulted flag |
-| 26 | `OR IGNORE` against `OR ROLLBACK` inside a transaction -- the nearest thing to TRY/CATCH |
-| 27 | a `BEFORE DELETE` trigger that cascades by hand, and when foreign keys are checked |
-| 28 | an `AFTER INSERT` trigger that fills in the row just written, gated by `WHEN` |
-| 29 | a view built on another view, and a month key frozen into it |
-| 30 | an index, and the leading-column rule that decides whether a lookup can use it |
+| 23 | `CASE` inside an `UPDATE`, and what a `CASE` with no `ELSE` returns |
+| 24 | `ON CONFLICT DO UPDATE ... WHERE` -- an upsert that only improves a row |
+| 25 | `CREATE TABLE` with PRIMARY KEY, REFERENCES, NOT NULL, CHECK and DEFAULT |
+| 26 | the rebuild-a-table migration, and why `PRAGMA foreign_keys` must go off first |
+| 27 | `RAISE(IGNORE)` -- a trigger that drops one row of a multi-row INSERT |
+| 28 | a view whose SELECT starts with `WITH RECURSIVE`: a calendar that stores nothing |
+| 29 | `CREATE UNIQUE INDEX` as a constraint on an existing table |
+| 30 | a `STRICT` table, where the declared type is a rule and not a hint |
 
-**A trigger runs once per row.** `NEW` is the row being written, `OLD` the row
-being replaced or removed. SQLite cannot change `NEW` in a BEFORE trigger; the
-idiom for a default is an AFTER INSERT trigger that updates the row by
-`NEW.rowid`. A trigger body may hold several statements.
+**Two schema tables you can query.** `sqlite_master` holds every object's
+CREATE statement -- question 26's probe reads it for the word CHECK.
+`pragma_index_list('t')` and `pragma_index_info('name')` describe a table's
+indexes; question 29's probe counts the unique ones.
 
 ## Things the data does on purpose
 
-- **Station 7's 2024 row has rowid 20**, which question 23's probe reads
-  to tell an update from a replace.
-- **971 incidents on six lines**, of which question 24 keeps eighteen.
-- **The last service_id is 11,141**, so question 25's three new rows are
-  everything after it.
-- **'Southwell' is already a station and 'Southwell Parkway' is not**, which is
-  what question 26's two inserts run into.
-- **Service 1 has 8 stops, 4 tickets, 2 units and no incidents**, and ends at
-  station 46 -- question 27 deletes it and question 28 defaults a ticket to it.
-- **`staff` has indexes on name and reports_to and none on base_station**,
-  which question 30 adds.
+- **4 stations have never been surveyed** for step-free access, which
+  question 1 counts and question 12's logic is about.
+- **The staff tree is five levels deep**, forty people under one, and the top
+  person reports to nobody -- questions 8 to 11 walk it in four directions.
+- **178 incidents have no quantified delay**, which is what makes
+  question 12's NOT go wrong.
+- **30 units have never been refurbished**, so question 13 has NULLs
+  to move.
+- **No Class 170 unit has more than 242 seats**, while every other model
+  reaches 300 -- question 14's target.
+- **Station 3's q1 figures are 41,704 for 2024 and 36,020 for 2025**,
+  one below and one above what question 24 sends.
+- **Service 10 is line 4 at 06:09 on 2025-01-01**, the slot question 29's
+  driver tries to reuse, and **the last ticket_id is 34,460**.
 - **The timetable is not flat.** Services per day run from 6 to
   27, thinner at weekends and in winter.
 
+**One SQLite quirk to know.** In this build, `json_group_array(x ORDER BY y)`
+emits the sort keys instead of `x` when `x` and `y` come from different joined
+tables; `group_concat` does not. Question 5 asks for a subquery for that reason.
+
 ## 1 - Warm-up (3)
 
-Three questions on one or two tables: a share that needs a float, counting the
-NULLs rather than the values, and a rate that AVG computes in one word.
+Three familiar questions: counting the NULLs rather than the values, a row count
+that COUNT(DISTINCT) would get wrong, and a LEFT JOIN whose count must not
+multiply.
 
-1. **Incidents by kind** (Q642)
+1. **Stations per town, surveyed or not** (Q672)
 
-   One row per kind of incident: how many, and what percentage of all
-   incidents that is, to two decimals.
+   One row per town: how many stations it has, and how many of them have never
+   been surveyed for step-free access.
 
-   *Return: kind, incidents, pct*
+   An unsurveyed station has step_free NULL.
 
-2. **Open returns by class** (Q643)
+   *Return: town, stations, unsurveyed*
 
-   One row per class: tickets sold, how many of them are open returns -- no
-   destination recorded -- and what percentage of the class that is, to two
-   decimals.
+2. **Front and rear** (Q673)
 
-   *Return: class, tickets, open_returns, pct*
+   One row per position in the train: how many workings there have been at
+   that position -- rows of service_units -- and the average seats of the
+   units that took it, to one decimal.
 
-3. **Big operators that cancel** (Q644)
+   *Return: position, workings, avg_seats*
 
-   Operators that scheduled at least 2750 services AND cancelled more than 3%
-   of them, with the service count and the rate to two decimals.
+3. **Services and first-class sales, per line** (Q674)
 
-   Both conditions describe the operator as a whole.
+   For each line: how many services it scheduled, and how many first-class
+   tickets it sold.
 
-   *Return: operator, services, cancel_pct*
+   Services with no tickets still count as services.
 
-## 2 - Sequences and strings (4)
+   *Return: line_id, services, first_class*
 
-`stops` is keyed on (service_id, stop_seq). Two LAGs over one named window, a
-handle from two string functions, NTH_VALUE and its frame, and a symmetric
-difference.
+## 2 - JSON (4)
 
-4. **Legs that ran slow** (Q645)
+New ground. SQLite has had JSON built in since 3.38: json_object builds a
+document, json_group_array aggregates into an array, json_each unnests text into
+rows, and a subquery nests one inside another.
 
-   For service 500, each leg's scheduled minutes and actual minutes -- from
-   the previous stop's arrival to this one's, timetabled and as it happened --
-   and the minutes lost, actual minus scheduled.
+4. **A unit as a JSON object** (Q675)
 
-   The first stop has no leg, so it is NULL across.
+   Units 1 to 8, each as one JSON object with keys model, seats, built and
+   refurbished -- numbers as numbers, and a unit never refurbished carrying a
+   JSON null.
 
-   *Return: stop_seq, sched_leg, actual_leg, lost*
+   Use json_object. Building JSON by gluing strings together is the trap.
 
-5. **A handle for every member of staff** (Q646)
+   *Return: unit_id, doc*
 
-   Every member of staff with a login handle: the name in lower case with the
-   space replaced by a dot -- 'Gareth Sedgwick' becomes 'gareth.sedgwick'.
+5. **A route as a JSON array** (Q676)
 
-   *Return: staff_id, handle*
+   For the first service that ran (not cancelled) on each line -- the lowest
+   service_id -- its calling points as a JSON array of station NAMES in stop
+   order.
 
-6. **The second call** (Q647)
+   json_group_array is the aggregate. Give it the names and the order from a
+   subquery that joins stops to stations first.
 
-   For every service that ran on 2025-04-07, the station_id of its SECOND stop
-   -- one row per service, and no row of NULLs.
+   *Return: line_id, route*
 
-   Use NTH_VALUE, and mind its frame.
+6. **A list handed in as JSON** (Q677)
 
-   *Return: service_id, second_call*
+   An app sends the station ids it wants as JSON text: '[5, 12, 40, 58]'.
+   Return each of those stations' name and town, by unnesting the array with
+   json_each and joining -- no IN list typed by hand.
 
-7. **One line or the other, not both** (Q648)
+   *Return: station_id, name, town*
 
-   Towns with a station on line 4's route or on line 5's, but NOT on both.
+7. **A nested document per line** (Q678)
 
-   Each line calls in eight towns; three are shared.
+   Each line as one JSON object: its name under 'line', its colour under
+   'colour', and under 'towns' a JSON array of the DISTINCT towns it calls in,
+   alphabetical.
 
-   *Return: town*
+   A subquery builds the array; json_object nests it.
 
-## 3 - Unpivot and set ops (3)
+   *Return: line_id, doc*
 
-Twelve quarters as rows with a LAG over them, a non-equi self-join on a distance
-in days, and relational division from the other side.
+## 3 - Hierarchies (4)
 
-8. **Station 9, quarter on quarter** (Q649)
+The staff tree is five levels deep. One recursive CTE, pointed four ways: depth
+from the top, the chain of names, the managers above one person, and the
+headcount below every manager at once.
 
-   Station 9's footfall as one row per quarter across all three years,
-   labelled like '2024-q3', with the change from the previous quarter. Twelve
-   rows in order; the first has no change.
+8. **How far down the tree** (Q679)
 
-   *Return: period, footfall, change*
+   Every member of staff with their depth in the reporting tree: 0 for the one
+   person who reports to nobody, 1 for those who report to them, and so on.
+   Forty rows.
 
-9. **Opened within a year of each other** (Q650)
+   *Return: staff_id, depth*
 
-   Pairs of stations that opened within 365 days of one another, each pair
-   once with the lower station_id first, and both dates.
+9. **The chain, written out** (Q680)
 
-   Not 'the same calendar year': December and the following January count.
+   Every member of staff with the chain of names from the top of the tree down
+   to them, joined by ' > ' -- so the top person's chain is just their own
+   name.
 
-   *Return: station_a, station_b, opened_a, opened_b*
+   *Return: staff_id, chain*
 
-10. **Lines that have run every model** (Q651)
+10. **Everyone above staff 37** (Q681)
 
-    Lines on which every model of rolling stock has worked at least once. Do
-    not hard-code the number of models.
+    The managers above staff member 37, all the way to the top, with how many
+    steps up each one is: 1 for the direct manager.
 
-    *Return: line_id*
+    This walks UP the tree, so the step follows reports_to from the person,
+    not from the top.
 
-## 4 - Dates and times (4)
+    *Return: staff_id, name, steps_up*
 
-Two counts by weekday that must not multiply, printf for h:mm, a week number
-that needs its year, and 'start of year' across a boundary.
+11. **Headcount below each manager** (Q682)
 
-11. **Incident rate by day of the week** (Q652)
+    For everyone who has at least one person below them: how many people are
+    under them at ANY depth -- reports, reports of reports, and so on.
 
-    For each day of the week -- strftime's number, 0 for Sunday -- how many
-    services ran, how many incidents were reported, and incidents per hundred
-    services to one decimal.
+    Seed the recursion with every person as their own root, then count what
+    each root reaches.
 
-    Services and incidents are counted from different tables; do not let one
-    multiply the other.
+    *Return: staff_id, headcount_below*
 
-    *Return: weekday, services, incidents, per_100*
+## 4 - NULL logic and subqueries (4)
 
-12. **Journey time as hours and minutes** (Q653)
+Three-valued logic and NOT, where NULLs sort and how to move them, ALL and ANY
+written as MAX and MIN, and an average of sums that needs two levels.
 
-    For every service that ran on 2025-03-03, its scheduled journey --
-    departure to last call -- formatted as 'h:mm', so 72 minutes shows as
-    '1:12' and 50 as '0:50'.
+12. **Not known to be long** (Q683)
 
-    *Return: service_id, journey*
+    Per kind of incident, how many are NOT over 30 minutes -- and an incident
+    whose delay was never quantified is not over 30 minutes either, so it
+    counts.
 
-13. **Tickets by week of 2025** (Q654)
+    *Return: kind, incidents*
 
-    How many tickets were sold in each week of 2025, numbered by strftime's
-    '%W' -- week 00 is the days before the first Monday. Only 2025.
+13. **Never refurbished goes last** (Q684)
 
-    *Return: week, tickets*
+    Every unit numbered by refurbishment year, earliest first -- and the units
+    NEVER refurbished numbered after all the others, not before. Ties by
+    unit_id.
 
-14. **Day of the year, across the boundary** (Q655)
+    *Return: unit_id, refurbished_year, position*
 
-    For incidents reported between 2025-12-28 and 2026-01-04, the day of the
-    year each fell on: 1 for the 1st of January, 365 for the 31st of December.
-    Oldest first, then incident_id.
+14. **As many seats as every Class 170** (Q685)
 
-    Build it from the 'start of year' modifier, not from a hard-coded date.
+    Units with at least as many seats as EVERY Class 170 unit -- the biggest
+    Class 170s themselves included.
 
-    *Return: incident_id, reported_at, day_of_year*
+    SQLite has no ALL or ANY. 'At least as many as every one of them' is a
+    comparison with one number from a subquery -- which number?
 
-## 5 - Joins and grain (4)
+    *Return: unit_id, model, seats*
 
-A chain of joins only as outer as its weakest link, three children counted at
-once, an anti-join through a foreign key, and a none-of condition in HAVING.
+15. **The average service's takings** (Q686)
 
-15. **Incidents while each unit was in the train** (Q656)
+    For each line, the average revenue PER SERVICE, to the nearest penny --
+    add up each service's tickets first, then average those totals. Services
+    with no tickets do not count.
 
-    Every unit of rolling stock with the number of incidents that happened on
-    services it was part of. Units with none -- and the five that have never
-    run -- must appear with 0, so all 50 rows come back.
+    An aggregate of an aggregate needs two levels.
 
-    *Return: unit_id, incidents*
+    *Return: line_id, avg_service_revenue*
 
-16. **Three counts per service** (Q657)
+## 5 - Distributions (4)
 
-    For every service scheduled on 2025-03-03: how many stops, how many units
-    and how many tickets. Three children of one parent; a cancelled service
-    has none of any and shows zeros.
+NTILE tiers, PERCENT_RANK against CUME_DIST, a standard deviation by hand, and a
+histogram from integer division.
 
-    *Return: service_id, stops, units, tickets*
+16. **The fleet in three tiers** (Q687)
 
-17. **Based where no train stops** (Q658)
+    Split the fifty units into three tiers by seats -- tier 1 the smallest --
+    as evenly as possible, ties by unit_id. One row per tier with how many
+    units it holds and its smallest and largest seat count.
 
-    Staff whose base station is one that no service has ever called at.
+    *Return: tier, units, min_seats, max_seats*
 
-    *Return: staff_id, name, base_station*
+17. **Where a salary sits in its role** (Q688)
 
-18. **Clean days** (Q659)
+    Every member of staff with their salary's PERCENT_RANK within their role,
+    to three decimals: 0 for the lowest paid in the role, 1 for the highest.
 
-    Days in January 2025 on which NO service was cancelled, with how many
-    services ran.
+    *Return: staff_id, role, salary, pct_rank*
 
-    *Return: day, services*
+18. **How spread out the prices are** (Q689)
 
-## 6 - Window functions (4)
+    For each class, the average ticket price and its population standard
+    deviation, both in pence to one decimal.
 
-A running total divided by a grand total, LAG with an offset of twelve, a share
-whose partition names the denominator, and a running maximum.
+    SQLite has no STDDEV. The variance is the mean of the squares minus the
+    square of the mean; sqrt() is built in.
 
-19. **How far through the year's takings** (Q660)
+    *Return: class, avg_price, stddev*
 
-    For each month of 2025: that month's ticket revenue in pence, and the
-    percentage of the YEAR's revenue taken by the end of it, to two decimals.
-    December reads 100.
+19. **Ticket prices in five-pound bands** (Q690)
 
-    *Return: month, revenue, cumulative_pct*
+    A histogram of ticket prices: how many tickets fall in each five-pound
+    band, the band labelled by where it starts in pounds -- 0, 5, 10... A
+    ticket at exactly 10.00 belongs to the 10 band.
 
-20. **Year on year, by month** (Q661)
+    *Return: band, tickets*
 
-    Tickets sold per month, each with the count for the SAME month a year
-    earlier and the difference. The first twelve months have no earlier year,
-    so those two columns are NULL.
+## 6 - Familiar mix (3)
 
-    *Return: month, tickets, year_before, change*
+Top-1 per group, a self-join along the stop sequence, and a date spine counting
+the days nothing happened.
 
-21. **Each operator's share of each line** (Q662)
+20. **Each line's worst service** (Q691)
 
-    For every line and operator: how many services, and what percentage of
-    THAT LINE's services the operator ran, to two decimals. Each line's four
-    percentages add to 100.
+    For each line, the service that lost the most quantified delay minutes
+    across its incidents, and how many. One row per line; ties by the lower
+    service_id.
 
-    *Return: line_id, operator_id, services, pct_of_line*
+    *Return: line_id, service_id, delay_minutes*
 
-22. **Records set** (Q663)
+21. **Consecutive calls on line 1** (Q692)
 
-    For each day of January 2025: tickets sold, the highest daily count seen
-    so far that month (today included), and 1 if today set or equalled that
-    record, else 0.
+    The pairs of stations that line 1's services call at one after the other:
+    each (this stop, next stop) pair once. Nine pairs for a ten-station route.
 
-    *Return: day, tickets, record_so_far, is_record*
+    *Return: from_station, to_station*
+
+22. **Days with no incidents, per month** (Q693)
+
+    For each month of the timetable, how many days had NO incident reported at
+    all. Eighteen months, every one of which has some quiet days.
+
+    A day with nothing reported has no row anywhere; generate the days first.
+
+    *Return: month, quiet_days*
 
 ## 7 - Changing the data (8)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. UPDATE against REPLACE, a windowed
-DELETE, a multi-row INSERT, conflict clauses in a transaction, two triggers, a
-stacked view and an index -- what SQLite has instead of a procedural language.
+question's probe query reads the result. CASE in an UPDATE, a conditional
+upsert, a table with four kinds of constraint, the rebuild-a-table migration,
+RAISE(IGNORE), a recursive view, a UNIQUE index and a STRICT table.
 
-23. **Correct a row without replacing it** (Q664)
+23. **A raise that depends on the role** (Q694)
 
-    Station 7's 2024 q3 footfall was mis-keyed. Set it to 70000, leaving the
-    other three quarters as they are -- and leaving the ROW as it is: the same
-    physical row, corrected, not a new row in its place.
+    One UPDATE that gives every member of staff a raise by role: managers 2%,
+    drivers 4%, everyone else 3%. Whole pounds: CAST(ROUND(salary * factor) AS
+    INTEGER).
 
-    INSERT OR REPLACE looks like an update and is not one.
+    The factor is a CASE expression. Think about what CASE returns for a role
+    you did not list.
 
-    *Checked: the row's rowid and its four quarters*
+    *Checked: total salary by role*
 
-24. **Prune the incident log** (Q665)
+24. **Update only if it is an improvement** (Q695)
 
-    Keep only the three most recent incidents on each line and delete the
-    rest. 'Most recent' is by reported_at, then by the higher incident_id.
+    Two revised q1 figures for station 3 arrive: 35000 for 2025 and 90000 for
+    2024. Both rows exist. Write two UPSERTs that create the row if missing
+    and otherwise update q1 -- but ONLY when the new figure is higher than the
+    stored one. The 2025 figure is lower and must be ignored.
 
-    A DELETE cannot use a window function directly; number the rows in a
-    subquery and delete what is not in the keep list.
+    Use (3, 2025, 35000, 30136, 31843, 38990) and (3, 2024, 90000, 0, 0, 0) as
+    the VALUES.
 
-    *Checked: per line, how many incidents remain and the earliest date among them*
+    *Checked: station 3's year, q1 and q2*
 
-25. **Three extra services** (Q666)
+25. **A table that defends itself** (Q696)
 
-    Add three services to the timetable in ONE INSERT: line 1, operator 2, on
-    2026-07-01, departing 07:15, 11:40 and 16:05. Let the table assign the ids
-    and default the cancelled flag; name the columns you supply.
+    Create `station_notes`: note_id INTEGER PRIMARY KEY; station_id that must
+    reference stations; note, TEXT, required, 1 to 80 characters; noted_on,
+    TEXT, defaulting to '2026-07-01'.
 
-    *Checked: line, operator, date, departure and cancelled flag for every service after the last existing id*
+    After your script, the question inserts three notes: a good one for
+    station 5, one for station 999, and an empty one. Exactly one should land.
 
-26. **Insert if absent, and carry on** (Q667)
+    *Checked: SELECT * FROM station_notes*
 
-    In one transaction: give every guard a 3% raise, then add two stations --
-    'Southwell' and 'Southwell Parkway', both in town Southwell, opened
-    2026-07-01, step_free 1 -- and commit. 'Southwell' already exists and
-    station names are UNIQUE: that insert must be skipped, not fail, and the
-    transaction must still commit.
+26. **Add a constraint by rebuilding the table** (Q697)
 
-    Whole pounds: CAST(ROUND(salary * 1.03) AS INTEGER).
+    `operators` needs a CHECK (since_year >= 1900). ALTER TABLE cannot add
+    one, so rebuild: create the new table, copy the rows, drop the old one,
+    rename the new one into place.
 
-    *Checked: the station count, the guards' total salary, and whether 'Southwell Parkway' exists*
+    Services reference operators, so DROP TABLE is refused while foreign keys
+    are on. Turn them off for the rebuild and back on after -- a PRAGMA, not a
+    transaction, since PRAGMA foreign_keys is a no-op inside one.
 
-27. **Cascade by hand** (Q668)
+    *Checked: the row count, whether the table's SQL now has a CHECK, and how many services would be orphaned*
 
-    The foreign keys on `services` do not cascade, so deleting a service with
-    stops, tickets, units or incidents fails. Write a trigger that removes a
-    service's rows from all FOUR child tables whenever the service itself is
-    deleted.
+27. **Drop the bad row, keep the rest** (Q698)
 
-    After your script, the question deletes service 1, which has 8 stops, 4
-    tickets and 2 units.
+    Write a trigger that silently discards any ticket inserted with a price of
+    0 -- no error, the other rows of the same INSERT still land.
 
-    *Checked: whether service 1 still exists, and how many stops, tickets and units still name it*
+    After your script, the question inserts three tickets in ONE statement;
+    the middle one is free. Two should land.
 
-28. **Fill in the blank on the way in** (Q669)
+    *Checked: id and price of every ticket after the last existing one*
 
-    A ticket inserted with no destination should be given one: the last stop
-    of its service. Write a trigger that fills to_station after such an insert
-    -- and leaves alone any ticket that arrived with a destination.
+28. **A calendar that stores nothing** (Q699)
 
-    After your script, the question inserts two tickets on service 1 from
-    station 49: one with to_station NULL, one with to_station 35.
+    Create a view `calendar (day)` that yields every date from 2025-01-01 to
+    2026-06-30 inclusive -- 546 rows -- generated by a recursive CTE inside
+    the view. It stores no rows.
 
-    *Checked: the destination of every ticket after the last existing id*
+    *Checked: the count, first and last day, and how many days in it have no incident*
 
-29. **A view over a view** (Q670)
+29. **One service per slot** (Q700)
 
-    Create `line_daily (line_id, run_date, services)` -- services per line per
-    day -- and then `line_monthly (line_id, month, services)` built ON TOP OF
-    line_daily, summing its rows by '%Y-%m'.
+    No two services may share a line, date and departure time. Enforce that
+    with a UNIQUE index on `services`.
 
-    Eighteen rows per line in the monthly view: January 2025 and January 2026
-    are different months.
+    After your script, the question inserts two services on line 4 for
+    2025-01-01: one at 06:09, which service 10 already holds, and one at
+    06:10. Exactly one should be refused.
 
-    *Checked: line 1's rows of line_monthly, in month order*
+    *Checked: line 4's services that day, and how many unique indexes services has beyond its primary key*
 
-30. **An index the lookup can use** (Q671)
+30. **A table that refuses the wrong type** (Q701)
 
-    Staff are looked up by base station -- `WHERE base_station = ?` -- and
-    there is no index for it. Create one that lets that lookup SEARCH instead
-    of SCAN. Name it as you like.
+    Create `unit_mileage (unit_id INTEGER PRIMARY KEY referencing
+    rolling_stock, miles INTEGER NOT NULL)` as a STRICT table, so that a REAL
+    can never be stored in the INTEGER column.
 
-    An index helps a lookup only if the looked-up column is its FIRST column.
+    After your script, the question inserts miles of 120500, 98000.5 and
+    '77000' for units 1, 2 and 3. One should be refused; one should be
+    converted.
 
-    *Checked: whether any index on staff has base_station as its leading column, and how many staff are based at station 14*
+    *Checked: unit_id, miles and typeof(miles)*
 
 ## The one concept with no question here
 
@@ -382,7 +410,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-641 retired ones.
+671 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
