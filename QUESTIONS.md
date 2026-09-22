@@ -24,11 +24,11 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the railway schema, re-seeded (SEED 641 -> 671). Twenty-two
-are SELECT questions across the usual tiers, at the same level as the last
-three sets. **The last eight are writable**, graded on the state of the
-database after a script runs -- and each takes a construct none of the three
-earlier writable stages did.
+Thirty questions on the railway schema, re-seeded (SEED 671 -> 701). This set
+changes the buckets: three warm-ups, then sixteen questions over four areas no
+earlier set covered -- JSON, hierarchies, NULL logic and subquery forms,
+distributions -- then three familiar shapes. **The last eight are writable**,
+on constructs none of the four earlier writable stages used.
 
 ### The writable stage
 
@@ -39,51 +39,50 @@ or by changing question, and is never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 23 | `UPDATE` against `INSERT OR REPLACE` | the row's rowid and values |
-| 24 | `DELETE` driven by `ROW_NUMBER` in a subquery | counts and earliest date per line |
-| 25 | a multi-row `INSERT` with named columns and defaults | the new rows |
-| 26 | `OR IGNORE` against `OR ROLLBACK` in a transaction | counts and a salary total |
-| 27 | a `BEFORE DELETE` trigger that cascades by hand | the parent and its children after a driven delete |
-| 28 | an `AFTER INSERT` trigger that fills in the new row | two driven tickets' destinations |
-| 29 | a view built on another view | one line's monthly rows |
-| 30 | an index, and the leading-column rule | the schema, via pragma_index_info |
+| 23 | `CASE` inside an `UPDATE` | salary totals by role |
+| 24 | `ON CONFLICT DO UPDATE ... WHERE` | one station's rows |
+| 25 | `CREATE TABLE` with PK, FK, NOT NULL, CHECK, DEFAULT | the table after three driven inserts |
+| 26 | the rebuild-a-table migration | row count, the CHECK, orphan count |
+| 27 | `RAISE(IGNORE)` in a `BEFORE INSERT` trigger | the tickets a driven multi-row insert left |
+| 28 | a view built on `WITH RECURSIVE` | count, ends, and quiet days |
+| 29 | `CREATE UNIQUE INDEX` | services in the slot, unique index count |
+| 30 | a `STRICT` table | rows and `typeof()` after three driven inserts |
 
-27 and 28 carry a `driver_sql`: statements the question runs after yours to
-exercise the trigger. A refusal is reported in the status bar, not treated as
-an error.
+25, 27, 29 and 30 carry a `driver_sql`: statements the question runs after
+yours. A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q642 | A2 COUNT and AVG | Incidents by kind | ex 1 | 1 - Warm-up |
-| Q643 | A1 conditional aggregation | Open returns by class | ex 2 | 1 - Warm-up |
-| Q644 | A3 WHERE vs HAVING | Big operators that cancel | ex 3 | 1 - Warm-up |
-| Q645 | W3 window vs GROUP BY | Legs that ran slow | ex 4 | 2 - Sequences and strings |
-| Q646 | STR string functions | A handle for every member of staff | ex 5 | 2 - Sequences and strings |
-| Q647 | W1 window frames | The second call | ex 6 | 2 - Sequences and strings |
-| Q648 | S1 set operations | One line or the other, not both | ex 7 | 2 - Sequences and strings |
-| Q649 | UNP unpivot | Station 9, quarter on quarter | ex 8 | 3 - Unpivot and set ops |
-| Q650 | J1 self-joins | Opened within a year of each other | ex 9 | 3 - Unpivot and set ops |
-| Q651 | S1 set operations | Lines that have run every model | ex 10 | 3 - Unpivot and set ops |
-| Q652 | C2 grain | Incident rate by day of the week | ex 11 | 4 - Dates and times |
-| Q653 | STR string functions | Journey time as hours and minutes | ex 12 | 4 - Dates and times |
-| Q654 | D1 dates & times | Tickets by week of 2025 | ex 13 | 4 - Dates and times |
-| Q655 | D2 date modifiers | Day of the year, across the boundary | ex 14 | 4 - Dates and times |
-| Q656 | J2 outer joins | Incidents while each unit was in the train | ex 15 | 5 - Joins and grain |
-| Q657 | C2 grain | Three counts per service | ex 16 | 5 - Joins and grain |
-| Q658 | J2 outer joins | Based where no train stops | ex 17 | 5 - Joins and grain |
-| Q659 | E1 all-or-none | Clean days | ex 18 | 5 - Joins and grain |
-| Q660 | W1 window frames | How far through the year's takings | ex 19 | 6 - Window functions |
-| Q661 | W2 window ranking | Year on year, by month | ex 20 | 6 - Window functions |
-| Q662 | W3 window vs GROUP BY | Each operator's share of each line | ex 21 | 6 - Window functions |
-| Q663 | W1 window frames | Records set | ex 22 | 6 - Window functions |
-| Q664 | UPS upsert | Correct a row without replacing it **(script)** | ex 23 | 7 - Changing the data |
-| Q665 | DML update & delete | Prune the incident log **(script)** | ex 24 | 7 - Changing the data |
-| Q666 | INS insert | Three extra services **(script)** | ex 25 | 7 - Changing the data |
-| Q667 | TXN transactions | Insert if absent, and carry on **(script)** | ex 26 | 7 - Changing the data |
-| Q668 | TRG triggers | Cascade by hand **(script)** | ex 27 | 7 - Changing the data |
-| Q669 | TRG triggers | Fill in the blank on the way in **(script)** | ex 28 | 7 - Changing the data |
-| Q670 | VIEW views | A view over a view **(script)** | ex 29 | 7 - Changing the data |
-| Q671 | X3 composite index order | An index the lookup can use **(script)** | ex 30 | 7 - Changing the data |
+| Q672 | A1 conditional aggregation | Stations per town, surveyed or not | ex 1 | 1 - Warm-up |
+| Q673 | A2 COUNT and AVG | Front and rear | ex 2 | 1 - Warm-up |
+| Q674 | C2 grain | Services and first-class sales, per line | ex 3 | 1 - Warm-up |
+| Q675 | JSN JSON functions | A unit as a JSON object | ex 4 | 2 - JSON |
+| Q676 | JSN JSON functions | A route as a JSON array | ex 5 | 2 - JSON |
+| Q677 | JSN JSON functions | A list handed in as JSON | ex 6 | 2 - JSON |
+| Q678 | JSN JSON functions | A nested document per line | ex 7 | 2 - JSON |
+| Q679 | R1 recursive CTE | How far down the tree | ex 8 | 3 - Hierarchies |
+| Q680 | R1 recursive CTE | The chain, written out | ex 9 | 3 - Hierarchies |
+| Q681 | R1 recursive CTE | Everyone above staff 37 | ex 10 | 3 - Hierarchies |
+| Q682 | R1 recursive CTE | Headcount below each manager | ex 11 | 3 - Hierarchies |
+| Q683 | C7 NULL | Not known to be long | ex 12 | 4 - NULL logic and subqueries |
+| Q684 | C7 NULL | Never refurbished goes last | ex 13 | 4 - NULL logic and subqueries |
+| Q685 | SUB subqueries | As many seats as every Class 170 | ex 14 | 4 - NULL logic and subqueries |
+| Q686 | SUB subqueries | The average service's takings | ex 15 | 4 - NULL logic and subqueries |
+| Q687 | DST distributions | The fleet in three tiers | ex 16 | 5 - Distributions |
+| Q688 | DST distributions | Where a salary sits in its role | ex 17 | 5 - Distributions |
+| Q689 | DST distributions | How spread out the prices are | ex 18 | 5 - Distributions |
+| Q690 | DST distributions | Ticket prices in five-pound bands | ex 19 | 5 - Distributions |
+| Q691 | W2 window ranking | Each line's worst service | ex 20 | 6 - Familiar mix |
+| Q692 | J1 self-joins | Consecutive calls on line 1 | ex 21 | 6 - Familiar mix |
+| Q693 | SPN date spine | Days with no incidents, per month | ex 22 | 6 - Familiar mix |
+| Q694 | DML update & delete | A raise that depends on the role **(script)** | ex 23 | 7 - Changing the data |
+| Q695 | UPS upsert | Update only if it is an improvement **(script)** | ex 24 | 7 - Changing the data |
+| Q696 | DDL constraints | A table that defends itself **(script)** | ex 25 | 7 - Changing the data |
+| Q697 | MIG table rebuild | Add a constraint by rebuilding the table **(script)** | ex 26 | 7 - Changing the data |
+| Q698 | TRG triggers | Drop the bad row, keep the rest **(script)** | ex 27 | 7 - Changing the data |
+| Q699 | VIEW views | A calendar that stores nothing **(script)** | ex 28 | 7 - Changing the data |
+| Q700 | IDX unique index | One service per slot **(script)** | ex 29 | 7 - Changing the data |
+| Q701 | SCT STRICT tables | A table that refuses the wrong type **(script)** | ex 30 | 7 - Changing the data |
 
 ## Retired
 
@@ -302,6 +301,36 @@ they still count as asked.
 | Q639 | TRG triggers | No pay cuts | - | retired |
 | Q640 | VIEW views | The footfall table, long | - | retired |
 | Q641 | R1 recursive CTE | A calendar table for July | - | retired |
+| Q642 | A2 COUNT and AVG | Incidents by kind | - | retired |
+| Q643 | A1 conditional aggregation | Open returns by class | - | retired |
+| Q644 | A3 WHERE vs HAVING | Big operators that cancel | - | retired |
+| Q645 | W3 window vs GROUP BY | Legs that ran slow | - | retired |
+| Q646 | STR string functions | A handle for every member of staff | - | retired |
+| Q647 | W1 window frames | The second call | - | retired |
+| Q648 | S1 set operations | One line or the other, not both | - | retired |
+| Q649 | UNP unpivot | Station 9, quarter on quarter | - | retired |
+| Q650 | J1 self-joins | Opened within a year of each other | - | retired |
+| Q651 | S1 set operations | Lines that have run every model | - | retired |
+| Q652 | C2 grain | Incident rate by day of the week | - | retired |
+| Q653 | STR string functions | Journey time as hours and minutes | - | retired |
+| Q654 | D1 dates & times | Tickets by week of 2025 | - | retired |
+| Q655 | D2 date modifiers | Day of the year, across the boundary | - | retired |
+| Q656 | J2 outer joins | Incidents while each unit was in the train | - | retired |
+| Q657 | C2 grain | Three counts per service | - | retired |
+| Q658 | J2 outer joins | Based where no train stops | - | retired |
+| Q659 | E1 all-or-none | Clean days | - | retired |
+| Q660 | W1 window frames | How far through the year's takings | - | retired |
+| Q661 | W2 window ranking | Year on year, by month | - | retired |
+| Q662 | W3 window vs GROUP BY | Each operator's share of each line | - | retired |
+| Q663 | W1 window frames | Records set | - | retired |
+| Q664 | UPS upsert | Correct a row without replacing it | - | retired |
+| Q665 | DML update & delete | Prune the incident log | - | retired |
+| Q666 | INS insert | Three extra services | - | retired |
+| Q667 | TXN transactions | Insert if absent, and carry on | - | retired |
+| Q668 | TRG triggers | Cascade by hand | - | retired |
+| Q669 | TRG triggers | Fill in the blank on the way in | - | retired |
+| Q670 | VIEW views | A view over a view | - | retired |
+| Q671 | X3 composite index order | An index the lookup can use | - | retired |
 | Q042 | C2 grain | Revenue per category | - | retired |
 | Q162 | R1 recursive CTE | The whole chain, written out | - | retired |
 | Q163 | R1 recursive CTE | Everyone above Nadia Kaur | - | retired |
@@ -839,10 +868,19 @@ they still count as asked.
   INSERT into a constrained table, two transactions, a summary-maintaining
   trigger, a BEFORE UPDATE policy trigger, an unpivot view, and a recursive
   CTE feeding an INSERT.
-- **Q642-Q671** current set, railway schema re-seeded (SEED 641 -> 671). Same
+- **Q642-Q671** railway schema re-seeded (SEED 641 -> 671). Same
   shape and level: twenty-two SELECT questions over the six tiers, and a
   writable stage whose eight constructs repeat none of the three earlier
   ones -- UPDATE against INSERT OR REPLACE, a windowed DELETE, a multi-row
   INSERT, conflict clauses inside a transaction, a cascading BEFORE DELETE
   trigger, an AFTER INSERT trigger that fills in the new row, a view over a
   view, and an index checked through the schema pragmas.
+- **Q672-Q701** current set, railway schema re-seeded (SEED 671 -> 701). The
+  buckets change: after three warm-ups, four areas no earlier set covered --
+  JSON (json_object, json_group_array, json_each, nesting), hierarchies (one
+  recursive CTE pointed four ways), NULL logic and subquery forms
+  (three-valued NOT, NULLS LAST, ALL/ANY as MAX/MIN, an average of sums),
+  and distributions (NTILE, PERCENT_RANK, stddev by hand, a histogram) --
+  then three familiar shapes. The writable eight are new again: CASE in an
+  UPDATE, a conditional upsert, a fully constrained table, the rebuild
+  migration, RAISE(IGNORE), a recursive view, a UNIQUE index, a STRICT table.
