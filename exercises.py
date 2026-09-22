@@ -206,12 +206,13 @@ EXERCISES = [
                   " UNION SELECT st.town FROM stops sp JOIN services s"
                   " ON s.service_id = sp.service_id JOIN stations st"
                   " ON st.station_id = sp.station_id WHERE s.line_id = 5)"
-                  " EXCEPT SELECT st.town FROM stops sp JOIN services s"
-                  " ON s.service_id = sp.service_id JOIN stations st"
-                  " ON st.station_id = sp.station_id WHERE s.line_id = 4"
-                  " INTERSECT SELECT st.town FROM stops sp JOIN services s"
-                  " ON s.service_id = sp.service_id JOIN stations st"
-                  " ON st.station_id = sp.station_id WHERE s.line_id = 5"),
+                  " EXCEPT SELECT town FROM (SELECT st.town FROM stops sp"
+                  " JOIN services s ON s.service_id = sp.service_id"
+                  " JOIN stations st ON st.station_id = sp.station_id"
+                  " WHERE s.line_id = 4 INTERSECT SELECT st.town FROM stops sp"
+                  " JOIN services s ON s.service_id = sp.service_id"
+                  " JOIN stations st ON st.station_id = sp.station_id"
+                  " WHERE s.line_id = 5)"),
         trap_sql=("SELECT st.town FROM stops sp JOIN services s"
                   " ON s.service_id = sp.service_id JOIN stations st"
                   " ON st.station_id = sp.station_id WHERE s.line_id = 4"
@@ -221,11 +222,13 @@ EXERCISES = [
         note="Symmetric difference: (A UNION B) EXCEPT (A INTERSECT B). The"
              " trap is A EXCEPT B, which is only line 4's own towns and"
              " misses line 5's. SQLite evaluates compound operators left to"
-             " right with no precedence, so the union sits in a subquery to"
-             " be computed first; the EXCEPT then takes away the intersect"
-             " that follows it.",
-        claims=[("five towns, each on exactly one of the two lines",
-                 lambda rows, c: len(rows) == 5 and all(
+             " right with NO precedence, so BOTH halves need their own"
+             " subquery: written flat, 'X EXCEPT A INTERSECT B' is"
+             " (X EXCEPT A) INTERSECT B, which is line 5's own towns --"
+             " five, not ten -- and this question's first reference"
+             " answer made exactly that mistake.",
+        claims=[("ten towns, each on exactly one of the two lines",
+                 lambda rows, c: len(rows) == 10 and all(
                      c.execute("SELECT COUNT(DISTINCT s.line_id) FROM stops sp"
                                " JOIN services s ON s.service_id = sp.service_id"
                                " JOIN stations st ON st.station_id = sp.station_id"
