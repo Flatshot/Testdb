@@ -1,27 +1,47 @@
 # SQL practice exercises
 
-Thirty questions on the railway schema, re-seeded so no answer from the previous
-set carries over. This set changes the buckets: after three warm-ups, sixteen
-questions cover four areas no earlier set touched -- **JSON**, **hierarchies**,
-**NULL logic and subquery forms**, and **distributions** -- then three familiar
-shapes, and **the eight writable questions** on constructs none of the four
-earlier writable stages used.
+Thirty questions on a NEW schema: a district hospital, replacing the railway.
+Its shape is intervals -- admissions with a start and an end, ward stays,
+prescriptions, and a time series of observations -- so alongside the familiar
+tiers there is one on **intervals and occupancy** that no earlier schema could
+ask. **The last eight are writable**, on constructs none of the five earlier
+writable stages used.
 
 | Stage | Questions |
 |---|---|
 | 1 - Warm-up | 1-3 |
-| 2 - JSON | 4-7 |
-| 3 - Hierarchies | 8-11 |
-| 4 - NULL logic and subqueries | 12-15 |
-| 5 - Distributions | 16-19 |
-| 6 - Familiar mix | 20-22 |
+| 2 - Sequences and strings | 4-7 |
+| 3 - Dates and times | 8-10 |
+| 4 - Intervals and occupancy | 11-14 |
+| 5 - Joins and grain | 15-18 |
+| 6 - Window functions | 19-22 |
 | 7 - Changing the data | 23-30 |
+
+## The schema
+
+Eleven tables. `admissions` is the centre: a patient, an admitting ward, a
+consultant, `admitted_at`, and a `discharged_at` that is NULL while the patient
+is still in. Under it hang `ward_stays` (the ordered sequence of wards, with
+their own start and end), `procedures` (priced by `procedure_types.tariff_pence`),
+`prescriptions` (of `drugs`, with a start and an end date) and `observations`
+(the big table: a reading every few hours). `staff` is a forest -- four division
+heads report to nobody -- and `shifts` is their rota. Double-click a table in
+the left pane to see its columns.
+
+**Datetimes are text**, 'YYYY-MM-DD HH:MM', and dates are 'YYYY-MM-DD'. They
+compare correctly as text; `julianday()` turns either into a number of days
+you can subtract, and `date()` cuts a datetime to its day.
+
+**The data ends at 2026-06-30 23:59.** Anything that would have ended after
+that is open instead -- 39 admissions have no discharge, 71
+prescriptions have no end -- and every question that measures an open interval
+says which end to supply.
 
 ## The writable stage
 
 SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
-instead is constraints, triggers, views, conflict clauses and DML driven by
-expressions -- and each of questions 23 to 30 is one of those.
+instead is constraints, triggers, views and DML driven by CTEs -- and each of
+questions 23 to 30 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -32,374 +52,369 @@ starts fresh, so no question depends on what another one wrote. If your
 script ends in a statement that returns rows, the results pane shows that;
 otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
-affect the grade. The status bar reports how many statements ran and how many
-rows changed; on question 24 that count is the difference between right and
-wrong.
+affect the grade.
 
-**Driver statements.** Questions 25, 27, 29 and 30 run statements of their own
-*after* yours -- inserts that your constraint, trigger, index or STRICT table
-should refuse, or let through. A refusal is reported in the status bar as what
-it is, not as an error.
+**Driver statements.** Questions 24, 25, 27, 28 and 29 run statements of their
+own *after* yours -- inserts and deletes that your table, trigger, view or
+index should refuse, cascade, soften or let through. A refusal is reported in
+the status bar as what it is, not as an error.
 
 | # | Construct |
 |---|---|
-| 23 | `CASE` inside an `UPDATE`, and what a `CASE` with no `ELSE` returns |
-| 24 | `ON CONFLICT DO UPDATE ... WHERE` -- an upsert that only improves a row |
-| 25 | `CREATE TABLE` with PRIMARY KEY, REFERENCES, NOT NULL, CHECK and DEFAULT |
-| 26 | the rebuild-a-table migration, and why `PRAGMA foreign_keys` must go off first |
-| 27 | `RAISE(IGNORE)` -- a trigger that drops one row of a multi-row INSERT |
-| 28 | a view whose SELECT starts with `WITH RECURSIVE`: a calendar that stores nothing |
-| 29 | `CREATE UNIQUE INDEX` as a constraint on an existing table |
-| 30 | a `STRICT` table, where the declared type is a rule and not a hint |
-
-**Two schema tables you can query.** `sqlite_master` holds every object's
-CREATE statement -- question 26's probe reads it for the word CHECK.
-`pragma_index_list('t')` and `pragma_index_info('name')` describe a table's
-indexes; question 29's probe counts the unique ones.
+| 23 | `WITH RECURSIVE ... UPDATE`: a tree walk feeding one statement |
+| 24 | `AUTOINCREMENT`, and why a plain INTEGER PRIMARY KEY reuses ids |
+| 25 | `ON DELETE CASCADE` declared in the table, against the default refusal |
+| 26 | a `DEFERRABLE INITIALLY DEFERRED` foreign key, checked at COMMIT |
+| 27 | `RAISE(FAIL)` against `RAISE(ABORT)`: how much of a statement is undone |
+| 28 | `INSTEAD OF DELETE` on a view -- a soft delete |
+| 29 | a partial `UNIQUE` index: a rule that applies only to open rows |
+| 30 | `CREATE TEMP TABLE`, the `temp` schema and `sqlite_temp_master` |
 
 ## Things the data does on purpose
 
-- **4 stations have never been surveyed** for step-free access, which
-  question 1 counts and question 12's logic is about.
-- **The staff tree is five levels deep**, forty people under one, and the top
-  person reports to nobody -- questions 8 to 11 walk it in four directions.
-- **178 incidents have no quantified delay**, which is what makes
-  question 12's NOT go wrong.
-- **30 units have never been refurbished**, so question 13 has NULLs
-  to move.
-- **No Class 170 unit has more than 242 seats**, while every other model
-  reaches 300 -- question 14's target.
-- **Station 3's q1 figures are 41,704 for 2024 and 36,020 for 2025**,
-  one below and one above what question 24 sends.
-- **Service 10 is line 4 at 06:09 on 2025-01-01**, the slot question 29's
-  driver tries to reuse, and **the last ticket_id is 34,460**.
-- **The timetable is not flat.** Services per day run from 6 to
-  27, thinner at weekends and in winter.
-
-**One SQLite quirk to know.** In this build, `json_group_array(x ORDER BY y)`
-emits the sort keys instead of `x` when `x` and `y` come from different joined
-tables; `group_concat` does not. Question 5 asks for a subquery for that reason.
+- **463 of the 2,000 patients have never been admitted**, and patient 6
+  is one of them -- which is why question 25 can delete them.
+- **39 admissions are still open**, and patient 1500 holds one; they
+  have 18 admissions altogether, the most of anyone.
+- **176 pairs of admissions of the same patient overlap in time.** The
+  ids were not assigned in time order, which is what question 12's trap trips
+  on.
+- **18 of the 56 staff below the heads report to someone with a HIGHER id**
+  than their own, so a one-level UPDATE cannot fill the tree by luck.
+- **Three staff have never worked a shift**, one of them a porter.
+- **6,488 observations have no temperature and 487 procedures no
+  duration**, and three procedure types have never been performed.
+- **Ward 1 was empty on 2025-01-01**, as every ward was: the data starts that
+  day, so a running occupancy needs no opening balance.
 
 ## 1 - Warm-up (3)
 
-Three familiar questions: counting the NULLs rather than the values, a row count
-that COUNT(DISTINCT) would get wrong, and a LEFT JOIN whose count must not
-multiply.
+Three questions to meet the tables: a per-bed ratio that must not truncate, a
+share of all admissions, and two conditions on a consultant's caseload that
+belong in HAVING.
 
-1. **Stations per town, surveyed or not** (Q672)
+1. **Beds and admissions per ward** (Q702)
 
-   One row per town: how many stations it has, and how many of them have never
-   been surveyed for step-free access.
+   One row per ward: its name, how many beds it has, how many admissions it
+   has taken (as the admitting ward), and admissions per bed to one decimal.
 
-   An unsurveyed station has step_free NULL.
+   *Return: ward, beds, admissions, per_bed*
 
-   *Return: town, stations, unsurveyed*
+2. **How patients arrive** (Q703)
 
-2. **Front and rear** (Q673)
+   One row per route of admission -- emergency, referral, transfer -- with how
+   many admissions came that way and what percentage of all admissions that
+   is, to two decimals.
 
-   One row per position in the train: how many workings there have been at
-   that position -- rows of service_units -- and the average seats of the
-   units that took it, to one decimal.
+   *Return: admitted_via, admissions, pct*
 
-   *Return: position, workings, avg_seats*
+3. **Busy consultants with long stays** (Q704)
 
-3. **Services and first-class sales, per line** (Q674)
+   Consultants with at least 600 completed admissions whose patients' average
+   length of stay is over 3.2 days, with both figures -- the average to two
+   decimals.
 
-   For each line: how many services it scheduled, and how many first-class
-   tickets it sold.
+   Length of stay is discharged_at minus admitted_at; julianday() of each
+   gives days. Only discharged admissions count.
 
-   Services with no tickets still count as services.
+   *Return: consultant_id, admissions, avg_days*
 
-   *Return: line_id, services, first_class*
+## 2 - Sequences and strings (4)
 
-## 2 - JSON (4)
+`ward_stays` is keyed on (admission_id, stay_seq), like stops were on a service.
+LAG along it, initials from a name, a set difference over a patient's history,
+and FIRST_VALUE/LAST_VALUE over a time series.
 
-New ground. SQLite has had JSON built in since 3.38: json_object builds a
-document, json_group_array aggregates into an array, json_each unnests text into
-rows, and a subquery nests one inside another.
+4. **One admission's moves** (Q705)
 
-4. **A unit as a JSON object** (Q675)
+   Admission 12 moved ward twice. For each of its stays: the ward, how many
+   hours it lasted to one decimal, and the ward the patient came FROM -- NULL
+   for the first stay.
 
-   Units 1 to 8, each as one JSON object with keys model, seats, built and
-   refurbished -- numbers as numbers, and a unit never refurbished carrying a
-   JSON null.
+   ward_stays is keyed on (admission_id, stay_seq).
 
-   Use json_object. Building JSON by gluing strings together is the trap.
+   *Return: stay_seq, ward_id, hours, from_ward*
 
-   *Return: unit_id, doc*
+5. **Initials** (Q706)
 
-5. **A route as a JSON array** (Q676)
+   Patients 1 to 10 with their initials as 'A.B.' -- first letter of each
+   name, each followed by a full stop. Every name is two words.
 
-   For the first service that ran (not cancelled) on each line -- the lowest
-   service_id -- its calling points as a JSON array of station NAMES in stop
-   order.
+   *Return: patient_id, initials*
 
-   json_group_array is the aggregate. Give it the names and the order from a
-   subquery that joins stops to stations first.
+6. **Only ever an emergency** (Q707)
 
-   *Return: line_id, route*
+   Patients who have been admitted as an emergency and have NEVER been
+   admitted any other way.
 
-6. **A list handed in as JSON** (Q677)
+   *Return: patient_id*
 
-   An app sends the station ids it wants as JSON text: '[5, 12, 40, 58]'.
-   Return each of those stations' name and town, by unnesting the array with
-   json_each and joining -- no IN list typed by hand.
+7. **First and last readings** (Q708)
 
-   *Return: station_id, name, town*
+   For admissions 1 to 5, the heart rate at the first observation and at the
+   last -- one row per admission, no NULLs.
 
-7. **A nested document per line** (Q678)
+   FIRST_VALUE and LAST_VALUE; mind the frame on the second.
 
-   Each line as one JSON object: its name under 'line', its colour under
-   'colour', and under 'towns' a JSON array of the DISTINCT towns it calls in,
-   alphabetical.
+   *Return: admission_id, first_hr, last_hr*
 
-   A subquery builds the array; json_object nests it.
+## 3 - Dates and times (3)
 
-   *Return: line_id, doc*
+Datetimes are 'YYYY-MM-DD HH:MM' text. A month key across a year boundary, a
+time range that wraps midnight, and the first open interval: a stay with no end
+yet.
 
-## 3 - Hierarchies (4)
+8. **Admissions by month** (Q709)
 
-The staff tree is five levels deep. One recursive CTE, pointed four ways: depth
-from the top, the chain of names, the managers above one person, and the
-headcount below every manager at once.
+   For each month, by date of admission: how many admissions, and the average
+   completed length of stay in days to one decimal. Eighteen months -- January
+   2025 and January 2026 are different months. Still-open admissions count as
+   admissions but not in the average.
 
-8. **How far down the tree** (Q679)
+   *Return: month, admissions, avg_days*
 
-   Every member of staff with their depth in the reporting tree: 0 for the one
-   person who reports to nobody, 1 for those who report to them, and so on.
-   Forty rows.
+9. **Admitted in the night** (Q710)
 
-   *Return: staff_id, depth*
+   For each route of admission: how many admissions, how many of them arrived
+   between 22:00 and 06:00, and the percentage to one decimal.
 
-9. **The chain, written out** (Q680)
+   The time is the tail of admitted_at, from character 12. The night wraps
+   past midnight.
 
-   Every member of staff with the chain of names from the top of the tree down
-   to them, joined by ' > ' -- so the top person's chain is just their own
-   name.
+   *Return: admitted_via, admissions, at_night, pct*
 
-   *Return: staff_id, chain*
+10. **Length of stay so far** (Q711)
 
-10. **Everyone above staff 37** (Q681)
+    For admissions in June 2026, per ward: how many, how many are still in,
+    and the average length of stay in days to two decimals AS OF the end of
+    the data, 2026-06-30 23:59 -- so a patient still in has been in from
+    admission until then.
 
-    The managers above staff member 37, all the way to the top, with how many
-    steps up each one is: 1 for the direct manager.
+    Open intervals: an end that is NULL means 'not yet'.
 
-    This walks UP the tree, so the step follows reports_to from the person,
-    not from the top.
+    *Return: ward_id, admissions, still_in, avg_days*
 
-    *Return: staff_id, name, steps_up*
+## 4 - Intervals and occupancy (4)
 
-11. **Headcount below each manager** (Q682)
+New ground. Who was on a ward at an instant, two intervals that overlap, a
+readmission within thirty days of a discharge, and a running occupancy built
+from +1 and -1 events.
 
-    For everyone who has at least one person below them: how many people are
-    under them at ANY depth -- reports, reports of reports, and so on.
+11. **Who was where at eight o'clock** (Q712)
 
-    Seed the recursion with every person as their own root, then count what
-    each root reaches.
+    How many patients were on each ward at 2026-06-30 08:00, from ward_stays:
+    a stay covers that instant if it began at or before it and had not ended
+    -- and a stay with no end had not ended.
 
-    *Return: staff_id, headcount_below*
+    *Return: ward_id, patients*
 
-## 4 - NULL logic and subqueries (4)
+12. **Admitted twice at once** (Q713)
 
-Three-valued logic and NOT, where NULLs sort and how to move them, ALL and ANY
-written as MAX and MIN, and an average of sums that needs two levels.
+    Pairs of admissions of the SAME patient whose intervals overlap -- a data-
+    quality check. Each pair once, the lower admission_id first. An open
+    admission runs to the snapshot, 2026-06-30 23:59.
 
-12. **Not known to be long** (Q683)
+    Two intervals overlap when each starts before the other ends.
 
-    Per kind of incident, how many are NOT over 30 minutes -- and an incident
-    whose delay was never quantified is not over 30 minutes either, so it
-    counts.
+    *Return: admission_a, admission_b, patient_id*
 
-    *Return: kind, incidents*
+13. **Back within thirty days** (Q714)
 
-13. **Never refurbished goes last** (Q684)
+    For each route of admission: how many admissions, how many of them were
+    READMISSIONS -- the same patient had been discharged within the previous
+    30 days -- and the percentage to one decimal.
 
-    Every unit numbered by refurbishment year, earliest first -- and the units
-    NEVER refurbished numbered after all the others, not before. Ties by
-    unit_id.
+    Measure from the previous DISCHARGE, not the previous admission.
 
-    *Return: unit_id, refurbished_year, position*
+    *Return: admitted_via, admissions, readmissions, pct*
 
-14. **As many seats as every Class 170** (Q685)
+14. **Nightingale, day by day** (Q715)
 
-    Units with at least as many seats as EVERY Class 170 unit -- the biggest
-    Class 170s themselves included.
+    For each day in January 2025 on which someone arrived on or left ward 1:
+    the net change that day -- arrivals minus departures, by ward_stays -- and
+    how many patients were on the ward at the end of it. The ward was empty on
+    2025-01-01.
 
-    SQLite has no ALL or ANY. 'At least as many as every one of them' is a
-    comparison with one number from a subquery -- which number?
+    Turn every stay into a +1 event and a -1 event, then run a total over the
+    days.
 
-    *Return: unit_id, model, seats*
+    *Return: day, net, occupancy*
 
-15. **The average service's takings** (Q686)
+## 5 - Joins and grain (4)
 
-    For each line, the average revenue PER SERVICE, to the nearest penny --
-    add up each service's tickets first, then average those totals. Services
-    with no tickets do not count.
+Two children of one parent, an anti-join that must test the key, a NOT EXISTS
+against the right table, and a join on two intervals overlapping instead of two
+keys matching.
 
-    An aggregate of an aggregate needs two levels.
+15. **Procedures and prescriptions, per ward** (Q716)
 
-    *Return: line_id, avg_service_revenue*
+    For each ward, by admitting ward: how many procedures and how many
+    prescriptions its admissions have had.
 
-## 5 - Distributions (4)
+    Both hang off `admissions`. Joining both at once multiplies each by the
+    other.
 
-NTILE tiers, PERCENT_RANK against CUME_DIST, a standard deviation by hand, and a
-histogram from integer division.
+    *Return: ward_id, procedures, prescriptions*
 
-16. **The fleet in three tiers** (Q687)
+16. **Never admitted** (Q717)
 
-    Split the fifty units into three tiers by seats -- tier 1 the smallest --
-    as evenly as possible, ties by unit_id. One row per tier with how many
-    units it holds and its smallest and largest seat count.
+    Patients who have never been admitted. Write it as an outer join that
+    keeps the non-matches.
 
-    *Return: tier, units, min_seats, max_seats*
+    *Return: patient_id, name*
 
-17. **Where a salary sits in its role** (Q688)
+17. **Never on the rota** (Q718)
 
-    Every member of staff with their salary's PERCENT_RANK within their role,
-    to three decimals: 0 for the lowest paid in the role, 1 for the highest.
+    Staff who have never worked a shift, with their role.
 
-    *Return: staff_id, role, salary, pct_rank*
+    *Return: staff_id, name, role*
 
-18. **How spread out the prices are** (Q689)
+18. **Controlled drugs on Fleming** (Q719)
 
-    For each class, the average ticket price and its population standard
-    deviation, both in pence to one decimal.
+    For each controlled drug, how many prescriptions of it were running while
+    the patient was on ward 5 -- Fleming -- at any point, whether or not they
+    were admitted there.
 
-    SQLite has no STDDEV. The variance is the mean of the squares minus the
-    square of the mean; sqrt() is built in.
+    A prescription runs from started_on to ended_on (dates); a stay from
+    from_at to to_at (datetimes, date() them). NULL ends run to 2026-06-30.
 
-    *Return: class, avg_price, stddev*
+    *Return: drug, prescriptions*
 
-19. **Ticket prices in five-pound bands** (Q690)
+## 6 - Window functions (4)
 
-    A histogram of ticket prices: how many tickets fall in each five-pound
-    band, the band labelled by where it starts in pounds -- 0, 5, 10... A
-    ticket at exactly 10.00 belongs to the 10 band.
+A running total per partition, DENSE_RANK over an aggregate, a share of a
+partition, and top-N per group.
 
-    *Return: band, tickets*
+19. **Admissions accumulating, per ward** (Q720)
 
-## 6 - Familiar mix (3)
+    Admissions by ward and month of admission, with a running total that
+    restarts for each ward.
 
-Top-1 per group, a self-join along the stop sequence, and a date spine counting
-the days nothing happened.
+    *Return: ward_id, month, admissions, running_total*
 
-20. **Each line's worst service** (Q691)
+20. **Consultants by caseload** (Q721)
 
-    For each line, the service that lost the most quantified delay minutes
-    across its incidents, and how many. One row per line; ties by the lower
-    service_id.
+    Every consultant who has admitted anyone, with their number of admissions
+    and their rank -- 1 for the most. Two consultants tie; they share a rank,
+    and no rank is skipped after them.
 
-    *Return: line_id, service_id, delay_minutes*
+    *Return: consultant_id, admissions, rank*
 
-21. **Consecutive calls on line 1** (Q692)
+21. **Each route's share of the ward** (Q722)
 
-    The pairs of stations that line 1's services call at one after the other:
-    each (this stop, next stop) pair once. Nine pairs for a ten-station route.
+    For every ward and route of admission: how many admissions, and what
+    percentage of THAT WARD's admissions came by that route, to two decimals.
+    Each ward's three shares add to 100.
 
-    *Return: from_station, to_station*
+    *Return: ward_id, admitted_via, admissions, pct_of_ward*
 
-22. **Days with no incidents, per month** (Q693)
+22. **The three highest earners per category** (Q723)
 
-    For each month of the timetable, how many days had NO incident reported at
-    all. Eighteen months, every one of which has some quiet days.
+    For each category of procedure -- surgical, diagnostic, therapeutic -- the
+    three surgeons whose procedures of that category carry the highest total
+    tariff, with the total in pence. Nine rows; ties by the lower surgeon_id.
 
-    A day with nothing reported has no row anywhere; generate the days first.
-
-    *Return: month, quiet_days*
+    *Return: category, surgeon_id, tariff_pence*
 
 ## 7 - Changing the data (8)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. CASE in an UPDATE, a conditional
-upsert, a table with four kinds of constraint, the rebuild-a-table migration,
-RAISE(IGNORE), a recursive view, a UNIQUE index and a STRICT table.
+question's probe query reads the result. A recursive UPDATE, AUTOINCREMENT, ON
+DELETE CASCADE, a deferred foreign key, RAISE(FAIL), a soft delete through a
+view, a partial UNIQUE index and a TEMP table.
 
-23. **A raise that depends on the role** (Q694)
+23. **Fill the division down the tree** (Q724)
 
-    One UPDATE that gives every member of staff a raise by role: managers 2%,
-    drivers 4%, everyone else 3%. Whole pounds: CAST(ROUND(salary * factor) AS
-    INTEGER).
+    Only the four division heads carry a division; the 56 people under them
+    have NULL. Fill every NULL with the division of the head at the top of
+    that person's chain, in ONE UPDATE fed by a recursive CTE.
 
-    The factor is a CASE expression. Think about what CASE returns for a role
-    you did not list.
+    Managers do not always have lower ids than their reports, so copying from
+    the direct manager will not cascade.
 
-    *Checked: total salary by role*
+    *Checked: staff per division*
 
-24. **Update only if it is an improvement** (Q695)
+24. **An id that is never reused** (Q725)
 
-    Two revised q1 figures for station 3 arrive: 35000 for 2025 and 90000 for
-    2024. Both rows exist. Write two UPSERTs that create the row if missing
-    and otherwise update q1 -- but ONLY when the new figure is higher than the
-    stored one. The 2025 figure is lower and must be ignored.
+    Create `incident_log (log_id INTEGER PRIMARY KEY, note TEXT NOT NULL)` so
+    that an id, once used, is never handed out again -- even after the row
+    that had it is deleted.
 
-    Use (3, 2025, 35000, 30136, 31843, 38990) and (3, 2024, 90000, 0, 0, 0) as
-    the VALUES.
+    After your script, the question inserts two notes, deletes the second, and
+    inserts a third. The third must get id 3, not 2.
 
-    *Checked: station 3's year, q1 and q2*
+    *Checked: SELECT * FROM incident_log*
 
-25. **A table that defends itself** (Q696)
+25. **Notes that go with the patient** (Q726)
 
-    Create `station_notes`: note_id INTEGER PRIMARY KEY; station_id that must
-    reference stations; note, TEXT, required, 1 to 80 characters; noted_on,
-    TEXT, defaulting to '2026-07-01'.
+    Create `patient_notes (note_id INTEGER PRIMARY KEY, patient_id INTEGER NOT
+    NULL referencing patients, note TEXT NOT NULL)` such that deleting a
+    patient deletes their notes with them.
 
-    After your script, the question inserts three notes: a good one for
-    station 5, one for station 999, and an empty one. Exactly one should land.
+    After your script, the question adds two notes for patient 6 -- who has
+    never been admitted -- and then deletes patient 6. Both the patient and
+    the notes should be gone.
 
-    *Checked: SELECT * FROM station_notes*
+    *Checked: whether patient 6 exists, and how many notes there are*
 
-26. **Add a constraint by rebuilding the table** (Q697)
+26. **The child before the parent** (Q727)
 
-    `operators` needs a CHECK (since_year >= 1900). ALTER TABLE cannot add
-    one, so rebuild: create the new table, copy the rows, drop the old one,
-    rename the new one into place.
+    Create `referrals (referral_id INTEGER PRIMARY KEY, patient_id INTEGER NOT
+    NULL referencing patients, referred_on TEXT NOT NULL)`, then in one
+    transaction insert a referral for patient 2001 -- who does not exist yet
+    -- and THEN insert patient 2001 (any name and details), and commit.
 
-    Services reference operators, so DROP TABLE is refused while foreign keys
-    are on. Turn them off for the rebuild and back on after -- a PRAGMA, not a
-    transaction, since PRAGMA foreign_keys is a no-op inside one.
+    The foreign key has to be DEFERRABLE INITIALLY DEFERRED, or the first
+    insert fails.
 
-    *Checked: the row count, whether the table's SQL now has a CHECK, and how many services would be orphaned*
+    *Checked: how many referrals, and whether patient 2001 exists*
 
-27. **Drop the bad row, keep the rest** (Q698)
+27. **Fail the row, keep what came before** (Q728)
 
-    Write a trigger that silently discards any ticket inserted with a price of
-    0 -- no error, the other rows of the same INSERT still land.
+    Write a trigger that refuses any observation with a heart rate over 200 --
+    but using RAISE(FAIL, ...) rather than ABORT, so that rows already written
+    by the same statement stay written.
 
-    After your script, the question inserts three tickets in ONE statement;
-    the middle one is free. Two should land.
+    After your script, the question inserts three observations for admission 1
+    in ONE statement; the third is the bad one. The first two should land.
 
-    *Checked: id and price of every ticket after the last existing one*
+    *Checked: time and heart rate of admission 1's observations on or after 2026-07-01*
 
-28. **A calendar that stores nothing** (Q699)
+28. **Stop, do not delete** (Q729)
 
-    Create a view `calendar (day)` that yields every date from 2025-01-01 to
-    2026-06-30 inclusive -- 546 rows -- generated by a recursive CTE inside
-    the view. It stores no rows.
+    Create a view `open_prescriptions (prescription_id, admission_id, drug_id,
+    started_on)` over the prescriptions with no end date, and make DELETE on
+    the view END the prescription -- set ended_on to '2026-07-01' -- rather
+    than remove it.
 
-    *Checked: the count, first and last day, and how many days in it have no incident*
+    After your script, the question runs DELETE FROM open_prescriptions WHERE
+    prescription_id = 367.
 
-29. **One service per slot** (Q700)
+    *Checked: the prescription count, 367's ended_on, and how many are still open*
 
-    No two services may share a line, date and departure time. Enforce that
-    with a UNIQUE index on `services`.
+29. **One open admission per patient** (Q730)
 
-    After your script, the question inserts two services on line 4 for
-    2025-01-01: one at 06:09, which service 10 already holds, and one at
-    06:10. Exactly one should be refused.
+    A patient cannot be admitted twice at once. Enforce it with a UNIQUE index
+    on `admissions` that applies only to rows with no discharge -- a partial
+    index -- so past admissions do not count.
 
-    *Checked: line 4's services that day, and how many unique indexes services has beyond its primary key*
+    After your script, the question inserts two admissions for patient 1500,
+    who is currently in: one still open, one already discharged. Only the open
+    one should be refused.
 
-30. **A table that refuses the wrong type** (Q701)
+    *Checked: how many partial unique indexes admissions has, and patient 1500's admission count*
 
-    Create `unit_mileage (unit_id INTEGER PRIMARY KEY referencing
-    rolling_stock, miles INTEGER NOT NULL)` as a STRICT table, so that a REAL
-    can never be stored in the INTEGER column.
+30. **Scratch space that leaves no trace** (Q731)
 
-    After your script, the question inserts miles of 120500, 98000.5 and
-    '77000' for units 1, 2 and 3. One should be refused; one should be
-    converted.
+    Find the admissions that have run more than 20 days as of 2026-06-30 23:59
+    -- open ones included -- and put their ids in a TEMPORARY table
+    `long_stays`. Then raise every 'routine' admission in that list to
+    'urgent', reading the list from the temp table.
 
-    *Checked: unit_id, miles and typeof(miles)*
+    A temp table lives in the `temp` schema and vanishes with the connection;
+    nothing permanent should be left behind.
+
+    *Checked: how many admissions are urgent, whether long_stays exists in the main schema, and whether it exists in temp*
 
 ## The one concept with no question here
 
@@ -410,7 +425,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-671 retired ones.
+701 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

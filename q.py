@@ -1,6 +1,6 @@
 """Run ad-hoc SQL against testdb and print the result as a table.
 
-    python q.py "SELECT name, unit_cost FROM parts LIMIT 5"
+    python q.py "SELECT name, beds FROM wards LIMIT 5"
     python q.py -f myquery.sql
     python q.py            # interactive; blank line runs, \\q quits
 

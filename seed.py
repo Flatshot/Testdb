@@ -1,4 +1,4 @@
-"""Populate testdb with practice data for a regional railway.
+"""Populate testdb with practice data for a district hospital.
 
 Deterministic: the RNG is seeded and no wall-clock dates are used, so running
 this twice produces byte-identical data. Safe to re-run -- it drops every table
@@ -6,82 +6,136 @@ first, so a schema change is picked up.
 
     python seed.py
 
-The gaps below are deliberate. Questions about anti-joins, NULL handling and
-COUNT need something real to find:
+The gaps below are deliberate. Questions about anti-joins, NULL handling,
+open intervals and COUNT need something real to find:
 
-  * cancelled services, which have no stops at all
-  * stations no service calls at
-  * stops that were skipped, so actual_arrive is NULL
-  * tickets with no destination recorded (open returns)
-  * incidents whose delay was never quantified
-  * units that have never been assigned to a service
-  * a five-deep reporting tree, with staff who manage nobody
-  * stations nobody has surveyed for step-free access
+  * patients who have never been admitted
+  * admissions still open, so discharged_at is NULL -- and their current
+    ward stay has no to_at, and their prescriptions may have no ended_on
+  * observations with no temperature, procedures with no duration
+  * patients whose blood group was never typed
+  * staff with no ward (pharmacists, porters), and three who have never
+    worked a shift
+  * procedure types nobody has performed
+  * a reporting FOREST: four division heads, and only they carry a division
 """
 
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import db
 
-SEED = 701
+SEED = 731
 
-# Services are generated per line per day across this window. stops is the big
-# table -- roughly eight per service -- and it is what the efficiency questions
-# are asked against, so it needs to be large enough that a scan is felt.
-RANGE_START = date(2025, 1, 1)
-RANGE_END = date(2026, 6, 30)
-# A flat timetable makes a whole class of question ungradeable: with the same
-# number of services every day, "the last day of the month" and "the 15th" give
-# identical counts, so a wrong query still matches. Runs per line vary by day of
-# the week and by season instead.
-RUNS_WEEKDAY = 4
-RUNS_SATURDAY = 3
-RUNS_SUNDAY = 2
-SUMMER = (6, 7, 8)          # an extra working on the busier lines
-WINTER = (1, 2)             # and one fewer in the quiet months
+# Admissions are spread across this window. observations is the big table --
+# a reading every four to eight hours of every stay -- so it is where a
+# fan-out or a runaway recursion is actually felt.
+RANGE_START = datetime(2025, 1, 1, 0, 0)
+RANGE_END = datetime(2026, 6, 30, 23, 59)
+# The window closes with patients still in. Anything that would end after
+# this instant is left open instead: a NULL discharge, a NULL stay end, a
+# NULL prescription end.
+SNAPSHOT = RANGE_END
 
 TABLES = [
-    "operators", "lines", "stations", "station_footfall", "staff",
-    "rolling_stock", "services", "stops", "service_units", "tickets",
-    "incidents",
+    "wards", "staff", "patients", "admissions", "ward_stays",
+    "procedure_types", "procedures", "drugs", "prescriptions", "shifts",
+    "observations",
 ]
 
-OPERATORS = [("Northern Rail", 1997), ("Coastway", 2004),
-             ("Vale Connect", 2012), ("Pennine Express", 1988)]
+WARDS = [("Nightingale", "cardiology", 24, 2), ("Seacole", "respiratory", 20, 2),
+         ("Cavell", "orthopaedics", 28, 3), ("Barry", "general surgery", 30, 3),
+         ("Fleming", "infectious diseases", 16, 4),
+         ("Lister", "gastroenterology", 22, 1),
+         ("Jenner", "paediatrics", 18, 1), ("Bevan", "geriatrics", 26, 4)]
+PAEDIATRICS, GERIATRICS = 7, 8
 
-LINES = [("Coast Line", "blue"), ("Vale Line", "green"),
-         ("Moor Line", "purple"), ("City Loop", "red"),
-         ("Estuary Line", "orange"), ("Dales Line", "brown")]
+FIRST = ["Aisha", "Bartholomew", "Cerys", "Dmitri", "Eleanor", "Farouk",
+         "Grace", "Hamid", "Imogen", "Jonah", "Kwame", "Leila", "Marcus",
+         "Nadia", "Oluwaseun", "Priya", "Quentin", "Rosa", "Samir", "Tamsin",
+         "Umar", "Verity", "Wilfred", "Xiu", "Yusuf", "Zara"]
+LAST = ["Achebe", "Baxter", "Chowdhury", "Dalgleish", "Ekwueme", "Fairweather",
+        "Grzybowski", "Hollingsworth", "Iqbal", "Jankowski", "Khatri",
+        "Lindqvist", "Mbeki", "Nakamura", "Okonjo", "Papadopoulos", "Quraishi",
+        "Rasmussen", "Sowerby", "Tremblay", "Uddin", "Villanueva", "Whitcombe",
+        "Yilmaz", "Zielinski"]
 
-TOWNS = ["Ashford", "Brindley", "Carrow", "Dunmere", "Eastgate", "Fenwick",
-         "Garsdale", "Holbeck", "Ilkeston", "Jarrow", "Kirkstall", "Langton",
-         "Marsden", "Netherby", "Oakworth", "Pentre", "Quarrydale", "Rosthorne",
-         "Southwell", "Trentham"]
-SUFFIXES = ["Central", "Parkway", "Bridge", "North", "South", "Halt",
-            "Junction", "Riverside"]
+ROLES = ["consultant", "doctor", "nurse", "pharmacist", "porter"]
+SALARY = {"consultant": (95_000, 140_000), "doctor": (42_000, 78_000),
+          "nurse": (28_000, 46_000), "pharmacist": (38_000, 58_000),
+          "porter": (22_000, 27_000)}
+BLOOD = ["O+", "O+", "O+", "O-", "A+", "A+", "A-", "B+", "B-", "AB+", "AB-"]
+POSTCODES = ["LS1", "LS2", "LS4", "LS6", "LS7", "LS8", "LS9", "LS11", "LS12",
+             "LS13", "LS15", "LS16", "LS17", "BD3", "WF1"]
+VIA = ["emergency"] * 55 + ["referral"] * 35 + ["transfer"] * 10
+PRIORITY = ["immediate"] * 10 + ["urgent"] * 40 + ["routine"] * 50
 
-FIRST = ["Alan", "Bernice", "Callum", "Dilys", "Eamon", "Freya", "Gareth",
-         "Heulwen", "Ivan", "Joyce", "Kenan", "Lowri", "Martyn", "Nerys",
-         "Osian", "Petra", "Rhodri", "Sian", "Tomos", "Verity"]
-LAST = ["Ackroyd", "Broadbent", "Cadwallader", "Dewhurst", "Eccleston",
-        "Fothergill", "Greenhalgh", "Hetherington", "Illingworth", "Jepson",
-        "Kirkbride", "Lightfoot", "Micklethwait", "Nuttall", "Ormerod",
-        "Pemberton", "Ravenscroft", "Sedgwick", "Thistlethwaite", "Wainwright"]
+PROCEDURE_TYPES = [
+    ("SRG-01", "Appendicectomy", "surgical", 285_000),
+    ("SRG-02", "Hip replacement", "surgical", 790_000),
+    ("SRG-03", "Knee replacement", "surgical", 720_000),
+    ("SRG-04", "Hernia repair", "surgical", 210_000),
+    ("SRG-05", "Cholecystectomy", "surgical", 330_000),
+    ("SRG-06", "Coronary bypass", "surgical", 1_450_000),
+    ("SRG-07", "Pacemaker insertion", "surgical", 640_000),
+    ("SRG-08", "Fracture fixation", "surgical", 410_000),
+    ("SRG-09", "Tonsillectomy", "surgical", 150_000),
+    ("SRG-10", "Skin graft", "surgical", 260_000),
+    ("DIA-01", "CT scan", "diagnostic", 42_000),
+    ("DIA-02", "MRI scan", "diagnostic", 68_000),
+    ("DIA-03", "Ultrasound", "diagnostic", 18_000),
+    ("DIA-04", "Endoscopy", "diagnostic", 55_000),
+    ("DIA-05", "Colonoscopy", "diagnostic", 61_000),
+    ("DIA-06", "Echocardiogram", "diagnostic", 36_000),
+    ("DIA-07", "Angiogram", "diagnostic", 95_000),
+    ("DIA-08", "Bronchoscopy", "diagnostic", 48_000),
+    ("DIA-09", "Bone density scan", "diagnostic", 22_000),
+    ("DIA-10", "Lumbar puncture", "diagnostic", 31_000),
+    ("THR-01", "Blood transfusion", "therapeutic", 27_000),
+    ("THR-02", "Dialysis session", "therapeutic", 38_000),
+    ("THR-03", "Chemotherapy cycle", "therapeutic", 120_000),
+    ("THR-04", "Physiotherapy course", "therapeutic", 15_000),
+    ("THR-05", "Radiotherapy fraction", "therapeutic", 45_000),
+    ("THR-06", "Joint injection", "therapeutic", 12_000),
+    ("THR-07", "Nebuliser therapy", "therapeutic", 6_000),
+    ("THR-08", "Wound debridement", "therapeutic", 19_000),
+    ("THR-09", "Cardioversion", "therapeutic", 52_000),
+    ("THR-10", "Plasma exchange", "therapeutic", 88_000),
+]
+# Three procedure types are never performed: the last of each category.
+NEVER_PERFORMED = {"SRG-10", "DIA-10", "THR-10"}
 
-ROLES = ["driver", "guard", "dispatcher", "manager"]
-MODELS = ["Class 150", "Class 156", "Class 158", "Class 170", "Class 195",
-          "Class 331", "Class 802"]
-CLASSES = ["first", "standard", "advance"]
-KINDS = ["signal", "weather", "fault", "trespass", "staffing"]
+DRUGS = [
+    ("Amoxicillin", "tablet", 500, 12, 0), ("Paracetamol", "tablet", 500, 3, 0),
+    ("Ibuprofen", "tablet", 400, 4, 0), ("Morphine", "injection", 10, 180, 1),
+    ("Metformin", "tablet", 500, 6, 0), ("Atorvastatin", "tablet", 20, 9, 0),
+    ("Ramipril", "tablet", 5, 7, 0), ("Salbutamol", "inhaler", 100, 250, 0),
+    ("Insulin glargine", "injection", 100, 420, 0),
+    ("Furosemide", "tablet", 40, 5, 0), ("Warfarin", "tablet", 3, 8, 0),
+    ("Heparin", "injection", 5000, 210, 0), ("Omeprazole", "tablet", 20, 11, 0),
+    ("Codeine", "tablet", 30, 15, 1), ("Diazepam", "tablet", 5, 9, 1),
+    ("Gentamicin", "infusion", 80, 340, 0), ("Vancomycin", "infusion", 500, 610, 0),
+    ("Ceftriaxone", "injection", 1000, 290, 0), ("Prednisolone", "tablet", 5, 6, 0),
+    ("Amlodipine", "tablet", 5, 7, 0), ("Bisoprolol", "tablet", 5, 8, 0),
+    ("Clopidogrel", "tablet", 75, 14, 0), ("Oxycodone", "tablet", 10, 95, 1),
+    ("Fentanyl", "injection", 100, 260, 1), ("Ondansetron", "injection", 4, 120, 0),
+    ("Dexamethasone", "injection", 4, 85, 0), ("Levothyroxine", "tablet", 50, 5, 0),
+    ("Sertraline", "tablet", 50, 10, 0), ("Tramadol", "tablet", 50, 18, 1),
+    ("Lorazepam", "injection", 2, 140, 1), ("Ipratropium", "inhaler", 20, 190, 0),
+    ("Tiotropium", "inhaler", 18, 380, 0), ("Enoxaparin", "injection", 40, 330, 0),
+    ("Apixaban", "tablet", 5, 32, 0), ("Digoxin", "tablet", 125, 9, 0),
+    ("Doxycycline", "tablet", 100, 13, 0), ("Nitrofurantoin", "tablet", 50, 16, 0),
+    ("Fluconazole", "tablet", 200, 24, 0), ("Piperacillin", "infusion", 4000, 720, 0),
+    ("Propofol", "infusion", 200, 460, 0),
+]
 
 
-def _iso(d):
-    return d.isoformat()
+def _dt(d):
+    return d.strftime("%Y-%m-%d %H:%M")
 
 
-def _hhmm(minutes):
-    return f"{minutes // 60 % 24:02d}:{minutes % 60:02d}"
+def _d(d):
+    return d.strftime("%Y-%m-%d")
 
 
 def seed():
@@ -99,198 +153,244 @@ def seed():
 
         with conn:
             conn.executemany(
-                "INSERT INTO operators (operator_id, name, since_year)"
-                " VALUES (?, ?, ?)",
-                [(i, n, y) for i, (n, y) in enumerate(OPERATORS, 1)])
-            conn.executemany(
-                "INSERT INTO lines (line_id, name, colour) VALUES (?, ?, ?)",
-                [(i, n, c) for i, (n, c) in enumerate(LINES, 1)])
-
-            # ------------------------------------------------------- stations
-            station_rows, used = [], set()
-            for sid in range(1, 61):
-                while True:
-                    town = TOWNS[rng.randrange(len(TOWNS))]
-                    name = (town if rng.random() < 0.35
-                            else f"{town} {SUFFIXES[rng.randrange(len(SUFFIXES))]}")
-                    if name not in used:
-                        used.add(name)
-                        break
-                opened = date(1840, 1, 1) + timedelta(
-                    days=rng.randrange(0, 60000))
-                # A tenth have never been surveyed for step-free access.
-                step = None if rng.random() < 0.10 else rng.choice([0, 1])
-                station_rows.append((sid, name, town, _iso(opened), step))
-            conn.executemany(
-                "INSERT INTO stations (station_id, name, town, opened_on,"
-                " step_free) VALUES (?, ?, ?, ?, ?)", station_rows)
-
-            # ----------------------------------------------- station_footfall
-            foot = []
-            for sid in range(1, 61):
-                base = rng.randrange(20_000, 400_000)
-                for year in (2023, 2024, 2025):
-                    qs = [max(0, int(base * rng.uniform(0.18, 0.32)))
-                          for _ in range(4)]
-                    foot.append((sid, year, *qs))
-            conn.executemany(
-                "INSERT INTO station_footfall (station_id, year, q1, q2, q3,"
-                " q4) VALUES (?, ?, ?, ?, ?, ?)", foot)
+                "INSERT INTO wards (ward_id, name, specialty, beds, floor)"
+                " VALUES (?, ?, ?, ?, ?)",
+                [(i, *w) for i, w in enumerate(WARDS, 1)])
 
             # ---------------------------------------------------------- staff
+            # A forest: four division heads report to nobody. Consultants
+            # report to the head of Medicine or Surgery, doctors to a
+            # consultant, senior nurses to the matron, nurses to a senior
+            # nurse, pharmacists to the chief pharmacist, porters to the
+            # matron. Three levels at the deepest.
             staff_rows = []
-            for stid in range(1, 41):
+            heads = [(1, "consultant", "Medicine"), (2, "consultant", "Surgery"),
+                     (3, "nurse", "Nursing"), (4, "pharmacist", "Pharmacy")]
+            roles = (["consultant"] * 8 + ["doctor"] * 16 + ["nurse"] * 24
+                     + ["pharmacist"] * 3 + ["porter"] * 5)
+            consultants, senior_nurses = [], []
+            for sid in range(1, 61):
                 name = (FIRST[rng.randrange(len(FIRST))] + " "
                         + LAST[rng.randrange(len(LAST))])
-                role = "manager" if stid <= 5 else ROLES[rng.randrange(3)]
-                if stid == 1:
+                hired = date(2003, 1, 1) + timedelta(days=rng.randrange(8000))
+                if sid <= 4:
+                    _, role, division = heads[sid - 1]
                     boss = None
-                elif stid <= 5:
-                    boss = 1
                 else:
-                    # One draw whatever the level, so the rest of the seed
-                    # stream is untouched; the offsets just deepen the tree.
-                    pick = rng.randrange(2, 6)
-                    if stid <= 15:
-                        boss = pick
-                    elif stid <= 25:
-                        boss = pick + 4
+                    role, division = roles[sid - 5], None
+                    if role == "consultant":
+                        boss = rng.choice([1, 2])
+                        consultants.append(sid)
+                    elif role == "doctor":
+                        boss = rng.choice(consultants)
+                    elif role == "nurse":
+                        if len(senior_nurses) < 6:
+                            boss = 3
+                            senior_nurses.append(sid)
+                        else:
+                            boss = rng.choice(senior_nurses)
+                    elif role == "pharmacist":
+                        boss = 4
                     else:
-                        boss = pick + 14
-                hired = date(2005, 1, 1) + timedelta(days=rng.randrange(7000))
-                salary = rng.randrange(26_000, 71_000)
-                staff_rows.append((stid, name, rng.randrange(1, 61), role,
-                                   _iso(hired), boss, salary))
+                        boss = 3
+                ward = (None if role in ("pharmacist", "porter")
+                        else rng.randrange(1, len(WARDS) + 1))
+                lo, hi = SALARY[role]
+                staff_rows.append((sid, name, role, ward, _d(hired), boss,
+                                   division, rng.randrange(lo, hi)))
+            # Shuffle the ids below the heads, so a manager's id is as often
+            # above a report's as below it. Otherwise a one-level UPDATE
+            # that reads its own earlier rows walks the whole tree by luck.
+            perm = list(range(5, 61))
+            random.Random(SEED + 1).shuffle(perm)
+            remap = {i: (i if i <= 4 else perm[i - 5]) for i in range(1, 61)}
+            staff_rows = sorted(
+                (remap[s[0]], s[1], s[2], s[3], s[4],
+                 None if s[5] is None else remap[s[5]], s[6], s[7])
+                for s in staff_rows)
+            consultants = [s[0] for s in staff_rows
+                           if s[2] == "consultant" and s[0] > 4]
+            # Two passes: a manager may now have a higher id than a report,
+            # and foreign keys are checked as each statement ends.
             conn.executemany(
-                "INSERT INTO staff (staff_id, name, base_station, role,"
-                " hired_on, reports_to, salary) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                staff_rows)
-
-            # -------------------------------------------------- rolling stock
-            stock = []
-            for uid in range(1, 51):
-                built = rng.randrange(1988, 2023)
-                # Older units may have been refurbished; newer ones have not.
-                refurb = (built + rng.randrange(12, 25)
-                          if built < 2005 and rng.random() < 0.7 else None)
-                stock.append((uid, MODELS[rng.randrange(len(MODELS))],
-                              rng.choice([120, 148, 176, 200, 242, 300]),
-                              built, refurb))
+                "INSERT INTO staff (staff_id, name, role, ward_id, hired_on,"
+                " reports_to, division, salary) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)",
+                [(s[0], s[1], s[2], s[3], s[4], s[6], s[7]) for s in staff_rows])
             conn.executemany(
-                "INSERT INTO rolling_stock (unit_id, model, seats, built_year,"
-                " refurbished_year) VALUES (?, ?, ?, ?, ?)", stock)
+                "UPDATE staff SET reports_to = ? WHERE staff_id = ?",
+                [(s[5], s[0]) for s in staff_rows if s[5] is not None])
+            all_consultants = [1, 2] + consultants
+            doctors = [s[0] for s in staff_rows if s[2] == "doctor"]
+            nurses_by_ward = {}
+            for s in staff_rows:
+                if s[2] == "nurse" and s[3]:
+                    nurses_by_ward.setdefault(s[3], []).append(s[0])
+            # Three people have never worked a shift.
+            never_on_shift = {12, 27, 44}
 
-            # ------------------------------------------- a route per line ----
-            # Each line calls at a fixed ordered list of stations. Five
-            # stations are on no line at all.
-            pool = list(range(1, 56))
-            rng.shuffle(pool)
-            routes, at = {}, 0
-            for lid in range(1, len(LINES) + 1):
-                n = rng.randrange(6, 11)
-                routes[lid] = pool[at:at + n]
-                at += n
-                if at + 10 > len(pool):
-                    at = 0
+            # ------------------------------------------------------- patients
+            patients = []
+            for pid in range(1, 2001):
+                name = (FIRST[rng.randrange(len(FIRST))] + " "
+                        + LAST[rng.randrange(len(LAST))])
+                born = date(1930, 1, 1) + timedelta(days=rng.randrange(33_000))
+                blood = None if rng.random() < 0.12 else rng.choice(BLOOD)
+                patients.append((pid, name, _d(born), rng.choice("FM"), blood,
+                                 rng.choice(POSTCODES)))
+            conn.executemany(
+                "INSERT INTO patients (patient_id, name, born_on, sex,"
+                " blood_group, postcode_area) VALUES (?, ?, ?, ?, ?, ?)",
+                patients)
+            born_of = {p[0]: date.fromisoformat(p[2]) for p in patients}
 
-            # Each line draws its trains from a pool of units. Pools overlap
-            # but no unit works every line, so "used on all six" is a real
-            # question rather than a description of everything.
-            pools = {}
-            for lid in range(1, len(LINES) + 1):
-                start = (lid - 1) * 7
-                pools[lid] = [((start + k) % 45) + 1 for k in range(14)]
+            conn.executemany(
+                "INSERT INTO procedure_types (code, name, category,"
+                " tariff_pence) VALUES (?, ?, ?, ?)", PROCEDURE_TYPES)
+            conn.executemany(
+                "INSERT INTO drugs (drug_id, name, form, unit_mg, price_pence,"
+                " controlled) VALUES (?, ?, ?, ?, ?, ?)",
+                [(i, *d) for i, d in enumerate(DRUGS, 1)])
 
-            # ------------------------------------------------------- services
-            svc_rows, stop_rows, unit_rows = [], [], []
-            svc = 0
-            day = RANGE_START
-            while day <= RANGE_END:
-                weekday = day.weekday()          # 0 Monday .. 6 Sunday
-                for lid in range(1, len(LINES) + 1):
-                    if weekday == 6:
-                        runs = RUNS_SUNDAY
-                    elif weekday == 5:
-                        runs = RUNS_SATURDAY
-                    else:
-                        runs = RUNS_WEEKDAY
-                    if day.month in SUMMER and lid % 2 == 1:
-                        runs += 1
-                    elif day.month in WINTER and runs > 1:
-                        runs -= 1
-                    # A line drops the odd working at short notice.
-                    if runs > 1 and rng.random() < 0.08:
-                        runs -= 1
-                    for run in range(runs):
-                        svc += 1
-                        dep = 6 * 60 + run * 210 + rng.randrange(0, 40)
-                        cancelled = 1 if rng.random() < 0.03 else 0
-                        svc_rows.append((svc, lid,
-                                         rng.randrange(1, len(OPERATORS) + 1),
-                                         _iso(day), _hhmm(dep), cancelled))
-                        if cancelled:
-                            continue          # cancelled services have no stops
-                        t = dep
-                        for seq, st in enumerate(routes[lid], 1):
-                            t += rng.randrange(4, 15)
-                            # One stop in twenty was skipped or not recorded.
-                            actual = (None if rng.random() < 0.05
-                                      else _hhmm(t + rng.randrange(-1, 9)))
-                            stop_rows.append((svc, seq, st, _hhmm(t), actual))
-                        for pos in range(1, rng.randrange(2, 4)):
-                            unit_rows.append(
-                                (svc, pools[lid][rng.randrange(
-                                    len(pools[lid]))], pos))
+            # ----------------------------------------------------- admissions
+            # 1,700 of the 2,000 patients are ever admitted; a third of
+            # admissions go to someone already admitted before, so
+            # readmissions are common enough to ask about.
+            pool = rng.sample(range(1, 2001), k=1700)
+            admitted_before = []
+            adm_rows, stay_rows = [], []
+            span_minutes = int((RANGE_END - RANGE_START).total_seconds() // 60)
+            for aid in range(1, 6001):
+                if admitted_before and rng.random() < 0.33:
+                    pid = rng.choice(admitted_before)
+                else:
+                    pid = rng.choice(pool)
+                admitted_before.append(pid)
+                start = RANGE_START + timedelta(minutes=rng.randrange(span_minutes))
+                # Length of stay: most short, a long tail up to a month.
+                los_hours = min(rng.expovariate(1 / 72) + 4, 720)
+                end = start + timedelta(hours=los_hours)
+                age = (start.date() - born_of[pid]).days // 365
+                if age < 16:
+                    ward = PAEDIATRICS
+                elif age >= 75 and rng.random() < 0.6:
+                    ward = GERIATRICS
+                else:
+                    ward = rng.randrange(1, 7)
+                discharged = None if end > SNAPSHOT else _dt(end)
+                adm_rows.append((aid, pid, ward, rng.choice(all_consultants),
+                                 _dt(start), discharged, rng.choice(VIA),
+                                 rng.choice(PRIORITY)))
+                # Ward stays: one for most, two or three for some. The first
+                # is on the admitting ward; moves go to a different ward.
+                n_stays = rng.choices([1, 2, 3], weights=[70, 25, 5])[0]
+                cuts = sorted(rng.uniform(0.1, 0.9) for _ in range(n_stays - 1))
+                bounds = [start] + [start + timedelta(hours=los_hours * c)
+                                    for c in cuts] + [end]
+                cur = ward
+                for seq in range(1, n_stays + 1):
+                    s_from, s_to = bounds[seq - 1], bounds[seq]
+                    if seq > 1:
+                        cur = rng.choice([w for w in range(1, 9) if w != cur])
+                    to_at = None if s_to > SNAPSHOT else _dt(s_to)
+                    stay_rows.append((aid, seq, cur, _dt(s_from), to_at))
+                    if to_at is None:
+                        break
+            conn.executemany(
+                "INSERT INTO admissions (admission_id, patient_id, ward_id,"
+                " consultant_id, admitted_at, discharged_at, admitted_via,"
+                " priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", adm_rows)
+            conn.executemany(
+                "INSERT INTO ward_stays (admission_id, stay_seq, ward_id,"
+                " from_at, to_at) VALUES (?, ?, ?, ?, ?)", stay_rows)
+
+            def stay_end(a):
+                end = (datetime.strptime(a[5], "%Y-%m-%d %H:%M") if a[5]
+                       else SNAPSHOT)
+                return datetime.strptime(a[4], "%Y-%m-%d %H:%M"), end
+
+            # ----------------------------------------------------- procedures
+            codes = [p[0] for p in PROCEDURE_TYPES if p[0] not in NEVER_PERFORMED]
+            proc, pid_ = [], 0
+            for a in adm_rows:
+                n = rng.choices([0, 1, 2], weights=[40, 45, 15])[0]
+                start, end = stay_end(a)
+                for _ in range(n):
+                    pid_ += 1
+                    at = start + timedelta(minutes=rng.randrange(
+                        max(60, int((end - start).total_seconds() // 60))))
+                    if at > SNAPSHOT:
+                        at = start + timedelta(minutes=30)
+                    dur = None if rng.random() < 0.10 else rng.randrange(15, 300)
+                    proc.append((pid_, a[0], rng.choice(codes), _dt(at),
+                                 rng.choice(all_consultants + doctors),
+                                 rng.randrange(1, 7), dur))
+            conn.executemany(
+                "INSERT INTO procedures (procedure_id, admission_id, code,"
+                " performed_at, surgeon_id, theatre, duration_minutes)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)", proc)
+
+            # -------------------------------------------------- prescriptions
+            rx, rid = [], 0
+            prescribers = all_consultants + doctors
+            for a in adm_rows:
+                start, end = stay_end(a)
+                for _ in range(rng.choices([0, 1, 2, 3, 4, 5],
+                                           weights=[15, 25, 25, 18, 10, 7])[0]):
+                    rid += 1
+                    drug = rng.randrange(1, len(DRUGS) + 1)
+                    began = start.date() + timedelta(days=rng.randrange(0, 2))
+                    ends = began + timedelta(days=rng.randrange(1, 15))
+                    ended = None if (a[5] is None and ends > SNAPSHOT.date()) \
+                        else _d(min(ends, end.date()) if ends > end.date()
+                                else ends)
+                    unit = DRUGS[drug - 1][2]
+                    rx.append((rid, a[0], drug, rng.choice(prescribers),
+                               _d(began), ended, unit * rng.choice([1, 1, 2]),
+                               rng.choice([1, 2, 2, 3, 4])))
+            conn.executemany(
+                "INSERT INTO prescriptions (prescription_id, admission_id,"
+                " drug_id, prescribed_by, started_on, ended_on, dose_mg,"
+                " times_per_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rx)
+
+            # --------------------------------------------------------- shifts
+            shifts, shid = [], 0
+            day = RANGE_START.date()
+            while day <= RANGE_END.date():
+                for s in staff_rows:
+                    if s[0] in never_on_shift or rng.random() > 0.58:
+                        continue
+                    shid += 1
+                    home = s[3] or rng.randrange(1, 9)
+                    ward = home if rng.random() < 0.9 else rng.randrange(1, 9)
+                    kind = "night" if rng.random() < 0.35 else "day"
+                    hours = 12 if s[2] == "nurse" else 8
+                    shifts.append((shid, s[0], ward, _d(day), kind, hours))
                 day += timedelta(days=1)
             conn.executemany(
-                "INSERT INTO services (service_id, line_id, operator_id,"
-                " run_date, depart_time, cancelled) VALUES (?, ?, ?, ?, ?, ?)",
-                svc_rows)
-            conn.executemany(
-                "INSERT INTO stops (service_id, stop_seq, station_id,"
-                " sched_arrive, actual_arrive) VALUES (?, ?, ?, ?, ?)",
-                stop_rows)
-            conn.executemany(
-                "INSERT OR IGNORE INTO service_units (service_id, unit_id,"
-                " position) VALUES (?, ?, ?)", unit_rows)
+                "INSERT INTO shifts (shift_id, staff_id, ward_id, shift_date,"
+                " kind, hours) VALUES (?, ?, ?, ?, ?, ?)", shifts)
 
-            running = [s[0] for s in svc_rows if not s[5]]
-
-            # -------------------------------------------------------- tickets
-            tick, tid = [], 0
-            for s in rng.sample(running, k=int(len(running) * 0.8)):
-                # A ticket is for a journey this service actually makes, so
-                # from_station and to_station are stations on its own route.
-                route = routes[svc_rows[s - 1][1]]
-                for _ in range(rng.randrange(1, 8)):
-                    tid += 1
-                    cls = CLASSES[rng.randrange(3)]
-                    base = {"first": 2200, "standard": 900,
-                            "advance": 450}[cls]
-                    a = rng.randrange(0, len(route) - 1)
-                    # A twentieth are open returns with no destination.
-                    to = (None if rng.random() < 0.05
-                          else route[rng.randrange(a + 1, len(route))])
-                    tick.append((tid, s, route[a], to, cls,
-                                 base + rng.randrange(0, 900),
-                                 svc_rows[s - 1][3]))
+            # --------------------------------------------------- observations
+            # A reading every four to eight hours for the whole stay, capped.
+            obs, oid = [], 0
+            for a in adm_rows:
+                start, end = stay_end(a)
+                takers = nurses_by_ward.get(a[2]) or [3]
+                t = start + timedelta(minutes=rng.randrange(10, 40))
+                count = 0
+                while t <= end and count < 60:
+                    oid += 1
+                    count += 1
+                    temp = (None if rng.random() < 0.08
+                            else round(rng.gauss(37.0, 0.6), 1))
+                    obs.append((oid, a[0], _dt(t), rng.choice(takers),
+                                rng.randrange(48, 125), rng.randrange(95, 175),
+                                rng.randrange(55, 105), temp))
+                    t += timedelta(minutes=rng.randrange(240, 480))
             conn.executemany(
-                "INSERT INTO tickets (ticket_id, service_id, from_station,"
-                " to_station, class, price_pence, sold_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)", tick)
-
-            # ------------------------------------------------------ incidents
-            inc, iid = [], 0
-            for s in rng.sample(running, k=int(len(running) * 0.09)):
-                iid += 1
-                # A sixth of incidents were never quantified.
-                delay = (None if rng.random() < 0.17
-                         else rng.randrange(1, 95))
-                inc.append((iid, s, svc_rows[s - 1][3],
-                            KINDS[rng.randrange(len(KINDS))], delay))
-            conn.executemany(
-                "INSERT INTO incidents (incident_id, service_id, reported_at,"
-                " kind, delay_minutes) VALUES (?, ?, ?, ?, ?)", inc)
+                "INSERT INTO observations (obs_id, admission_id, taken_at,"
+                " taken_by, heart_rate, systolic, diastolic, temp_c)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", obs)
     finally:
         conn.close()
     return _counts()

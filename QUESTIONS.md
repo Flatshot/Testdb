@@ -24,11 +24,13 @@ Similar questions are fine and useful. Re-asks are not.
 
 ## Live set
 
-Thirty questions on the railway schema, re-seeded (SEED 671 -> 701). This set
-changes the buckets: three warm-ups, then sixteen questions over four areas no
-earlier set covered -- JSON, hierarchies, NULL logic and subquery forms,
-distributions -- then three familiar shapes. **The last eight are writable**,
-on constructs none of the four earlier writable stages used.
+Thirty questions on a NEW schema: a district hospital (11 tables, SEED 731),
+replacing the railway. Its shape is intervals -- admissions, ward stays and
+prescriptions with a start and an end, and a time series of observations.
+Sixteen of the twenty-two SELECT questions are familiar shapes on the new
+tables; six, in the "Intervals and occupancy" stage and two neighbours, are on
+ground the railway could not offer. **The last eight are writable**, on
+constructs none of the five earlier writable stages used.
 
 ### The writable stage
 
@@ -39,50 +41,50 @@ or by changing question, and is never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 23 | `CASE` inside an `UPDATE` | salary totals by role |
-| 24 | `ON CONFLICT DO UPDATE ... WHERE` | one station's rows |
-| 25 | `CREATE TABLE` with PK, FK, NOT NULL, CHECK, DEFAULT | the table after three driven inserts |
-| 26 | the rebuild-a-table migration | row count, the CHECK, orphan count |
-| 27 | `RAISE(IGNORE)` in a `BEFORE INSERT` trigger | the tickets a driven multi-row insert left |
-| 28 | a view built on `WITH RECURSIVE` | count, ends, and quiet days |
-| 29 | `CREATE UNIQUE INDEX` | services in the slot, unique index count |
-| 30 | a `STRICT` table | rows and `typeof()` after three driven inserts |
+| 23 | `WITH RECURSIVE ... UPDATE` | staff per division |
+| 24 | `AUTOINCREMENT` | the log after insert, delete, insert |
+| 25 | `ON DELETE CASCADE` | the patient and the notes after a driven delete |
+| 26 | a `DEFERRABLE INITIALLY DEFERRED` foreign key | the referral and the late-arriving patient |
+| 27 | `RAISE(FAIL)` against `RAISE(ABORT)` | what a three-row insert left behind |
+| 28 | `INSTEAD OF DELETE` on a view | the count, the end date, the open count |
+| 29 | a partial `UNIQUE` index | the index flags and one patient's admissions |
+| 30 | `CREATE TEMP TABLE` | urgent count, main schema, temp schema |
 
-25, 27, 29 and 30 carry a `driver_sql`: statements the question runs after
+24, 25, 27, 28 and 29 carry a `driver_sql`: statements the question runs after
 yours. A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q672 | A1 conditional aggregation | Stations per town, surveyed or not | ex 1 | 1 - Warm-up |
-| Q673 | A2 COUNT and AVG | Front and rear | ex 2 | 1 - Warm-up |
-| Q674 | C2 grain | Services and first-class sales, per line | ex 3 | 1 - Warm-up |
-| Q675 | JSN JSON functions | A unit as a JSON object | ex 4 | 2 - JSON |
-| Q676 | JSN JSON functions | A route as a JSON array | ex 5 | 2 - JSON |
-| Q677 | JSN JSON functions | A list handed in as JSON | ex 6 | 2 - JSON |
-| Q678 | JSN JSON functions | A nested document per line | ex 7 | 2 - JSON |
-| Q679 | R1 recursive CTE | How far down the tree | ex 8 | 3 - Hierarchies |
-| Q680 | R1 recursive CTE | The chain, written out | ex 9 | 3 - Hierarchies |
-| Q681 | R1 recursive CTE | Everyone above staff 37 | ex 10 | 3 - Hierarchies |
-| Q682 | R1 recursive CTE | Headcount below each manager | ex 11 | 3 - Hierarchies |
-| Q683 | C7 NULL | Not known to be long | ex 12 | 4 - NULL logic and subqueries |
-| Q684 | C7 NULL | Never refurbished goes last | ex 13 | 4 - NULL logic and subqueries |
-| Q685 | SUB subqueries | As many seats as every Class 170 | ex 14 | 4 - NULL logic and subqueries |
-| Q686 | SUB subqueries | The average service's takings | ex 15 | 4 - NULL logic and subqueries |
-| Q687 | DST distributions | The fleet in three tiers | ex 16 | 5 - Distributions |
-| Q688 | DST distributions | Where a salary sits in its role | ex 17 | 5 - Distributions |
-| Q689 | DST distributions | How spread out the prices are | ex 18 | 5 - Distributions |
-| Q690 | DST distributions | Ticket prices in five-pound bands | ex 19 | 5 - Distributions |
-| Q691 | W2 window ranking | Each line's worst service | ex 20 | 6 - Familiar mix |
-| Q692 | J1 self-joins | Consecutive calls on line 1 | ex 21 | 6 - Familiar mix |
-| Q693 | SPN date spine | Days with no incidents, per month | ex 22 | 6 - Familiar mix |
-| Q694 | DML update & delete | A raise that depends on the role **(script)** | ex 23 | 7 - Changing the data |
-| Q695 | UPS upsert | Update only if it is an improvement **(script)** | ex 24 | 7 - Changing the data |
-| Q696 | DDL constraints | A table that defends itself **(script)** | ex 25 | 7 - Changing the data |
-| Q697 | MIG table rebuild | Add a constraint by rebuilding the table **(script)** | ex 26 | 7 - Changing the data |
-| Q698 | TRG triggers | Drop the bad row, keep the rest **(script)** | ex 27 | 7 - Changing the data |
-| Q699 | VIEW views | A calendar that stores nothing **(script)** | ex 28 | 7 - Changing the data |
-| Q700 | IDX unique index | One service per slot **(script)** | ex 29 | 7 - Changing the data |
-| Q701 | SCT STRICT tables | A table that refuses the wrong type **(script)** | ex 30 | 7 - Changing the data |
+| Q702 | A2 COUNT and AVG | Beds and admissions per ward | ex 1 | 1 - Warm-up |
+| Q703 | A2 COUNT and AVG | How patients arrive | ex 2 | 1 - Warm-up |
+| Q704 | A3 WHERE vs HAVING | Busy consultants with long stays | ex 3 | 1 - Warm-up |
+| Q705 | W3 window vs GROUP BY | One admission's moves | ex 4 | 2 - Sequences and strings |
+| Q706 | STR string functions | Initials | ex 5 | 2 - Sequences and strings |
+| Q707 | S1 set operations | Only ever an emergency | ex 6 | 2 - Sequences and strings |
+| Q708 | W1 window frames | First and last readings | ex 7 | 2 - Sequences and strings |
+| Q709 | D1 dates & times | Admissions by month | ex 8 | 3 - Dates and times |
+| Q710 | D1 dates & times | Admitted in the night | ex 9 | 3 - Dates and times |
+| Q711 | INT intervals | Length of stay so far | ex 10 | 3 - Dates and times |
+| Q712 | INT intervals | Who was where at eight o'clock | ex 11 | 4 - Intervals and occupancy |
+| Q713 | INT intervals | Admitted twice at once | ex 12 | 4 - Intervals and occupancy |
+| Q714 | INT intervals | Back within thirty days | ex 13 | 4 - Intervals and occupancy |
+| Q715 | INT intervals | Nightingale, day by day | ex 14 | 4 - Intervals and occupancy |
+| Q716 | C2 grain | Procedures and prescriptions, per ward | ex 15 | 5 - Joins and grain |
+| Q717 | J2 outer joins | Never admitted | ex 16 | 5 - Joins and grain |
+| Q718 | J2 outer joins | Never on the rota | ex 17 | 5 - Joins and grain |
+| Q719 | INT intervals | Controlled drugs on Fleming | ex 18 | 5 - Joins and grain |
+| Q720 | W1 window frames | Admissions accumulating, per ward | ex 19 | 6 - Window functions |
+| Q721 | W2 window ranking | Consultants by caseload | ex 20 | 6 - Window functions |
+| Q722 | W3 window vs GROUP BY | Each route's share of the ward | ex 21 | 6 - Window functions |
+| Q723 | W2 window ranking | The three highest earners per category | ex 22 | 6 - Window functions |
+| Q724 | R1 recursive CTE | Fill the division down the tree **(script)** | ex 23 | 7 - Changing the data |
+| Q725 | DDL constraints | An id that is never reused **(script)** | ex 24 | 7 - Changing the data |
+| Q726 | DDL constraints | Notes that go with the patient **(script)** | ex 25 | 7 - Changing the data |
+| Q727 | TXN transactions | The child before the parent **(script)** | ex 26 | 7 - Changing the data |
+| Q728 | TRG triggers | Fail the row, keep what came before **(script)** | ex 27 | 7 - Changing the data |
+| Q729 | VIEW views | Stop, do not delete **(script)** | ex 28 | 7 - Changing the data |
+| Q730 | IDX partial index | One open admission per patient **(script)** | ex 29 | 7 - Changing the data |
+| Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | ex 30 | 7 - Changing the data |
 
 ## Retired
 
@@ -331,6 +333,36 @@ they still count as asked.
 | Q669 | TRG triggers | Fill in the blank on the way in | - | retired |
 | Q670 | VIEW views | A view over a view | - | retired |
 | Q671 | X3 composite index order | An index the lookup can use | - | retired |
+| Q672 | A1 conditional aggregation | Stations per town, surveyed or not | - | retired |
+| Q673 | A2 COUNT and AVG | Front and rear | - | retired |
+| Q674 | C2 grain | Services and first-class sales, per line | - | retired |
+| Q675 | JSN JSON functions | A unit as a JSON object | - | retired |
+| Q676 | JSN JSON functions | A route as a JSON array | - | retired |
+| Q677 | JSN JSON functions | A list handed in as JSON | - | retired |
+| Q678 | JSN JSON functions | A nested document per line | - | retired |
+| Q679 | R1 recursive CTE | How far down the tree | - | retired |
+| Q680 | R1 recursive CTE | The chain, written out | - | retired |
+| Q681 | R1 recursive CTE | Everyone above staff 37 | - | retired |
+| Q682 | R1 recursive CTE | Headcount below each manager | - | retired |
+| Q683 | C7 NULL | Not known to be long | - | retired |
+| Q684 | C7 NULL | Never refurbished goes last | - | retired |
+| Q685 | SUB subqueries | As many seats as every Class 170 | - | retired |
+| Q686 | SUB subqueries | The average service's takings | - | retired |
+| Q687 | DST distributions | The fleet in three tiers | - | retired |
+| Q688 | DST distributions | Where a salary sits in its role | - | retired |
+| Q689 | DST distributions | How spread out the prices are | - | retired |
+| Q690 | DST distributions | Ticket prices in five-pound bands | - | retired |
+| Q691 | W2 window ranking | Each line's worst service | - | retired |
+| Q692 | J1 self-joins | Consecutive calls on line 1 | - | retired |
+| Q693 | SPN date spine | Days with no incidents, per month | - | retired |
+| Q694 | DML update & delete | A raise that depends on the role | - | retired |
+| Q695 | UPS upsert | Update only if it is an improvement | - | retired |
+| Q696 | DDL constraints | A table that defends itself | - | retired |
+| Q697 | MIG table rebuild | Add a constraint by rebuilding the table | - | retired |
+| Q698 | TRG triggers | Drop the bad row, keep the rest | - | retired |
+| Q699 | VIEW views | A calendar that stores nothing | - | retired |
+| Q700 | IDX unique index | One service per slot | - | retired |
+| Q701 | SCT STRICT tables | A table that refuses the wrong type | - | retired |
 | Q042 | C2 grain | Revenue per category | - | retired |
 | Q162 | R1 recursive CTE | The whole chain, written out | - | retired |
 | Q163 | R1 recursive CTE | Everyone above Nadia Kaur | - | retired |
@@ -875,7 +907,7 @@ they still count as asked.
   INSERT, conflict clauses inside a transaction, a cascading BEFORE DELETE
   trigger, an AFTER INSERT trigger that fills in the new row, a view over a
   view, and an index checked through the schema pragmas.
-- **Q672-Q701** current set, railway schema re-seeded (SEED 671 -> 701). The
+- **Q672-Q701** railway schema re-seeded (SEED 671 -> 701). The
   buckets change: after three warm-ups, four areas no earlier set covered --
   JSON (json_object, json_group_array, json_each, nesting), hierarchies (one
   recursive CTE pointed four ways), NULL logic and subquery forms
@@ -884,3 +916,13 @@ they still count as asked.
   then three familiar shapes. The writable eight are new again: CASE in an
   UPDATE, a conditional upsert, a fully constrained table, the rebuild
   migration, RAISE(IGNORE), a recursive view, a UNIQUE index, a STRICT table.
+- **Q702-Q731** current set, on a NEW schema: a district hospital (11 tables,
+  SEED 731). Chosen for intervals -- admissions, ward stays and prescriptions
+  with a start and an end, observations as a time series -- which the
+  railway could not ask about. Sixteen familiar shapes on the new tables,
+  six on intervals: an open interval measured to a snapshot, occupancy at
+  an instant, overlapping admissions, readmission within thirty days, a
+  running occupancy from +1/-1 events, and a join on two intervals. The
+  writable eight: a recursive UPDATE, AUTOINCREMENT, ON DELETE CASCADE, a
+  deferred foreign key, RAISE(FAIL), a soft delete through a view, a
+  partial UNIQUE index, and a TEMP table.

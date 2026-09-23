@@ -31,10 +31,11 @@ PROGRESS_STEPS = 10_000
 # gigabytes before the deadline fires. Stop reading rows well before that.
 #
 # This has to sit ABOVE the largest table, not merely above the largest
-# expected ANSWER -- otherwise "SELECT * FROM enrolments" trips a guard meant
-# for runaways. enrolments holds 67,000 rows and fetches in 149ms for 18MB, so
-# 250,000 leaves room to browse any table whole (and to join a couple of them)
-# while still catching an unbounded recursion long before memory matters.
+# expected ANSWER -- otherwise "SELECT * FROM observations" trips a guard meant
+# for runaways. The biggest table in any schema this repo has had held under
+# 100,000 rows, so 250,000 leaves room to browse any table whole (and to join
+# a couple of them) while still catching an unbounded recursion long before
+# memory matters.
 MAX_ROWS = 250_000
 
 
