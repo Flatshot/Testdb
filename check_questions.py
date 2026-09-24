@@ -24,6 +24,13 @@ Behavioural checks (against testdb.db, read-only):
     sandbox, changes the state its probe_sql reads, and its trap leaves a
     state the probe can tell apart
 
+Python checks (pyexercises.py vs QUESTIONS.md), same idea:
+  * every exercise has a P-ledger id in the ledger, a concept, a trap and a
+    note; ids are unique and contiguous from P001; the prompt says what to
+    Print or Return and names the function it wants
+  * every solution is graded CORRECT and every trap graded WRONG, through
+    the same grade() the GUI uses
+
     py check_questions.py
 """
 
@@ -35,9 +42,10 @@ from pathlib import Path
 
 import db
 import exercises as ex
+import pyexercises as px
 
 LEDGER = Path(__file__).resolve().parent / "QUESTIONS.md"
-ROW = re.compile(r"^\|\s*(Q\d{3})\s*\|(.*?)\|(.*?)\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$")
+ROW = re.compile(r"^\|\s*([QP]\d{3})\s*\|(.*?)\|(.*?)\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$")
 TRAILING_LIMIT = re.compile(r"\bLIMIT\s+(\d+)\s*$", re.IGNORECASE)
 ORDER_BY = re.compile(r"\bORDER\s+BY\b(.*?)\s+LIMIT\b", re.IGNORECASE | re.DOTALL)
 
@@ -75,9 +83,11 @@ def main():
         print("could not parse any rows out of QUESTIONS.md")
         return 1
 
-    nums = sorted(int(q[1:]) for q in ledger)
-    if nums != list(range(1, len(nums) + 1)):
-        problems.append(f"ledger ids are not contiguous from Q001: {nums[:3]}...{nums[-3:]}")
+    for prefix in "QP":
+        nums = sorted(int(q[1:]) for q in ledger if q[0] == prefix)
+        if nums != list(range(1, len(nums) + 1)):
+            problems.append(f"ledger ids are not contiguous from {prefix}001:"
+                            f" {nums[:3]}...{nums[-3:]}")
 
     seen_ids, seen_titles = {}, {}
     for e in ex.EXERCISES:
@@ -128,15 +138,61 @@ def main():
                 f"a tie at the boundary would make the answer ambiguous")
 
     by_ex = {e["id"]: e.get("ledger") for e in ex.EXERCISES}
+    by_py = {e["id"]: e.get("ledger") for e in px.EXERCISES}
     for qid, row in ledger.items():
-        m = re.fullmatch(r"ex\s*(\d+)", row["gui"])
+        m = re.fullmatch(r"(ex|py)\s*(\d+)", row["gui"])
         if not m:
             continue
-        eid = int(m.group(1))
-        if eid not in by_ex:
+        table = by_py if m.group(1) == "py" else by_ex
+        eid = int(m.group(2))
+        if eid not in table:
             problems.append(f"{qid} claims exercise {eid}, which does not exist")
-        elif by_ex[eid] != qid:
-            problems.append(f"{qid} claims exercise {eid}, but it points at {by_ex[eid]}")
+        elif table[eid] != qid:
+            problems.append(f"{qid} claims exercise {eid}, but it points at {table[eid]}")
+
+    # --- python ---------------------------------------------------------
+    py_seen = {}
+    py_traps = 0
+    for e in px.EXERCISES:
+        qid = e.get("ledger")
+        if not qid or qid[0] != "P":
+            problems.append(f"python {e['id']} ({e['title']}) has no P-ledger id")
+        else:
+            if qid not in ledger:
+                problems.append(f"python {e['id']} points at {qid}, not in the ledger")
+            if qid in py_seen:
+                problems.append(f"{qid} claimed by python {py_seen[qid]} and {e['id']}")
+            py_seen[qid] = e["id"]
+        for field in ("concept", "trap", "note", "solution", "prompt", "kind"):
+            if not e.get(field):
+                problems.append(f"python {e['id']} has no {field}")
+        wrapped = sum(max(1, len(textwrap.wrap(line, 76)))
+                      for line in e["prompt"].split("\n"))
+        if wrapped > 14:
+            problems.append(f"python {e['id']} prompt is {wrapped} lines wrapped at 76 cols")
+        if px.is_program(e):
+            if "Print:" not in e["prompt"]:
+                problems.append(f"python {e['id']} prompt never says Print:")
+        else:
+            if "Return:" not in e["prompt"]:
+                problems.append(f"python {e['id']} prompt never says Return:")
+            if f"`{e['func']}(" not in e["prompt"]:
+                problems.append(f"python {e['id']} prompt never names `{e['func']}(`")
+            if not e.get("cases"):
+                problems.append(f"python {e['id']} has no test cases")
+        key = e["title"].strip().lower()
+        if key in seen_titles:
+            problems.append(f"duplicate title {e['title']!r} on {seen_titles[key]} and python {e['id']}")
+        seen_titles[key] = f"python {e['id']}"
+        ok, msg, _ = px.grade(e, e["solution"])
+        if not ok:
+            problems.append(f"python {e['id']} ({e['title']}): solution graded WRONG -- {msg}")
+        ok, _, _ = px.grade(e, e["trap"])
+        if ok:
+            problems.append(f"python {e['id']} ({e['title']}): trap graded CORRECT, so the"
+                            f" question does not test its concept")
+        else:
+            py_traps += 1
 
     # --- behavioural ------------------------------------------------------
     conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
@@ -299,7 +355,7 @@ def main():
 
     linked = sum(1 for r in ledger.values() if r["gui"].startswith("ex"))
     print(f"ledger entries : {len(ledger)}")
-    print(f"exercises      : {len(ex.EXERCISES)}")
+    print(f"exercises      : {len(ex.EXERCISES)} SQL, {len(px.EXERCISES)} Python")
     print(f"linked to GUI  : {linked}")
     print(f"traps rejected : "
           f"{traps_by_error + traps_by_result + traps_by_plan} / {len(ex.EXERCISES)} "
@@ -313,6 +369,8 @@ def main():
     print(f"answer spread  : "
           f"{len(ex.EXERCISES) - flat_checked} of {len(ex.EXERCISES)}"
           f" have no value column that is constant on every row")
+    print(f"python traps   : {py_traps} / {len(px.EXERCISES)} rejected, every"
+          f" solution accepted")
 
     if problems:
         print(f"\n{len(problems)} problem(s):")

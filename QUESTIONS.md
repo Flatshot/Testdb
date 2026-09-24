@@ -22,69 +22,90 @@ A new question is an acceptable **variation** if it changes at least one of:
 
 Similar questions are fine and useful. Re-asks are not.
 
+Python questions (`P` ids) follow the same rule: the same construct on the
+same kind of input with the same shape of answer is a duplicate.
+
 ## Live set
 
-Thirty questions on a NEW schema: a district hospital (11 tables, SEED 731),
-replacing the railway. Its shape is intervals -- admissions, ward stays and
-prescriptions with a start and an end, and a time series of observations.
-Sixteen of the twenty-two SELECT questions are familiar shapes on the new
-tables; six, in the "Intervals and occupancy" stage and two neighbours, are on
-ground the railway could not offer. **The last eight are writable**, on
-constructs none of the five earlier writable stages used.
+Forty questions in two tracks. **Twenty SQL** on the district hospital (11
+tables, SEED 731 -- the same data as the previous set, not re-seeded) and
+**twenty Python**, the first Python set, from a first print() to dictionaries
+and try/except. The SQL twenty repeat nothing from Q702-Q731: fifteen SELECT
+questions over the same seven stages, and **five writable**, on constructs
+none of the six earlier writable stages used.
 
 ### The writable stage
 
-SQLite has no stored procedures, variables or loops. What it has instead is
-below, and each question is one of them. Your script runs in a sandbox copy of
-the database that persists across Runs of one question, is thrown away by Reset
-or by changing question, and is never the copy that Check answer grades.
+Your script runs in a sandbox copy of the database that persists across Runs
+of one question, is thrown away by Reset or by changing question, and is
+never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 23 | `WITH RECURSIVE ... UPDATE` | staff per division |
-| 24 | `AUTOINCREMENT` | the log after insert, delete, insert |
-| 25 | `ON DELETE CASCADE` | the patient and the notes after a driven delete |
-| 26 | a `DEFERRABLE INITIALLY DEFERRED` foreign key | the referral and the late-arriving patient |
-| 27 | `RAISE(FAIL)` against `RAISE(ABORT)` | what a three-row insert left behind |
-| 28 | `INSTEAD OF DELETE` on a view | the count, the end date, the open count |
-| 29 | a partial `UNIQUE` index | the index flags and one patient's admissions |
-| 30 | `CREATE TEMP TABLE` | urgent count, main schema, temp schema |
+| 16 | a keyed summary table, against `CREATE TABLE ... AS SELECT` | key columns, row count, sum |
+| 17 | a composite `FOREIGN KEY (a, b) REFERENCES` | which notes survived |
+| 18 | an index on an expression | the query plan |
+| 19 | a `BEFORE INSERT` trigger whose WHEN reads another table | which prescriptions landed |
+| 20 | `RAISE(ROLLBACK)` against `RAISE(ABORT)` | which ids survived a driven transaction |
 
-24, 25, 27, 28 and 29 carry a `driver_sql`: statements the question runs after
+16, 17, 19 and 20 carry a `driver_sql`: statements the question runs after
 yours. A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q702 | A2 COUNT and AVG | Beds and admissions per ward | ex 1 | 1 - Warm-up |
-| Q703 | A2 COUNT and AVG | How patients arrive | ex 2 | 1 - Warm-up |
-| Q704 | A3 WHERE vs HAVING | Busy consultants with long stays | ex 3 | 1 - Warm-up |
-| Q705 | W3 window vs GROUP BY | One admission's moves | ex 4 | 2 - Sequences and strings |
-| Q706 | STR string functions | Initials | ex 5 | 2 - Sequences and strings |
-| Q707 | S1 set operations | Only ever an emergency | ex 6 | 2 - Sequences and strings |
-| Q708 | W1 window frames | First and last readings | ex 7 | 2 - Sequences and strings |
-| Q709 | D1 dates & times | Admissions by month | ex 8 | 3 - Dates and times |
-| Q710 | D1 dates & times | Admitted in the night | ex 9 | 3 - Dates and times |
-| Q711 | INT intervals | Length of stay so far | ex 10 | 3 - Dates and times |
-| Q712 | INT intervals | Who was where at eight o'clock | ex 11 | 4 - Intervals and occupancy |
-| Q713 | INT intervals | Admitted twice at once | ex 12 | 4 - Intervals and occupancy |
-| Q714 | INT intervals | Back within thirty days | ex 13 | 4 - Intervals and occupancy |
-| Q715 | INT intervals | Nightingale, day by day | ex 14 | 4 - Intervals and occupancy |
-| Q716 | C2 grain | Procedures and prescriptions, per ward | ex 15 | 5 - Joins and grain |
-| Q717 | J2 outer joins | Never admitted | ex 16 | 5 - Joins and grain |
-| Q718 | J2 outer joins | Never on the rota | ex 17 | 5 - Joins and grain |
-| Q719 | INT intervals | Controlled drugs on Fleming | ex 18 | 5 - Joins and grain |
-| Q720 | W1 window frames | Admissions accumulating, per ward | ex 19 | 6 - Window functions |
-| Q721 | W2 window ranking | Consultants by caseload | ex 20 | 6 - Window functions |
-| Q722 | W3 window vs GROUP BY | Each route's share of the ward | ex 21 | 6 - Window functions |
-| Q723 | W2 window ranking | The three highest earners per category | ex 22 | 6 - Window functions |
-| Q724 | R1 recursive CTE | Fill the division down the tree **(script)** | ex 23 | 7 - Changing the data |
-| Q725 | DDL constraints | An id that is never reused **(script)** | ex 24 | 7 - Changing the data |
-| Q726 | DDL constraints | Notes that go with the patient **(script)** | ex 25 | 7 - Changing the data |
-| Q727 | TXN transactions | The child before the parent **(script)** | ex 26 | 7 - Changing the data |
-| Q728 | TRG triggers | Fail the row, keep what came before **(script)** | ex 27 | 7 - Changing the data |
-| Q729 | VIEW views | Stop, do not delete **(script)** | ex 28 | 7 - Changing the data |
-| Q730 | IDX partial index | One open admission per patient **(script)** | ex 29 | 7 - Changing the data |
-| Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | ex 30 | 7 - Changing the data |
+| Q732 | A2 COUNT and AVG | Procedures by category | ex 1 | 1 - Warm-up |
+| Q733 | C5 COUNT(*) vs COUNT(col) | Controlled, by form | ex 2 | 1 - Warm-up |
+| Q734 | A3 WHERE vs HAVING | Night owls | ex 3 | 1 - Warm-up |
+| Q735 | STR string functions | Surname first | ex 4 | 2 - Strings and sequences |
+| Q736 | J1 self-joins | Where transfers go | ex 5 | 2 - Strings and sequences |
+| Q737 | D1 dates & times | Admissions by weekday | ex 6 | 3 - Dates and times |
+| Q738 | D1 dates & times | Age at admission | ex 7 | 3 - Dates and times |
+| Q739 | INT intervals | Beds in use, March 2026 | ex 8 | 4 - Intervals and occupancy |
+| Q740 | INT intervals | Where the patient was | ex 9 | 4 - Intervals and occupancy |
+| Q741 | INT intervals | Fleming at eight, all week | ex 10 | 4 - Intervals and occupancy |
+| Q742 | C2 grain | Well travelled | ex 11 | 5 - Joins and grain |
+| Q743 | E1 EXISTS | Never in theatre six | ex 12 | 5 - Joins and grain |
+| Q744 | C7 NULL | Away from home | ex 13 | 5 - Joins and grain |
+| Q745 | W2 window ranking | The peak reading | ex 14 | 6 - Window functions |
+| Q746 | C3 PARTITION BY | Gaps in the readings | ex 15 | 6 - Window functions |
+| Q747 | DDL constraints | A summary with a key **(script)** | ex 16 | 7 - Changing the data |
+| Q748 | DDL constraints | A note on one stay **(script)** | ex 17 | 7 - Changing the data |
+| Q749 | IDX expression index | An index on an expression **(script)** | ex 18 | 7 - Changing the data |
+| Q750 | TRG triggers | No prescribing after discharge **(script)** | ex 19 | 7 - Changing the data |
+| Q751 | TXN transactions | Undo everything, not just this row **(script)** | ex 20 | 7 - Changing the data |
+
+### Python
+
+Twenty questions, graded two ways. A **program** question compares what the
+code prints with what the reference prints, line for line. A **function**
+question calls the named function on several inputs and compares the values
+it returns with the reference's -- dicts and sets order-free, floats rounded,
+but a tuple is not a list and a set is not a list. Every question has a trap
+the checker proves is rejected. The code runs in a separate interpreter with
+a five-second limit and no access to the database.
+
+| ID | Concept | Question | In GUI | Stage |
+|----|---------|----------|--------|-------|
+| P001 | PY0 print | Say hello | py 1 | 1 - First steps |
+| P002 | PY0 arithmetic | Three sums | py 2 | 1 - First steps |
+| P003 | PY0 f-strings | Variables in a sentence | py 3 | 1 - First steps |
+| P004 | PY0 input | Reading a line | py 4 | 1 - First steps |
+| P005 | PY1 strings | Initials | py 5 | 2 - Strings and lists |
+| P006 | PY1 strings | Counting vowels | py 6 | 2 - Strings and lists |
+| P007 | PY1 slicing | Every other one | py 7 | 2 - Strings and lists |
+| P008 | PY1 lists | The longest word | py 8 | 2 - Strings and lists |
+| P009 | PY2 if/elif | Triage by heart rate | py 9 | 3 - Conditions and loops |
+| P010 | PY2 for/range | The seven times table | py 10 | 3 - Conditions and loops |
+| P011 | PY2 while | Steps to one | py 11 | 3 - Conditions and loops |
+| P012 | PY2 enumerate/break | The first negative | py 12 | 3 - Conditions and loops |
+| P013 | PY3 functions | Body mass index | py 13 | 4 - Functions |
+| P014 | PY3 default arguments | Arguments you can leave out | py 14 | 4 - Functions |
+| P015 | PY3 tuples | Three answers at once | py 15 | 4 - Functions |
+| P016 | PY3 booleans | Reads the same backwards | py 16 | 4 - Functions |
+| P017 | PY4 dicts | Counting words | py 17 | 5 - Dicts, sets and comprehensions |
+| P018 | PY4 dicts | The most common item | py 18 | 5 - Dicts, sets and comprehensions |
+| P019 | PY4 sets | Prescribed on both wards | py 19 | 5 - Dicts, sets and comprehensions |
+| P020 | PY4 try/except | Readings that are not numbers | py 20 | 5 - Dicts, sets and comprehensions |
 
 ## Retired
 
@@ -363,6 +384,36 @@ they still count as asked.
 | Q699 | VIEW views | A calendar that stores nothing | - | retired |
 | Q700 | IDX unique index | One service per slot | - | retired |
 | Q701 | SCT STRICT tables | A table that refuses the wrong type | - | retired |
+| Q702 | A2 COUNT and AVG | Beds and admissions per ward | - | retired |
+| Q703 | A2 COUNT and AVG | How patients arrive | - | retired |
+| Q704 | A3 WHERE vs HAVING | Busy consultants with long stays | - | retired |
+| Q705 | W3 window vs GROUP BY | One admission's moves | - | retired |
+| Q706 | STR string functions | Initials | - | retired |
+| Q707 | S1 set operations | Only ever an emergency | - | retired |
+| Q708 | W1 window frames | First and last readings | - | retired |
+| Q709 | D1 dates & times | Admissions by month | - | retired |
+| Q710 | D1 dates & times | Admitted in the night | - | retired |
+| Q711 | INT intervals | Length of stay so far | - | retired |
+| Q712 | INT intervals | Who was where at eight o'clock | - | retired |
+| Q713 | INT intervals | Admitted twice at once | - | retired |
+| Q714 | INT intervals | Back within thirty days | - | retired |
+| Q715 | INT intervals | Nightingale, day by day | - | retired |
+| Q716 | C2 grain | Procedures and prescriptions, per ward | - | retired |
+| Q717 | J2 outer joins | Never admitted | - | retired |
+| Q718 | J2 outer joins | Never on the rota | - | retired |
+| Q719 | INT intervals | Controlled drugs on Fleming | - | retired |
+| Q720 | W1 window frames | Admissions accumulating, per ward | - | retired |
+| Q721 | W2 window ranking | Consultants by caseload | - | retired |
+| Q722 | W3 window vs GROUP BY | Each route's share of the ward | - | retired |
+| Q723 | W2 window ranking | The three highest earners per category | - | retired |
+| Q724 | R1 recursive CTE | Fill the division down the tree **(script)** | - | retired |
+| Q725 | DDL constraints | An id that is never reused **(script)** | - | retired |
+| Q726 | DDL constraints | Notes that go with the patient **(script)** | - | retired |
+| Q727 | TXN transactions | The child before the parent **(script)** | - | retired |
+| Q728 | TRG triggers | Fail the row, keep what came before **(script)** | - | retired |
+| Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
+| Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
+| Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
 | Q042 | C2 grain | Revenue per category | - | retired |
 | Q162 | R1 recursive CTE | The whole chain, written out | - | retired |
 | Q163 | R1 recursive CTE | Everyone above Nadia Kaur | - | retired |
@@ -926,3 +977,18 @@ they still count as asked.
   writable eight: a recursive UPDATE, AUTOINCREMENT, ON DELETE CASCADE, a
   deferred foreign key, RAISE(FAIL), a soft delete through a view, a
   partial UNIQUE index, and a TEMP table.
+- **Q732-Q751 and P001-P020** current set. The hospital data unchanged (SEED
+  731); twenty SQL questions instead of thirty, alongside the first twenty
+  PYTHON questions. SQL: fifteen SELECT shapes not yet asked on this schema
+  -- a NULL-aware AVG, COUNT(col) against SUM, two aggregates in HAVING,
+  instr/substr, consecutive stays self-joined, weekdays, ages, occupancy as
+  a share of bed-days, a point in an interval, an interval on a calendar of
+  instants, COUNT(DISTINCT) over two hops, an anti-join, NULL in a
+  comparison, top-1 per group, LAG with a partition -- and five writable: a
+  keyed summary table against CTAS, a composite foreign key, an expression
+  index, a cross-table BEFORE INSERT trigger, and RAISE(ROLLBACK). Python:
+  print, arithmetic, f-strings, input(); strings, slicing, lists; if/elif,
+  for/range, while, enumerate; functions, defaults, tuples, booleans; dicts,
+  sets, try/except. The tool gained a Python tab (pygui.py), a subprocess
+  runner with a time limit (pyrun.py), a shared ui.py, and a checker path
+  for the Python set.

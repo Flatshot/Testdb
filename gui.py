@@ -1,15 +1,18 @@
-"""Desktop GUI for practicing SQL against testdb.
+"""Desktop GUI for practicing SQL against testdb, and Python beside it.
 
     python gui.py
 
-Left pane picks an exercise or browses the schema. Write SQL on the right,
-F5 to run it, F6 to see its query plan, Ctrl+Enter to have your result graded
-against the expected one.
+Two tabs. On the SQL tab the left pane picks an exercise or browses the
+schema; write SQL on the right, F5 to run it, F6 to see its query plan,
+Ctrl+Enter to have your result graded against the expected one. The Python
+tab (pygui.py) has the same shape with a text output pane in place of the
+results table, and the same keys.
 
 The database is opened READ-ONLY, so nothing you type in here can damage the
-practice data no matter how wrong it goes.
+practice data no matter how wrong it goes. Python runs in a separate
+process with a time limit (pyrun.py).
 
-Progress (which exercises you've solved, and your SQL for each) is kept in
+Progress (which exercises you've solved, and your code for each) is kept in
 progress.json next to this file.
 """
 
@@ -23,10 +26,14 @@ from tkinter import messagebox, ttk
 
 import db
 import exercises as ex
+from pygui import PythonPane
+from ui import (BASE_FONT_SIZE, BG_APP, BG_BAD, BG_FIELD, BG_INFO, BG_OK,
+                BG_QUESTION, BG_SELECT, BG_STRIPE, BG_SURFACE, BORDER, CURSOR,
+                FG_HEADING, FG_MUTED, FG_TEXT, MONO_FAMILIES, UI_FAMILIES,
+                clip_status, fit_question, pick_family)
 
 PROGRESS_PATH = db.HERE / "progress.json"
 FREE = 0  # pseudo-exercise id for the scratch pad
-QUESTION_MAX_LINES = 16
 
 # How many result rows to put in the table widget. Separate from db.MAX_ROWS,
 # which bounds what is FETCHED: grading and the row count use the full result,
@@ -35,63 +42,9 @@ QUESTION_MAX_LINES = 16
 # first screen anyway.
 DISPLAY_ROWS = 2_000
 
-# The status bar wraps rather than scrolls, so an unbounded message grows
-# upward until it covers the editor. Six lines is enough for the longest
-# message any caller sends and small enough to stay out of the way.
-STATUS_MAX_LINES = 6
-
 # A single result cell wider than this cannot be read in the results pane --
 # the column stops at 340px -- so the rest is replaced with its length.
 CELL_DISPLAY_CHARS = 300
-
-# Tk resolves point sizes against the display DPI, and macOS reports 72 where
-# Windows reports 96 -- the same number draws about a quarter smaller here.
-# Every explicit size below derives from this one. It is a FLOOR, not an
-# assignment: Tk's own named fonts are 13 on macOS and 9 on Windows, so raising
-# a platform's larger default to match this would shrink the UI, not grow it.
-BASE_FONT_SIZE = 14
-
-# Font families in order of preference, Windows first then macOS then Linux.
-# Tk does not error on a missing family -- it silently substitutes, which for
-# the editor can mean a PROPORTIONAL face, and SQL is unreadable in one. So the
-# family is resolved against what is actually installed, and the last resort is
-# Tk's own named fonts, which every platform guarantees.
-MONO_FAMILIES = ("Consolas", "Menlo", "SF Mono", "DejaVu Sans Mono",
-                 "Liberation Mono", "Courier New")
-UI_FAMILIES = ("Segoe UI", "SF Pro Text", "Helvetica Neue", "Cantarell",
-               "DejaVu Sans")
-
-
-def _pick_family(candidates, named_fallback):
-    """First installed family from candidates, else Tk's own named font.
-
-    Must be called with a Tk root already created -- font.families() needs an
-    interpreter to ask.
-    """
-    installed = {f.lower() for f in tkfont.families()}
-    for name in candidates:
-        if name.lower() in installed:
-            return name
-    return tkfont.nametofont(named_fallback).actual("family")
-
-# Dark palette. Tk has no notion of a colour scheme, so every widget that is
-# not a ttk widget has to be told individually -- and the ttk widgets only obey
-# under a fully styleable theme (see _apply_theme).
-BG_APP = "#1e1e1e"      # window and panel backgrounds
-BG_SURFACE = "#252526"  # raised surfaces: notebook pages, buttons, headings
-BG_FIELD = "#1b1b1b"    # text entry areas
-BG_QUESTION = "#26292b"  # the question panel, slightly lifted off the app bg
-BG_SELECT = "#0a4a7a"    # selected row / selected text
-BG_STRIPE = "#232323"    # alternating result rows
-FG_TEXT = "#d6d6d6"
-FG_MUTED = "#9d9d9d"
-FG_HEADING = "#e8e8e8"
-BORDER = "#3a3a3a"
-CURSOR = "#d6d6d6"
-
-BG_OK = "#1a7f37"
-BG_BAD = "#b3261e"
-BG_INFO = "#333333"
 
 
 # Reference solutions are stored as one long string so the source of
@@ -187,7 +140,7 @@ def format_sql(sql, indent="    "):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("testdb - SQL practice")
+        self.title("testdb - SQL and Python practice")
         self.minsize(940, 620)
         self._centre(1220, 800)
 
@@ -202,8 +155,8 @@ class App(tk.Tk):
         self.conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
         self.conn.row_factory = sqlite3.Row
 
-        self.mono_family = _pick_family(MONO_FAMILIES, "TkFixedFont")
-        self.ui_family = _pick_family(UI_FAMILIES, "TkDefaultFont")
+        self.mono_family = pick_family(MONO_FAMILIES, "TkFixedFont")
+        self.ui_family = pick_family(UI_FAMILIES, "TkDefaultFont")
         self.mono = tkfont.Font(family=self.mono_family, size=BASE_FONT_SIZE)
         self._scale_named_fonts()
         self.current = FREE
@@ -222,6 +175,10 @@ class App(tk.Tk):
         self._populate_schema()
         self._select_exercise(FREE)
         self._refresh_progress_label()
+        # Built after the SQL side so the theme is already applied.
+        self.py = PythonPane(self.tabs, self)
+        self.tabs.add(self.py, text="Python")
+        self.tabs.bind("<<NotebookTabChanged>>", self._on_tab_change)
 
     def _centre(self, want_w, want_h):
         """Fit the window to the screen and centre it.
@@ -237,15 +194,18 @@ class App(tk.Tk):
     def _load_progress(self):
         try:
             raw = json.loads(PROGRESS_PATH.read_text(encoding="utf-8"))
-            return {"solved": set(raw.get("solved", [])), "sql": raw.get("sql", {})}
+            return {"solved": set(raw.get("solved", [])), "sql": raw.get("sql", {}),
+                    "python": raw.get("python", {})}
         except (OSError, ValueError):
-            return {"solved": set(), "sql": {}}
+            return {"solved": set(), "sql": {}, "python": {}}
 
-    def _save_progress(self):
+    def save_progress(self):
         try:
             PROGRESS_PATH.write_text(
                 json.dumps(
-                    {"solved": sorted(self.progress["solved"]), "sql": self.progress["sql"]},
+                    {"solved": sorted(self.progress["solved"]),
+                     "sql": self.progress["sql"],
+                     "python": self.progress["python"]},
                     indent=2,
                 ),
                 encoding="utf-8",
@@ -365,8 +325,16 @@ class App(tk.Tk):
                                background=BG_INFO, foreground="white")
         self.status.pack(fill="x", side="bottom")
 
-        outer = ttk.PanedWindow(self, orient="horizontal")
-        outer.pack(fill="both", expand=True, padx=6, pady=6)
+        # SQL and Python are two tabs of one notebook. Each tab owns its
+        # own exercise list, editor and output; the status bar and the
+        # keyboard shortcuts are shared and go to whichever tab is in front.
+        self.tabs = ttk.Notebook(self)
+        self.tabs.pack(fill="both", expand=True, padx=6, pady=6)
+        sql_tab = ttk.Frame(self.tabs)
+        self.tabs.add(sql_tab, text="SQL")
+
+        outer = ttk.PanedWindow(sql_tab, orient="horizontal")
+        outer.pack(fill="both", expand=True)
 
         # ---- left: exercises + schema -------------------------------------
         left = ttk.Notebook(outer, width=290)
@@ -483,11 +451,31 @@ class App(tk.Tk):
         # keep the wrap width in step with the window
         self.bind("<Configure>", self._on_resize)
 
-        self.bind("<F5>", lambda e: (self.run_query(), "break")[1])
-        self.bind("<F6>", lambda e: (self.explain_plan(), "break")[1])
-        self.bind("<Control-Return>", lambda e: (self.check_answer(), "break")[1])
+        self.bind("<F5>", lambda e: (self._run_key(), "break")[1])
+        self.bind("<F6>", lambda e: (self._explain_key(), "break")[1])
+        self.bind("<Control-Return>", lambda e: (self._check_key(), "break")[1])
         self.editor.bind("<Control-Return>", lambda e: (self.check_answer(), "break")[1])
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ------------------------------------------------------------- tab routing
+    def _python_in_front(self):
+        return self.tabs.index(self.tabs.select()) == 1
+
+    def _run_key(self):
+        self.py.run() if self._python_in_front() else self.run_query()
+
+    def _check_key(self):
+        self.py.check() if self._python_in_front() else self.check_answer()
+
+    def _explain_key(self):
+        if not self._python_in_front():
+            self.explain_plan()
+
+    def _on_tab_change(self, _event):
+        # Nothing carries between the tabs, so a stale grading message would
+        # be about the other one's question.
+        self._set_status("Ready", BG_INFO)
+        (self.py.editor if self._python_in_front() else self.editor).focus_set()
 
     # ------------------------------------------------------------- tree filling
     def _populate_exercises(self):
@@ -598,20 +586,7 @@ class App(tk.Tk):
         self.editor.focus_set()
 
     def _fit_question(self):
-        """Grow the question panel to fit its text.
-
-        A fixed height silently truncated longer prompts, and the line that gets
-        cut is the last one -- which is the "Return: ..." line naming the columns
-        the answer needs.
-        """
-        self.question.update_idletasks()
-        try:
-            wanted = self.question.count("1.0", "end", "displaylines")[0]
-        except (tk.TclError, TypeError):
-            wanted = int(self.question.index("end-1c").split(".")[0])
-        wanted = max(3, min(wanted, QUESTION_MAX_LINES))
-        if wanted != int(self.question.cget("height")):
-            self.question.configure(height=wanted)
+        fit_question(self.question)
 
     def _sql(self):
         return self.editor.get("1.0", "end").strip().rstrip(";")
@@ -777,7 +752,7 @@ class App(tk.Tk):
             self.title_var.set(f"{e['id']}. {e['title']}   ({e['tier']})  [solved]")
             self._refresh_progress_label()
             self._stash_sql()
-            self._save_progress()
+            self.save_progress()
             if e.get("note"):
                 msg = f"{msg}   {e['note']}"
         self._set_status(msg, BG_OK if passed else BG_BAD)
@@ -889,28 +864,10 @@ class App(tk.Tk):
         self._status_text = text
         self.status.configure(text=self._clip_status(text), background=colour)
 
-    def _clip_status(self, text):
-        """Trim a status message to a few lines' worth of characters.
+    set_status = _set_status    # what the Python pane calls
 
-        The status label wraps and grows DOWNWARD, and pack gives it what it
-        asks for -- so a long message does not scroll, it pushes the editor and
-        the results off the top of the window. Everything that reaches the bar
-        is clipped here rather than in each caller, because the long ones
-        arrive from three different places: SQLite error text, grading feedback
-        holding a sample row, and result values that can themselves be enormous
-        (a GROUP_CONCAT with no DISTINCT is happily 300,000 characters).
-        """
-        width = max(self.winfo_width() - 40, 400)
-        per_line = max(width // 7, 40)   # ~7px a character in the default font
-        lines = text.split("\n")
-        if len(lines) > STATUS_MAX_LINES:
-            hidden = len(lines) - STATUS_MAX_LINES + 1
-            lines = lines[:STATUS_MAX_LINES - 1] + [f"... ({hidden} more lines)"]
-        out = "\n".join(lines)
-        budget = per_line * STATUS_MAX_LINES
-        if len(out) > budget:
-            out = out[:budget - 3] + "..."
-        return out
+    def _clip_status(self, text):
+        return clip_status(text, max(self.winfo_width() - 40, 400))
 
     def _refresh_progress_label(self):
         # Count only the CURRENT set. progress.json also holds solved ledger ids
@@ -921,7 +878,8 @@ class App(tk.Tk):
 
     def _on_close(self):
         self._stash_sql()
-        self._save_progress()
+        self.py.stash()
+        self.save_progress()
         self._drop_sandbox()
         self.conn.close()
         self.destroy()

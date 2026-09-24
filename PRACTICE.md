@@ -1,21 +1,28 @@
-# SQL practice exercises
+# SQL and Python practice exercises
 
-Thirty questions on a NEW schema: a district hospital, replacing the railway.
-Its shape is intervals -- admissions with a start and an end, ward stays,
-prescriptions, and a time series of observations -- so alongside the familiar
-tiers there is one on **intervals and occupancy** that no earlier schema could
-ask. **The last eight are writable**, on constructs none of the five earlier
-writable stages used.
+Forty questions in two tabs. **Twenty SQL** on the district hospital -- the
+same data as the previous set, with none of its questions -- and **twenty
+Python**, from a first print() to dictionaries and try/except. The Python
+questions are beginner-level on purpose; the SQL ones are at the level of the
+previous sets.
 
-| Stage | Questions |
+| Stage | SQL questions |
 |---|---|
 | 1 - Warm-up | 1-3 |
-| 2 - Sequences and strings | 4-7 |
-| 3 - Dates and times | 8-10 |
-| 4 - Intervals and occupancy | 11-14 |
-| 5 - Joins and grain | 15-18 |
-| 6 - Window functions | 19-22 |
-| 7 - Changing the data | 23-30 |
+| 2 - Strings and sequences | 4-5 |
+| 3 - Dates and times | 6-7 |
+| 4 - Intervals and occupancy | 8-10 |
+| 5 - Joins and grain | 11-13 |
+| 6 - Window functions | 14-15 |
+| 7 - Changing the data | 16-20 |
+
+| Stage | Python questions |
+|---|---|
+| 1 - First steps | 1-4 |
+| 2 - Strings and lists | 5-8 |
+| 3 - Conditions and loops | 9-12 |
+| 4 - Functions | 13-16 |
+| 5 - Dicts, sets and comprehensions | 17-20 |
 
 ## The schema
 
@@ -33,15 +40,15 @@ compare correctly as text; `julianday()` turns either into a number of days
 you can subtract, and `date()` cuts a datetime to its day.
 
 **The data ends at 2026-06-30 23:59.** Anything that would have ended after
-that is open instead -- 39 admissions have no discharge, 71
-prescriptions have no end -- and every question that measures an open interval
-says which end to supply.
+that is open instead -- 39 admissions have no discharge, 39
+ward stays no end, 71 prescriptions no end -- and every question that
+measures an open interval says which end to supply.
 
 ## The writable stage
 
 SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
 instead is constraints, triggers, views and DML driven by CTEs -- and each of
-questions 23 to 30 is one of those.
+questions 16 to 20 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -54,367 +61,571 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Questions 24, 25, 27, 28 and 29 run statements of their
-own *after* yours -- inserts and deletes that your table, trigger, view or
-index should refuse, cascade, soften or let through. A refusal is reported in
-the status bar as what it is, not as an error.
+**Driver statements.** Questions 16, 17, 19 and 20 run statements of their
+own *after* yours -- inserts that your key, trigger or table should refuse or
+let through. A refusal is reported in the status bar as what it is, not as an
+error.
 
 | # | Construct |
 |---|---|
-| 23 | `WITH RECURSIVE ... UPDATE`: a tree walk feeding one statement |
-| 24 | `AUTOINCREMENT`, and why a plain INTEGER PRIMARY KEY reuses ids |
-| 25 | `ON DELETE CASCADE` declared in the table, against the default refusal |
-| 26 | a `DEFERRABLE INITIALLY DEFERRED` foreign key, checked at COMMIT |
-| 27 | `RAISE(FAIL)` against `RAISE(ABORT)`: how much of a statement is undone |
-| 28 | `INSTEAD OF DELETE` on a view -- a soft delete |
-| 29 | a partial `UNIQUE` index: a rule that applies only to open rows |
-| 30 | `CREATE TEMP TABLE`, the `temp` schema and `sqlite_temp_master` |
+| 16 | a keyed summary table, against `CREATE TABLE ... AS SELECT`, which copies no key |
+| 17 | a composite `FOREIGN KEY (a, b) REFERENCES parent (a, b)` |
+| 18 | an index on an expression, and the plan that proves it is used |
+| 19 | a `BEFORE INSERT` trigger whose WHEN clause reads another table |
+| 20 | `RAISE(ROLLBACK)` against `RAISE(ABORT)`: how much of a transaction is undone |
 
 ## Things the data does on purpose
 
-- **463 of the 2,000 patients have never been admitted**, and patient 6
-  is one of them -- which is why question 25 can delete them.
-- **39 admissions are still open**, and patient 1500 holds one; they
-  have 18 admissions altogether, the most of anyone.
-- **176 pairs of admissions of the same patient overlap in time.** The
-  ids were not assigned in time order, which is what question 12's trap trips
-  on.
-- **18 of the 56 staff below the heads report to someone with a HIGHER id**
-  than their own, so a one-level UPDATE cannot fill the tree by luck.
-- **Three staff have never worked a shift**, one of them a porter.
-- **6,488 observations have no temperature and 487 procedures no
-  duration**, and three procedure types have never been performed.
-- **Ward 1 was empty on 2025-01-01**, as every ward was: the data starts that
-  day, so a running occupancy needs no opening balance.
+- **487 procedures have no recorded duration**, which is what question 1's
+  AVG has to leave out.
+- **2,135 ward stays are moves** -- a stay_seq above 1 -- and stays of one
+  admission never overlap, so a procedure falls inside exactly one of them.
+- **9 staff have no home ward**, the pharmacists and porters, so a
+  comparison against their ward is NULL rather than false.
+- **3 procedure types have never been performed**, and they are the
+  whole answer to question 12.
+- **2 of admissions 31 to 40 reach their peak heart rate twice**, which is
+  why question 14 says which of the two it wants.
+- **Admission 173 is still open and admission 1 was discharged on 2026-04-02**,
+  the two that question 19's trigger has to let through.
+- **The largest dose on file is 10,000 mg**, so question 20's cap of 10000
+  refuses nothing already there.
+
+## How the Python questions are graded
+
+Two kinds, and the question says which. A **program** question: the editor
+holds a whole program, Run shows what it prints, and Check compares that with
+the reference program's output line for line -- trailing spaces and blank
+lines at the end are ignored, nothing else is. Where the program is meant to
+read input(), the question says what it will be given. A **function** question:
+the editor defines a function with the name the question gives, Run calls it
+once for each test input and shows every call and its result, and Check
+compares each result with the reference function's. Values are compared, not
+their printed form, so a dictionary in a different order is the same
+dictionary -- but the type counts: a tuple is not a list, and a set is not a
+sorted list.
+
+Your code runs in a separate interpreter with a five-second limit, so a loop
+that never ends is stopped and reported, not fatal. It cannot see the
+database, the app, or any file. Tab inserts four spaces and Return keeps the
+indentation of the line above.
+
+# SQL
 
 ## 1 - Warm-up (3)
 
-Three questions to meet the tables: a per-bed ratio that must not truncate, a
-share of all admissions, and two conditions on a consultant's caseload that
-belong in HAVING.
+Three questions on aggregates: an AVG that must skip NULLs, a COUNT(column) that
+does not do what it looks like, and two conditions on totals that belong in
+HAVING.
 
-1. **Beds and admissions per ward** (Q702)
+1. **Procedures by category** (Q732)
 
-   One row per ward: its name, how many beds it has, how many admissions it
-   has taken (as the admitting ward), and admissions per bed to one decimal.
+   One row per category of procedure: how many have been performed, the
+   revenue in POUNDS to two decimals (tariffs are in pence), and the average
+   duration in minutes to one decimal -- over the procedures whose duration
+   was recorded.
 
-   *Return: ward, beds, admissions, per_bed*
+   *Return: category, procedures, revenue_pounds, avg_minutes*
 
-2. **How patients arrive** (Q703)
+2. **Controlled, by form** (Q733)
 
-   One row per route of admission -- emergency, referral, transfer -- with how
-   many admissions came that way and what percentage of all admissions that
-   is, to two decimals.
+   One row per form of drug -- tablet, injection, infusion, inhaler: how many
+   drugs come in that form, how many of them are controlled, and the
+   percentage that are, to one decimal. `controlled` is 0 or 1.
 
-   *Return: admitted_via, admissions, pct*
+   *Return: form, drugs, controlled, pct*
 
-3. **Busy consultants with long stays** (Q704)
+3. **Night owls** (Q734)
 
-   Consultants with at least 600 completed admissions whose patients' average
-   length of stay is over 3.2 days, with both figures -- the average to two
-   decimals.
+   Staff who have worked at least 300 shifts, of which at least 40 per cent
+   were nights: staff_id, their shifts, their nights, and the percentage to
+   one decimal.
 
-   Length of stay is discharged_at minus admitted_at; julianday() of each
-   gives days. Only discharged admissions count.
+   Both conditions are about totals, so both belong in HAVING.
 
-   *Return: consultant_id, admissions, avg_days*
+   *Return: staff_id, shifts, nights, pct_night*
 
-## 2 - Sequences and strings (4)
+## 2 - Strings and sequences (2)
 
-`ward_stays` is keyed on (admission_id, stay_seq), like stops were on a service.
-LAG along it, initials from a name, a set difference over a patient's history,
-and FIRST_VALUE/LAST_VALUE over a time series.
+A name split with instr() and substr(), and consecutive ward stays paired by a
+self-join on stay_seq + 1.
 
-4. **One admission's moves** (Q705)
+4. **Surname first** (Q735)
 
-   Admission 12 moved ward twice. For each of its stays: the ward, how many
-   hours it lasted to one decimal, and the ward the patient came FROM -- NULL
-   for the first stay.
+   Patients 1 to 10 with their name turned round, 'Surname, Forename' --
+   'Marcus Lindqvist' becomes 'Lindqvist, Marcus'. Every name is two words
+   separated by one space; instr() finds the space and substr() takes either
+   side of it.
 
-   ward_stays is keyed on (admission_id, stay_seq).
+   *Return: patient_id, sorted_name*
 
-   *Return: stay_seq, ward_id, hours, from_ward*
+5. **Where transfers go** (Q736)
 
-5. **Initials** (Q706)
+   Every move between wards: for each pair of wards, how many times a patient
+   went straight from the first to the second. A move is two CONSECUTIVE stays
+   of one admission -- stay_seq and stay_seq + 1.
 
-   Patients 1 to 10 with their initials as 'A.B.' -- first letter of each
-   name, each followed by a full stop. Every name is two words.
+   *Return: from_ward, to_ward, transfers*
 
-   *Return: patient_id, initials*
+## 3 - Dates and times (2)
 
-6. **Only ever an emergency** (Q707)
+strftime('%w') for the weekday, and an age from a julianday difference rather
+than a subtraction of years.
 
-   Patients who have been admitted as an emergency and have NEVER been
-   admitted any other way.
+6. **Admissions by weekday** (Q737)
 
-   *Return: patient_id*
+   How many admissions arrived on each day of the week, with the percentage of
+   all admissions to one decimal. strftime('%w') gives the weekday as a digit,
+   0 for Sunday through 6 for Saturday; return the digit as an integer and the
+   English name.
 
-7. **First and last readings** (Q708)
+   *Return: day_num, day_name, admissions, pct*
 
-   For admissions 1 to 5, the heart rate at the first observation and at the
-   last -- one row per admission, no NULLs.
+7. **Age at admission** (Q738)
 
-   FIRST_VALUE and LAST_VALUE; mind the frame on the second.
+   Admissions by the patient's age on the day they were admitted: 'under 18',
+   '18-64' and '65 and over', with the count and the percentage of all
+   admissions to one decimal. Age in years is the difference in julianday()
+   divided by 365.25, rounded down.
 
-   *Return: admission_id, first_hr, last_hr*
+   *Return: band, admissions, pct*
 
-## 3 - Dates and times (3)
+## 4 - Intervals and occupancy (3)
 
-Datetimes are 'YYYY-MM-DD HH:MM' text. A month key across a year boundary, a
-time range that wraps midnight, and the first open interval: a stay with no end
-yet.
+Clipping stays to a month for a share of bed-days, placing a point inside an
+interval, and asking the same interval question on every day of a recursive
+calendar.
 
-8. **Admissions by month** (Q709)
+8. **Beds in use, March 2026** (Q739)
 
-   For each month, by date of admission: how many admissions, and the average
-   completed length of stay in days to one decimal. Eighteen months -- January
-   2025 and January 2026 are different months. Still-open admissions count as
-   admissions but not in the average.
+   For each ward, the percentage of its bed-days used in March 2026, to one
+   decimal: the days of ward_stays that fell INSIDE the month, added up, over
+   beds times 31. A stay that began in February or ran into April counts only
+   for its March part -- clip each stay to the month with MAX() and MIN()
+   before subtracting. An open stay runs to 2026-06-30 23:59.
 
-   *Return: month, admissions, avg_days*
+   *Return: ward_id, beds, pct_used*
 
-9. **Admitted in the night** (Q710)
+9. **Where the patient was** (Q740)
 
-   For each route of admission: how many admissions, how many of them arrived
-   between 22:00 and 06:00, and the percentage to one decimal.
+   How many procedures were performed while the patient was on each ward --
+   not the ward they were admitted to, but the ward_stay whose interval
+   contains performed_at. A stay with no end is still running.
 
-   The time is the tail of admitted_at, from character 12. The night wraps
-   past midnight.
+   *Return: ward_id, procedures*
 
-   *Return: admitted_via, admissions, at_night, pct*
+10. **Fleming at eight, all week** (Q741)
 
-10. **Length of stay so far** (Q711)
+    For each day from 2026-06-24 to 2026-06-30, how many patients were on ward
+    5 at 08:00 that morning. Build the seven days with a recursive CTE, then
+    join ward_stays on the interval containing that instant -- the day plus '
+    08:00'. Stays with no end are still running.
 
-    For admissions in June 2026, per ward: how many, how many are still in,
-    and the average length of stay in days to two decimals AS OF the end of
-    the data, 2026-06-30 23:59 -- so a patient still in has been in from
-    admission until then.
+    *Return: day, patients*
 
-    Open intervals: an end that is NULL means 'not yet'.
+## 5 - Joins and grain (3)
 
-    *Return: ward_id, admissions, still_in, avg_days*
+COUNT(DISTINCT) over two hops, an anti-join that `<>` cannot express, and a
+comparison that goes NULL when one side is missing.
 
-## 4 - Intervals and occupancy (4)
+11. **Well travelled** (Q742)
 
-New ground. Who was on a ward at an instant, two intervals that overlap, a
-readmission within thirty days of a discharge, and a running occupancy built
-from +1 and -1 events.
+    Patients who have been on SIX or more different wards over all their
+    admissions, with the number of wards. A patient who was on a ward twice
+    has been on it once.
 
-11. **Who was where at eight o'clock** (Q712)
+    *Return: patient_id, wards*
 
-    How many patients were on each ward at 2026-06-30 08:00, from ward_stays:
-    a stay covers that instant if it began at or before it and had not ended
-    -- and a stay with no end had not ended.
+12. **Never in theatre six** (Q743)
 
-    *Return: ward_id, patients*
+    Procedure types that have never been performed in theatre 6, with their
+    name. A type never performed anywhere qualifies too.
 
-12. **Admitted twice at once** (Q713)
+    *Return: code, name*
 
-    Pairs of admissions of the SAME patient whose intervals overlap -- a data-
-    quality check. Each pair once, the lower admission_id first. An open
-    admission runs to the snapshot, 2026-06-30 23:59.
+13. **Away from home** (Q744)
 
-    Two intervals overlap when each starts before the other ends.
+    For each role that HAS a home ward -- consultants, doctors, nurses;
+    pharmacists and porters have NULL -- how many shifts its staff have
+    worked, how many were on a ward other than their own, and the percentage
+    to one decimal.
 
-    *Return: admission_a, admission_b, patient_id*
+    *Return: role, shifts, away, pct_away*
 
-13. **Back within thirty days** (Q714)
+## 6 - Window functions (2)
 
-    For each route of admission: how many admissions, how many of them were
-    READMISSIONS -- the same patient had been discharged within the previous
-    30 days -- and the percentage to one decimal.
+Top-1 per group with a tiebreak that is part of the question, and LAG that must
+be partitioned.
 
-    Measure from the previous DISCHARGE, not the previous admission.
+14. **The peak reading** (Q745)
 
-    *Return: admitted_via, admissions, readmissions, pct*
+    For admissions 31 to 40: the highest heart rate recorded, and how many
+    hours after admission it was taken, to one decimal. If the peak was
+    reached more than once, the EARLIEST time.
 
-14. **Nightingale, day by day** (Q715)
+    *Return: admission_id, peak_hr, hours_in*
 
-    For each day in January 2025 on which someone arrived on or left ward 1:
-    the net change that day -- arrivals minus departures, by ward_stays -- and
-    how many patients were on the ward at the end of it. The ward was empty on
-    2025-01-01.
+15. **Gaps in the readings** (Q746)
 
-    Turn every stay into a +1 event and a -1 event, then run a total over the
-    days.
+    For admissions 1 to 10: the longest gap between two consecutive
+    observations, in hours to one decimal. LAG brings the previous reading's
+    time onto each row; the partition matters.
 
-    *Return: day, net, occupancy*
+    *Return: admission_id, longest_gap_hours*
 
-## 5 - Joins and grain (4)
-
-Two children of one parent, an anti-join that must test the key, a NOT EXISTS
-against the right table, and a join on two intervals overlapping instead of two
-keys matching.
-
-15. **Procedures and prescriptions, per ward** (Q716)
-
-    For each ward, by admitting ward: how many procedures and how many
-    prescriptions its admissions have had.
-
-    Both hang off `admissions`. Joining both at once multiplies each by the
-    other.
-
-    *Return: ward_id, procedures, prescriptions*
-
-16. **Never admitted** (Q717)
-
-    Patients who have never been admitted. Write it as an outer join that
-    keeps the non-matches.
-
-    *Return: patient_id, name*
-
-17. **Never on the rota** (Q718)
-
-    Staff who have never worked a shift, with their role.
-
-    *Return: staff_id, name, role*
-
-18. **Controlled drugs on Fleming** (Q719)
-
-    For each controlled drug, how many prescriptions of it were running while
-    the patient was on ward 5 -- Fleming -- at any point, whether or not they
-    were admitted there.
-
-    A prescription runs from started_on to ended_on (dates); a stay from
-    from_at to to_at (datetimes, date() them). NULL ends run to 2026-06-30.
-
-    *Return: drug, prescriptions*
-
-## 6 - Window functions (4)
-
-A running total per partition, DENSE_RANK over an aggregate, a share of a
-partition, and top-N per group.
-
-19. **Admissions accumulating, per ward** (Q720)
-
-    Admissions by ward and month of admission, with a running total that
-    restarts for each ward.
-
-    *Return: ward_id, month, admissions, running_total*
-
-20. **Consultants by caseload** (Q721)
-
-    Every consultant who has admitted anyone, with their number of admissions
-    and their rank -- 1 for the most. Two consultants tie; they share a rank,
-    and no rank is skipped after them.
-
-    *Return: consultant_id, admissions, rank*
-
-21. **Each route's share of the ward** (Q722)
-
-    For every ward and route of admission: how many admissions, and what
-    percentage of THAT WARD's admissions came by that route, to two decimals.
-    Each ward's three shares add to 100.
-
-    *Return: ward_id, admitted_via, admissions, pct_of_ward*
-
-22. **The three highest earners per category** (Q723)
-
-    For each category of procedure -- surgical, diagnostic, therapeutic -- the
-    three surgeons whose procedures of that category carry the highest total
-    tariff, with the total in pence. Nine rows; ties by the lower surgeon_id.
-
-    *Return: category, surgeon_id, tariff_pence*
-
-## 7 - Changing the data (8)
+## 7 - Changing the data (5)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A recursive UPDATE, AUTOINCREMENT, ON
-DELETE CASCADE, a deferred foreign key, RAISE(FAIL), a soft delete through a
-view, a partial UNIQUE index and a TEMP table.
+question's probe query reads the result. A keyed summary table against CTAS, a
+composite foreign key, an expression index, a trigger that reads another table,
+and RAISE(ROLLBACK).
 
-23. **Fill the division down the tree** (Q724)
+16. **A summary with a key** (Q747)
 
-    Only the four division heads carry a division; the 56 people under them
-    have NULL. Fill every NULL with the division of the head at the top of
-    that person's chain, in ONE UPDATE fed by a recursive CTE.
+    Build `ward_load (ward_id INTEGER PRIMARY KEY, admissions INTEGER NOT
+    NULL)` holding each ward's number of admissions as the admitting ward --
+    eight rows -- so that the table has a real PRIMARY KEY. CREATE TABLE ...
+    AS SELECT will not give you one. After your script, the question tries to
+    insert a second row for ward 1.
 
-    Managers do not always have lower ids than their reports, so copying from
-    the direct manager will not cascade.
+    *Checked: how many columns are the key, the row count, and the sum of admissions*
 
-    *Checked: staff per division*
+17. **A note on one stay** (Q748)
 
-24. **An id that is never reused** (Q725)
+    Create `stay_notes (note_id INTEGER PRIMARY KEY, admission_id INTEGER NOT
+    NULL, stay_seq INTEGER NOT NULL, note TEXT NOT NULL)` where the PAIR
+    (admission_id, stay_seq) must match a row of ward_stays -- a foreign key
+    on two columns at once. After your script, the question inserts a note for
+    stay (1, 1), one for (1, 9), and one for (999999, 1).
 
-    Create `incident_log (log_id INTEGER PRIMARY KEY, note TEXT NOT NULL)` so
-    that an id, once used, is never handed out again -- even after the row
-    that had it is deleted.
+    *Checked: which (admission_id, stay_seq) pairs the notes hold*
 
-    After your script, the question inserts two notes, deletes the second, and
-    inserts a third. The third must get id 3, not 2.
+18. **An index on an expression** (Q749)
 
-    *Checked: SELECT * FROM incident_log*
+    The query `SELECT COUNT(*) FROM admissions WHERE date(admitted_at) =
+    '2026-03-01'` scans the whole table: the index on admitted_at cannot serve
+    a condition on date(admitted_at). Create an index named `idx_adm_day` that
+    CAN -- an index on the expression itself.
 
-25. **Notes that go with the patient** (Q726)
+    *Checked: the query plan of that SELECT*
 
-    Create `patient_notes (note_id INTEGER PRIMARY KEY, patient_id INTEGER NOT
-    NULL referencing patients, note TEXT NOT NULL)` such that deleting a
-    patient deletes their notes with them.
+19. **No prescribing after discharge** (Q750)
 
-    After your script, the question adds two notes for patient 6 -- who has
-    never been admitted -- and then deletes patient 6. Both the patient and
-    the notes should be gone.
+    Write a BEFORE INSERT trigger on prescriptions that refuses a prescription
+    whose started_on is after the day its admission was discharged --
+    RAISE(ABORT, ...) -- and lets any other through, including one for an
+    admission still open. The check needs to read admissions. After your
+    script, the question inserts one for admission 2 starting 2026-03-01, one
+    for admission 173 starting 2026-06-20, and one for admission 1 starting
+    2026-04-01.
 
-    *Checked: whether patient 6 exists, and how many notes there are*
+    *Checked: the admission and start date of each new prescription*
 
-26. **The child before the parent** (Q727)
+20. **Undo everything, not just this row** (Q751)
 
-    Create `referrals (referral_id INTEGER PRIMARY KEY, patient_id INTEGER NOT
-    NULL referencing patients, referred_on TEXT NOT NULL)`, then in one
-    transaction insert a referral for patient 2001 -- who does not exist yet
-    -- and THEN insert patient 2001 (any name and details), and commit.
+    Write a BEFORE INSERT trigger on prescriptions that refuses a dose over
+    10000 mg with RAISE(ROLLBACK, ...) -- not ABORT. After your script, the
+    question runs, as separate statements: BEGIN; an insert of 100 mg with id
+    20001; an insert of 20000 mg with id 20002; an insert of 100 mg with id
+    20003; COMMIT.
 
-    The foreign key has to be DEFERRABLE INITIALLY DEFERRED, or the first
-    insert fails.
+    *Checked: which of the three ids exist afterwards*
 
-    *Checked: how many referrals, and whether patient 2001 exists*
+# Python
 
-27. **Fail the row, keep what came before** (Q728)
+## 1 - First steps (4)
 
-    Write a trigger that refuses any observation with a heart rate over 200 --
-    but using RAISE(FAIL, ...) rather than ABORT, so that rows already written
-    by the same statement stay written.
+Programs, graded on what they print: print(), arithmetic, variables in an
+f-string, and a line read with input().
 
-    After your script, the question inserts three observations for admission 1
-    in ONE statement; the third is the bad one. The first two should land.
+1. **Say hello** (P001)
 
-    *Checked: time and heart rate of admission 1's observations on or after 2026-07-01*
+   Write a program that prints exactly this line:
 
-28. **Stop, do not delete** (Q729)
+   ```
+   Hello, hospital!
+   ```
 
-    Create a view `open_prescriptions (prescription_id, admission_id, drug_id,
-    started_on)` over the prescriptions with no end date, and make DELETE on
-    the view END the prescription -- set ended_on to '2026-07-01' -- rather
-    than remove it.
+   *Print: the line above, punctuation included.*
 
-    After your script, the question runs DELETE FROM open_prescriptions WHERE
-    prescription_id = 367.
+2. **Three sums** (P002)
 
-    *Checked: the prescription count, 367's ended_on, and how many are still open*
+   Print three numbers, one per line, each worked out by Python rather than
+   typed in:
 
-29. **One open admission per patient** (Q730)
+   ```
+   the hours in a 365-day year
+   the minutes in a week
+   2 to the power of 10
+   ```
 
-    A patient cannot be admitted twice at once. Enforce it with a UNIQUE index
-    on `admissions` that applies only to rows with no discharge -- a partial
-    index -- so past admissions do not count.
+   *Print: three lines, the numbers only.*
 
-    After your script, the question inserts two admissions for patient 1500,
-    who is currently in: one still open, one already discharged. Only the open
-    one should be refused.
+3. **Variables in a sentence** (P003)
 
-    *Checked: how many partial unique indexes admissions has, and patient 1500's admission count*
+   Put the ward name 'Fleming', its 16 beds and its 11 patients in three
+   variables, then print two lines built from them:
 
-30. **Scratch space that leaves no trace** (Q731)
+   ```
+   Fleming has 16 beds and 11 patients
+   Occupancy: 68.8%
+   ```
 
-    Find the admissions that have run more than 20 days as of 2026-06-30 23:59
-    -- open ones included -- and put their ids in a TEMPORARY table
-    `long_stays`. Then raise every 'routine' admission in that list to
-    'urgent', reading the list from the temp table.
+   The percentage is patients divided by beds times 100, shown to ONE decimal
+   place -- use an f-string with a format spec such as {x:.1f}.
 
-    A temp table lives in the `temp` schema and vanishes with the connection;
-    nothing permanent should be left behind.
+   *Print: the two lines.*
 
-    *Checked: how many admissions are urgent, whether long_stays exists in the main schema, and whether it exists in temp*
+4. **Reading a line** (P004)
+
+   Read one line from the keyboard with input() -- it will be a name -- and
+   greet it:
+
+   ```
+   Good morning, Ada.
+   ```
+
+   When you press Run the program is given the line 'Ada' as its input, so you
+   cannot type it yourself.
+
+   *Print: the greeting, with the name that was read.*
+
+## 2 - Strings and lists (4)
+
+Functions, graded on what they return: split and index a string, count with a
+loop, slice a list, keep the first of a tie.
+
+5. **Initials** (P005)
+
+   Write a function `initials(name)` that returns the first letter of each
+   word in the name, each followed by a full stop:
+
+   ```
+   initials("Florence Nightingale") -> "F.N."
+   ```
+
+   A name can have one word or several. str.split() breaks a string into a
+   list of words.
+
+   *Return: the initials as one string.*
+
+6. **Counting vowels** (P006)
+
+   Write a function `count_vowels(text)` that returns how many vowels -- a, e,
+   i, o, u -- the text contains, in either case:
+
+   ```
+   count_vowels("Observation") -> 5
+   ```
+
+   *Return: the count as an integer.*
+
+7. **Every other one** (P007)
+
+   Write a function `every_other(items)` that returns a new list holding the
+   first item, the third, the fifth and so on -- the ones at even positions
+   counting from 0:
+
+   ```
+   every_other([1, 2, 3, 4, 5]) -> [1, 3, 5]
+   ```
+
+   A slice can do it in one expression: items[start:stop:step].
+
+   *Return: the new list; an empty list stays empty.*
+
+8. **The longest word** (P008)
+
+   Write a function `longest_word(sentence)` that returns the longest word in
+   the sentence. If several tie, return the one that comes FIRST. An empty
+   sentence returns an empty string.
+
+   ```
+   longest_word("a bb cc") -> "bb"
+   ```
+
+   *Return: the word.*
+
+## 3 - Conditions and loops (4)
+
+if/elif with a boundary, for over range(), a while loop that counts, and a
+return from inside a loop.
+
+9. **Triage by heart rate** (P009)
+
+   Write a function `triage(heart_rate)` that returns 'high' for a rate over
+   100, 'low' for a rate under 60, and 'normal' otherwise. 100 and 60 are both
+   normal.
+
+   ```
+   triage(101) -> 'high'
+   ```
+
+   *Return: one of the three strings.*
+
+10. **The seven times table** (P010)
+
+    Print the seven times table from 1 to 10, one line each, in this form:
+
+    ```
+    7 x 1 = 7
+    7 x 2 = 14
+    ...
+    7 x 10 = 70
+    ```
+
+    Use a for loop over range(), not ten print statements.
+
+    *Print: ten lines.*
+
+11. **Steps to one** (P011)
+
+    Write a function `collatz_steps(n)` that counts how many steps it takes to
+    reach 1 from n, where a step halves an even number and turns an odd number
+    into 3n + 1:
+
+    ```
+    6 -> 3 -> 10 -> 5 -> 16 -> 8 -> 4 -> 2 -> 1, so collatz_steps(6) -> 8
+    ```
+
+    collatz_steps(1) is 0. You do not know in advance how many steps there
+    are, so this is a while loop.
+
+    *Return: the number of steps.*
+
+12. **The first negative** (P012)
+
+    Write a function `first_negative_index(nums)` that returns the index of
+    the first negative number in the list, or -1 if there is none:
+
+    ```
+    first_negative_index([3, 1, -4, 1, -5]) -> 2
+    ```
+
+    enumerate(nums) gives you each index with its value; return as soon as you
+    find one.
+
+    *Return: an index, or -1.*
+
+## 4 - Functions (4)
+
+Operator precedence, default arguments, a tuple as three answers, and a
+comparison returned directly as a boolean.
+
+13. **Body mass index** (P013)
+
+    Write a function `bmi(weight_kg, height_m)` that returns the body mass
+    index -- weight divided by the SQUARE of height -- rounded to one decimal
+    place:
+
+    ```
+    bmi(70, 1.75) -> 22.9
+    ```
+
+    *Return: a number with one decimal place.*
+
+14. **Arguments you can leave out** (P014)
+
+    Write a function `course_total_mg(dose_mg, times_per_day, days)` that
+    returns the total milligrams over a course: dose times doses per day times
+    days. The last two arguments are optional -- times_per_day defaults to 2
+    and days to 7 -- so all three of these calls work:
+
+    ```
+    course_total_mg(500) -> 7000
+    course_total_mg(500, 3) -> 10500
+    course_total_mg(250, 4, 5) -> 5000
+    ```
+
+    *Return: the total as an integer.*
+
+15. **Three answers at once** (P015)
+
+    Write a function `min_max_mean(nums)` that returns the smallest value, the
+    largest, and the mean rounded to two decimal places -- as a TUPLE of
+    three:
+
+    ```
+    min_max_mean([1, 2, 3, 4]) -> (1, 4, 2.5)
+    ```
+
+    min(), max(), sum() and len() do the arithmetic. The list is never empty.
+
+    *Return: a tuple (smallest, largest, mean).*
+
+16. **Reads the same backwards** (P016)
+
+    Write a function `is_palindrome(text)` that returns True when the text
+    reads the same backwards as forwards, ignoring case and spaces:
+
+    ```
+    is_palindrome("Never odd or even") -> True
+    ```
+
+    text[::-1] is the text reversed. An empty string counts as a palindrome.
+
+    *Return: True or False.*
+
+## 5 - Dicts, sets and comprehensions (4)
+
+Counting into a dict with .get(), insertion order as a tiebreak, a set
+intersection returned as a sorted list, and try/except around int().
+
+17. **Counting words** (P017)
+
+    Write a function `word_counts(text)` that returns a dictionary from each
+    word, lower-cased, to how many times it appears:
+
+    ```
+    word_counts("the ward the bed") -> {'the': 2, 'ward': 1, 'bed': 1}
+    ```
+
+    dict.get(key, 0) reads a count that may not exist yet.
+
+    *Return: the dictionary; empty text gives an empty one.*
+
+18. **The most common item** (P018)
+
+    Write a function `most_common(items)` that returns the item appearing most
+    often. If several tie, return the one that appears FIRST in the list. The
+    list is never empty.
+
+    ```
+    most_common(["b", "a", "b", "a"]) -> "b"
+    ```
+
+    Count into a dictionary first, then look for the largest count; a
+    dictionary remembers the order keys were added.
+
+    *Return: the item.*
+
+19. **Prescribed on both wards** (P019)
+
+    Write a function `shared_drugs(ward_a, ward_b)` that takes two lists of
+    drug names, possibly with repeats, and returns the names that appear in
+    BOTH -- each once, sorted:
+
+    ```
+    shared_drugs(["Morphine", "Codeine", "Codeine"], ["Codeine", "Aspirin", "Morphine"]) -> ["Codeine", "Morphine"]
+    ```
+
+    A set drops the repeats and & finds what two sets share.
+
+    *Return: a sorted LIST of names.*
+
+20. **Readings that are not numbers** (P020)
+
+    Write a function `parse_readings(strings)` that turns a list of strings
+    into a list of integers, SKIPPING any string that is not a whole number:
+
+    ```
+    parse_readings(["72", "x", "-5", " 80 ", "3.5"]) -> [72, -5, 80]
+    ```
+
+    int(s) converts a string and raises ValueError when it cannot; catch that
+    with try/except rather than inspecting the characters yourself.
+
+    *Return: the list of integers, in the original order.*
 
 ## The one concept with no question here
 
@@ -425,7 +636,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-701 retired ones.
+731 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
