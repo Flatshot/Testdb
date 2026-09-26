@@ -1,5 +1,10 @@
-"""Python practice exercises: twenty questions from a first print() to
-dictionaries and comprehensions.
+"""Python practice exercises: twenty short programs, one built-in each.
+
+The second Python set, and a step DOWN from the first: every question is a
+program of two to four lines that prints a result, and every question names
+the one function or method it is about -- in the title, so the tree on the
+left reads like a list of tools, and in the prompt, which says "Use len()
+to ...". There are no functions to define and no loops until the last two.
 
 Two kinds of question, told apart by `kind`:
 
@@ -9,10 +14,8 @@ Two kinds of question, told apart by `kind`:
               text the program can read with input().
   "function"  the editor defines a function named `func`. Run calls it once
               per case in `cases` and shows each call and its result; Check
-              compares each result with the reference function's. Values
-              are compared, not their printed form -- a dict in another
-              order is the same dict -- but the container type counts, so a
-              tuple is not a list.
+              compares each result with the reference function's. Not used
+              in this set, but the grader still supports it.
 
 Every question carries a `trap`: a wrong answer a beginner is likely to
 write, which check_questions.py proves the grader rejects. The `note` is
@@ -25,546 +28,392 @@ so an infinite loop or a print in a loop is stopped, not fatal.
 import pyrun
 
 EXERCISES = [
-    # ======================================================== 1 First steps
+    # ============================================================ 1 Printing
     dict(
-        id=1, ledger="P001", concept="PY0 print", tier="1 - First steps",
-        title="Say hello", kind="program",
+        id=1, ledger="P021", concept="PY0 print", tier="1 - Printing",
+        title="print(): two things in one call", kind="program",
         prompt=(
-            "Write a program that prints exactly this line:\n\n"
-            "  Hello, hospital!\n\n"
-            "Print: the line above, punctuation included."
+            "Use print() with TWO arguments, separated by a comma, to print"
+            " the word Ward and the number 5 on one line:\n\n"
+            "  Ward 5\n\n"
+            "print() puts a space between its arguments for you.\n\n"
+            "Print: that one line."
         ),
-        solution='print("Hello, hospital!")\n',
-        trap='print("Hello hospital!")\n',
-        note="print() writes its argument and then a newline. The text"
-             " inside the quotes is printed exactly as written -- the"
-             " comma and the exclamation mark are part of the answer, and"
-             " the grader compares character by character.",
+        solution='print("Ward", 5)\n',
+        trap='print("Ward" + 5)\n',
+        note="print() takes any number of arguments and writes them"
+             " separated by spaces, whatever their types. + is different:"
+             " it joins two strings, and \"Ward\" + 5 is a TypeError"
+             " because 5 is not a string. When you want things side by"
+             " side, the comma is the easy way.",
     ),
     dict(
-        id=2, ledger="P002", concept="PY0 arithmetic", tier="1 - First steps",
-        title="Three sums", kind="program",
+        id=2, ledger="P022", concept="PY0 print sep", tier="1 - Printing",
+        title="print(): choosing the separator", kind="program",
         prompt=(
-            "Print three numbers, one per line, each worked out by Python"
-            " rather than typed in:\n\n"
-            "  the hours in a 365-day year\n"
-            "  the minutes in a week\n"
-            "  2 to the power of 10\n\n"
-            "Print: three lines, the numbers only."
+            "Use print() with three arguments -- the numbers 2026, 6 and 30"
+            " -- and its sep= option to print them joined by hyphens:\n\n"
+            "  2026-6-30\n\n"
+            "Print: that one line."
         ),
-        solution="print(365 * 24)\nprint(7 * 24 * 60)\nprint(2 ** 10)\n",
-        trap="print(365 * 24)\nprint(7 * 24 * 60)\nprint(2 ^ 10)\n",
-        note="Power is **, not ^. In Python ^ is bitwise exclusive-or, so"
-             " 2 ^ 10 is 8 -- it runs without complaint and is simply the"
-             " wrong number. The other arithmetic operators are + - * and /,"
-             " with // for whole-number division and % for the remainder.",
+        solution='print(2026, 6, 30, sep="-")\n',
+        trap='print(2026, "-", 6, "-", 30)\n',
+        note="sep is a keyword argument: it names the string print() puts"
+             " between the values, and the default is one space. Passing"
+             " the hyphens as extra arguments puts a space either side of"
+             " each one, giving 2026 - 6 - 30. end= is the other option,"
+             " for what comes after the last value; its default is a"
+             " newline.",
     ),
     dict(
-        id=3, ledger="P003", concept="PY0 f-strings", tier="1 - First steps",
-        title="Variables in a sentence", kind="program",
+        id=3, ledger="P023", concept="PY0 str", tier="1 - Printing",
+        title="str(): a number inside text", kind="program",
         prompt=(
-            "Put the ward name 'Fleming', its 16 beds and its 11 patients in"
-            " three variables, then print two lines built from them:\n\n"
-            "  Fleming has 16 beds and 11 patients\n"
-            "  Occupancy: 68.8%\n\n"
-            "The percentage is patients divided by beds times 100, shown"
-            " to ONE decimal place -- use an f-string with a format spec"
-            " such as {x:.1f}.\n\n"
+            "Put the number 16 in a variable called beds. Then use + to"
+            " join three pieces into one string -- 'Fleming has ', the"
+            " number, and ' beds' -- and print it:\n\n"
+            "  Fleming has 16 beds\n\n"
+            "+ only joins strings, so use str() to turn the number into"
+            " one first.\n\n"
+            "Print: that one line."
+        ),
+        solution='beds = 16\nprint("Fleming has " + str(beds) + " beds")\n',
+        trap='beds = 16\nprint("Fleming has " + beds + " beds")\n',
+        note="A string plus an integer is a TypeError: Python will not"
+             " guess whether you meant to add or to join. str(beds) gives"
+             " the text '16', and text plus text joins. The other way"
+             " round, int('16') turns text into a number. An f-string does"
+             " the str() for you, which is why it is the usual choice.",
+    ),
+    dict(
+        id=4, ledger="P024", concept="PY0 input", tier="1 - Printing",
+        title="input(): reading a number", kind="program",
+        stdin="24\n",
+        prompt=(
+            "Use input() to read one line -- it will be the number 24 --"
+            " turn it into a number with int(), add 1 to it, and print the"
+            " result:\n\n"
+            "  25\n\n"
+            "When you press Run the program is given the line '24', so you"
+            " cannot type it yourself.\n\n"
+            "Print: the number one higher than the line read."
+        ),
+        solution="beds = int(input())\nprint(beds + 1)\n",
+        trap="beds = input()\nprint(beds + 1)\n",
+        note="input() always returns a string, even when the person typed"
+             " digits: '24' is text. Adding 1 to text is a TypeError, and"
+             " adding '1' would give '241'. int() converts it, and after"
+             " that arithmetic works. Convert at the moment you read, so"
+             " the rest of the program never sees the text form.",
+    ),
+    # ============================================================== 2 Strings
+    dict(
+        id=5, ledger="P025", concept="PY1 len", tier="2 - Strings",
+        title="len(): how long a string is", kind="program",
+        prompt=(
+            "Put 'Nightingale' in a variable and use len() to print how"
+            " many characters it has:\n\n"
+            "  11\n\n"
+            "Print: the number."
+        ),
+        solution='ward = "Nightingale"\nprint(len(ward))\n',
+        trap='ward = "Nightingale"\nprint(ward.len())\n',
+        note="len() is a function you call ON a value -- len(ward) -- not a"
+             " method the value has, so ward.len() is an AttributeError."
+             " The same len() works on lists, tuples and dictionaries. The"
+             " methods that DO belong to strings are called with a dot,"
+             " like ward.upper().",
+    ),
+    dict(
+        id=6, ledger="P026", concept="PY1 upper/lower", tier="2 - Strings",
+        title="upper() and lower(): changing case", kind="program",
+        prompt=(
+            "Put 'Seacole Ward' in a variable. Use the upper() method to"
+            " print it in capitals, then the lower() method to print it in"
+            " small letters:\n\n"
+            "  SEACOLE WARD\n"
+            "  seacole ward\n\n"
             "Print: the two lines."
         ),
-        solution=('ward = "Fleming"\nbeds = 16\npatients = 11\n'
-                  'print(f"{ward} has {beds} beds and {patients} patients")\n'
-                  'print(f"Occupancy: {patients / beds * 100:.1f}%")\n'),
-        trap=('ward = "Fleming"\nbeds = 16\npatients = 11\n'
-              'print(ward + " has " + str(beds) + " beds and " + str(patients)'
-              ' + " patients")\n'
-              'print("Occupancy: " + str(patients / beds * 100) + "%")\n'),
-        note="An f-string puts any expression inside {braces} and can"
-             " format it on the way: {value:.1f} means one decimal place."
-             " Building the line with + and str() works for the first"
-             " line, but the second prints 68.75 -- str() has no opinion"
-             " about decimals.",
+        solution='name = "Seacole Ward"\nprint(name.upper())\nprint(name.lower())\n',
+        trap='name = "Seacole Ward"\nprint(name.upper)\nprint(name.lower)\n',
+        note="A method is called with parentheses, even when it needs no"
+             " arguments. name.upper without them is the method itself,"
+             " and printing it shows <built-in method upper of str"
+             " object ...> rather than the result. Strings are immutable:"
+             " upper() returns a NEW string and leaves name as it was.",
     ),
     dict(
-        id=4, ledger="P004", concept="PY0 input", tier="1 - First steps",
-        title="Reading a line", kind="program",
-        stdin="Ada\n",
+        id=7, ledger="P027", concept="PY1 replace", tier="2 - Strings",
+        title="replace(): swapping part of a string", kind="program",
         prompt=(
-            "Read one line from the keyboard with input() -- it will be a"
-            " name -- and greet it:\n\n"
-            "  Good morning, Ada.\n\n"
-            "When you press Run the program is given the line 'Ada' as its"
-            " input, so you cannot type it yourself.\n\n"
-            "Print: the greeting, with the name that was read."
+            "Put 'Bed 3, Bay 3' in a variable and use the replace() method"
+            " to change every 3 to a 4, then print the result:\n\n"
+            "  Bed 4, Bay 4\n\n"
+            "Print: that one line."
         ),
-        solution='name = input()\nprint(f"Good morning, {name}.")\n',
-        trap='name = input("Name? ")\nprint(f"Good morning, {name}.")\n',
-        note="input() returns the line typed, without its newline. An"
-             " argument to input() is a prompt, and a prompt is PRINTED --"
-             " so input(\"Name? \") puts 'Name? ' on the output before the"
-             " greeting, and the output no longer matches. Prompts are for"
-             " people at a keyboard; a program that is fed its input has"
-             " no one to read them.",
-    ),
-    # ================================================= 2 Strings and lists
-    dict(
-        id=5, ledger="P005", concept="PY1 strings", tier="2 - Strings and lists",
-        title="Initials", kind="function",
-        func="initials",
-        cases=[("Florence Nightingale",), ("Mary Seacole",),
-               ("Jean Paul Gaultier",), ("Ada",)],
-        prompt=(
-            "Write a function `initials(name)` that returns the first letter"
-            " of each word in the name, each followed by a full stop:\n\n"
-            "  initials(\"Florence Nightingale\") -> \"F.N.\"\n\n"
-            "A name can have one word or several. str.split() breaks a"
-            " string into a list of words.\n\n"
-            "Return: the initials as one string."
-        ),
-        solution=('def initials(name):\n'
-                  '    return "".join(word[0] + "." for word in name.split())\n'),
-        trap=('def initials(name):\n'
-              '    words = name.split()\n'
-              '    return words[0][0] + "." + words[1][0] + "."\n'),
-        note="Indexing words[1] assumes exactly two words: a third is"
-             " ignored and a single word raises IndexError. A loop over"
-             " name.split() -- or a join over it -- handles any number."
-             " word[0] is the first character of a string; strings are"
-             " sequences, indexed from 0 like lists.",
+        solution='label = "Bed 3, Bay 3"\nprint(label.replace("3", "4"))\n',
+        trap='label = "Bed 3, Bay 3"\nlabel.replace("3", "4")\nprint(label)\n',
+        note="replace() returns a new string with the change made; it does"
+             " not change the one you called it on. Calling it and then"
+             " printing the original prints the original. Either print the"
+             " result directly or assign it back: label = label.replace"
+             "(...). By default every occurrence is replaced.",
     ),
     dict(
-        id=6, ledger="P006", concept="PY1 strings", tier="2 - Strings and lists",
-        title="Counting vowels", kind="function",
-        func="count_vowels",
-        cases=[("Observation",), ("RHYTHM",), ("Aeiou Sky",), ("",)],
+        id=8, ledger="P028", concept="PY1 strip", tier="2 - Strings",
+        title="strip(): trimming spaces", kind="program",
         prompt=(
-            "Write a function `count_vowels(text)` that returns how many"
-            " vowels -- a, e, i, o, u -- the text contains, in either"
-            " case:\n\n"
-            "  count_vowels(\"Observation\") -> 5\n\n"
-            "Return: the count as an integer."
+            "Put '   Bay 3   ' -- three spaces either side -- in a"
+            " variable. Use the strip() method to remove the outer spaces,"
+            " then print the result between square brackets:\n\n"
+            "  [Bay 3]\n\n"
+            "Print: that one line."
         ),
-        solution=('def count_vowels(text):\n'
-                  '    count = 0\n'
-                  '    for ch in text.lower():\n'
-                  '        if ch in "aeiou":\n'
-                  '            count += 1\n'
-                  '    return count\n'),
-        trap=('def count_vowels(text):\n'
-              '    count = 0\n'
-              '    for ch in text:\n'
-              '        if ch in "aeiou":\n'
-              '            count += 1\n'
-              '    return count\n'),
-        note="The capital O in Observation is a vowel too. Lower-casing the"
-             " text once, with text.lower(), is simpler than listing both"
-             " cases -- and `ch in \"aeiou\"` asks whether a one-character"
-             " string appears inside another, which is the same `in` that"
-             " tests list membership.",
+        solution='bay = "   Bay 3   "\nprint("[" + bay.strip() + "]")\n',
+        trap='bay = "   Bay 3   "\nprint("[" + bay.replace(" ", "") + "]")\n',
+        note="strip() removes whitespace from both ENDS and nothing in the"
+             " middle, which is what you want for input that someone"
+             " padded. replace(' ', '') removes every space, including"
+             " the one inside the text, giving 'Bay3'. lstrip()"
+             " and rstrip() trim one end only.",
     ),
     dict(
-        id=7, ledger="P007", concept="PY1 slicing", tier="2 - Strings and lists",
-        title="Every other one", kind="function",
-        func="every_other",
-        cases=[([1, 2, 3, 4, 5],), (["a", "b"],), ([],), ([7],)],
+        id=9, ledger="P029", concept="PY1 count", tier="2 - Strings",
+        title="count(): occurrences of a letter", kind="program",
         prompt=(
-            "Write a function `every_other(items)` that returns a new list"
-            " holding the first item, the third, the fifth and so on --"
-            " the ones at even positions counting from 0:\n\n"
-            "  every_other([1, 2, 3, 4, 5]) -> [1, 3, 5]\n\n"
-            "A slice can do it in one expression: items[start:stop:step].\n\n"
-            "Return: the new list; an empty list stays empty."
+            "Put 'observation' in a variable and use the count() method to"
+            " print how many times the letter o appears:\n\n"
+            "  2\n\n"
+            "Print: the number."
         ),
-        solution="def every_other(items):\n    return items[::2]\n",
-        trap="def every_other(items):\n    return items[1::2]\n",
-        note="items[::2] starts at index 0 and takes every second item;"
-             " items[1::2] starts at index 1 and returns the OTHER half."
-             " Slicing never raises on an empty list or a short one -- it"
-             " just returns what is there, which is why no special case is"
-             " needed.",
+        solution='word = "observation"\nprint(word.count("o"))\n',
+        trap='word = "observation"\nprint(word.count(o))\n',
+        note="The thing to count is a string, so it goes in quotes: count"
+             "('o'). Without quotes, o is the name of a variable, and there"
+             " is no variable called o -- a NameError. count() is"
+             " case-sensitive and can count longer pieces too, as in"
+             " word.count('ti').",
+    ),
+    # ============================================================== 3 Numbers
+    dict(
+        id=10, ledger="P030", concept="PY1 round", tier="3 - Numbers",
+        title="round(): a set number of decimals", kind="program",
+        prompt=(
+            "Use round() to print 37.66666 rounded to one decimal place,"
+            " and on the next line rounded to a whole number:\n\n"
+            "  37.7\n"
+            "  38\n\n"
+            "Print: the two lines."
+        ),
+        solution="print(round(37.66666, 1))\nprint(round(37.66666))\n",
+        trap="print(round(37.66666, 1))\nprint(round(37.66666, 0))\n",
+        note="round(x, 1) keeps one decimal. round(x) with no second"
+             " argument returns an INTEGER, 38. round(x, 0) rounds to no"
+             " decimals but keeps the float type, 38.0 -- a different line"
+             " of output. When you want a whole number, leave the second"
+             " argument out.",
     ),
     dict(
-        id=8, ledger="P008", concept="PY1 lists", tier="2 - Strings and lists",
-        title="The longest word", kind="function",
-        func="longest_word",
-        cases=[("the ward round starts at nine",), ("a bb cc",),
-               ("single",), ("",)],
+        id=11, ledger="P031", concept="PY1 abs", tier="3 - Numbers",
+        title="abs(): distance from zero", kind="program",
         prompt=(
-            "Write a function `longest_word(sentence)` that returns the"
-            " longest word in the sentence. If several tie, return the one"
-            " that comes FIRST. An empty sentence returns an empty"
-            " string.\n\n"
-            "  longest_word(\"a bb cc\") -> \"bb\"\n\n"
-            "Return: the word."
+            "A patient's temperature is 36.2 and the normal figure is 37.0."
+            " Put both in variables and use abs() to print how far apart"
+            " they are, as a positive number, rounded to one decimal:\n\n"
+            "  0.8\n\n"
+            "Print: the number."
         ),
-        solution=('def longest_word(sentence):\n'
-                  '    best = ""\n'
-                  '    for word in sentence.split():\n'
-                  '        if len(word) > len(best):\n'
-                  '            best = word\n'
-                  '    return best\n'),
-        trap=('def longest_word(sentence):\n'
-              '    words = sentence.split()\n'
-              '    if not words:\n'
-              '        return ""\n'
-              '    return sorted(words, key=len)[-1]\n'),
-        note="Sorting by length and taking the last item returns the LAST"
-             " of the tied words, because a sort keeps ties in their"
-             " original order. A loop that only replaces the best on a"
-             " strictly greater length keeps the first; so does"
-             " max(words, key=len), which returns the first maximum it meets.",
-    ),
-    # ============================================== 3 Conditions and loops
-    dict(
-        id=9, ledger="P009", concept="PY2 if/elif", tier="3 - Conditions and loops",
-        title="Triage by heart rate", kind="function",
-        func="triage",
-        cases=[(100,), (101,), (60,), (59,), (75,)],
-        prompt=(
-            "Write a function `triage(heart_rate)` that returns 'high' for"
-            " a rate over 100, 'low' for a rate under 60, and 'normal'"
-            " otherwise. 100 and 60 are both normal.\n\n"
-            "  triage(101) -> 'high'\n\n"
-            "Return: one of the three strings."
-        ),
-        solution=('def triage(heart_rate):\n'
-                  '    if heart_rate > 100:\n'
-                  '        return "high"\n'
-                  '    elif heart_rate < 60:\n'
-                  '        return "low"\n'
-                  '    else:\n'
-                  '        return "normal"\n'),
-        trap=('def triage(heart_rate):\n'
-              '    if heart_rate >= 100:\n'
-              '        return "high"\n'
-              '    elif heart_rate <= 60:\n'
-              '        return "low"\n'
-              '    else:\n'
-              '        return "normal"\n'),
-        note="'Over 100' is > 100, not >= 100: the boundary belongs to"
-             " normal. Off-by-one at a boundary is the commonest bug in an"
-             " if; test the boundary values themselves, as the cases here"
-             " do. Once a return runs the function is over, so the elif"
-             " and else only see rates the first test let through.",
+        solution="temp = 36.2\nnormal = 37.0\nprint(round(abs(temp - normal), 1))\n",
+        trap="temp = 36.2\nnormal = 37.0\nprint(round(temp - normal, 1))\n",
+        note="temp - normal is -0.8, and abs() drops the sign. Without it"
+             " the order of the subtraction decides the sign, and 'how far"
+             " apart' should not depend on which you wrote first. round()"
+             " goes on the outside, because 36.2 - 37.0 in floating point"
+             " is -0.7999999999999972.",
     ),
     dict(
-        id=10, ledger="P010", concept="PY2 for/range", tier="3 - Conditions and loops",
-        title="The seven times table", kind="program",
+        id=12, ledger="P032", concept="PY1 max/min", tier="3 - Numbers",
+        title="max() and min(): the largest of several", kind="program",
         prompt=(
-            "Print the seven times table from 1 to 10, one line each, in"
-            " this form:\n\n"
-            "  7 x 1 = 7\n"
-            "  7 x 2 = 14\n"
-            "  ...\n"
-            "  7 x 10 = 70\n\n"
-            "Use a for loop over range(), not ten print statements.\n\n"
-            "Print: ten lines."
+            "Three heart-rate readings are 72, 118 and 65. Use max() to"
+            " print the highest and min() to print the lowest, passing the"
+            " three numbers as three arguments:\n\n"
+            "  118\n"
+            "  65\n\n"
+            "Print: the two lines."
         ),
-        solution='for n in range(1, 11):\n    print(f"7 x {n} = {7 * n}")\n',
-        trap='for n in range(1, 10):\n    print(f"7 x {n} = {7 * n}")\n',
-        note="range(1, 10) stops BEFORE 10, so the table ends at 9. The"
-             " stop value is never included, which is what makes range(len"
-             "(items)) produce exactly the valid indexes -- and what makes"
-             " an inclusive table need range(1, 11).",
+        solution="print(max(72, 118, 65))\nprint(min(72, 118, 65))\n",
+        trap="print(max(72, 118), 65)\nprint(min(72, 118), 65)\n",
+        note="max() and min() take any number of arguments, or one list."
+             " Close the parentheses too early and 65 becomes a second"
+             " argument to print() instead, giving '118 65'. Count the"
+             " brackets: every value you want compared goes inside"
+             " max(...).",
     ),
     dict(
-        id=11, ledger="P011", concept="PY2 while", tier="3 - Conditions and loops",
-        title="Steps to one", kind="function",
-        func="collatz_steps",
-        cases=[(1,), (2,), (6,), (27,)],
+        id=13, ledger="P033", concept="PY1 int/float", tier="3 - Numbers",
+        title="int() and float(): text into numbers", kind="program",
         prompt=(
-            "Write a function `collatz_steps(n)` that counts how many steps"
-            " it takes to reach 1 from n, where a step halves an even"
-            " number and turns an odd number into 3n + 1:\n\n"
-            "  6 -> 3 -> 10 -> 5 -> 16 -> 8 -> 4 -> 2 -> 1, so"
-            " collatz_steps(6) -> 8\n\n"
-            "collatz_steps(1) is 0. You do not know in advance how many"
-            " steps there are, so this is a while loop.\n\n"
-            "Return: the number of steps."
+            "The strings '250' and '2.5' hold a dose and a multiplier."
+            " Use int() on the first and float() on the second, multiply"
+            " them, and print the result:\n\n"
+            "  625.0\n\n"
+            "Print: the number."
         ),
-        solution=('def collatz_steps(n):\n'
-                  '    steps = 0\n'
-                  '    while n != 1:\n'
-                  '        if n % 2 == 0:\n'
-                  '            n = n // 2\n'
-                  '        else:\n'
-                  '            n = 3 * n + 1\n'
-                  '        steps += 1\n'
-                  '    return steps\n'),
-        trap=('def collatz_steps(n):\n'
-              '    steps = 1\n'
-              '    while n != 1:\n'
-              '        if n % 2 == 0:\n'
-              '            n = n // 2\n'
-              '        else:\n'
-              '            n = 3 * n + 1\n'
-              '        steps += 1\n'
-              '    return steps\n'),
-        note="A while loop runs until its condition is false, and the"
-             " counter counts the times the body ran -- so it starts at 0,"
-             " and n = 1 leaves it there. Starting at 1 counts the number"
-             " itself as a step. n // 2 keeps the result an integer; n / 2"
-             " would turn it into 3.0, and then 3.0 % 2 keeps working but"
-             " the final answer arrives as a float.",
+        solution='dose = "250"\nfactor = "2.5"\nprint(int(dose) * float(factor))\n',
+        trap='dose = "250"\nfactor = "2.5"\nprint(int(dose) * int(factor))\n',
+        note="int('2.5') is a ValueError: int() only accepts whole numbers"
+             " written as digits. float() accepts either. An int times a"
+             " float is a float, so the answer prints as 625.0 -- the .0"
+             " is the type showing. Multiplying the strings themselves"
+             " would be a TypeError; converting first is the whole point.",
     ),
     dict(
-        id=12, ledger="P012", concept="PY2 enumerate/break",
-        tier="3 - Conditions and loops",
-        title="The first negative", kind="function",
-        func="first_negative_index",
-        cases=[([3, 1, -4, 1, -5],), ([1, 2],), ([-1],), ([],)],
+        id=14, ledger="P034", concept="PY1 divmod", tier="3 - Numbers",
+        title="// and %: whole hours and the minutes left", kind="program",
         prompt=(
-            "Write a function `first_negative_index(nums)` that returns the"
-            " index of the first negative number in the list, or -1 if"
-            " there is none:\n\n"
-            "  first_negative_index([3, 1, -4, 1, -5]) -> 2\n\n"
-            "enumerate(nums) gives you each index with its value; return"
-            " as soon as you find one.\n\n"
-            "Return: an index, or -1."
+            "A shift lasted 155 minutes. Use // to get the whole hours and"
+            " % to get the minutes left over, and print them as:\n\n"
+            "  2 h 35 min\n\n"
+            "Print: that one line."
         ),
-        solution=('def first_negative_index(nums):\n'
-                  '    for i, n in enumerate(nums):\n'
-                  '        if n < 0:\n'
-                  '            return i\n'
-                  '    return -1\n'),
-        trap=('def first_negative_index(nums):\n'
-              '    found = -1\n'
-              '    for i, n in enumerate(nums):\n'
-              '        if n < 0:\n'
-              '            found = i\n'
-              '    return found\n'),
-        note="Without a return or a break the loop keeps going, and the"
-             " variable ends up holding the LAST negative's index, not the"
-             " first. A return inside the loop leaves both the loop and the"
-             " function at once; the return after the loop only runs when"
-             " nothing was found.",
+        solution='minutes = 155\nprint(minutes // 60, "h", minutes % 60, "min")\n',
+        trap='minutes = 155\nprint(minutes / 60, "h", minutes % 60, "min")\n',
+        note="/ always gives a float, so 155 / 60 is 2.5833. // is floor"
+             " division: 155 // 60 is 2, the whole hours. % is the"
+             " remainder, 35. The pair is so common that divmod(155, 60)"
+             " returns both at once as (2, 35).",
     ),
-    # ============================================================ 4 Functions
+    # ================================================================ 4 Lists
     dict(
-        id=13, ledger="P013", concept="PY3 functions", tier="4 - Functions",
-        title="Body mass index", kind="function",
-        func="bmi",
-        cases=[(70, 1.75), (90, 1.8), (50, 1.6)],
+        id=15, ledger="P035", concept="PY2 append", tier="4 - Lists",
+        title="append(): adding to a list", kind="program",
         prompt=(
-            "Write a function `bmi(weight_kg, height_m)` that returns the"
-            " body mass index -- weight divided by the SQUARE of height --"
-            " rounded to one decimal place:\n\n"
-            "  bmi(70, 1.75) -> 22.9\n\n"
-            "Return: a number with one decimal place."
+            "Start with the list ['Barry', 'Bevan'] in a variable. Use the"
+            " append() method to add 'Cavell' to the end, then print the"
+            " list:\n\n"
+            "  ['Barry', 'Bevan', 'Cavell']\n\n"
+            "Print: the list, as print() shows a list."
         ),
-        solution=('def bmi(weight_kg, height_m):\n'
-                  '    return round(weight_kg / height_m ** 2, 1)\n'),
-        trap=('def bmi(weight_kg, height_m):\n'
-              '    return round(weight_kg / height_m, 1)\n'),
-        note="round(x, 1) rounds to one decimal place; round(x) alone gives"
-             " an integer. ** binds tighter than /, so weight / height ** 2"
-             " squares the height first -- no brackets needed, though"
-             " (height_m ** 2) does no harm and reads more clearly.",
+        solution='wards = ["Barry", "Bevan"]\nwards.append("Cavell")\nprint(wards)\n',
+        trap='wards = ["Barry", "Bevan"]\nwards = wards.append("Cavell")\nprint(wards)\n',
+        note="append() changes the list in place and returns None. So"
+             " wards = wards.append(...) throws the list away and leaves"
+             " wards holding None. Call it on its own line and print the"
+             " list afterwards. Methods that change a list -- append,"
+             " sort, reverse -- all return None; ones that build a new"
+             " value, like sorted(), return it.",
     ),
     dict(
-        id=14, ledger="P014", concept="PY3 default arguments", tier="4 - Functions",
-        title="Arguments you can leave out", kind="function",
-        func="course_total_mg",
-        cases=[(500,), (500, 3), (250, 4, 5)],
+        id=16, ledger="P036", concept="PY2 sorted", tier="4 - Lists",
+        title="sorted(): a list in order", kind="program",
         prompt=(
-            "Write a function `course_total_mg(dose_mg, times_per_day, days)`"
-            " that returns the total milligrams over a course: dose times"
-            " doses per day times days. The last two arguments are"
-            " optional -- times_per_day defaults to 2 and days to 7 -- so"
-            " all three of these calls work:\n\n"
-            "  course_total_mg(500) -> 7000\n"
-            "  course_total_mg(500, 3) -> 10500\n"
-            "  course_total_mg(250, 4, 5) -> 5000\n\n"
-            "Return: the total as an integer."
+            "Put the list [118, 72, 65, 90] in a variable and use sorted()"
+            " to print it from smallest to largest:\n\n"
+            "  [65, 72, 90, 118]\n\n"
+            "Print: the sorted list."
         ),
-        solution=('def course_total_mg(dose_mg, times_per_day=2, days=7):\n'
-                  '    return dose_mg * times_per_day * days\n'),
-        trap=('def course_total_mg(dose_mg, times_per_day, days):\n'
-              '    return dose_mg * times_per_day * days\n'),
-        note="A parameter with a default -- days=7 -- may be left out of"
-             " the call. Without defaults, course_total_mg(500) raises"
-             " TypeError: missing 2 required positional arguments. Defaults"
-             " must come after the parameters that have none, and the"
-             " arguments are matched left to right, so the second call"
-             " sets times_per_day and leaves days at 7.",
+        solution="rates = [118, 72, 65, 90]\nprint(sorted(rates))\n",
+        trap="rates = [118, 72, 65, 90]\nprint(rates.sort())\n",
+        note="sorted(rates) returns a new sorted list and leaves rates"
+             " alone. rates.sort() sorts the list IN PLACE and returns"
+             " None, so printing its result prints None. Both are right"
+             " for different jobs: sort() when you want the list itself"
+             " reordered, sorted() when you want a copy. reverse=True"
+             " flips the order in either.",
     ),
     dict(
-        id=15, ledger="P015", concept="PY3 tuples", tier="4 - Functions",
-        title="Three answers at once", kind="function",
-        func="min_max_mean",
-        cases=[([1, 2, 3, 4],), ([10],), ([2, 9, 4],)],
+        id=17, ledger="P037", concept="PY2 sum/len", tier="4 - Lists",
+        title="sum() and len(): an average", kind="program",
         prompt=(
-            "Write a function `min_max_mean(nums)` that returns the"
-            " smallest value, the largest, and the mean rounded to two"
-            " decimal places -- as a TUPLE of three:\n\n"
-            "  min_max_mean([1, 2, 3, 4]) -> (1, 4, 2.5)\n\n"
-            "min(), max(), sum() and len() do the arithmetic. The list is"
-            " never empty.\n\n"
-            "Return: a tuple (smallest, largest, mean)."
+            "Put the list [36.8, 37.2, 38.1, 36.9] in a variable. Use sum()"
+            " and len() to work out the average and print it rounded to"
+            " one decimal:\n\n"
+            "  37.2\n\n"
+            "Print: the number."
         ),
-        solution=('def min_max_mean(nums):\n'
-                  '    return min(nums), max(nums), round(sum(nums) / len(nums), 2)\n'),
-        trap=('def min_max_mean(nums):\n'
-              '    return [min(nums), max(nums), round(sum(nums) / len(nums), 2)]\n'),
-        note="A function returns one value; a tuple is how it returns"
-             " several. `return a, b, c` makes one -- the brackets are"
-             " optional -- and the caller can unpack it: lo, hi, avg ="
-             " min_max_mean(nums). A list holds the same numbers but is a"
-             " different type, and the grader compares types too, because"
-             " a caller expecting a tuple may rely on it being immutable.",
+        solution="temps = [36.8, 37.2, 38.1, 36.9]\nprint(round(sum(temps) / len(temps), 1))\n",
+        trap="temps = [36.8, 37.2, 38.1, 36.9]\nprint(round(sum(temps) / 4), 1)\n",
+        note="sum() adds a list up and len() counts it, so the average is"
+             " one over the other -- with len() rather than a typed 4, so"
+             " the line stays right when the list changes. The trap's"
+             " brackets close round() before the 1, which makes the 1 a"
+             " second argument to print(): '37 1'. Bracket mistakes like"
+             " this run without error; check the output.",
     ),
     dict(
-        id=16, ledger="P016", concept="PY3 booleans", tier="4 - Functions",
-        title="Reads the same backwards", kind="function",
-        func="is_palindrome",
-        cases=[("Never odd or even",), ("Ward",), ("",), ("A Toyota",)],
+        id=18, ledger="P038", concept="PY2 split/join", tier="4 - Lists",
+        title="split() and join(): text to list and back", kind="program",
         prompt=(
-            "Write a function `is_palindrome(text)` that returns True when"
-            " the text reads the same backwards as forwards, ignoring case"
-            " and spaces:\n\n"
-            "  is_palindrome(\"Never odd or even\") -> True\n\n"
-            "text[::-1] is the text reversed. An empty string counts as a"
-            " palindrome.\n\n"
-            "Return: True or False."
+            "Put 'Morphine Codeine Diazepam' in a variable. Use the split()"
+            " method to break it into a list and print the list, then use"
+            " the join() method with ', ' to put it back together and"
+            " print that:\n\n"
+            "  ['Morphine', 'Codeine', 'Diazepam']\n"
+            "  Morphine, Codeine, Diazepam\n\n"
+            "Print: the two lines."
         ),
-        solution=('def is_palindrome(text):\n'
-                  '    cleaned = text.lower().replace(" ", "")\n'
-                  '    return cleaned == cleaned[::-1]\n'),
-        trap=('def is_palindrome(text):\n'
-              '    cleaned = text.lower()\n'
-              '    return cleaned == cleaned[::-1]\n'),
-        note="A comparison is already a boolean, so `return cleaned =="
-             " cleaned[::-1]` needs no if/else around it. The spaces have"
-             " to go before comparing: 'never odd or even' reversed is"
-             " 'neve ro ddo reven', which is not the same string.",
+        solution=('drugs = "Morphine Codeine Diazepam"\n'
+                  'names = drugs.split()\n'
+                  'print(names)\n'
+                  'print(", ".join(names))\n'),
+        trap=('drugs = "Morphine Codeine Diazepam"\n'
+              'names = drugs.split()\n'
+              'print(names)\n'
+              'print(names.join(", "))\n'),
+        note="split() belongs to the string and returns a list; with no"
+             " argument it splits on any whitespace. join() ALSO belongs"
+             " to a string -- the separator -- and takes the list as its"
+             " argument, so it is ', '.join(names), not names.join(', ')."
+             " Lists have no join method, which is the AttributeError the"
+             " trap raises.",
     ),
-    # ============================================ 5 Dicts, sets and comprehensions
+    # ================================================================ 5 Loops
     dict(
-        id=17, ledger="P017", concept="PY4 dicts",
-        tier="5 - Dicts, sets and comprehensions",
-        title="Counting words", kind="function",
-        func="word_counts",
-        cases=[("the ward the bed",), ("A a A",), ("",)],
+        id=19, ledger="P039", concept="PY2 range", tier="5 - Loops",
+        title="range(): the numbers 1 to 5", kind="program",
         prompt=(
-            "Write a function `word_counts(text)` that returns a dictionary"
-            " from each word, lower-cased, to how many times it appears:\n\n"
-            "  word_counts(\"the ward the bed\") -> {'the': 2, 'ward': 1,"
-            " 'bed': 1}\n\n"
-            "dict.get(key, 0) reads a count that may not exist yet.\n\n"
-            "Return: the dictionary; empty text gives an empty one."
+            "Use range() inside list() to build the list of numbers from 1"
+            " to 5 and print it:\n\n"
+            "  [1, 2, 3, 4, 5]\n\n"
+            "range() itself prints as range(1, 6); list() turns it into a"
+            " real list.\n\n"
+            "Print: the list."
         ),
-        solution=('def word_counts(text):\n'
-                  '    counts = {}\n'
-                  '    for word in text.lower().split():\n'
-                  '        counts[word] = counts.get(word, 0) + 1\n'
-                  '    return counts\n'),
-        trap=('def word_counts(text):\n'
-              '    counts = {}\n'
-              '    for word in text.split():\n'
-              '        counts[word] = counts.get(word, 0) + 1\n'
-              '    return counts\n'),
-        note="counts[word] on a word not yet seen raises KeyError;"
-             " counts.get(word, 0) returns 0 instead, so the first sighting"
-             " and the fifth are the same line of code. Without .lower(),"
-             " 'A' and 'a' are two different keys. The standard library's"
-             " collections.Counter does exactly this, once you have written"
-             " it by hand once.",
+        solution="print(list(range(1, 6)))\n",
+        trap="print(list(range(1, 5)))\n",
+        note="range(start, stop) runs from start up to but NOT including"
+             " stop, so 1 to 5 is range(1, 6). With one argument it starts"
+             " at 0: range(5) is 0 to 4. A third argument is the step."
+             " Wrapping in list() is only for looking at it; a for loop"
+             " uses the range directly.",
     ),
     dict(
-        id=18, ledger="P018", concept="PY4 dicts",
-        tier="5 - Dicts, sets and comprehensions",
-        title="The most common item", kind="function",
-        func="most_common",
-        cases=[(["b", "a", "b", "a"],), ([3, 1, 3, 1, 1],), (["x"],)],
+        id=20, ledger="P040", concept="PY2 for", tier="5 - Loops",
+        title="for: one line per item", kind="program",
         prompt=(
-            "Write a function `most_common(items)` that returns the item"
-            " appearing most often. If several tie, return the one that"
-            " appears FIRST in the list. The list is never empty.\n\n"
-            "  most_common([\"b\", \"a\", \"b\", \"a\"]) -> \"b\"\n\n"
-            "Count into a dictionary first, then look for the largest"
-            " count; a dictionary remembers the order keys were added.\n\n"
-            "Return: the item."
+            "Put the list ['Fleming', 'Jenner', 'Lister'] in a variable and"
+            " use a for loop to print each ward on its own line, followed"
+            " by ' ward':\n\n"
+            "  Fleming ward\n"
+            "  Jenner ward\n"
+            "  Lister ward\n\n"
+            "Print: the three lines."
         ),
-        solution=('def most_common(items):\n'
-                  '    counts = {}\n'
-                  '    for item in items:\n'
-                  '        counts[item] = counts.get(item, 0) + 1\n'
-                  '    best = None\n'
-                  '    for item, count in counts.items():\n'
-                  '        if best is None or count > counts[best]:\n'
-                  '            best = item\n'
-                  '    return best\n'),
-        trap=('def most_common(items):\n'
-              '    return max(sorted(set(items)), key=items.count)\n'),
-        note="A dict keeps insertion order, so walking counts.items() visits"
-             " items in the order they were first seen, and replacing the"
-             " best only on a strictly greater count keeps the first of a"
-             " tie. Going through a set -- or a sorted one -- throws that"
-             " order away, and max() then breaks the tie by whatever order"
-             " it was given.",
-    ),
-    dict(
-        id=19, ledger="P019", concept="PY4 sets",
-        tier="5 - Dicts, sets and comprehensions",
-        title="Prescribed on both wards", kind="function",
-        func="shared_drugs",
-        cases=[(["Morphine", "Codeine", "Codeine"],
-                ["Codeine", "Aspirin", "Morphine"]),
-               ([], ["Codeine"]),
-               (["Insulin"], ["Insulin"])],
-        prompt=(
-            "Write a function `shared_drugs(ward_a, ward_b)` that takes two"
-            " lists of drug names, possibly with repeats, and returns the"
-            " names that appear in BOTH -- each once, sorted:\n\n"
-            "  shared_drugs([\"Morphine\", \"Codeine\", \"Codeine\"],"
-            " [\"Codeine\", \"Aspirin\", \"Morphine\"]) -> [\"Codeine\","
-            " \"Morphine\"]\n\n"
-            "A set drops the repeats and & finds what two sets share.\n\n"
-            "Return: a sorted LIST of names."
-        ),
-        solution=('def shared_drugs(ward_a, ward_b):\n'
-                  '    return sorted(set(ward_a) & set(ward_b))\n'),
-        trap=('def shared_drugs(ward_a, ward_b):\n'
-              '    return set(ward_a) & set(ward_b)\n'),
-        note="set(a) & set(b) is the intersection, and a set has no order"
-             " -- which is exactly why the question asks for a sorted list:"
-             " sorted() takes any collection and returns a list. Returning"
-             " the set itself is a different type, and one whose printed"
-             " order is not something a caller can rely on.",
-    ),
-    dict(
-        id=20, ledger="P020", concept="PY4 try/except",
-        tier="5 - Dicts, sets and comprehensions",
-        title="Readings that are not numbers", kind="function",
-        func="parse_readings",
-        cases=[(["72", "x", "-5", " 80 ", "3.5"],), ([],), (["1", "2"],)],
-        prompt=(
-            "Write a function `parse_readings(strings)` that turns a list of"
-            " strings into a list of integers, SKIPPING any string that is"
-            " not a whole number:\n\n"
-            "  parse_readings([\"72\", \"x\", \"-5\", \" 80 \", \"3.5\"])"
-            " -> [72, -5, 80]\n\n"
-            "int(s) converts a string and raises ValueError when it cannot;"
-            " catch that with try/except rather than inspecting the"
-            " characters yourself.\n\n"
-            "Return: the list of integers, in the original order."
-        ),
-        solution=('def parse_readings(strings):\n'
-                  '    readings = []\n'
-                  '    for s in strings:\n'
-                  '        try:\n'
-                  '            readings.append(int(s))\n'
-                  '        except ValueError:\n'
-                  '            pass\n'
-                  '    return readings\n'),
-        trap=('def parse_readings(strings):\n'
-              '    return [int(s) for s in strings if s.strip().isdigit()]\n'),
-        note="isdigit() is false for '-5', so a negative reading is thrown"
-             " away, and it would also be false for '+3'. Asking int() and"
-             " catching the ValueError accepts exactly what int() accepts --"
-             " including the spaces around ' 80 ' -- and nothing else."
-             " This is the Python habit: try the operation, handle the"
-             " failure, rather than predicting it.",
+        solution=('wards = ["Fleming", "Jenner", "Lister"]\n'
+                  'for ward in wards:\n'
+                  '    print(ward, "ward")\n'),
+        trap=('wards = ["Fleming", "Jenner", "Lister"]\n'
+              'for ward in wards:\n'
+              '    pass\n'
+              'print(ward, "ward")\n'),
+        note="The indented block under for runs once per item, with the"
+             " loop variable holding that item. A print AFTER the block,"
+             " at the left margin, runs once, after the loop, with the"
+             " variable still holding the LAST item -- so only 'Lister"
+             " ward' appears. Indentation is what puts a line inside the"
+             " loop; four spaces is the convention.",
     ),
 ]
 

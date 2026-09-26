@@ -2,9 +2,9 @@
 
 Forty questions in two tabs. **Twenty SQL** on the district hospital -- the
 same data as the previous set, with none of its questions -- and **twenty
-Python**, from a first print() to dictionaries and try/except. The Python
-questions are beginner-level on purpose; the SQL ones are at the level of the
-previous sets.
+Python**, each a short program about ONE function or method, named in the
+question's title. The Python questions are a step down from the last set on
+purpose; the SQL ones are at the level of the previous sets.
 
 | Stage | SQL questions |
 |---|---|
@@ -18,11 +18,11 @@ previous sets.
 
 | Stage | Python questions |
 |---|---|
-| 1 - First steps | 1-4 |
-| 2 - Strings and lists | 5-8 |
-| 3 - Conditions and loops | 9-12 |
-| 4 - Functions | 13-16 |
-| 5 - Dicts, sets and comprehensions | 17-20 |
+| 1 - Printing | 1-4 |
+| 2 - Strings | 5-9 |
+| 3 - Numbers | 10-14 |
+| 4 - Lists | 15-18 |
+| 5 - Loops | 19-20 |
 
 ## The schema
 
@@ -47,8 +47,8 @@ measures an open interval says which end to supply.
 ## The writable stage
 
 SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
-instead is constraints, triggers, views and DML driven by CTEs -- and each of
-questions 16 to 20 is one of those.
+instead is constraints, triggers, views, DDL and DML driven by CTEs -- and
+each of questions 16 to 20 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -61,49 +61,45 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Questions 16, 17, 19 and 20 run statements of their
-own *after* yours -- inserts that your key, trigger or table should refuse or
-let through. A refusal is reported in the status bar as what it is, not as an
-error.
+**Driver statements.** Questions 16, 17 and 18 run statements of their own
+*after* yours -- inserts your table should fill in or refuse, and a delete
+your foreign key should follow. A refusal is reported in the status bar as
+what it is, not as an error.
 
 | # | Construct |
 |---|---|
-| 16 | a keyed summary table, against `CREATE TABLE ... AS SELECT`, which copies no key |
-| 17 | a composite `FOREIGN KEY (a, b) REFERENCES parent (a, b)` |
-| 18 | an index on an expression, and the plan that proves it is used |
-| 19 | a `BEFORE INSERT` trigger whose WHEN clause reads another table |
-| 20 | `RAISE(ROLLBACK)` against `RAISE(ABORT)`: how much of a transaction is undone |
+| 16 | `DEFAULT` values: what a column takes when an INSERT leaves it out |
+| 17 | `UNIQUE` with `COLLATE NOCASE`: equality that ignores case |
+| 18 | `ON DELETE SET NULL`, against the default refusal and against CASCADE |
+| 19 | a `WITHOUT ROWID` table with a composite key, filled by a recursive CTE |
+| 20 | `ALTER TABLE ... RENAME TO` and `RENAME COLUMN`, and the foreign key that follows |
 
 ## Things the data does on purpose
 
-- **487 procedures have no recorded duration**, which is what question 1's
-  AVG has to leave out.
-- **2,135 ward stays are moves** -- a stay_seq above 1 -- and stays of one
-  admission never overlap, so a procedure falls inside exactly one of them.
-- **9 staff have no home ward**, the pharmacists and porters, so a
-  comparison against their ward is NULL rather than false.
-- **3 procedure types have never been performed**, and they are the
-  whole answer to question 12.
-- **2 of admissions 31 to 40 reach their peak heart rate twice**, which is
-  why question 14 says which of the two it wants.
-- **Admission 173 is still open and admission 1 was discharged on 2026-04-02**,
-  the two that question 19's trigger has to let through.
-- **The largest dose on file is 10,000 mg**, so question 20's cap of 10000
-  refuses nothing already there.
+- **487 procedures have no recorded duration**, which question 2's AVG
+  leaves out on its own.
+- **3 names are shared by two staff each**, which is what question 4
+  finds as colliding usernames.
+- **1,855 of the 4,479 procedures were performed on a day the surgeon had
+  no shift**, so question 11's LEFT JOIN has plenty of non-matches.
+- **96 patients have nine or more admissions**, the population of
+  question 9; two of admissions 1 to 10 overlap the admission that follows,
+  which is question 7's negative gap.
+- **The eight wards have 184 beds between them**, the row count question 19
+  has to reach.
+- **Eighteen months of data**, so a month keyed on '%m' alone merges two
+  years -- question 15's trap.
 
 ## How the Python questions are graded
 
-Two kinds, and the question says which. A **program** question: the editor
-holds a whole program, Run shows what it prints, and Check compares that with
-the reference program's output line for line -- trailing spaces and blank
-lines at the end are ignored, nothing else is. Where the program is meant to
-read input(), the question says what it will be given. A **function** question:
-the editor defines a function with the name the question gives, Run calls it
-once for each test input and shows every call and its result, and Check
-compares each result with the reference function's. Values are compared, not
-their printed form, so a dictionary in a different order is the same
-dictionary -- but the type counts: a tuple is not a list, and a set is not a
-sorted list.
+Every question in this set is a **program**: the editor holds a whole
+program, Run shows what it prints, and Check compares that with the reference
+program's output line for line -- trailing spaces and blank lines at the end
+are ignored, nothing else is. Where the program is meant to read input(), the
+question says what it will be given. Each question is about one function or
+method, named in its title, and the prompt says what to print so that you can
+tell at once whether you have it. (The grader also supports **function**
+questions, where the value returned is compared instead; none in this set.)
 
 Your code runs in a separate interpreter with a five-second limit, so a loop
 that never ends is stopped and reported, not fatal. It cannot see the
@@ -114,518 +110,481 @@ indentation of the line above.
 
 ## 1 - Warm-up (3)
 
-Three questions on aggregates: an AVG that must skip NULLs, a COUNT(column) that
-does not do what it looks like, and two conditions on totals that belong in
-HAVING.
+A pivot by conditional aggregation, two conditions on totals that belong in
+HAVING, and a per-admission MIN that has to be found before it is averaged.
 
-1. **Procedures by category** (Q732)
+1. **Priorities, side by side** (Q752)
 
-   One row per category of procedure: how many have been performed, the
-   revenue in POUNDS to two decimals (tariffs are in pence), and the average
-   duration in minutes to one decimal -- over the procedures whose duration
-   was recorded.
+   One row per consultant who has admitted anyone, with their admissions split
+   into three columns by priority: how many were immediate, how many urgent,
+   how many routine. Three counts on one row, not three rows.
 
-   *Return: category, procedures, revenue_pounds, avg_minutes*
+   *Return: consultant_id, immediate, urgent, routine*
 
-2. **Controlled, by form** (Q733)
+2. **Long operations** (Q753)
 
-   One row per form of drug -- tablet, injection, infusion, inhaler: how many
-   drugs come in that form, how many of them are controlled, and the
-   percentage that are, to one decimal. `controlled` is 0 or 1.
+   Surgeons who have performed at least 175 procedures and whose average
+   recorded duration is over 160 minutes: surgeon_id, their procedures, and
+   the average to one decimal. A NULL duration is unknown and simply not
+   averaged.
 
-   *Return: form, drugs, controlled, pct*
+   *Return: surgeon_id, procedures, avg_minutes*
 
-3. **Night owls** (Q734)
+3. **Hours to the first procedure** (Q754)
 
-   Staff who have worked at least 300 shifts, of which at least 40 per cent
-   were nights: staff_id, their shifts, their nights, and the percentage to
-   one decimal.
+   For each admitting ward: the average number of hours between admission and
+   the FIRST procedure of the admission, to one decimal, over admissions that
+   had at least one. Find each admission's earliest performed_at first, then
+   average the difference.
 
-   Both conditions are about totals, so both belong in HAVING.
-
-   *Return: staff_id, shifts, nights, pct_night*
+   *Return: ward_id, avg_hours*
 
 ## 2 - Strings and sequences (2)
 
-A name split with instr() and substr(), and consecutive ward stays paired by a
-self-join on stay_seq + 1.
+lower() and replace() building a username, and CAST turning the tail of a
+postcode into a number.
 
-4. **Surname first** (Q735)
+4. **Usernames that collide** (Q755)
 
-   Patients 1 to 10 with their name turned round, 'Surname, Forename' --
-   'Marcus Lindqvist' becomes 'Lindqvist, Marcus'. Every name is two words
-   separated by one space; instr() finds the space and substr() takes either
-   side of it.
+   A username is the staff member's name in lower case with the space replaced
+   by a full stop: 'Xiu Chowdhury' becomes 'xiu.chowdhury'. Which usernames
+   would belong to more than one person, and which staff_ids would share them
+   -- as one comma-separated string in id order, such as '17,42'?
 
-   *Return: patient_id, sorted_name*
+   *Return: username, staff_ids*
 
-5. **Where transfers go** (Q736)
+5. **Leeds districts as numbers** (Q756)
 
-   Every move between wards: for each pair of wards, how many times a patient
-   went straight from the first to the second. A move is two CONSECUTIVE stays
-   of one admission -- stay_seq and stay_seq + 1.
+   Patients whose postcode area starts with LS, counted by the district NUMBER
+   that follows the letters -- 'LS16' is district 16. Return the district as
+   an integer, not text, so that it sorts as a number.
 
-   *Return: from_ward, to_ward, transfers*
+   *Return: district, patients*
 
 ## 3 - Dates and times (2)
 
-strftime('%w') for the weekday, and an age from a julianday difference rather
-than a subtraction of years.
+date() for 'the same calendar day', and LEAD with the row filter kept outside
+the window.
 
-6. **Admissions by weekday** (Q737)
+6. **In and out the same day** (Q757)
 
-   How many admissions arrived on each day of the week, with the percentage of
-   all admissions to one decimal. strftime('%w') gives the weekday as a digit,
-   0 for Sunday through 6 for Saturday; return the digit as an integer and the
-   English name.
+   For each ward, by admitting ward: how many completed admissions it has had,
+   how many of them were discharged on the same CALENDAR DAY they were
+   admitted, and the percentage to one decimal.
 
-   *Return: day_num, day_name, admissions, pct*
+   *Return: ward_id, completed, same_day, pct*
 
-7. **Age at admission** (Q738)
+7. **The next admission** (Q758)
 
-   Admissions by the patient's age on the day they were admitted: 'under 18',
-   '18-64' and '65 and over', with the count and the percentage of all
-   admissions to one decimal. Age in years is the difference in julianday()
-   divided by 365.25, rounded down.
+   For admissions 1 to 10: when the same patient was NEXT admitted, and the
+   days from this admission's discharge to that, to one decimal. NULL in both
+   if there was no next admission; negative if the next one began before this
+   one ended. LEAD is LAG's mirror.
 
-   *Return: band, admissions, pct*
+   *Return: admission_id, next_admitted_at, days_between*
 
 ## 4 - Intervals and occupancy (3)
 
-Clipping stays to a month for a share of bed-days, placing a point inside an
-interval, and asking the same interval question on every day of a recursive
-calendar.
+Who was already on the ward at the instant of admission, the longest gap from a
+discharge to the next admission, and prescription-days with the open ends
+supplied.
 
-8. **Beds in use, March 2026** (Q739)
+8. **Already on the ward** (Q759)
 
-   For each ward, the percentage of its bed-days used in March 2026, to one
-   decimal: the days of ward_stays that fell INSIDE the month, added up, over
-   beds times 31. A stay that began in February or ran into April counts only
-   for its March part -- clip each stay to the month with MAX() and MIN()
-   before subtracting. An open stay runs to 2026-06-30 23:59.
+   For admissions 1 to 10: how many OTHER patients were on the admitting ward
+   at the moment of admission -- ward_stays on that ward whose interval covers
+   admitted_at, not counting this admission's own stay. A stay with no end is
+   still running.
 
-   *Return: ward_id, beds, pct_used*
+   *Return: admission_id, ward_id, already_there*
 
-9. **Where the patient was** (Q740)
+9. **The longest time away** (Q760)
 
-   How many procedures were performed while the patient was on each ward --
-   not the ward they were admitted to, but the ward_stay whose interval
-   contains performed_at. A stay with no end is still running.
+   For patients with at least NINE admissions: the longest gap, in days to one
+   decimal, between being discharged and next being admitted. Measure from the
+   previous DISCHARGE, in admission order.
 
-   *Return: ward_id, procedures*
+   *Return: patient_id, longest_gap_days*
 
-10. **Fleming at eight, all week** (Q741)
+10. **Days on a drug** (Q761)
 
-    For each day from 2026-06-24 to 2026-06-30, how many patients were on ward
-    5 at 08:00 that morning. Build the seven days with a recursive CTE, then
-    join ward_stays on the interval containing that instant -- the day plus '
-    08:00'. Stays with no end are still running.
+    For each drug, the total number of prescription-days as of 2026-06-30:
+    each prescription contributes ended_on minus started_on in days, and a
+    prescription with no end runs to 2026-06-30. Dates, not datetimes, so the
+    answer is a whole number.
 
-    *Return: day, patients*
+    *Return: drug, days*
 
 ## 5 - Joins and grain (3)
 
-COUNT(DISTINCT) over two hops, an anti-join that `<>` cannot express, and a
-comparison that goes NULL when one side is missing.
+A LEFT JOIN on a date whose non-matches are the answer, all-or-none by SUM of a
+comparison, and COUNT(DISTINCT) against COUNT.
 
-11. **Well travelled** (Q742)
+11. **Operating off the rota** (Q762)
 
-    Patients who have been on SIX or more different wards over all their
-    admissions, with the number of wards. A patient who was on a ward twice
-    has been on it once.
+    For each surgeon: how many procedures they have performed, and how many of
+    those were on a day the surgeon had NO shift in the rota. shifts has one
+    row per person per day, so match on staff and on date(performed_at).
 
-    *Return: patient_id, wards*
+    *Return: surgeon_id, procedures, off_rota*
 
-12. **Never in theatre six** (Q743)
+12. **Always routine** (Q763)
 
-    Procedure types that have never been performed in theatre 6, with their
-    name. A type never performed anywhere qualifies too.
+    Patients with at least four admissions, EVERY one of which was routine
+    priority, with their number of admissions.
 
-    *Return: code, name*
+    *Return: patient_id, admissions*
 
-13. **Away from home** (Q744)
+13. **How many hands on each ward** (Q764)
 
-    For each role that HAS a home ward -- consultants, doctors, nurses;
-    pharmacists and porters have NULL -- how many shifts its staff have
-    worked, how many were on a ward other than their own, and the percentage
-    to one decimal.
+    For each ward: how many shifts have been worked there, how many DIFFERENT
+    staff have worked them, and shifts per person to one decimal.
 
-    *Return: role, shifts, away, pct_away*
+    *Return: ward_id, shifts, staff, per_person*
 
 ## 6 - Window functions (2)
 
-Top-1 per group with a tiebreak that is part of the question, and LAG that must
-be partitioned.
+NTILE quarters ordered by the thing being quartered, and top-1 per group keyed
+on a month that includes its year.
 
-14. **The peak reading** (Q745)
+14. **Length of stay in quarters** (Q765)
 
-    For admissions 31 to 40: the highest heart rate recorded, and how many
-    hours after admission it was taken, to one decimal. If the peak was
-    reached more than once, the EARLIEST time.
+    Split the completed admissions into four equal groups by length of stay --
+    NTILE(4) ordered by the stay -- and for each group give the count and the
+    shortest, longest and average stay in days, to two decimals.
 
-    *Return: admission_id, peak_hr, hours_in*
+    *Return: quarter, admissions, shortest, longest, avg_days*
 
-15. **Gaps in the readings** (Q746)
+15. **Each ward's busiest month** (Q766)
 
-    For admissions 1 to 10: the longest gap between two consecutive
-    observations, in hours to one decimal. LAG brings the previous reading's
-    time onto each row; the partition matters.
+    For each ward, the month -- 'YYYY-MM' of admitted_at -- in which it took
+    the most admissions, with the count. If two months tie, the EARLIER one.
 
-    *Return: admission_id, longest_gap_hours*
+    *Return: ward_id, month, admissions*
 
 ## 7 - Changing the data (5)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A keyed summary table against CTAS, a
-composite foreign key, an expression index, a trigger that reads another table,
-and RAISE(ROLLBACK).
+question's probe query reads the result. DEFAULT values, UNIQUE COLLATE NOCASE,
+ON DELETE SET NULL, a WITHOUT ROWID table, and ALTER TABLE RENAME.
 
-16. **A summary with a key** (Q747)
+16. **Fill in what was left out** (Q767)
 
-    Build `ward_load (ward_id INTEGER PRIMARY KEY, admissions INTEGER NOT
-    NULL)` holding each ward's number of admissions as the admitting ward --
-    eight rows -- so that the table has a real PRIMARY KEY. CREATE TABLE ...
-    AS SELECT will not give you one. After your script, the question tries to
-    insert a second row for ward 1.
+    Create `ward_rounds (round_id INTEGER PRIMARY KEY, ward_id INTEGER NOT
+    NULL referencing wards, held_on TEXT NOT NULL, start_time TEXT NOT NULL,
+    attendees INTEGER NOT NULL)` so that an insert giving only a ward_id
+    succeeds, with held_on '2026-07-01', start_time '08:00' and attendees 0
+    filled in by the table. After your script, the question inserts a round
+    for ward 3 giving nothing else, and one for ward 5 giving a start_time of
+    '14:00'.
 
-    *Checked: how many columns are the key, the row count, and the sum of admissions*
+    *Checked: the four value columns of each round*
 
-17. **A note on one stay** (Q748)
+17. **Unique whatever the case** (Q768)
 
-    Create `stay_notes (note_id INTEGER PRIMARY KEY, admission_id INTEGER NOT
-    NULL, stay_seq INTEGER NOT NULL, note TEXT NOT NULL)` where the PAIR
-    (admission_id, stay_seq) must match a row of ward_stays -- a foreign key
-    on two columns at once. After your script, the question inserts a note for
-    stay (1, 1), one for (1, 9), and one for (999999, 1).
+    Create `ward_tags (tag_id INTEGER PRIMARY KEY, tag TEXT NOT NULL)` where a
+    tag must be unique REGARDLESS OF CASE -- 'Isolation' and 'isolation' are
+    the same tag. A collation does it. After your script, the question inserts
+    'Isolation', 'isolation', 'ISOLATION' and 'Bariatric', in that order.
 
-    *Checked: which (admission_id, stay_seq) pairs the notes hold*
+    *Checked: the tags that survive, in insertion order*
 
-18. **An index on an expression** (Q749)
+18. **The booking outlives the theatre** (Q769)
 
-    The query `SELECT COUNT(*) FROM admissions WHERE date(admitted_at) =
-    '2026-03-01'` scans the whole table: the index on admitted_at cannot serve
-    a condition on date(admitted_at). Create an index named `idx_adm_day` that
-    CAN -- an index on the expression itself.
+    Create `theatres (theatre_no INTEGER PRIMARY KEY, name TEXT NOT NULL)`
+    with rows 1, 2 and 3 (any names), and `theatre_bookings (booking_id
+    INTEGER PRIMARY KEY, theatre_no INTEGER referencing theatres, booked_for
+    TEXT NOT NULL)` with bookings 1 to 4 for theatres 1, 2, 2 and 3 (any
+    text). Deleting a theatre must KEEP its bookings and blank their
+    theatre_no. After your script, the question deletes theatre 2.
 
-    *Checked: the query plan of that SELECT*
+    *Checked: each booking's theatre_no*
 
-19. **No prescribing after discharge** (Q750)
+19. **One row per bed, no rowid** (Q770)
 
-    Write a BEFORE INSERT trigger on prescriptions that refuses a prescription
-    whose started_on is after the day its admission was discharged --
-    RAISE(ABORT, ...) -- and lets any other through, including one for an
-    admission still open. The check needs to read admissions. After your
-    script, the question inserts one for admission 2 starting 2026-03-01, one
-    for admission 173 starting 2026-06-20, and one for admission 1 starting
-    2026-04-01.
+    Create `bed_state (ward_id INTEGER NOT NULL referencing wards, bed_no
+    INTEGER NOT NULL, admission_id INTEGER referencing admissions, PRIMARY KEY
+    (ward_id, bed_no))` as a WITHOUT ROWID table, and fill it with one row per
+    bed of every ward -- bed_no 1 up to the ward's beds -- with admission_id
+    NULL. A recursive CTE can count to each ward's beds.
 
-    *Checked: the admission and start date of each new prescription*
+    *Checked: whether the table is WITHOUT ROWID, the row count, the highest bed number on ward 5, and how many beds are taken*
 
-20. **Undo everything, not just this row** (Q751)
+20. **Renamed, and still referenced** (Q771)
 
-    Write a BEFORE INSERT trigger on prescriptions that refuses a dose over
-    10000 mg with RAISE(ROLLBACK, ...) -- not ABORT. After your script, the
-    question runs, as separate statements: BEGIN; an insert of 100 mg with id
-    20001; an insert of 20000 mg with id 20002; an insert of 100 mg with id
-    20003; COMMIT.
+    Rename the table `procedure_types` to `procedure_catalogue`, and its
+    column `tariff_pence` to `price_pence`, with ALTER TABLE -- so that the
+    rows, the primary key and the foreign key from procedures all carry over.
+    Do not rebuild the table.
 
-    *Checked: which of the three ids exist afterwards*
+    *Checked: whether price_pence exists, how many procedures still join to the catalogue by code, and whether the old name is gone*
 
 # Python
 
-## 1 - First steps (4)
+## 1 - Printing (4)
 
-Programs, graded on what they print: print(), arithmetic, variables in an
-f-string, and a line read with input().
+print() with several arguments and with sep=, str() to put a number inside text,
+and input() read as a number with int().
 
-1. **Say hello** (P001)
+1. **print(): two things in one call** (P021)
 
-   Write a program that prints exactly this line:
-
-   ```
-   Hello, hospital!
-   ```
-
-   *Print: the line above, punctuation included.*
-
-2. **Three sums** (P002)
-
-   Print three numbers, one per line, each worked out by Python rather than
-   typed in:
+   Use print() with TWO arguments, separated by a comma, to print the word
+   Ward and the number 5 on one line:
 
    ```
-   the hours in a 365-day year
-   the minutes in a week
-   2 to the power of 10
+   Ward 5
    ```
 
-   *Print: three lines, the numbers only.*
+   print() puts a space between its arguments for you.
 
-3. **Variables in a sentence** (P003)
+   *Print: that one line.*
 
-   Put the ward name 'Fleming', its 16 beds and its 11 patients in three
-   variables, then print two lines built from them:
+2. **print(): choosing the separator** (P022)
+
+   Use print() with three arguments -- the numbers 2026, 6 and 30 -- and its
+   sep= option to print them joined by hyphens:
 
    ```
-   Fleming has 16 beds and 11 patients
-   Occupancy: 68.8%
+   2026-6-30
    ```
 
-   The percentage is patients divided by beds times 100, shown to ONE decimal
-   place -- use an f-string with a format spec such as {x:.1f}.
+   *Print: that one line.*
+
+3. **str(): a number inside text** (P023)
+
+   Put the number 16 in a variable called beds. Then use + to join three
+   pieces into one string -- 'Fleming has ', the number, and ' beds' -- and
+   print it:
+
+   ```
+   Fleming has 16 beds
+   ```
+
+   + only joins strings, so use str() to turn the number into one first.
+
+   *Print: that one line.*
+
+4. **input(): reading a number** (P024)
+
+   Use input() to read one line -- it will be the number 24 -- turn it into a
+   number with int(), add 1 to it, and print the result:
+
+   ```
+   25
+   ```
+
+   When you press Run the program is given the line '24', so you cannot type
+   it yourself.
+
+   *Print: the number one higher than the line read.*
+
+## 2 - Strings (5)
+
+len(), upper() and lower(), replace(), strip() and count() -- and the two
+mistakes that go with methods: leaving off the parentheses, and forgetting that
+a string method returns a new string.
+
+5. **len(): how long a string is** (P025)
+
+   Put 'Nightingale' in a variable and use len() to print how many characters
+   it has:
+
+   ```
+   11
+   ```
+
+   *Print: the number.*
+
+6. **upper() and lower(): changing case** (P026)
+
+   Put 'Seacole Ward' in a variable. Use the upper() method to print it in
+   capitals, then the lower() method to print it in small letters:
+
+   ```
+   SEACOLE WARD
+   seacole ward
+   ```
 
    *Print: the two lines.*
 
-4. **Reading a line** (P004)
+7. **replace(): swapping part of a string** (P027)
 
-   Read one line from the keyboard with input() -- it will be a name -- and
-   greet it:
-
-   ```
-   Good morning, Ada.
-   ```
-
-   When you press Run the program is given the line 'Ada' as its input, so you
-   cannot type it yourself.
-
-   *Print: the greeting, with the name that was read.*
-
-## 2 - Strings and lists (4)
-
-Functions, graded on what they return: split and index a string, count with a
-loop, slice a list, keep the first of a tie.
-
-5. **Initials** (P005)
-
-   Write a function `initials(name)` that returns the first letter of each
-   word in the name, each followed by a full stop:
+   Put 'Bed 3, Bay 3' in a variable and use the replace() method to change
+   every 3 to a 4, then print the result:
 
    ```
-   initials("Florence Nightingale") -> "F.N."
+   Bed 4, Bay 4
    ```
 
-   A name can have one word or several. str.split() breaks a string into a
-   list of words.
+   *Print: that one line.*
 
-   *Return: the initials as one string.*
+8. **strip(): trimming spaces** (P028)
 
-6. **Counting vowels** (P006)
-
-   Write a function `count_vowels(text)` that returns how many vowels -- a, e,
-   i, o, u -- the text contains, in either case:
+   Put ' Bay 3 ' -- three spaces either side -- in a variable. Use the strip()
+   method to remove the outer spaces, then print the result between square
+   brackets:
 
    ```
-   count_vowels("Observation") -> 5
+   [Bay 3]
    ```
 
-   *Return: the count as an integer.*
+   *Print: that one line.*
 
-7. **Every other one** (P007)
+9. **count(): occurrences of a letter** (P029)
 
-   Write a function `every_other(items)` that returns a new list holding the
-   first item, the third, the fifth and so on -- the ones at even positions
-   counting from 0:
-
-   ```
-   every_other([1, 2, 3, 4, 5]) -> [1, 3, 5]
-   ```
-
-   A slice can do it in one expression: items[start:stop:step].
-
-   *Return: the new list; an empty list stays empty.*
-
-8. **The longest word** (P008)
-
-   Write a function `longest_word(sentence)` that returns the longest word in
-   the sentence. If several tie, return the one that comes FIRST. An empty
-   sentence returns an empty string.
+   Put 'observation' in a variable and use the count() method to print how
+   many times the letter o appears:
 
    ```
-   longest_word("a bb cc") -> "bb"
+   2
    ```
 
-   *Return: the word.*
+   *Print: the number.*
 
-## 3 - Conditions and loops (4)
+## 3 - Numbers (5)
 
-if/elif with a boundary, for over range(), a while loop that counts, and a
-return from inside a loop.
+round() with and without a second argument, abs(), max() and min() with several
+arguments, int() against float(), and // with %.
 
-9. **Triage by heart rate** (P009)
+10. **round(): a set number of decimals** (P030)
 
-   Write a function `triage(heart_rate)` that returns 'high' for a rate over
-   100, 'low' for a rate under 60, and 'normal' otherwise. 100 and 60 are both
-   normal.
-
-   ```
-   triage(101) -> 'high'
-   ```
-
-   *Return: one of the three strings.*
-
-10. **The seven times table** (P010)
-
-    Print the seven times table from 1 to 10, one line each, in this form:
+    Use round() to print 37.66666 rounded to one decimal place, and on the
+    next line rounded to a whole number:
 
     ```
-    7 x 1 = 7
-    7 x 2 = 14
-    ...
-    7 x 10 = 70
+    37.7
+    38
     ```
 
-    Use a for loop over range(), not ten print statements.
+    *Print: the two lines.*
 
-    *Print: ten lines.*
+11. **abs(): distance from zero** (P031)
 
-11. **Steps to one** (P011)
-
-    Write a function `collatz_steps(n)` that counts how many steps it takes to
-    reach 1 from n, where a step halves an even number and turns an odd number
-    into 3n + 1:
+    A patient's temperature is 36.2 and the normal figure is 37.0. Put both in
+    variables and use abs() to print how far apart they are, as a positive
+    number, rounded to one decimal:
 
     ```
-    6 -> 3 -> 10 -> 5 -> 16 -> 8 -> 4 -> 2 -> 1, so collatz_steps(6) -> 8
+    0.8
     ```
 
-    collatz_steps(1) is 0. You do not know in advance how many steps there
-    are, so this is a while loop.
+    *Print: the number.*
 
-    *Return: the number of steps.*
+12. **max() and min(): the largest of several** (P032)
 
-12. **The first negative** (P012)
-
-    Write a function `first_negative_index(nums)` that returns the index of
-    the first negative number in the list, or -1 if there is none:
+    Three heart-rate readings are 72, 118 and 65. Use max() to print the
+    highest and min() to print the lowest, passing the three numbers as three
+    arguments:
 
     ```
-    first_negative_index([3, 1, -4, 1, -5]) -> 2
+    118
+    65
     ```
 
-    enumerate(nums) gives you each index with its value; return as soon as you
-    find one.
+    *Print: the two lines.*
 
-    *Return: an index, or -1.*
+13. **int() and float(): text into numbers** (P033)
 
-## 4 - Functions (4)
-
-Operator precedence, default arguments, a tuple as three answers, and a
-comparison returned directly as a boolean.
-
-13. **Body mass index** (P013)
-
-    Write a function `bmi(weight_kg, height_m)` that returns the body mass
-    index -- weight divided by the SQUARE of height -- rounded to one decimal
-    place:
+    The strings '250' and '2.5' hold a dose and a multiplier. Use int() on the
+    first and float() on the second, multiply them, and print the result:
 
     ```
-    bmi(70, 1.75) -> 22.9
+    625.0
     ```
 
-    *Return: a number with one decimal place.*
+    *Print: the number.*
 
-14. **Arguments you can leave out** (P014)
+14. **// and %: whole hours and the minutes left** (P034)
 
-    Write a function `course_total_mg(dose_mg, times_per_day, days)` that
-    returns the total milligrams over a course: dose times doses per day times
-    days. The last two arguments are optional -- times_per_day defaults to 2
-    and days to 7 -- so all three of these calls work:
+    A shift lasted 155 minutes. Use // to get the whole hours and % to get the
+    minutes left over, and print them as:
 
     ```
-    course_total_mg(500) -> 7000
-    course_total_mg(500, 3) -> 10500
-    course_total_mg(250, 4, 5) -> 5000
+    2 h 35 min
     ```
 
-    *Return: the total as an integer.*
+    *Print: that one line.*
 
-15. **Three answers at once** (P015)
+## 4 - Lists (4)
 
-    Write a function `min_max_mean(nums)` that returns the smallest value, the
-    largest, and the mean rounded to two decimal places -- as a TUPLE of
-    three:
+append() returns None, sorted() against sort(), an average from sum() and len(),
+and split() with join() the right way round.
 
-    ```
-    min_max_mean([1, 2, 3, 4]) -> (1, 4, 2.5)
-    ```
+15. **append(): adding to a list** (P035)
 
-    min(), max(), sum() and len() do the arithmetic. The list is never empty.
-
-    *Return: a tuple (smallest, largest, mean).*
-
-16. **Reads the same backwards** (P016)
-
-    Write a function `is_palindrome(text)` that returns True when the text
-    reads the same backwards as forwards, ignoring case and spaces:
+    Start with the list ['Barry', 'Bevan'] in a variable. Use the append()
+    method to add 'Cavell' to the end, then print the list:
 
     ```
-    is_palindrome("Never odd or even") -> True
+    ['Barry', 'Bevan', 'Cavell']
     ```
 
-    text[::-1] is the text reversed. An empty string counts as a palindrome.
+    *Print: the list, as print() shows a list.*
 
-    *Return: True or False.*
+16. **sorted(): a list in order** (P036)
 
-## 5 - Dicts, sets and comprehensions (4)
-
-Counting into a dict with .get(), insertion order as a tiebreak, a set
-intersection returned as a sorted list, and try/except around int().
-
-17. **Counting words** (P017)
-
-    Write a function `word_counts(text)` that returns a dictionary from each
-    word, lower-cased, to how many times it appears:
+    Put the list [118, 72, 65, 90] in a variable and use sorted() to print it
+    from smallest to largest:
 
     ```
-    word_counts("the ward the bed") -> {'the': 2, 'ward': 1, 'bed': 1}
+    [65, 72, 90, 118]
     ```
 
-    dict.get(key, 0) reads a count that may not exist yet.
+    *Print: the sorted list.*
 
-    *Return: the dictionary; empty text gives an empty one.*
+17. **sum() and len(): an average** (P037)
 
-18. **The most common item** (P018)
-
-    Write a function `most_common(items)` that returns the item appearing most
-    often. If several tie, return the one that appears FIRST in the list. The
-    list is never empty.
+    Put the list [36.8, 37.2, 38.1, 36.9] in a variable. Use sum() and len()
+    to work out the average and print it rounded to one decimal:
 
     ```
-    most_common(["b", "a", "b", "a"]) -> "b"
+    37.2
     ```
 
-    Count into a dictionary first, then look for the largest count; a
-    dictionary remembers the order keys were added.
+    *Print: the number.*
 
-    *Return: the item.*
+18. **split() and join(): text to list and back** (P038)
 
-19. **Prescribed on both wards** (P019)
-
-    Write a function `shared_drugs(ward_a, ward_b)` that takes two lists of
-    drug names, possibly with repeats, and returns the names that appear in
-    BOTH -- each once, sorted:
+    Put 'Morphine Codeine Diazepam' in a variable. Use the split() method to
+    break it into a list and print the list, then use the join() method with
+    ', ' to put it back together and print that:
 
     ```
-    shared_drugs(["Morphine", "Codeine", "Codeine"], ["Codeine", "Aspirin", "Morphine"]) -> ["Codeine", "Morphine"]
+    ['Morphine', 'Codeine', 'Diazepam']
+    Morphine, Codeine, Diazepam
     ```
 
-    A set drops the repeats and & finds what two sets share.
+    *Print: the two lines.*
 
-    *Return: a sorted LIST of names.*
+## 5 - Loops (2)
 
-20. **Readings that are not numbers** (P020)
+range() and where it stops, and a first for loop with the print inside it.
 
-    Write a function `parse_readings(strings)` that turns a list of strings
-    into a list of integers, SKIPPING any string that is not a whole number:
+19. **range(): the numbers 1 to 5** (P039)
+
+    Use range() inside list() to build the list of numbers from 1 to 5 and
+    print it:
 
     ```
-    parse_readings(["72", "x", "-5", " 80 ", "3.5"]) -> [72, -5, 80]
+    [1, 2, 3, 4, 5]
     ```
 
-    int(s) converts a string and raises ValueError when it cannot; catch that
-    with try/except rather than inspecting the characters yourself.
+    range() itself prints as range(1, 6); list() turns it into a real list.
 
-    *Return: the list of integers, in the original order.*
+    *Print: the list.*
+
+20. **for: one line per item** (P040)
+
+    Put the list ['Fleming', 'Jenner', 'Lister'] in a variable and use a for
+    loop to print each ward on its own line, followed by ' ward':
+
+    ```
+    Fleming ward
+    Jenner ward
+    Lister ward
+    ```
+
+    *Print: the three lines.*
 
 ## The one concept with no question here
 
@@ -636,7 +595,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-731 retired ones.
+771 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
