@@ -27,13 +27,13 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Forty questions in two tracks. **Twenty SQL** on the district hospital (11
-tables, SEED 731 -- the same data as the two previous sets, not re-seeded)
-and **twenty Python**, a step DOWN from the first Python set: every question
-is a short program that prints a result and names the one built-in or method
-it is about, in its title and its prompt. The SQL twenty repeat nothing from
-Q702-Q751: fifteen SELECT questions over the same seven stages, and **five
-writable**, on constructs none of the seven earlier writable stages used.
+Thirty questions in two tracks, and a step EASIER on the SQL side at the
+user's request. **Fifteen SQL** on the district hospital (11 tables, SEED 731
+-- the same data as the three previous sets) over the same seven stages, one
+or two questions each, with **three writable**. **Fifteen Python** at the
+level of the previous set: short programs that print a result, each about
+one function, method or keyword, named in the title and the prompt, on tools
+P021-P040 did not cover.
 
 ### The writable stage
 
@@ -43,72 +43,56 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 16 | `DEFAULT` values on columns | the rounds a driven insert filled in |
-| 17 | `UNIQUE` with `COLLATE NOCASE` | which tags survived four inserts |
-| 18 | `ON DELETE SET NULL` | each booking's theatre after a driven delete |
-| 19 | a `WITHOUT ROWID` table with a composite key | the schema flag, the row count, ward 5's beds |
-| 20 | `ALTER TABLE ... RENAME TO` / `RENAME COLUMN` | the column, the join, the old name |
+| 13 | an `UPDATE` with arithmetic and a `WHERE` | total salary by role |
+| 14 | `ALTER TABLE ... DROP COLUMN` | the columns of wards, and its row count |
+| 15 | `DROP INDEX` then `CREATE INDEX` | the table's indexes and the new one's columns |
 
-16, 17 and 18 carry a `driver_sql`: statements the question runs after
-yours. A refusal is reported in the status bar, not treated as an error.
+None of the three carries a `driver_sql`.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q752 | A1 conditional aggregation | Priorities, side by side | ex 1 | 1 - Warm-up |
-| Q753 | A3 WHERE vs HAVING | Long operations | ex 2 | 1 - Warm-up |
-| Q754 | D1 dates & times | Hours to the first procedure | ex 3 | 1 - Warm-up |
-| Q755 | STR string functions | Usernames that collide | ex 4 | 2 - Strings and sequences |
-| Q756 | STR string functions | Leeds districts as numbers | ex 5 | 2 - Strings and sequences |
-| Q757 | D1 dates & times | In and out the same day | ex 6 | 3 - Dates and times |
-| Q758 | W3 window vs GROUP BY | The next admission | ex 7 | 3 - Dates and times |
-| Q759 | INT intervals | Already on the ward | ex 8 | 4 - Intervals and occupancy |
-| Q760 | INT intervals | The longest time away | ex 9 | 4 - Intervals and occupancy |
-| Q761 | INT intervals | Days on a drug | ex 10 | 4 - Intervals and occupancy |
-| Q762 | J2 outer joins | Operating off the rota | ex 11 | 5 - Joins and grain |
-| Q763 | E1 all-or-none | Always routine | ex 12 | 5 - Joins and grain |
-| Q764 | C2 grain | How many hands on each ward | ex 13 | 5 - Joins and grain |
-| Q765 | DST distributions | Length of stay in quarters | ex 14 | 6 - Window functions |
-| Q766 | W2 window ranking | Each ward's busiest month | ex 15 | 6 - Window functions |
-| Q767 | DDL constraints | Fill in what was left out **(script)** | ex 16 | 7 - Changing the data |
-| Q768 | DDL constraints | Unique whatever the case **(script)** | ex 17 | 7 - Changing the data |
-| Q769 | DDL constraints | The booking outlives the theatre **(script)** | ex 18 | 7 - Changing the data |
-| Q770 | DDL constraints | One row per bed, no rowid **(script)** | ex 19 | 7 - Changing the data |
-| Q771 | DDL constraints | Renamed, and still referenced **(script)** | ex 20 | 7 - Changing the data |
+| Q772 | A2 COUNT and AVG | The price list | ex 1 | 1 - Warm-up |
+| Q773 | A3 WHERE vs HAVING | The most prescribed | ex 2 | 1 - Warm-up |
+| Q774 | STR string functions | Three-letter ward codes | ex 3 | 2 - Strings and sequences |
+| Q775 | SEQ sequences | Where the second stay was | ex 4 | 2 - Strings and sequences |
+| Q776 | D1 dates & times | Admissions by year | ex 5 | 3 - Dates and times |
+| Q777 | D1 dates & times | How long admissions 1 to 5 lasted | ex 6 | 3 - Dates and times |
+| Q778 | INT intervals | Running on the last Sunday | ex 7 | 4 - Intervals and occupancy |
+| Q779 | INT intervals | Touching the last weekend | ex 8 | 4 - Intervals and occupancy |
+| Q780 | C7 NULL | Blood group unknown | ex 9 | 5 - Joins and grain |
+| Q781 | J2 outer joins | Who each person reports to | ex 10 | 5 - Joins and grain |
+| Q782 | W2 window ranking | Patient 1500's admissions, numbered | ex 11 | 6 - Window functions |
+| Q783 | W3 window vs GROUP BY | Each ward's share of the beds | ex 12 | 6 - Window functions |
+| Q784 | DML update & delete | A rise for the porters **(script)** | ex 13 | 7 - Changing the data |
+| Q785 | ALT ALTER TABLE | A column nobody needs **(script)** | ex 14 | 7 - Changing the data |
+| Q786 | IDX index maintenance | Swap one index for another **(script)** | ex 15 | 7 - Changing the data |
 
 ### Python
 
-Twenty programs, each two to four lines, each about one function or method:
-`print()` and its sep=, `str()`, `input()` with `int()`, `len()`, `upper()`
-and `lower()`, `replace()`, `strip()`, `count()`, `round()`, `abs()`, `max()`
-and `min()`, `int()` and `float()`, `//` and `%`, `append()`, `sorted()`,
-`sum()` with `len()`, `split()` and `join()`, `range()`, and a first `for`.
-Graded on what they print, line for line. Every question has a trap the
-checker proves is rejected -- most of them the mistake a first-week learner
-makes with that exact function: a method without its parentheses, a result
-not assigned, `sort()` printed, `"text" + 5`.
+Fifteen programs, each two to four lines, each about one tool the last set
+did not cover: `title()`, `startswith()`, `find()` against `index()`, the
+`in` test, `index()` on a list, `pop()`, `insert()`, `remove()`, `sorted()`
+with `reverse=True`, `len()` on a list, the `.2f` format spec, `divmod()`,
+`type()`, `enumerate()` and a first `while`. Graded on what they print, line
+for line. Every question has a trap the checker proves is rejected.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P021 | PY0 print | print(): two things in one call | py 1 | 1 - Printing |
-| P022 | PY0 print sep | print(): choosing the separator | py 2 | 1 - Printing |
-| P023 | PY0 str | str(): a number inside text | py 3 | 1 - Printing |
-| P024 | PY0 input | input(): reading a number | py 4 | 1 - Printing |
-| P025 | PY1 len | len(): how long a string is | py 5 | 2 - Strings |
-| P026 | PY1 upper/lower | upper() and lower(): changing case | py 6 | 2 - Strings |
-| P027 | PY1 replace | replace(): swapping part of a string | py 7 | 2 - Strings |
-| P028 | PY1 strip | strip(): trimming spaces | py 8 | 2 - Strings |
-| P029 | PY1 count | count(): occurrences of a letter | py 9 | 2 - Strings |
-| P030 | PY1 round | round(): a set number of decimals | py 10 | 3 - Numbers |
-| P031 | PY1 abs | abs(): distance from zero | py 11 | 3 - Numbers |
-| P032 | PY1 max/min | max() and min(): the largest of several | py 12 | 3 - Numbers |
-| P033 | PY1 int/float | int() and float(): text into numbers | py 13 | 3 - Numbers |
-| P034 | PY1 divmod | // and %: whole hours and the minutes left | py 14 | 3 - Numbers |
-| P035 | PY2 append | append(): adding to a list | py 15 | 4 - Lists |
-| P036 | PY2 sorted | sorted(): a list in order | py 16 | 4 - Lists |
-| P037 | PY2 sum/len | sum() and len(): an average | py 17 | 4 - Lists |
-| P038 | PY2 split/join | split() and join(): text to list and back | py 18 | 4 - Lists |
-| P039 | PY2 range | range(): the numbers 1 to 5 | py 19 | 5 - Loops |
-| P040 | PY2 for | for: one line per item | py 20 | 5 - Loops |
+| P041 | PY1 title | title(): a capital on every word | py 1 | 1 - More strings |
+| P042 | PY1 startswith | startswith(): does it begin with | py 2 | 1 - More strings |
+| P043 | PY1 find | find(): where a character is | py 3 | 1 - More strings |
+| P044 | PY2 in | in: is it in the list | py 4 | 2 - Lists |
+| P045 | PY2 index | index(): where in the list | py 5 | 2 - Lists |
+| P046 | PY2 pop | pop(): take the last one off | py 6 | 2 - Lists |
+| P047 | PY2 insert | insert(): put it at a position | py 7 | 2 - Lists |
+| P048 | PY2 remove | remove(): take out by value | py 8 | 2 - Lists |
+| P049 | PY2 sorted reverse | sorted(reverse=True): largest first | py 9 | 2 - Lists |
+| P050 | PY2 len list | len(): how many in the list | py 10 | 2 - Lists |
+| P051 | PY1 format spec | f'{x:.2f}': two decimal places | py 11 | 3 - Numbers and types |
+| P052 | PY1 divmod | divmod(): quotient and remainder at once | py 12 | 3 - Numbers and types |
+| P053 | PY1 type | type(): what kind of value | py 13 | 3 - Numbers and types |
+| P054 | PY2 enumerate | enumerate(): numbering as you loop | py 14 | 4 - Loops |
+| P055 | PY2 while | while: repeat until a condition fails | py 15 | 4 - Loops |
 
 ## Retired
 
@@ -417,6 +401,46 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q752 | A1 conditional aggregation | Priorities, side by side | - | retired |
+| Q753 | A3 WHERE vs HAVING | Long operations | - | retired |
+| Q754 | D1 dates & times | Hours to the first procedure | - | retired |
+| Q755 | STR string functions | Usernames that collide | - | retired |
+| Q756 | STR string functions | Leeds districts as numbers | - | retired |
+| Q757 | D1 dates & times | In and out the same day | - | retired |
+| Q758 | W3 window vs GROUP BY | The next admission | - | retired |
+| Q759 | INT intervals | Already on the ward | - | retired |
+| Q760 | INT intervals | The longest time away | - | retired |
+| Q761 | INT intervals | Days on a drug | - | retired |
+| Q762 | J2 outer joins | Operating off the rota | - | retired |
+| Q763 | E1 all-or-none | Always routine | - | retired |
+| Q764 | C2 grain | How many hands on each ward | - | retired |
+| Q765 | DST distributions | Length of stay in quarters | - | retired |
+| Q766 | W2 window ranking | Each ward's busiest month | - | retired |
+| Q767 | DDL constraints | Fill in what was left out **(script)** | - | retired |
+| Q768 | DDL constraints | Unique whatever the case **(script)** | - | retired |
+| Q769 | DDL constraints | The booking outlives the theatre **(script)** | - | retired |
+| Q770 | DDL constraints | One row per bed, no rowid **(script)** | - | retired |
+| Q771 | DDL constraints | Renamed, and still referenced **(script)** | - | retired |
+| P021 | PY0 print | print(): two things in one call | - | retired |
+| P022 | PY0 print sep | print(): choosing the separator | - | retired |
+| P023 | PY0 str | str(): a number inside text | - | retired |
+| P024 | PY0 input | input(): reading a number | - | retired |
+| P025 | PY1 len | len(): how long a string is | - | retired |
+| P026 | PY1 upper/lower | upper() and lower(): changing case | - | retired |
+| P027 | PY1 replace | replace(): swapping part of a string | - | retired |
+| P028 | PY1 strip | strip(): trimming spaces | - | retired |
+| P029 | PY1 count | count(): occurrences of a letter | - | retired |
+| P030 | PY1 round | round(): a set number of decimals | - | retired |
+| P031 | PY1 abs | abs(): distance from zero | - | retired |
+| P032 | PY1 max/min | max() and min(): the largest of several | - | retired |
+| P033 | PY1 int/float | int() and float(): text into numbers | - | retired |
+| P034 | PY1 divmod | // and %: whole hours and the minutes left | - | retired |
+| P035 | PY2 append | append(): adding to a list | - | retired |
+| P036 | PY2 sorted | sorted(): a list in order | - | retired |
+| P037 | PY2 sum/len | sum() and len(): an average | - | retired |
+| P038 | PY2 split/join | split() and join(): text to list and back | - | retired |
+| P039 | PY2 range | range(): the numbers 1 to 5 | - | retired |
+| P040 | PY2 for | for: one line per item | - | retired |
 | Q732 | A2 COUNT and AVG | Procedures by category | - | retired |
 | Q733 | C5 COUNT(*) vs COUNT(col) | Controlled, by form | - | retired |
 | Q734 | A3 WHERE vs HAVING | Night owls | - | retired |
@@ -1048,3 +1072,13 @@ they still count as asked.
   filled by a recursive CTE, and ALTER TABLE RENAME TO / RENAME COLUMN.
   Python, a step down from P001-P020 at the user's request: twenty short
   programs, one built-in or method each, named in the title and the prompt.
+- **Q772-Q786 and P041-P055** current set, thirty questions instead of forty
+  and easier on the SQL side at the user's request. Same hospital data (SEED
+  731). SQL, twelve SELECT over the same seven stages -- the catalogue
+  against the events, HAVING on a count, substr() from 1, stay_seq = 2, a
+  year CAST to a number, julianday() for a length, a day inside an interval
+  with the open end supplied, stays touching a weekend, IS NULL against
+  = NULL, a self LEFT JOIN for a manager, ROW_NUMBER by the right column, a
+  share via SUM() OVER () -- and three writable: an UPDATE with a WHERE,
+  DROP COLUMN, and DROP INDEX with CREATE INDEX. Python, fifteen one-tool
+  programs on tools the last set did not cover.
