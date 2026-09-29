@@ -1,10 +1,10 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the district hospital -- the
-same data as the previous sets, with none of their questions, and a step
-easier than they were -- and **fifteen Python**, each a short program about
-ONE function, method or keyword, named in the question's title, on tools the
-last set did not cover.
+same data as the previous sets, with none of their questions, and back at
+the level of the sets before the easy one -- and **fifteen Python**, each a
+short program about ONE tool, named in the question's title, this time on
+dictionaries, tuples, slices and string tests.
 
 | Stage | SQL questions |
 |---|---|
@@ -18,10 +18,10 @@ last set did not cover.
 
 | Stage | Python questions |
 |---|---|
-| 1 - More strings | 1-3 |
-| 2 - Lists | 4-10 |
-| 3 - Numbers and types | 11-13 |
-| 4 - Loops | 14-15 |
+| 1 - Dictionaries | 1-7 |
+| 2 - Tuples and slices | 8-10 |
+| 3 - String tests | 11-13 |
+| 4 - Two lists at once | 14-15 |
 
 ## The schema
 
@@ -60,31 +60,31 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**No driver statements this time.** The probe reads what your script left
-behind, and nothing else runs in between.
+**Driver statements.** All three writable questions run statements of their
+own *after* yours -- a rename your foreign key should follow, inserts your
+CHECK should sort, and an UPDATE your trigger should redirect. A refusal is
+reported in the status bar as what it is, not as an error.
 
 | # | Construct |
 |---|---|
-| 13 | an `UPDATE` with arithmetic in the SET and a `WHERE` that keeps it to one role |
-| 14 | `ALTER TABLE ... DROP COLUMN`, against blanking the values |
-| 15 | `DROP INDEX` and `CREATE INDEX`: an index replaced, not merely added to |
+| 13 | `ON UPDATE CASCADE`: a parent key renamed and the children following |
+| 14 | `CHECK (json_valid(payload))`: a constraint that calls a function |
+| 15 | `INSTEAD OF UPDATE` on a view, with OLD to say which row |
 
 ## Things the data does on purpose
 
-- **The least prescribed drug has 263 prescriptions**, so question 2's
-  threshold of 330 keeps only four.
-- **315 admissions had a third stay**, which is why question 4 says
-  exactly 2 and not 2 or more.
-- **22 prescriptions running on 2026-06-28 have no end date**, and
-  they are the ones question 7's trap drops.
-- **240 patients have no recorded blood group**, the population of
-  question 9.
-- **Staff 1 to 4 are the division heads**, with a NULL reports_to, so
-  question 10's inner join loses four of its ten rows.
-- **Patient 1500 has 18 admissions**, and the ids were not dealt in time
-  order -- the first admission has id 2415.
-- **There are 5 porters**, so question 13's UPDATE should change five
-  rows and no more.
+- **9 surnames are shared by three or more staff**, Papadopoulos by
+  eight, which is question 3's answer.
+- **Consecutive stays are never on the same ward**, so 'back where they
+  started' can only mean stay 3 -- 34 admissions did it.
+- **The longest completed stay is 27 days**, so question 5's trap of
+  'over 30 days' finds nothing at all.
+- **296 pairs of same-drug prescriptions overlap**, on all forty drugs,
+  the population of question 8.
+- **Every one of the 30 days of June 2026 has an admission**, so
+  question 11's moving average needs no calendar.
+- **Patient 3 lives in LS7** until question 15's driver moves them to LS99;
+  a trigger body without a WHERE moves all 2,000.
 
 ## How the Python questions are graded
 
@@ -108,362 +108,370 @@ indentation of the line above.
 
 ## 1 - Warm-up (2)
 
-Which table answers the question, and a condition on a count that has to be
-HAVING.
+An average of products, which is not a product of averages, and a share that
+needs the whole group in HAVING.
 
-1. **The price list** (Q772)
+1. **Milligrams a day, by form** (Q787)
 
-   One row per category in procedure_types -- the catalogue of what CAN be
-   done, not the procedures performed: the cheapest, the dearest and the
-   average tariff of the types listed, in POUNDS to two decimals. Tariffs are
-   stored in pence.
+   For each form of drug: how many prescriptions, the average DAILY dose in mg
+   to one decimal -- dose_mg times times_per_day, averaged over prescriptions
+   -- and the largest daily dose.
 
-   *Return: category, cheapest, dearest, average*
+   *Return: form, prescriptions, avg_daily_mg, max_daily_mg*
 
-2. **The most prescribed** (Q773)
+2. **Mostly emergencies** (Q788)
 
-   Drugs that have been prescribed more than 330 times, with the count. The
-   condition is on the count, so it cannot go in WHERE.
+   Consultants for whom at least 55 per cent of admissions came in as
+   emergencies: consultant_id, admissions, emergencies, and the percentage to
+   one decimal.
 
-   *Return: drug, prescriptions*
+   *Return: consultant_id, admissions, emergencies, pct*
 
 ## 2 - Strings and sequences (2)
 
-substr() counts from 1, and stay_seq = 2 is an equality, not a range.
+Surnames cut one past the space, and the first and third stays of an admission
+joined with both sequence numbers pinned.
 
-3. **Three-letter ward codes** (Q774)
+3. **Surnames on the payroll** (Q789)
 
-   Every ward with a code made from the first three letters of its name in
-   upper case -- 'Nightingale' gives 'NIG'. substr(text, start, length) counts
-   from 1.
+   Surnames shared by THREE or more staff, with how many, and their staff_ids
+   as one comma-separated string in id order. The surname is everything after
+   the single space in the name.
 
-   *Return: ward_id, name, code*
+   *Return: surname, people, staff_ids*
 
-4. **Where the second stay was** (Q775)
+4. **Back where they started** (Q790)
 
-   For each ward, how many admissions had their SECOND stay there -- stay_seq
-   exactly 2 in ward_stays. A third stay does not count.
+   Admissions that moved ward twice and ended up back on the ward they were
+   admitted to -- stay 3 on the same ward as stay 1 -- counted per ward. Two
+   rows of ward_stays for one admission, joined.
 
-   *Return: ward_id, second_stays*
+   *Return: ward_id, returned*
 
 ## 3 - Dates and times (2)
 
-strftime() returns text until you CAST it, and two datetimes have to go through
-julianday() before they can be subtracted.
+A month boundary crossed, tested by comparing 'YYYY-MM' strings, and the
+difference between %W and %U.
 
-5. **Admissions by year** (Q776)
+5. **Crossing the month end** (Q791)
 
-   How many admissions there were in each year, with the year as a NUMBER.
-   strftime('%Y', ...) gives the year as text.
+   For each month of admission, 'YYYY-MM': how many completed admissions began
+   in it, how many of them were discharged in a LATER month than they were
+   admitted, and the percentage to one decimal. Compare months, not lengths of
+   stay.
 
-   *Return: year, admissions*
+   *Return: month, admissions, crossed, pct*
 
-6. **How long admissions 1 to 5 lasted** (Q777)
+6. **Weeks that start on Monday** (Q792)
 
-   For admissions 1 to 5, the length of stay in days to one decimal:
-   discharged_at minus admitted_at. They are text, so turn each into a number
-   of days with julianday() before subtracting.
+   Admissions per week of 2026, for weeks 1 to 10, with the week as an
+   integer. A week starts on MONDAY, and week 1 is the first week with a
+   Monday in it -- which is what strftime('%W') numbers. Its sibling '%U'
+   starts weeks on Sunday.
 
-   *Return: admission_id, days*
+   *Return: week, admissions*
 
 ## 4 - Intervals and occupancy (2)
 
-A day inside an interval, and two intervals that touch -- both with the open end
-supplied by COALESCE.
+A per-ward peak from a running sum over every event, and two prescriptions of
+one drug whose date ranges overlap.
 
-7. **Running on the last Sunday** (Q778)
+7. **Each ward's peak in June** (Q793)
 
-   For each drug that had at least one, how many prescriptions were running on
-   2026-06-28: started on or before that day and not ended before it. A
-   prescription with no end date is still running.
+   The most patients each ward held at any one instant during June 2026. Turn
+   every ward stay into a +1 event at from_at and a -1 at to_at, run a total
+   per ward in time order over ALL events, and take the highest value reached
+   at an event inside June. At the same instant, count the departure before
+   the arrival.
 
-   *Return: drug, running*
+   *Return: ward_id, peak*
 
-8. **Touching the last weekend** (Q779)
+8. **Twice at once** (Q794)
 
-   For each ward, how many ward stays overlapped the weekend of 2026-06-27 and
-   2026-06-28 at all -- began before the weekend ended and had not ended
-   before it began. An open stay has not ended.
+   For each drug, how many admissions had two prescriptions of it RUNNING AT
+   THE SAME TIME -- two rows of prescriptions for the same admission and drug
+   whose date ranges overlap. Count each admission once. An open prescription
+   runs to 2026-06-30.
 
-   *Return: ward_id, stays*
+   *Return: drug, admissions*
 
 ## 5 - Joins and grain (2)
 
-IS NULL where = NULL finds nothing, and a self LEFT JOIN that keeps the people
-with no manager.
+A correlated subquery for the ward's own average, and three one-to-many children
+counted without multiplying each other.
 
-9. **Blood group unknown** (Q780)
+9. **Longer than the ward's usual** (Q795)
 
-   For each admitting ward, how many admissions were of a patient whose blood
-   group is not recorded -- NULL in patients.
+   For completed admissions that began in June 2026, per admitting ward: how
+   many there were, and how many lasted longer than THAT WARD's average
+   completed length of stay over all time. The comparison is against the
+   ward's own average, so it is a correlated subquery.
 
-   *Return: ward_id, admissions*
+   *Return: ward_id, admissions, above_average*
 
-10. **Who each person reports to** (Q781)
+10. **Three children of one admission** (Q796)
 
-    Staff 1 to 10 with the NAME of the person they report to. The four
-    division heads report to nobody, and must still appear, with NULL for the
-    manager.
+    For admissions 1 to 10: how many ward stays, procedures and prescriptions
+    each has. Three tables hang off admissions, and joining all three at once
+    multiplies each count by the other two.
 
-    *Return: staff_id, name, manager*
+    *Return: admission_id, stays, procedures, prescriptions*
 
 ## 6 - Window functions (2)
 
-ROW_NUMBER ordered by the column that matters, and SUM() OVER () for a share of
-the whole.
+A ROWS frame for a moving average, and rn = 2 for second place per group.
 
-11. **Patient 1500's admissions, numbered** (Q782)
+11. **A week's worth, smoothed** (Q797)
 
-    Every admission of patient 1500 -- the most admitted patient -- numbered
-    1, 2, 3 ... in the order they happened. Ids are not in time order, so
-    number by admitted_at.
+    For each day of June 2026: the admissions that day, and the seven-day
+    moving average -- that day and the six before it, to two decimals. Days
+    early in the month average over what there is. Every day of June has
+    admissions, so a calendar is not needed.
 
-    *Return: n, admission_id, admitted_at*
+    *Return: day, admissions, avg7*
 
-12. **Each ward's share of the beds** (Q783)
+12. **Second-longest stay on each ward** (Q798)
 
-    Every ward with its beds and what percentage of ALL the hospital's beds
-    that is, to one decimal. A window SUM with an empty OVER () gives the
-    total on every row.
+    For each admitting ward, the SECOND-longest completed admission: its id
+    and its length in days to two decimals. Ties by the lower admission_id.
 
-    *Return: ward_id, beds, pct_of_beds*
+    *Return: ward_id, admission_id, days*
 
 ## 7 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. An UPDATE that must have a WHERE, DROP
-COLUMN, and replacing an index.
+question's probe query reads the result. ON UPDATE CASCADE, a CHECK that calls
+json_valid(), and INSTEAD OF UPDATE on a view.
 
-13. **A rise for the porters** (Q784)
+13. **Rename the key and the children follow** (Q799)
 
-    Give every porter a 5 per cent rise, rounded to the nearest whole pound,
-    and nobody else anything. One UPDATE.
+    Create `ward_codes (code TEXT PRIMARY KEY, ward_id INTEGER NOT NULL
+    referencing wards)` and `ward_sections (section_id INTEGER PRIMARY KEY,
+    code TEXT NOT NULL referencing ward_codes, label TEXT NOT NULL)`, such
+    that changing a code in ward_codes changes it in every section that uses
+    it. Insert codes 'NIG' for ward 1 and 'SEA' for ward 2, and sections 'bay
+    A' and 'bay B' under NIG and 'bay A' under SEA. After your script, the
+    question renames NIG to 'NGT'.
 
-    *Checked: the total salary of each role*
+    *Checked: each section's code, in section order*
 
-14. **A column nobody needs** (Q785)
+14. **A column that must hold JSON** (Q800)
 
-    Remove the `floor` column from wards -- the column itself, not its values
-    -- leaving the other four columns and all eight rows as they are.
+    Create `device_readings (reading_id INTEGER PRIMARY KEY, admission_id
+    INTEGER NOT NULL referencing admissions, payload TEXT NOT NULL)` where
+    payload must be VALID JSON -- a CHECK constraint can call json_valid().
+    After your script, the question inserts three payloads for admission 1:
+    '{"spo2": 97}', 'spo2=97' and '[97, 98]'.
 
-    *Checked: the columns of wards, in order, and its row count*
+    *Checked: the payloads that were accepted, in insertion order*
 
-15. **Swap one index for another** (Q786)
+15. **Editing through a view** (Q801)
 
-    observations has an index `idx_obs_taken` on taken_at alone. Replace it:
-    drop that index, and create `idx_obs_by` on (taken_by, taken_at), so that
-    a lookup by the nurse and then by time can use it. The other index on the
-    table stays.
+    Create a view `patient_contact (patient_id, name, postcode_area)` over
+    patients, and make an UPDATE of postcode_area on the VIEW change the
+    patient underneath -- an INSTEAD OF UPDATE trigger. After your script, the
+    question runs UPDATE patient_contact SET postcode_area = 'LS99' WHERE
+    patient_id = 3.
 
-    *Checked: the names of the table's indexes, and the columns of idx_obs_by in order*
+    *Checked: patient 3's postcode in the table, and how many patients have postcode LS99*
 
 # Python
 
-## 1 - More strings (3)
+## 1 - Dictionaries (7)
 
-title() against capitalize(), startswith() against ==, and find() against
-index() on a miss.
+Square brackets against get(), assigning a new key, keys() and values() as
+views, items() unpacked in a loop, and len().
 
-1. **title(): a capital on every word** (P041)
+1. **dict: a value by its key** (P056)
 
-   Put 'florence nightingale' in a variable and use the title() method to
-   print it with a capital letter on each word:
-
-   ```
-   Florence Nightingale
-   ```
-
-   *Print: that one line.*
-
-2. **startswith(): does it begin with** (P042)
-
-   Put the procedure code 'SRG-04' in a variable. Use the startswith() method
-   to print whether it begins with 'SRG', then whether it begins with 'DIA':
+   Make a dictionary from ward names to beds: 'Fleming' 16, 'Barry' 30,
+   'Jenner' 18. Look up Fleming with square brackets and print its beds:
 
    ```
-   True
-   False
-   ```
-
-   *Print: the two lines.*
-
-3. **find(): where a character is** (P043)
-
-   Put 'SRG-04' in a variable. Use the find() method to print the position of
-   the hyphen, then the result of looking for a letter that is not there, 'X':
-
-   ```
-   3
-   -1
-   ```
-
-   Positions count from 0.
-
-   *Print: the two lines.*
-
-## 2 - Lists (7)
-
-The in test, index(), pop(), insert(), remove(), sorted() with reverse=True, and
-len() on a list -- with the errors each one raises when it is used like its
-neighbour.
-
-4. **in: is it in the list** (P044)
-
-   Put the list ['Morphine', 'Codeine', 'Diazepam'] in a variable. Use the in
-   test to print whether 'Codeine' is in it, then whether 'Aspirin' is:
-
-   ```
-   True
-   False
-   ```
-
-   *Print: the two lines.*
-
-5. **index(): where in the list** (P045)
-
-   Put ['Morphine', 'Codeine', 'Diazepam'] in a variable and use the index()
-   method to print the position of 'Codeine':
-
-   ```
-   1
+   16
    ```
 
    *Print: the number.*
 
-6. **pop(): take the last one off** (P046)
+2. **get(): a lookup that may miss** (P057)
 
-   Put [72, 118, 65] in a variable. Use the pop() method to remove the LAST
-   item, print the item that was removed, then print the list:
+   With the same dictionary -- 'Fleming' 16, 'Barry' 30, 'Jenner' 18 -- use
+   the get() method to print the beds for 'Bevan', which is not there, with 0
+   as the fallback; then get() 'Barry' the same way:
 
    ```
-   65
-   [72, 118]
+   0
+   30
    ```
 
    *Print: the two lines.*
 
-7. **insert(): put it at a position** (P047)
+3. **dict[key] = value: adding an entry** (P058)
 
-   Put ['Barry', 'Cavell'] in a variable. Use the insert() method to put
-   'Bevan' at position 1 -- between the two -- then print the list:
+   Start with the dictionary 'Fleming' 16, 'Barry' 30. Add 'Jenner' with 18 by
+   assigning to a new key, then print the dictionary:
 
    ```
-   ['Barry', 'Bevan', 'Cavell']
+   {'Fleming': 16, 'Barry': 30, 'Jenner': 18}
+   ```
+
+   *Print: the dictionary, as print() shows one.*
+
+4. **keys(): the keys as a list** (P059)
+
+   With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, use the keys()
+   method inside list() to print the ward names as a list:
+
+   ```
+   ['Fleming', 'Barry', 'Jenner']
    ```
 
    *Print: the list.*
 
-8. **remove(): take out by value** (P048)
+5. **values(): adding them up** (P060)
 
-   Put ['Barry', 'Bevan', 'Cavell'] in a variable. Use the remove() method to
-   take out 'Bevan' -- by its value, not its position -- then print the list:
-
-   ```
-   ['Barry', 'Cavell']
-   ```
-
-   *Print: the list.*
-
-9. **sorted(reverse=True): largest first** (P049)
-
-   Put [72, 118, 65, 90] in a variable and use sorted() with its reverse=
-   option to print the list from largest to smallest:
+   With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, use sum() over
+   the values() method to print the total beds:
 
    ```
-   [118, 90, 72, 65]
+   64
    ```
 
-   *Print: the sorted list.*
+   *Print: the number.*
 
-10. **len(): how many in the list** (P050)
+6. **items(): key and value together** (P061)
 
-    Put ['Barry', 'Bevan', 'Cavell', 'Fleming'] in a variable and use len() to
-    print how many wards the list holds:
+   With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, loop over the
+   items() method to print one line per ward:
+
+   ```
+   Fleming: 16
+   Barry: 30
+   Jenner: 18
+   ```
+
+   *Print: the three lines.*
+
+7. **len(): how many entries** (P062)
+
+   With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, use len() to
+   print how many wards it holds:
+
+   ```
+   3
+   ```
+
+   *Print: the number.*
+
+## 2 - Tuples and slices (3)
+
+A tuple unpacked into two names, [start:stop] on a string, and a string
+multiplied.
+
+8. **tuple: a pair that cannot change** (P063)
+
+   Put the blood pressure reading 120 over 80 in a tuple called bp. Unpack it
+   into two names, systolic and diastolic, and print them as:
+
+   ```
+   120/80
+   ```
+
+   *Print: that one line.*
+
+9. **[start:stop]: a piece of a string** (P064)
+
+   Put the procedure code 'SRG-04' in a variable. Use slicing to print the
+   first three characters, then the last two:
+
+   ```
+   SRG
+   04
+   ```
+
+   *Print: the two lines.*
+
+10. **'-' * n: repeating a string** (P065)
+
+    Print a line of 20 hyphens, then the word Ward, then another line of 20
+    hyphens, using multiplication to make the lines:
 
     ```
-    4
-    ```
-
-    *Print: the number.*
-
-## 3 - Numbers and types (3)
-
-A .2f format spec where round() does not help, divmod() unpacked into two names,
-and type() on three values that look alike.
-
-11. **f'{x:.2f}': two decimal places** (P051)
-
-    A dose costs 180 pence. Put that in a variable, divide by 100 to get
-    pounds, and use an f-string with the format spec .2f to print it with two
-    decimal places and a pound sign:
-
-    ```
-    £1.80
-    ```
-
-    *Print: that one line.*
-
-12. **divmod(): quotient and remainder at once** (P052)
-
-    A shift lasted 155 minutes. Use divmod() to get the whole hours and the
-    minutes left over in ONE call, unpack the pair into two variables, and
-    print:
-
-    ```
-    2 h 35 min
-    ```
-
-    *Print: that one line.*
-
-13. **type(): what kind of value** (P053)
-
-    Use type() to print the type of 3, of 3.0 and of '3', one per line,
-    exactly as Python shows them:
-
-    ```
-    <class 'int'>
-    <class 'float'>
-    <class 'str'>
+    --------------------
+    Ward
+    --------------------
     ```
 
     *Print: the three lines.*
 
-## 4 - Loops (2)
+## 3 - String tests (3)
 
-enumerate() with a start value, and a while loop that has to change its own
-variable.
+endswith() against in, isdigit() against type(), and if/else so that only one
+line prints.
 
-14. **enumerate(): numbering as you loop** (P054)
+11. **endswith(): the end of a string** (P066)
 
-    Put ['Fleming', 'Jenner', 'Lister'] in a variable and use a for loop with
-    enumerate() to print each ward with its number, counting from 1:
+    Two file names: 'report.pdf' and 'pdf_notes.txt'. Use the endswith()
+    method to print whether each ends with '.pdf':
 
     ```
-    1. Fleming
-    2. Jenner
-    3. Lister
+    True
+    False
     ```
 
-    enumerate() takes a second argument for where to start.
+    *Print: the two lines.*
+
+12. **isdigit(): is it all digits** (P067)
+
+    Two strings read from a form: '0420' and '42a'. Use the isdigit() method
+    to print whether each is made of digits only:
+
+    ```
+    True
+    False
+    ```
+
+    *Print: the two lines.*
+
+13. **if/else: one of two lines** (P068)
+
+    Put 'Codeine' in a variable and the list ['Morphine', 'Codeine',
+    'Fentanyl'] in another. Use if/else with the in test to print 'controlled'
+    when the drug is in the list and 'not controlled' otherwise:
+
+    ```
+    controlled
+    ```
+
+    *Print: the one line that applies.*
+
+## 4 - Two lists at once (2)
+
+zip() to walk two lists in step, and max() with key= to pick by a rule.
+
+14. **zip(): walking two lists together** (P069)
+
+    Two lists in step: wards ['Fleming', 'Barry', 'Jenner'] and beds [16, 30,
+    18]. Use zip() in a for loop to print each ward with its beds:
+
+    ```
+    Fleming 16
+    Barry 30
+    Jenner 18
+    ```
 
     *Print: the three lines.*
 
-15. **while: repeat until a condition fails** (P055)
+15. **max(key=): the biggest by a rule** (P070)
 
-    Start a variable at 3 and use a while loop to count down, printing the
-    number each time, until it reaches 0; then print Go:
+    With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, use max() with
+    key=beds.get to print the name of the ward with the most beds:
 
     ```
-    3
-    2
-    1
-    Go
+    Barry
     ```
 
-    Something inside the loop has to change the variable, or the loop never
-    ends.
-
-    *Print: the four lines.*
+    *Print: the name.*
 
 ## The one concept with no question here
 
@@ -474,7 +482,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-811 retired ones.
+841 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

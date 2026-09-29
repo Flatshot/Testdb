@@ -1,12 +1,14 @@
-"""Python practice exercises: fifteen short programs, one built-in each.
+"""Python practice exercises: fifteen short programs, one tool each.
 
-The third Python set, at the level of the second: every question is a
-program of two to four lines that prints a result, and every question names
-the one function, method or keyword it is about -- in the title, so the
-tree on the left reads like a list of tools, and in the prompt. The tools
-are ones the previous set did not cover: title(), startswith(), find(), the
-in test, index(), pop(), insert(), remove(), sorted() in reverse, len() on
-a list, a format spec, divmod(), type(), enumerate() and while.
+The fourth Python set, at the level of the two before it: every question
+is a program of two to four lines that prints a result, and every question
+names the one function, method, type or keyword it is about -- in the
+title, so the tree on the left reads like a list of tools, and in the
+prompt. This set's ground is dictionaries, tuples, slices and a few more
+string tools: a dict lookup, get(), adding a key, keys(), values() with
+sum(), items() in a loop, len() on a dict, a tuple unpacked, slicing a
+string, endswith(), isdigit(), zip(), max() with a key, string
+multiplication, and if/else.
 
 Two kinds of question, told apart by `kind`:
 
@@ -30,290 +32,299 @@ so an infinite loop or a print in a loop is stopped, not fatal.
 import pyrun
 
 EXERCISES = [
-    # ========================================================= 1 More strings
+    # ========================================================= 1 Dictionaries
     dict(
-        id=1, ledger="P041", concept="PY1 title", tier="1 - More strings",
-        title="title(): a capital on every word", kind="program",
+        id=1, ledger="P056", concept="PY3 dict lookup", tier="1 - Dictionaries",
+        title="dict: a value by its key", kind="program",
         prompt=(
-            "Put 'florence nightingale' in a variable and use the title()"
-            " method to print it with a capital letter on each word:\n\n"
-            "  Florence Nightingale\n\n"
-            "Print: that one line."
+            "Make a dictionary from ward names to beds: 'Fleming' 16,"
+            " 'Barry' 30, 'Jenner' 18. Look up Fleming with square brackets"
+            " and print its beds:\n\n"
+            "  16\n\n"
+            "Print: the number."
         ),
-        solution='name = "florence nightingale"\nprint(name.title())\n',
-        trap='name = "florence nightingale"\nprint(name.capitalize())\n',
-        note="title() capitalises the first letter of EVERY word;"
-             " capitalize() does only the first letter of the string and"
-             " lower-cases the rest, giving 'Florence nightingale'. Both"
-             " return a new string. upper() and lower() are the other two"
-             " in the family.",
+        solution='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(beds["Fleming"])\n',
+        trap='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(beds("Fleming"))\n',
+        note="A dictionary is looked up with square brackets, like a list,"
+             " but by key rather than by position. Round brackets would"
+             " CALL it, and a dict is not callable -- a TypeError. The"
+             " literal is {key: value, ...}; keys are usually strings or"
+             " numbers, values can be anything.",
     ),
     dict(
-        id=2, ledger="P042", concept="PY1 startswith", tier="1 - More strings",
-        title="startswith(): does it begin with", kind="program",
+        id=2, ledger="P057", concept="PY3 dict get", tier="1 - Dictionaries",
+        title="get(): a lookup that may miss", kind="program",
         prompt=(
-            "Put the procedure code 'SRG-04' in a variable. Use the"
-            " startswith() method to print whether it begins with 'SRG',"
-            " then whether it begins with 'DIA':\n\n"
+            "With the same dictionary -- 'Fleming' 16, 'Barry' 30,"
+            " 'Jenner' 18 -- use the get() method to print the beds for"
+            " 'Bevan', which is not there, with 0 as the fallback; then"
+            " get() 'Barry' the same way:\n\n"
+            "  0\n"
+            "  30\n\n"
+            "Print: the two lines."
+        ),
+        solution=('beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\n'
+                  'print(beds.get("Bevan", 0))\nprint(beds.get("Barry", 0))\n'),
+        trap=('beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\n'
+              'print(beds["Bevan"])\nprint(beds["Barry"])\n'),
+        note="Square brackets on a missing key raise KeyError and stop the"
+             " program. get(key, default) returns the default instead, and"
+             " the default is None when you give none. Use brackets when a"
+             " missing key would be a bug; get() when it is an ordinary"
+             " outcome.",
+    ),
+    dict(
+        id=3, ledger="P058", concept="PY3 dict assign", tier="1 - Dictionaries",
+        title="dict[key] = value: adding an entry", kind="program",
+        prompt=(
+            "Start with the dictionary 'Fleming' 16, 'Barry' 30. Add"
+            " 'Jenner' with 18 by assigning to a new key, then print the"
+            " dictionary:\n\n"
+            "  {'Fleming': 16, 'Barry': 30, 'Jenner': 18}\n\n"
+            "Print: the dictionary, as print() shows one."
+        ),
+        solution='beds = {"Fleming": 16, "Barry": 30}\nbeds["Jenner"] = 18\nprint(beds)\n',
+        trap='beds = {"Fleming": 16, "Barry": 30}\nbeds.append("Jenner", 18)\nprint(beds)\n',
+        note="A dictionary has no append(): assigning to a key that does"
+             " not exist creates it, and assigning to one that does"
+             " replaces its value. New keys go on the end, and a dict"
+             " remembers insertion order, which is why the printed order"
+             " is the order you added them.",
+    ),
+    dict(
+        id=4, ledger="P059", concept="PY3 dict keys", tier="1 - Dictionaries",
+        title="keys(): the keys as a list", kind="program",
+        prompt=(
+            "With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18,"
+            " use the keys() method inside list() to print the ward names"
+            " as a list:\n\n"
+            "  ['Fleming', 'Barry', 'Jenner']\n\n"
+            "Print: the list."
+        ),
+        solution='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(list(beds.keys()))\n',
+        trap='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(beds.keys())\n',
+        note="keys() returns a view, and a view prints as"
+             " dict_keys(['Fleming', ...]) rather than as a list. list()"
+             " turns it into one. A view is fine to loop over directly --"
+             " for ward in beds.keys(), or just for ward in beds, which"
+             " means the same.",
+    ),
+    dict(
+        id=5, ledger="P060", concept="PY3 dict values", tier="1 - Dictionaries",
+        title="values(): adding them up", kind="program",
+        prompt=(
+            "With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18,"
+            " use sum() over the values() method to print the total"
+            " beds:\n\n"
+            "  64\n\n"
+            "Print: the number."
+        ),
+        solution='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(sum(beds.values()))\n',
+        trap='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(sum(beds))\n',
+        note="Looping over a dictionary -- and sum() loops -- gives its"
+             " KEYS. sum(beds) tries to add up the ward names, and adding"
+             " a string to a number is a TypeError. values() is the view"
+             " of the numbers; sum(), max() and min() all take it.",
+    ),
+    dict(
+        id=6, ledger="P061", concept="PY3 dict items", tier="1 - Dictionaries",
+        title="items(): key and value together", kind="program",
+        prompt=(
+            "With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18,"
+            " loop over the items() method to print one line per ward:\n\n"
+            "  Fleming: 16\n"
+            "  Barry: 30\n"
+            "  Jenner: 18\n\n"
+            "Print: the three lines."
+        ),
+        solution=('beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\n'
+                  'for ward, n in beds.items():\n'
+                  '    print(f"{ward}: {n}")\n'),
+        trap=('beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\n'
+              'for ward, n in beds:\n'
+              '    print(f"{ward}: {n}")\n'),
+        note="items() yields (key, value) pairs, which the for loop"
+             " unpacks into two names. Looping over the dictionary itself"
+             " yields keys only, so unpacking 'Fleming' into two names"
+             " fails -- a string of seven characters into two variables"
+             " is a ValueError. If you only need the keys, drop the"
+             " second name and the items().",
+    ),
+    dict(
+        id=7, ledger="P062", concept="PY3 len dict", tier="1 - Dictionaries",
+        title="len(): how many entries", kind="program",
+        prompt=(
+            "With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18,"
+            " use len() to print how many wards it holds:\n\n"
+            "  3\n\n"
+            "Print: the number."
+        ),
+        solution='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(len(beds))\n',
+        trap='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(len(beds.items))\n',
+        note="len() on a dictionary counts its entries. beds.items without"
+             " parentheses is the method itself, not the pairs, and a"
+             " method has no length -- a TypeError. len(beds.items()) would"
+             " work but says nothing len(beds) does not.",
+    ),
+    # ==================================================== 2 Tuples and slices
+    dict(
+        id=8, ledger="P063", concept="PY3 tuple", tier="2 - Tuples and slices",
+        title="tuple: a pair that cannot change", kind="program",
+        prompt=(
+            "Put the blood pressure reading 120 over 80 in a tuple called"
+            " bp. Unpack it into two names, systolic and diastolic, and"
+            " print them as:\n\n"
+            "  120/80\n\n"
+            "Print: that one line."
+        ),
+        solution='bp = (120, 80)\nsystolic, diastolic = bp\nprint(f"{systolic}/{diastolic}")\n',
+        trap='bp = (120, 80)\nsystolic, diastolic = bp\nprint(systolic / diastolic)\n',
+        note="A tuple is a fixed sequence written with round brackets, and"
+             " unpacking assigns its items to names in one line. The slash"
+             " in the output is a character, not a division: f\"{a}/{b}\""
+             " prints 120/80, while a / b computes 1.5. Tuples cannot be"
+             " changed after they are made, which is what makes them safe"
+             " to pass around.",
+    ),
+    dict(
+        id=9, ledger="P064", concept="PY1 slicing", tier="2 - Tuples and slices",
+        title="[start:stop]: a piece of a string", kind="program",
+        prompt=(
+            "Put the procedure code 'SRG-04' in a variable. Use slicing to"
+            " print the first three characters, then the last two:\n\n"
+            "  SRG\n"
+            "  04\n\n"
+            "Print: the two lines."
+        ),
+        solution='code = "SRG-04"\nprint(code[:3])\nprint(code[-2:])\n',
+        trap='code = "SRG-04"\nprint(code[0:2])\nprint(code[-2:])\n',
+        note="A slice [start:stop] runs from start up to but NOT including"
+             " stop, so the first three characters are [0:3] or [:3];"
+             " [0:2] is two. A negative index counts from the end, so"
+             " [-2:] is the last two. Strings, lists and tuples all slice"
+             " the same way.",
+    ),
+    dict(
+        id=10, ledger="P065", concept="PY1 string multiply", tier="2 - Tuples and slices",
+        title="'-' * n: repeating a string", kind="program",
+        prompt=(
+            "Print a line of 20 hyphens, then the word Ward, then another"
+            " line of 20 hyphens, using multiplication to make the"
+            " lines:\n\n"
+            "  --------------------\n"
+            "  Ward\n"
+            "  --------------------\n\n"
+            "Print: the three lines."
+        ),
+        solution='print("-" * 20)\nprint("Ward")\nprint("-" * 20)\n',
+        trap='print("-" + 20)\nprint("Ward")\nprint("-" + 20)\n',
+        note="A string times an integer repeats it; a string plus an"
+             " integer is a TypeError. The same trick makes a list of"
+             " repeated items, [0] * 5. Useful for rulers, padding and"
+             " simple bars.",
+    ),
+    # ==================================================== 3 String tests
+    dict(
+        id=11, ledger="P066", concept="PY1 endswith", tier="3 - String tests",
+        title="endswith(): the end of a string", kind="program",
+        prompt=(
+            "Two file names: 'report.pdf' and 'pdf_notes.txt'. Use the"
+            " endswith() method to print whether each ends with"
+            " '.pdf':\n\n"
             "  True\n"
             "  False\n\n"
             "Print: the two lines."
         ),
-        solution='code = "SRG-04"\nprint(code.startswith("SRG"))\nprint(code.startswith("DIA"))\n',
-        trap='code = "SRG-04"\nprint(code == "SRG")\nprint(code == "DIA")\n',
-        note="== asks whether the whole string is 'SRG', and 'SRG-04' is"
-             " not, so both lines come out False. startswith() asks about"
-             " the beginning only, and returns a boolean you can print or"
-             " put straight into an if. endswith() is its mirror.",
+        solution='print("report.pdf".endswith(".pdf"))\nprint("pdf_notes.txt".endswith(".pdf"))\n',
+        trap='print("pdf" in "report.pdf")\nprint("pdf" in "pdf_notes.txt")\n',
+        note="in asks whether the text appears ANYWHERE, so 'pdf' is in"
+             " 'pdf_notes.txt' too. endswith() asks about the tail only,"
+             " and startswith() about the head. Include the dot in the"
+             " test, or 'mypdf' would pass.",
     ),
     dict(
-        id=3, ledger="P043", concept="PY1 find", tier="1 - More strings",
-        title="find(): where a character is", kind="program",
+        id=12, ledger="P067", concept="PY1 isdigit", tier="3 - String tests",
+        title="isdigit(): is it all digits", kind="program",
         prompt=(
-            "Put 'SRG-04' in a variable. Use the find() method to print the"
-            " position of the hyphen, then the result of looking for a"
-            " letter that is not there, 'X':\n\n"
-            "  3\n"
-            "  -1\n\n"
-            "Positions count from 0.\n\n"
-            "Print: the two lines."
-        ),
-        solution='code = "SRG-04"\nprint(code.find("-"))\nprint(code.find("X"))\n',
-        trap='code = "SRG-04"\nprint(code.index("-"))\nprint(code.index("X"))\n',
-        note="find() and index() both give the position of the first"
-             " match, counting from 0. They differ on a miss: find()"
-             " returns -1, index() raises ValueError and stops the program."
-             " Use find() when a miss is an ordinary outcome, index() when"
-             " it would be a bug.",
-    ),
-    # ================================================================ 2 Lists
-    dict(
-        id=4, ledger="P044", concept="PY2 in", tier="2 - Lists",
-        title="in: is it in the list", kind="program",
-        prompt=(
-            "Put the list ['Morphine', 'Codeine', 'Diazepam'] in a variable."
-            " Use the in test to print whether 'Codeine' is in it, then"
-            " whether 'Aspirin' is:\n\n"
+            "Two strings read from a form: '0420' and '42a'. Use the"
+            " isdigit() method to print whether each is made of digits"
+            " only:\n\n"
             "  True\n"
             "  False\n\n"
             "Print: the two lines."
         ),
-        solution=('drugs = ["Morphine", "Codeine", "Diazepam"]\n'
-                  'print("Codeine" in drugs)\nprint("Aspirin" in drugs)\n'),
-        trap=('drugs = ["Morphine", "Codeine", "Diazepam"]\n'
-              'print("codeine" in drugs)\nprint("Aspirin" in drugs)\n'),
-        note="in is an operator, not a method: value in list. It compares"
-             " with ==, so the case has to match -- 'codeine' is not in a"
-             " list that holds 'Codeine'. The same in works on strings"
-             " ('od' in 'Codeine'), tuples, sets and dictionary keys.",
+        solution='print("0420".isdigit())\nprint("42a".isdigit())\n',
+        trap='print(type("0420") == int)\nprint(type("42a") == int)\n',
+        note="Text read from a form or input() is always a str, so asking"
+             " its type says nothing about what it contains. isdigit()"
+             " looks at the characters. It is false for '-5' and '3.5',"
+             " so it is a check for whole non-negative numbers; for"
+             " anything else, try int() and catch the ValueError.",
     ),
     dict(
-        id=5, ledger="P045", concept="PY2 index", tier="2 - Lists",
-        title="index(): where in the list", kind="program",
+        id=13, ledger="P068", concept="PY2 if/else", tier="3 - String tests",
+        title="if/else: one of two lines", kind="program",
         prompt=(
-            "Put ['Morphine', 'Codeine', 'Diazepam'] in a variable and use"
-            " the index() method to print the position of 'Codeine':\n\n"
-            "  1\n\n"
-            "Print: the number."
+            "Put 'Codeine' in a variable and the list ['Morphine',"
+            " 'Codeine', 'Fentanyl'] in another. Use if/else with the in"
+            " test to print 'controlled' when the drug is in the list and"
+            " 'not controlled' otherwise:\n\n"
+            "  controlled\n\n"
+            "Print: the one line that applies."
         ),
-        solution='drugs = ["Morphine", "Codeine", "Diazepam"]\nprint(drugs.index("Codeine"))\n',
-        trap='drugs = ["Morphine", "Codeine", "Diazepam"]\nprint(drugs.find("Codeine"))\n',
-        note="Lists have index() but not find(): drugs.find(...) is an"
-             " AttributeError. Positions count from 0, so the second item"
-             " is at 1. index() raises ValueError when the value is not"
-             " there; test with in first if that is possible.",
+        solution=('drug = "Codeine"\ncontrolled = ["Morphine", "Codeine", "Fentanyl"]\n'
+                  'if drug in controlled:\n    print("controlled")\n'
+                  'else:\n    print("not controlled")\n'),
+        trap=('drug = "Codeine"\ncontrolled = ["Morphine", "Codeine", "Fentanyl"]\n'
+              'if drug in controlled:\n    print("controlled")\n'
+              'print("not controlled")\n'),
+        note="Without the else, the second print is not part of the"
+             " choice: it sits after the if at the left margin and runs"
+             " every time, so both lines appear. else: introduces the"
+             " block that runs only when the condition was false, and the"
+             " two blocks are exclusive.",
     ),
+    # ================================================== 4 Two lists at once
     dict(
-        id=6, ledger="P046", concept="PY2 pop", tier="2 - Lists",
-        title="pop(): take the last one off", kind="program",
+        id=14, ledger="P069", concept="PY2 zip", tier="4 - Two lists at once",
+        title="zip(): walking two lists together", kind="program",
         prompt=(
-            "Put [72, 118, 65] in a variable. Use the pop() method to remove"
-            " the LAST item, print the item that was removed, then print"
-            " the list:\n\n"
-            "  65\n"
-            "  [72, 118]\n\n"
-            "Print: the two lines."
-        ),
-        solution='rates = [72, 118, 65]\nlast = rates.pop()\nprint(last)\nprint(rates)\n',
-        trap='rates = [72, 118, 65]\nfirst = rates.pop(0)\nprint(first)\nprint(rates)\n',
-        note="pop() with no argument removes and RETURNS the last item --"
-             " the one method that both changes the list and hands"
-             " something back. pop(0) removes the first instead; any index"
-             " works. append() and pop() together make a list behave as a"
-             " stack.",
-    ),
-    dict(
-        id=7, ledger="P047", concept="PY2 insert", tier="2 - Lists",
-        title="insert(): put it at a position", kind="program",
-        prompt=(
-            "Put ['Barry', 'Cavell'] in a variable. Use the insert() method"
-            " to put 'Bevan' at position 1 -- between the two -- then print"
-            " the list:\n\n"
-            "  ['Barry', 'Bevan', 'Cavell']\n\n"
-            "Print: the list."
-        ),
-        solution='wards = ["Barry", "Cavell"]\nwards.insert(1, "Bevan")\nprint(wards)\n',
-        trap='wards = ["Barry", "Cavell"]\nwards.append("Bevan")\nprint(wards)\n',
-        note="insert(position, value) puts the value at that index and"
-             " shifts the rest along; append() only ever adds at the end."
-             " Like append(), insert() changes the list in place and"
-             " returns None, so do not assign its result.",
-    ),
-    dict(
-        id=8, ledger="P048", concept="PY2 remove", tier="2 - Lists",
-        title="remove(): take out by value", kind="program",
-        prompt=(
-            "Put ['Barry', 'Bevan', 'Cavell'] in a variable. Use the"
-            " remove() method to take out 'Bevan' -- by its value, not its"
-            " position -- then print the list:\n\n"
-            "  ['Barry', 'Cavell']\n\n"
-            "Print: the list."
-        ),
-        solution='wards = ["Barry", "Bevan", "Cavell"]\nwards.remove("Bevan")\nprint(wards)\n',
-        trap='wards = ["Barry", "Bevan", "Cavell"]\nwards.remove(1)\nprint(wards)\n',
-        note="remove() takes the VALUE to remove and deletes the first"
-             " match; remove(1) looks for the number 1, finds none, and"
-             " raises ValueError. To remove by position use pop(1) or"
-             " del wards[1]. remove() returns None, like the other"
-             " in-place methods.",
-    ),
-    dict(
-        id=9, ledger="P049", concept="PY2 sorted reverse", tier="2 - Lists",
-        title="sorted(reverse=True): largest first", kind="program",
-        prompt=(
-            "Put [72, 118, 65, 90] in a variable and use sorted() with its"
-            " reverse= option to print the list from largest to"
-            " smallest:\n\n"
-            "  [118, 90, 72, 65]\n\n"
-            "Print: the sorted list."
-        ),
-        solution="rates = [72, 118, 65, 90]\nprint(sorted(rates, reverse=True))\n",
-        trap="rates = [72, 118, 65, 90]\nprint(sorted(rates, reverse=true))\n",
-        note="Python's booleans are True and False with a capital letter;"
-             " true on its own is an undefined name and a NameError."
-             " reverse=True is a keyword argument, written with its name,"
-             " and the same option works on list.sort().",
-    ),
-    dict(
-        id=10, ledger="P050", concept="PY2 len list", tier="2 - Lists",
-        title="len(): how many in the list", kind="program",
-        prompt=(
-            "Put ['Barry', 'Bevan', 'Cavell', 'Fleming'] in a variable and"
-            " use len() to print how many wards the list holds:\n\n"
-            "  4\n\n"
-            "Print: the number."
-        ),
-        solution='wards = ["Barry", "Bevan", "Cavell", "Fleming"]\nprint(len(wards))\n',
-        trap='wards = ["Barry", "Bevan", "Cavell", "Fleming"]\nprint(wards.count())\n',
-        note="len() is the one way to ask how many items a list holds, and"
-             " it works on strings, tuples and dictionaries too. count()"
-             " exists on lists but answers a different question -- how many"
-             " times one particular value appears -- and needs that value"
-             " as its argument, so calling it empty is a TypeError.",
-    ),
-    # ==================================================== 3 Numbers and types
-    dict(
-        id=11, ledger="P051", concept="PY1 format spec", tier="3 - Numbers and types",
-        title="f'{x:.2f}': two decimal places", kind="program",
-        prompt=(
-            "A dose costs 180 pence. Put that in a variable, divide by 100"
-            " to get pounds, and use an f-string with the format spec .2f"
-            " to print it with two decimal places and a pound sign:\n\n"
-            "  £1.80\n\n"
-            "Print: that one line."
-        ),
-        solution='pence = 180\nprint(f"£{pence / 100:.2f}")\n',
-        trap='pence = 180\nprint(f"£{round(pence / 100, 2)}")\n',
-        note="round(1.8, 2) is still 1.8 -- rounding does not add trailing"
-             " zeros, because a number has no notion of how many digits to"
-             " show. Formatting does: :.2f always writes two decimals. The"
-             " spec goes after a colon inside the braces, and other specs"
-             " exist, such as :, for thousands separators and :>8 to pad.",
-    ),
-    dict(
-        id=12, ledger="P052", concept="PY1 divmod", tier="3 - Numbers and types",
-        title="divmod(): quotient and remainder at once", kind="program",
-        prompt=(
-            "A shift lasted 155 minutes. Use divmod() to get the whole"
-            " hours and the minutes left over in ONE call, unpack the pair"
-            " into two variables, and print:\n\n"
-            "  2 h 35 min\n\n"
-            "Print: that one line."
-        ),
-        solution='hours, mins = divmod(155, 60)\nprint(hours, "h", mins, "min")\n',
-        trap='result = divmod(155, 60)\nprint(result, "h", "min")\n',
-        note="divmod(a, b) returns a tuple (a // b, a %% b), and a tuple"
-             " can be unpacked into two names on the left of the ="
-             " sign. Printing the tuple itself shows '(2, 35) h min'."
-             " Unpacking is how a function hands back more than one"
-             " value.",
-    ),
-    dict(
-        id=13, ledger="P053", concept="PY1 type", tier="3 - Numbers and types",
-        title="type(): what kind of value", kind="program",
-        prompt=(
-            "Use type() to print the type of 3, of 3.0 and of '3', one per"
-            " line, exactly as Python shows them:\n\n"
-            "  <class 'int'>\n"
-            "  <class 'float'>\n"
-            "  <class 'str'>\n\n"
+            "Two lists in step: wards ['Fleming', 'Barry', 'Jenner'] and"
+            " beds [16, 30, 18]. Use zip() in a for loop to print each"
+            " ward with its beds:\n\n"
+            "  Fleming 16\n"
+            "  Barry 30\n"
+            "  Jenner 18\n\n"
             "Print: the three lines."
         ),
-        solution="print(type(3))\nprint(type(3.0))\nprint(type('3'))\n",
-        trap="print(type(3))\nprint(type(3.0))\nprint(type(int('3')))\n",
-        note="Three values that look alike are three types: an integer, a"
-             " float, and a string of one character. int('3') converts the"
-             " string, so its type is int again -- the trap prints the type"
-             " of the converted value, not of the string. type() is a"
-             " debugging tool; in code, isinstance(x, int) is the test.",
-    ),
-    # ================================================================ 4 Loops
-    dict(
-        id=14, ledger="P054", concept="PY2 enumerate", tier="4 - Loops",
-        title="enumerate(): numbering as you loop", kind="program",
-        prompt=(
-            "Put ['Fleming', 'Jenner', 'Lister'] in a variable and use a"
-            " for loop with enumerate() to print each ward with its number,"
-            " counting from 1:\n\n"
-            "  1. Fleming\n"
-            "  2. Jenner\n"
-            "  3. Lister\n\n"
-            "enumerate() takes a second argument for where to start.\n\n"
-            "Print: the three lines."
-        ),
-        solution=('wards = ["Fleming", "Jenner", "Lister"]\n'
-                  'for n, ward in enumerate(wards, 1):\n'
-                  '    print(f"{n}. {ward}")\n'),
-        trap=('wards = ["Fleming", "Jenner", "Lister"]\n'
-              'for n, ward in enumerate(wards):\n'
-              '    print(f"{n}. {ward}")\n'),
-        note="enumerate() yields (number, item) pairs, and the for loop"
-             " unpacks each pair into two names. It counts from 0 unless"
-             " told otherwise; enumerate(wards, 1) starts at 1. It replaces"
-             " the older habit of range(len(wards)) with an index lookup.",
+        solution=('wards = ["Fleming", "Barry", "Jenner"]\nbeds = [16, 30, 18]\n'
+                  'for ward, n in zip(wards, beds):\n    print(ward, n)\n'),
+        trap=('wards = ["Fleming", "Barry", "Jenner"]\nbeds = [16, 30, 18]\n'
+              'for ward in wards:\n    for n in beds:\n        print(ward, n)\n'),
+        note="zip() pairs the first items, then the second, then the third,"
+             " and stops at the shorter list. Two nested loops pair EVERY"
+             " ward with EVERY bed count -- nine lines. When two lists"
+             " line up position by position, zip() is the loop; dict"
+             "(zip(wards, beds)) turns the pairs into a dictionary.",
     ),
     dict(
-        id=15, ledger="P055", concept="PY2 while", tier="4 - Loops",
-        title="while: repeat until a condition fails", kind="program",
+        id=15, ledger="P070", concept="PY3 max key", tier="4 - Two lists at once",
+        title="max(key=): the biggest by a rule", kind="program",
         prompt=(
-            "Start a variable at 3 and use a while loop to count down,"
-            " printing the number each time, until it reaches 0; then"
-            " print Go:\n\n"
-            "  3\n"
-            "  2\n"
-            "  1\n"
-            "  Go\n\n"
-            "Something inside the loop has to change the variable, or the"
-            " loop never ends.\n\n"
-            "Print: the four lines."
+            "With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18,"
+            " use max() with key=beds.get to print the name of the ward"
+            " with the most beds:\n\n"
+            "  Barry\n\n"
+            "Print: the name."
         ),
-        solution='n = 3\nwhile n > 0:\n    print(n)\n    n = n - 1\nprint("Go")\n',
-        trap='n = 3\nwhile n > 0:\n    print(n)\nprint("Go")\n',
-        note="A while loop tests its condition before every pass. Nothing"
-             " in the trap changes n, so the condition stays true and the"
-             " loop prints 3 forever -- the runner stops it at the time"
-             " limit. Every while needs a line in its body that moves it"
-             " towards the exit; n -= 1 is the short form.",
+        solution='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(max(beds, key=beds.get))\n',
+        trap='beds = {"Fleming": 16, "Barry": 30, "Jenner": 18}\nprint(max(beds))\n',
+        note="max(beds) compares the KEYS, and 'Jenner' is the largest"
+             " string alphabetically. key= names a function that turns"
+             " each item into the thing to compare -- beds.get maps a"
+             " ward to its beds -- and max() returns the original item,"
+             " the ward name, not the number. min() and sorted() take"
+             " the same key= argument.",
     ),
 ]
 
