@@ -1,10 +1,10 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the district hospital -- the
-same data as the previous sets, with none of their questions, and back at
-the level of the sets before the easy one -- and **fifteen Python**, each a
-short program about ONE tool, named in the question's title, this time on
-dictionaries, tuples, slices and string tests.
+same data as the previous sets, with none of their questions, at the level
+of the last set -- and **fifteen Python**, a small step up: each asks for a
+tiny FUNCTION that returns a value, graded on the return, still built
+around one tool named in the question's title.
 
 | Stage | SQL questions |
 |---|---|
@@ -18,10 +18,10 @@ dictionaries, tuples, slices and string tests.
 
 | Stage | Python questions |
 |---|---|
-| 1 - Dictionaries | 1-7 |
-| 2 - Tuples and slices | 8-10 |
-| 3 - String tests | 11-13 |
-| 4 - Two lists at once | 14-15 |
+| 1 - Numbers | 1-3 |
+| 2 - Strings | 4-8 |
+| 3 - Lists | 9-13 |
+| 4 - Dictionaries | 14-15 |
 
 ## The schema
 
@@ -60,44 +60,45 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** All three writable questions run statements of their
-own *after* yours -- a rename your foreign key should follow, inserts your
-CHECK should sort, and an UPDATE your trigger should redirect. A refusal is
-reported in the status bar as what it is, not as an error.
+**Driver statements.** Question 15 runs one statement of its own *after*
+yours -- the discharge your trigger should act on. Questions 13 and 14 are
+graded on what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 13 | `ON UPDATE CASCADE`: a parent key renamed and the children following |
-| 14 | `CHECK (json_valid(payload))`: a constraint that calls a function |
-| 15 | `INSTEAD OF UPDATE` on a view, with OLD to say which row |
+| 13 | `PRAGMA foreign_keys = OFF` for a load, `ON` again, and `pragma_foreign_key_check` to find what slipped in |
+| 14 | `ALTER TABLE ADD COLUMN` and an `UPDATE` with a correlated `json_group_array(... ORDER BY ...)` |
+| 15 | `AFTER UPDATE OF column ... WHEN`, with a body that updates a second table |
 
 ## Things the data does on purpose
 
-- **9 surnames are shared by three or more staff**, Papadopoulos by
-  eight, which is question 3's answer.
-- **Consecutive stays are never on the same ward**, so 'back where they
-  started' can only mean stay 3 -- 34 admissions did it.
-- **The longest completed stay is 27 days**, so question 5's trap of
-  'over 30 days' finds nothing at all.
-- **296 pairs of same-drug prescriptions overlap**, on all forty drugs,
-  the population of question 8.
-- **Every one of the 30 days of June 2026 has an admission**, so
-  question 11's moving average needs no calendar.
-- **Patient 3 lives in LS7** until question 15's driver moves them to LS99;
-  a trigger body without a WHERE moves all 2,000.
+- **26 staff prescribe**, and one of them sits at 19.96 per cent
+  controlled -- which rounds to 20.0 and is not 20, so question 2 says
+  'before rounding'.
+- **315 admissions had exactly three stays**, the population of question
+  4, and the first stay is the longest of the three more often than not.
+- **487 procedures have no recorded duration**, so question 7 has to
+  leave them out before computing an end.
+- **39 patients have spent more than 40 days in hospital in all**, five
+  of them with an admission still open -- the five question 8's trap loses.
+- **353 admissions had neither a procedure nor a prescription**; with
+  OR instead of AND the count is six times that.
+- **Admission 173 is still open and moved ward on 2026-06-28**, so question
+  15's trigger has one open stay to close and one closed stay to leave
+  alone.
 
 ## How the Python questions are graded
 
-Every question in this set is a **program**: the editor holds a whole
-program, Run shows what it prints, and Check compares that with the reference
-program's output line for line -- trailing spaces and blank lines at the end
-are ignored, nothing else is. Each question is about one function, method or
-keyword, named in its title, and the prompt says what to print so that you
-can tell at once whether you have it. Several traps in this set raise an
-error rather than print the wrong thing; the output pane shows the traceback,
-and the last line of it names the mistake. (The grader also supports
-**function** questions, where the value returned is compared instead; none in
-this set.)
+Every question in this set is a **function**: the editor defines a function
+with the name the question gives, Run calls it once for each test input and
+shows every call and its result in the output pane, and Check compares each
+result with the reference function's. Values are compared, not their printed
+form, so a dictionary in a different order is the same dictionary -- but the
+type counts: a tuple is not a list, a set is not a list, and 0 is not False.
+A function that prints its answer instead of returning it returns None, and
+None matches nothing. Each question is still about one tool, named in its
+title. (The grader also supports **program** questions, graded on what they
+print; none in this set.)
 
 Your code runs in a separate interpreter with a five-second limit, so a loop
 that never ends is stopped and reported, not fatal. It cannot see the
@@ -108,370 +109,361 @@ indentation of the line above.
 
 ## 1 - Warm-up (2)
 
-An average of products, which is not a product of averages, and a share that
-needs the whole group in HAVING.
+A pivot by two conditional SUMs with a real division, and two aggregate
+conditions in one HAVING with the flag summed rather than filtered.
 
-1. **Milligrams a day, by form** (Q787)
+1. **Days and nights, side by side** (Q802)
 
-   For each form of drug: how many prescriptions, the average DAILY dose in mg
-   to one decimal -- dose_mg times times_per_day, averaged over prescriptions
-   -- and the largest daily dose.
+   One row per ward: how many day shifts and how many night shifts have been
+   worked there, as two columns, and the percentage of shifts that were nights
+   to one decimal.
 
-   *Return: form, prescriptions, avg_daily_mg, max_daily_mg*
+   *Return: ward_id, day_shifts, night_shifts, pct_night*
 
-2. **Mostly emergencies** (Q788)
+2. **Heavy on the controlled drugs** (Q803)
 
-   Consultants for whom at least 55 per cent of admissions came in as
-   emergencies: consultant_id, admissions, emergencies, and the percentage to
-   one decimal.
+   Prescribers who have written at least 460 prescriptions, of which at least
+   20 per cent were for controlled drugs -- tested on the exact share, before
+   rounding: staff_id, prescriptions, controlled, and the percentage to one
+   decimal. `controlled` is on drugs.
 
-   *Return: consultant_id, admissions, emergencies, pct*
+   *Return: staff_id, prescriptions, controlled, pct*
 
 ## 2 - Strings and sequences (2)
 
-Surnames cut one past the space, and the first and third stays of an admission
-joined with both sequence numbers pinned.
+printf() to pad a number, and top-1 per admission followed by a count of which
+position won.
 
-3. **Surnames on the payroll** (Q789)
+3. **Reference numbers, zero-padded** (Q804)
 
-   Surnames shared by THREE or more staff, with how many, and their staff_ids
-   as one comma-separated string in id order. The surname is everything after
-   the single space in the name.
+   Patients 1 to 5 with a reference of the form 'P00001' -- the letter P and
+   the id padded with zeros to five digits. printf('%05d', n) pads a number.
 
-   *Return: surname, people, staff_ids*
+   *Return: patient_id, reference*
 
-4. **Back where they started** (Q790)
+4. **Which of three stays was the longest** (Q805)
 
-   Admissions that moved ward twice and ended up back on the ward they were
-   admitted to -- stay 3 on the same ward as stay 1 -- counted per ward. Two
-   rows of ward_stays for one admission, joined.
+   For admissions that had exactly three ward stays: how often the LONGEST of
+   the three was stay 1, stay 2 and stay 3. Three rows. An open stay runs to
+   2026-06-30 23:59; find each admission's longest stay first, then count by
+   its stay_seq.
 
-   *Return: ward_id, returned*
+   *Return: stay_seq, admissions*
 
 ## 3 - Dates and times (2)
 
-A month boundary crossed, tested by comparing 'YYYY-MM' strings, and the
-difference between %W and %U.
+date() modifiers applied left to right for the end of a month, and %H cast to an
+integer.
 
-5. **Crossing the month end** (Q791)
+5. **First and last day of the month** (Q806)
 
-   For each month of admission, 'YYYY-MM': how many completed admissions began
-   in it, how many of them were discharged in a LATER month than they were
-   admitted, and the percentage to one decimal. Compare months, not lengths of
-   stay.
+   For admissions 1 to 5: the first and the last day of the month they were
+   admitted in, as dates. date() takes modifiers: 'start of month', '+1
+   month', '-1 day'.
 
-   *Return: month, admissions, crossed, pct*
+   *Return: admission_id, month_start, month_end*
 
-6. **Weeks that start on Monday** (Q792)
+6. **Readings round the clock** (Q807)
 
-   Admissions per week of 2026, for weeks 1 to 10, with the week as an
-   integer. A week starts on MONDAY, and week 1 is the first week with a
-   Monday in it -- which is what strftime('%W') numbers. Its sibling '%U'
-   starts weeks on Sunday.
+   Observations by the hour of day they were taken, 0 to 23 as an integer: how
+   many, and the average heart rate to one decimal. strftime('%H') gives the
+   hour, as text.
 
-   *Return: week, admissions*
+   *Return: hour, readings, avg_hr*
 
 ## 4 - Intervals and occupancy (2)
 
-A per-ward peak from a running sum over every event, and two prescriptions of
-one drug whose date ranges overlap.
+An interval whose end is computed with datetime() and a modifier built from a
+column, and a sum of intervals with open ends tested in HAVING.
 
-7. **Each ward's peak in June** (Q793)
+7. **Two on the table at once** (Q808)
 
-   The most patients each ward held at any one instant during June 2026. Turn
-   every ward stay into a +1 event at from_at and a -1 at to_at, run a total
-   per ward in time order over ALL events, and take the highest value reached
-   at an event inside June. At the same instant, count the departure before
-   the arrival.
+   For each theatre, how many PAIRS of procedures overlapped in time -- a
+   procedure runs from performed_at for duration_minutes, and
+   datetime(performed_at, '+' || duration_minutes || ' minutes') is when it
+   ended. Only procedures with a recorded duration; each pair once.
 
-   *Return: ward_id, peak*
+   *Return: theatre, overlapping_pairs*
 
-8. **Twice at once** (Q794)
+8. **Forty days in hospital** (Q809)
 
-   For each drug, how many admissions had two prescriptions of it RUNNING AT
-   THE SAME TIME -- two rows of prescriptions for the same admission and drug
-   whose date ranges overlap. Count each admission once. An open prescription
-   runs to 2026-06-30.
+   Patients who have spent more than 40 days in hospital altogether, adding up
+   every admission as of 2026-06-30 23:59 -- an open admission counts up to
+   then. With their number of admissions and the total to one decimal.
 
-   *Return: drug, admissions*
+   *Return: patient_id, admissions, total_days*
 
 ## 5 - Joins and grain (2)
 
-A correlated subquery for the ward's own average, and three one-to-many children
-counted without multiplying each other.
+A pair of columns from two tables as the grain, and two NOT EXISTS joined by the
+right connective.
 
-9. **Longer than the ward's usual** (Q795)
+9. **Consultant and surgeon, a regular pair** (Q810)
 
-   For completed admissions that began in June 2026, per admitting ward: how
-   many there were, and how many lasted longer than THAT WARD's average
-   completed length of stay over all time. The comparison is against the
-   ward's own average, so it is a correlated subquery.
+   Pairs of consultant and surgeon who have worked on the same admissions at
+   least 25 times -- the consultant is on the admission, the surgeon on the
+   procedure -- with the number of procedures and of distinct admissions.
 
-   *Return: ward_id, admissions, above_average*
+   *Return: consultant_id, surgeon_id, procedures, admissions*
 
-10. **Three children of one admission** (Q796)
+10. **Neither cut nor dosed** (Q811)
 
-    For admissions 1 to 10: how many ward stays, procedures and prescriptions
-    each has. Three tables hang off admissions, and joining all three at once
-    multiplies each count by the other two.
+    For each admitting ward, how many admissions had NO procedure AND NO
+    prescription -- nothing done at all. Two NOT EXISTS, and mind the
+    connective.
 
-    *Return: admission_id, stays, procedures, prescriptions*
+    *Return: ward_id, admissions*
 
 ## 6 - Window functions (2)
 
-A ROWS frame for a moving average, and rn = 2 for second place per group.
+DENSE_RANK beside FIRST_VALUE for a gap to the leader, and a running SUM over a
+total SUM for a cumulative share.
 
-11. **A week's worth, smoothed** (Q797)
+11. **Behind the leader** (Q812)
 
-    For each day of June 2026: the admissions that day, and the seven-day
-    moving average -- that day and the six before it, to two decimals. Days
-    early in the month average over what there is. Every day of June has
-    admissions, so a calendar is not needed.
+    Wards by admissions in June 2026: each ward's count, its DENSE_RANK with 1
+    for the most, and how many admissions behind the leading ward it is -- 0
+    for the leader. FIRST_VALUE over the same ordering gives the leader's
+    count on every row.
 
-    *Return: day, admissions, avg7*
+    *Return: ward_id, admissions, rank, behind*
 
-12. **Second-longest stay on each ward** (Q798)
+12. **Running share of admissions** (Q813)
 
-    For each admitting ward, the SECOND-longest completed admission: its id
-    and its length in days to two decimals. Ties by the lower admission_id.
+    Wards ordered from most admissions to fewest, each with its count and the
+    CUMULATIVE share of all admissions up to and including it, to one decimal
+    -- the last row reaches 100. Ties by the lower ward_id. Two window SUMs:
+    one ordered, one not.
 
-    *Return: ward_id, admission_id, days*
+    *Return: ward_id, admissions, cumulative_pct*
 
 ## 7 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. ON UPDATE CASCADE, a CHECK that calls
-json_valid(), and INSTEAD OF UPDATE on a view.
+question's probe query reads the result. A load with foreign keys off and a
+check afterwards, a JSON column built by UPDATE, and a trigger that keeps two
+tables consistent.
 
-13. **Rename the key and the children follow** (Q799)
+13. **Load first, check afterwards** (Q814)
 
-    Create `ward_codes (code TEXT PRIMARY KEY, ward_id INTEGER NOT NULL
-    referencing wards)` and `ward_sections (section_id INTEGER PRIMARY KEY,
-    code TEXT NOT NULL referencing ward_codes, label TEXT NOT NULL)`, such
-    that changing a code in ward_codes changes it in every section that uses
-    it. Insert codes 'NIG' for ward 1 and 'SEA' for ward 2, and sections 'bay
-    A' and 'bay B' under NIG and 'bay A' under SEA. After your script, the
-    question renames NIG to 'NGT'.
+    Create `referrals (referral_id INTEGER PRIMARY KEY, patient_id INTEGER NOT
+    NULL referencing patients, referred_on TEXT NOT NULL)`. Then, with foreign
+    keys switched OFF by PRAGMA, insert referrals for patients 1, 2 and 9999
+    -- the last does not exist -- switch them back ON, and use PRAGMA
+    foreign_key_check (or the pragma_foreign_key_check table) to find and
+    DELETE the offending row.
 
-    *Checked: each section's code, in section order*
+    *Checked: the referrals left, and how many foreign-key violations remain*
 
-14. **A column that must hold JSON** (Q800)
+14. **A route stored as JSON** (Q815)
 
-    Create `device_readings (reading_id INTEGER PRIMARY KEY, admission_id
-    INTEGER NOT NULL referencing admissions, payload TEXT NOT NULL)` where
-    payload must be VALID JSON -- a CHECK constraint can call json_valid().
-    After your script, the question inserts three payloads for admission 1:
-    '{"spo2": 97}', 'spo2=97' and '[97, 98]'.
+    Add a column `route` (TEXT) to admissions and fill it, for EVERY
+    admission, with a JSON array of the ward_ids of its stays in stay_seq
+    order -- '[1,5,2]' for admission 12. json_group_array(... ORDER BY ...)
+    builds the array; an UPDATE with a correlated subquery fills the column.
 
-    *Checked: the payloads that were accepted, in insertion order*
+    *Checked: admission 12's route, how many routes are valid JSON arrays, and how many have three wards*
 
-15. **Editing through a view** (Q801)
+15. **Discharge closes the stay** (Q816)
 
-    Create a view `patient_contact (patient_id, name, postcode_area)` over
-    patients, and make an UPDATE of postcode_area on the VIEW change the
-    patient underneath -- an INSTEAD OF UPDATE trigger. After your script, the
-    question runs UPDATE patient_contact SET postcode_area = 'LS99' WHERE
-    patient_id = 3.
+    Write a trigger so that when an admission's discharged_at is set -- an
+    UPDATE OF that column from NULL to a value -- the admission's OPEN ward
+    stay gets that value as its to_at. After your script, the question
+    discharges admission 173 at '2026-07-01 09:00'.
 
-    *Checked: patient 3's postcode in the table, and how many patients have postcode LS99*
+    *Checked: admission 173's stays with their to_at, and how many open stays it has left*
 
 # Python
 
-## 1 - Dictionaries (7)
+## 1 - Numbers (3)
 
-Square brackets against get(), assigning a new key, keys() and values() as
-views, items() unpacked in a loop, and len().
+return against print, a comparison returned as a boolean, and / against // in an
+average.
 
-1. **dict: a value by its key** (P056)
+1. **return: sum() handed back** (P071)
 
-   Make a dictionary from ward names to beds: 'Fleming' 16, 'Barry' 30,
-   'Jenner' 18. Look up Fleming with square brackets and print its beds:
-
-   ```
-   16
-   ```
-
-   *Print: the number.*
-
-2. **get(): a lookup that may miss** (P057)
-
-   With the same dictionary -- 'Fleming' 16, 'Barry' 30, 'Jenner' 18 -- use
-   the get() method to print the beds for 'Bevan', which is not there, with 0
-   as the fallback; then get() 'Barry' the same way:
+   Write a function `total(nums)` that RETURNS the sum of the numbers in the
+   list, using sum():
 
    ```
-   0
-   30
+   total([16, 30, 18]) -> 64
    ```
 
-   *Print: the two lines.*
+   Return the value; do not print it. An empty list totals 0.
 
-3. **dict[key] = value: adding an entry** (P058)
+   *Return: the total.*
 
-   Start with the dictionary 'Fleming' 16, 'Barry' 30. Add 'Jenner' with 18 by
-   assigning to a new key, then print the dictionary:
+2. **%: is it even** (P072)
 
-   ```
-   {'Fleming': 16, 'Barry': 30, 'Jenner': 18}
-   ```
-
-   *Print: the dictionary, as print() shows one.*
-
-4. **keys(): the keys as a list** (P059)
-
-   With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, use the keys()
-   method inside list() to print the ward names as a list:
+   Write a function `is_even(n)` that returns True when n is even and False
+   otherwise, using the remainder operator %:
 
    ```
-   ['Fleming', 'Barry', 'Jenner']
+   is_even(4) -> True
+   is_even(7) -> False
    ```
 
-   *Print: the list.*
+   *Return: True or False, not a number.*
 
-5. **values(): adding them up** (P060)
+3. **/: an average to two decimals** (P073)
 
-   With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, use sum() over
-   the values() method to print the total beds:
-
-   ```
-   64
-   ```
-
-   *Print: the number.*
-
-6. **items(): key and value together** (P061)
-
-   With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, loop over the
-   items() method to print one line per ward:
+   Write a function `average(nums)` that returns the mean of a non-empty list,
+   rounded to two decimal places, using / for the division:
 
    ```
-   Fleming: 16
-   Barry: 30
-   Jenner: 18
+   average([1, 2, 3, 4]) -> 2.5
    ```
 
-   *Print: the three lines.*
+   *Return: the mean, rounded.*
 
-7. **len(): how many entries** (P062)
+## 2 - Strings (5)
 
-   With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, use len() to
-   print how many wards it holds:
+upper() called, strip() against replace(), split() against list(), join() on the
+separator, and a slice of three.
 
-   ```
-   3
-   ```
+4. **upper(): shouting** (P074)
 
-   *Print: the number.*
-
-## 2 - Tuples and slices (3)
-
-A tuple unpacked into two names, [start:stop] on a string, and a string
-multiplied.
-
-8. **tuple: a pair that cannot change** (P063)
-
-   Put the blood pressure reading 120 over 80 in a tuple called bp. Unpack it
-   into two names, systolic and diastolic, and print them as:
+   Write a function `shout(text)` that returns the text in capitals with an
+   exclamation mark on the end, using upper():
 
    ```
-   120/80
+   shout("code blue") -> "CODE BLUE!"
    ```
 
-   *Print: that one line.*
+   *Return: the new string.*
 
-9. **[start:stop]: a piece of a string** (P064)
+5. **strip(): tidy input** (P075)
 
-   Put the procedure code 'SRG-04' in a variable. Use slicing to print the
-   first three characters, then the last two:
+   Write a function `clean(text)` that returns the text with whitespace
+   removed from both ends, using strip(). Spaces inside the text stay:
 
    ```
-   SRG
-   04
+   clean("  Bay 3  ") -> "Bay 3"
    ```
 
-   *Print: the two lines.*
+   *Return: the stripped string.*
 
-10. **'-' * n: repeating a string** (P065)
+6. **split(): text into words** (P076)
 
-    Print a line of 20 hyphens, then the word Ward, then another line of 20
-    hyphens, using multiplication to make the lines:
+   Write a function `words(text)` that returns the words of the text as a
+   list, using split():
+
+   ```
+   words("Morphine Codeine Diazepam") -> ["Morphine", "Codeine", "Diazepam"]
+   ```
+
+   *Return: a list of strings; empty text gives an empty list.*
+
+7. **join(): words into text** (P077)
+
+   Write a function `joined(names)` that returns the names as one string
+   separated by ', ', using join():
+
+   ```
+   joined(["Barry", "Bevan"]) -> "Barry, Bevan"
+   ```
+
+   *Return: one string; an empty list gives an empty string.*
+
+8. **[start:stop]: the first three** (P078)
+
+   Write a function `first_three(text)` that returns the first three
+   characters of the text, using a slice. Shorter text returns what there is:
+
+   ```
+   first_three("Nightingale") -> "Nig"
+   ```
+
+   *Return: the slice.*
+
+## 3 - Lists (5)
+
+max(key=len), count() against len(), [-1], a list comprehension against list
+repetition, and set() turned back into a sorted list.
+
+9. **max(key=len): the longest** (P079)
+
+   Write a function `longest(words)` that returns the longest word in a non-
+   empty list, using max() with key=len. On a tie the first of the longest is
+   returned:
+
+   ```
+   longest(["Barry", "Nightingale", "Bevan"]) -> "Nightingale"
+   ```
+
+   *Return: the word.*
+
+10. **count(): how many of one value** (P080)
+
+    Write a function `count_of(items, value)` that returns how many times the
+    value appears in the list, using the list's count() method:
 
     ```
-    --------------------
-    Ward
-    --------------------
+    count_of(["day", "night", "day"], "day") -> 2
     ```
 
-    *Print: the three lines.*
+    *Return: the count, 0 when it never appears.*
 
-## 3 - String tests (3)
+11. **[-1]: the last item** (P081)
 
-endswith() against in, isdigit() against type(), and if/else so that only one
-line prints.
-
-11. **endswith(): the end of a string** (P066)
-
-    Two file names: 'report.pdf' and 'pdf_notes.txt'. Use the endswith()
-    method to print whether each ends with '.pdf':
+    Write a function `last(items)` that returns the last item of a non-empty
+    list, using a negative index:
 
     ```
-    True
-    False
+    last([72, 118, 65]) -> 65
     ```
 
-    *Print: the two lines.*
+    *Return: the item.*
 
-12. **isdigit(): is it all digits** (P067)
+12. **[... for ...]: a list from a list** (P082)
 
-    Two strings read from a form: '0420' and '42a'. Use the isdigit() method
-    to print whether each is made of digits only:
-
-    ```
-    True
-    False
-    ```
-
-    *Print: the two lines.*
-
-13. **if/else: one of two lines** (P068)
-
-    Put 'Codeine' in a variable and the list ['Morphine', 'Codeine',
-    'Fentanyl'] in another. Use if/else with the in test to print 'controlled'
-    when the drug is in the list and 'not controlled' otherwise:
+    Write a function `doubled(nums)` that returns a NEW list with every number
+    doubled, using a list comprehension:
 
     ```
-    controlled
+    doubled([1, 2, 3]) -> [2, 4, 6]
     ```
 
-    *Print: the one line that applies.*
+    *Return: the new list; an empty list stays empty.*
 
-## 4 - Two lists at once (2)
+13. **set(): the distinct values, sorted** (P083)
 
-zip() to walk two lists in step, and max() with key= to pick by a rule.
-
-14. **zip(): walking two lists together** (P069)
-
-    Two lists in step: wards ['Fleming', 'Barry', 'Jenner'] and beds [16, 30,
-    18]. Use zip() in a for loop to print each ward with its beds:
+    Write a function `distinct_sorted(items)` that returns the distinct values
+    of the list, sorted, as a LIST -- set() to drop the repeats, sorted() to
+    order them:
 
     ```
-    Fleming 16
-    Barry 30
-    Jenner 18
+    distinct_sorted(["day", "night", "day"]) -> ["day", "night"]
     ```
 
-    *Print: the three lines.*
+    *Return: a sorted list.*
 
-15. **max(key=): the biggest by a rule** (P070)
+## 4 - Dictionaries (2)
 
-    With the dictionary 'Fleming' 16, 'Barry' 30, 'Jenner' 18, use max() with
-    key=beds.get to print the name of the ward with the most beds:
+get() with a fallback, and max(key=d.get) to return the key rather than the
+value.
+
+14. **get(): a lookup with a fallback** (P084)
+
+    Write a function `beds_for(ward, beds)` that returns the beds for the ward
+    from the dictionary, or 0 when the ward is not in it, using get():
 
     ```
-    Barry
+    beds_for("Bevan", {"Fleming": 16}) -> 0
     ```
 
-    *Print: the name.*
+    *Return: a number.*
+
+15. **max(key=d.get): the key with the biggest value** (P085)
+
+    Write a function `fullest(beds)` that returns the KEY with the largest
+    value in a non-empty dictionary, using max() with key=beds.get:
+
+    ```
+    fullest({"Fleming": 16, "Barry": 30}) -> "Barry"
+    ```
+
+    *Return: the key.*
 
 ## The one concept with no question here
 
@@ -482,7 +474,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-841 retired ones.
+871 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

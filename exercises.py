@@ -1,19 +1,19 @@
 """Practice exercises: fifteen questions on the hospital schema.
 
-The fifth set on the district hospital, beside the fourth Python set
-(pyexercises.py), back at the level of Q752-Q771 after the easier set
-before it. Same data: SEED 731, not re-seeded. Twelve SELECT questions --
-an average of products, HAVING on a share, surnames shared by several
-staff, an admission that came back to its first ward, stays that crossed
-a month end, %W against %U, the peak occupancy of each ward from a
-running sum, two prescriptions of one drug at once, an admission against
-its own ward's average, three children of one parent, a seven-day moving
-average, and the second-longest stay per ward -- and three WRITABLE
-questions on constructs no earlier writable stage used:
+The sixth set on the district hospital, beside the fifth Python set
+(pyexercises.py), at the level of the set before it. Same data: SEED 731,
+not re-seeded. Twelve SELECT questions -- shifts pivoted by kind, HAVING on
+a share of controlled drugs, printf() padding, which stay of three was the
+longest, the last day of a month by modifiers, observations by hour,
+procedures that overlapped in one theatre, days in hospital across
+admissions with open ends, consultant-surgeon pairs, admissions with
+neither procedure nor prescription, a gap to the leader by FIRST_VALUE,
+and a cumulative share -- and three WRITABLE questions on constructs no
+earlier writable stage used:
 
-  * ON UPDATE CASCADE
-  * a CHECK constraint built on json_valid()
-  * INSTEAD OF UPDATE on a view
+  * PRAGMA foreign_keys OFF, a load, and PRAGMA foreign_key_check
+  * a JSON column filled by UPDATE with json_group_array
+  * an AFTER UPDATE OF trigger that closes the open stay on discharge
 
 Each of those runs in a private in-memory copy of the database, so nothing
 you write can reach the real file. The copy persists across Runs of one
@@ -22,8 +22,8 @@ discarded by Reset or by moving to another question, so no question can
 depend on what another one wrote. Check answer always grades a FRESH copy.
 The question's `probe_sql` then reads the result, and that is what is
 compared with the reference. A `driver_sql`, where present, is what the
-question itself runs AFTER your script -- the statements your key, check
-or trigger should follow, refuse or redirect.
+question itself runs AFTER your script -- the statement your trigger should
+act on.
 """
 
 import sqlite3
@@ -31,507 +31,478 @@ import sqlite3
 EXERCISES = [
     # ========================================================== 1 Warm-up
     dict(
-        id=1, ledger="Q787", concept="A2", tier="1 - Warm-up",
-        title="Milligrams a day, by form",
+        id=1, ledger="Q802", concept="A1", tier="1 - Warm-up",
+        title="Days and nights, side by side",
         prompt=(
-            "For each form of drug: how many prescriptions, the average"
-            " DAILY dose in mg to one decimal -- dose_mg times"
-            " times_per_day, averaged over prescriptions -- and the"
-            " largest daily dose.\n\n"
-            "Return: form, prescriptions, avg_daily_mg, max_daily_mg"
+            "One row per ward: how many day shifts and how many night"
+            " shifts have been worked there, as two columns, and the"
+            " percentage of shifts that were nights to one decimal.\n\n"
+            "Return: ward_id, day_shifts, night_shifts, pct_night"
         ),
-        solution=("SELECT d.form, COUNT(*), ROUND(AVG(p.dose_mg * p.times_per_day), 1),"
-                  " MAX(p.dose_mg * p.times_per_day) FROM prescriptions p"
-                  " JOIN drugs d ON d.drug_id = p.drug_id GROUP BY d.form"),
-        trap_sql=("SELECT d.form, COUNT(*), ROUND(AVG(p.dose_mg) * AVG(p.times_per_day), 1),"
-                  " MAX(p.dose_mg) * MAX(p.times_per_day) FROM prescriptions p"
-                  " JOIN drugs d ON d.drug_id = p.drug_id GROUP BY d.form"),
-        note="The average of a product is not the product of the averages:"
-             " a big dose given once a day and a small one given six times"
-             " pull the two apart. Compute the daily dose per row, inside"
-             " the aggregate, and then average or take the max of THAT."
-             " MAX(a) * MAX(b) has the same flaw -- the largest dose and"
-             " the most frequent schedule need not be on the same row.",
-        claims=[("four forms, tablets the most prescribed",
-                 lambda rows, c: len(rows) == 4
-                 and max(rows, key=lambda r: r[1])[0] == 'tablet'
-                 and all(r[2] < r[3] for r in rows))],
+        solution=("SELECT ward_id, SUM(kind = 'day'), SUM(kind = 'night'),"
+                  " ROUND(100.0 * SUM(kind = 'night') / COUNT(*), 1) FROM shifts"
+                  " GROUP BY ward_id"),
+        trap_sql=("SELECT ward_id, SUM(kind = 'day'), SUM(kind = 'night'),"
+                  " ROUND(100 * SUM(kind = 'night') / COUNT(*), 1) FROM shifts"
+                  " GROUP BY ward_id"),
+        note="Two conditional SUMs make the pivot. The percentage is the"
+             " old integer-division trap in a new coat: 100 * nights and"
+             " COUNT(*) are both integers, so 38.5 becomes 38 before ROUND"
+             " can act. One real number in the expression is enough --"
+             " 100.0 -- and it has to be inside the division, not applied"
+             " after it.",
+        claims=[("eight wards, about a third nights",
+                 lambda rows, c: len(rows) == 8
+                 and all(30 < r[3] < 45 for r in rows))],
     ),
     dict(
-        id=2, ledger="Q788", concept="A3", tier="1 - Warm-up",
-        title="Mostly emergencies",
+        id=2, ledger="Q803", concept="A3", tier="1 - Warm-up",
+        title="Heavy on the controlled drugs",
         prompt=(
-            "Consultants for whom at least 55 per cent of admissions came"
-            " in as emergencies: consultant_id, admissions, emergencies,"
-            " and the percentage to one decimal.\n\n"
-            "Return: consultant_id, admissions, emergencies, pct"
+            "Prescribers who have written at least 460 prescriptions, of"
+            " which at least 20 per cent were for controlled drugs --"
+            " tested on the exact share, before rounding: staff_id,"
+            " prescriptions, controlled, and the percentage to one"
+            " decimal. `controlled` is on drugs.\n\n"
+            "Return: staff_id, prescriptions, controlled, pct"
         ),
-        solution=("SELECT consultant_id, COUNT(*), SUM(admitted_via = 'emergency'),"
-                  " ROUND(100.0 * SUM(admitted_via = 'emergency') / COUNT(*), 1)"
-                  " FROM admissions GROUP BY consultant_id"
-                  " HAVING 100.0 * SUM(admitted_via = 'emergency') / COUNT(*) >= 55"),
-        trap_sql=("SELECT consultant_id, COUNT(*), COUNT(*),"
-                  " ROUND(100.0 * COUNT(*) / COUNT(*), 1)"
-                  " FROM admissions WHERE admitted_via = 'emergency'"
-                  " GROUP BY consultant_id HAVING COUNT(*) >= 330"),
-        note="A share needs both the part and the whole in the same"
-             " group. Filter to emergencies in WHERE and the whole is gone:"
-             " every consultant is at 100 per cent and the count is of"
-             " emergencies only. Keep every row, count the part with a"
-             " conditional SUM, and put the ratio in HAVING. The"
-             " percentages here run from 54 to 57, so the threshold cuts"
-             " the ten consultants roughly in half.",
-        claims=[("about half the consultants, all between 55 and 60",
-                 lambda rows, c: 3 <= len(rows) <= 7
-                 and all(55 <= r[3] < 60 for r in rows))],
+        solution=("SELECT p.prescribed_by, COUNT(*), SUM(d.controlled),"
+                  " ROUND(100.0 * SUM(d.controlled) / COUNT(*), 1) FROM prescriptions p"
+                  " JOIN drugs d ON d.drug_id = p.drug_id GROUP BY p.prescribed_by"
+                  " HAVING COUNT(*) >= 460 AND 100.0 * SUM(d.controlled) / COUNT(*) >= 20"),
+        trap_sql=("SELECT p.prescribed_by, COUNT(*), COUNT(*),"
+                  " ROUND(100.0 * COUNT(*) / COUNT(*), 1) FROM prescriptions p"
+                  " JOIN drugs d ON d.drug_id = p.drug_id WHERE d.controlled = 1"
+                  " GROUP BY p.prescribed_by HAVING COUNT(*) >= 92"),
+        note="The share needs the whole group present, so the controlled"
+             " flag is summed, not filtered. Two conditions on aggregates"
+             " sit together in one HAVING with AND. The join brings the"
+             " flag over from drugs; the grouping stays on the prescriber."
+             " Three of the twenty-six pass; a fourth sits at 19.96 per"
+             " cent, which rounds to 20.0 but is not 20.",
+        claims=[("three prescribers, a fifth or so controlled",
+                 lambda rows, c: len(rows) == 3
+                 and all(r[1] >= 460 and 20 <= r[3] < 25 for r in rows))],
     ),
     # ======================================== 2 Strings and sequences
     dict(
-        id=3, ledger="Q789", concept="STR", tier="2 - Strings and sequences",
-        title="Surnames on the payroll",
+        id=3, ledger="Q804", concept="STR", tier="2 - Strings and sequences",
+        title="Reference numbers, zero-padded",
         prompt=(
-            "Surnames shared by THREE or more staff, with how many, and"
-            " their staff_ids as one comma-separated string in id order."
-            " The surname is everything after the single space in the"
-            " name.\n\n"
-            "Return: surname, people, staff_ids"
+            "Patients 1 to 5 with a reference of the form 'P00001' -- the"
+            " letter P and the id padded with zeros to five digits."
+            " printf('%05d', n) pads a number.\n\n"
+            "Return: patient_id, reference"
         ),
-        solution=("SELECT substr(name, instr(name, ' ') + 1), COUNT(*),"
-                  " group_concat(staff_id ORDER BY staff_id) FROM staff"
-                  " GROUP BY 1 HAVING COUNT(*) >= 3"),
-        trap_sql=("SELECT substr(name, instr(name, ' ')), COUNT(*),"
-                  " group_concat(staff_id ORDER BY staff_id) FROM staff"
-                  " GROUP BY 1 HAVING COUNT(*) >= 3"),
-        note="instr() gives the position OF the space, so the surname"
-             " starts one past it; substr(name, instr(name, ' ')) keeps"
-             " the space as a leading character. The grouping still works,"
-             " because every ' Baxter' matches every other ' Baxter', but"
-             " the string returned is wrong. Grouping by an expression and"
-             " ordering inside group_concat are both routine by now.",
-        claims=[("nine surnames, Papadopoulos the most common",
-                 lambda rows, c: len(rows) == 9
-                 and max(rows, key=lambda r: r[1])[0] == 'Papadopoulos'
-                 and all(r[0] == r[0].strip() and r[2].count(',') == r[1] - 1
-                         for r in rows))],
+        solution=("SELECT patient_id, printf('P%05d', patient_id) FROM patients"
+                  " WHERE patient_id <= 5"),
+        trap_sql=("SELECT patient_id, 'P' || patient_id FROM patients"
+                  " WHERE patient_id <= 5"),
+        note="printf() is C's formatting in SQL: %d an integer, %05d"
+             " padded with zeros to width 5, %s a string, %.2f two"
+             " decimals. Concatenation with || gives 'P1', which sorts"
+             " 'P10' before 'P2' -- the padding is what makes the"
+             " references sort as text in numeric order. format() is the"
+             " same function under its newer name.",
+        claims=[("five references, six characters each",
+                 lambda rows, c: len(rows) == 5
+                 and all(len(r[1]) == 6 and r[1].startswith('P0') for r in rows))],
     ),
     dict(
-        id=4, ledger="Q790", concept="SEQ", tier="2 - Strings and sequences",
-        title="Back where they started",
+        id=4, ledger="Q805", concept="SEQ", tier="2 - Strings and sequences",
+        title="Which of three stays was the longest",
         prompt=(
-            "Admissions that moved ward twice and ended up back on the"
-            " ward they were admitted to -- stay 3 on the same ward as"
-            " stay 1 -- counted per ward. Two rows of ward_stays for one"
-            " admission, joined.\n\n"
-            "Return: ward_id, returned"
+            "For admissions that had exactly three ward stays: how often"
+            " the LONGEST of the three was stay 1, stay 2 and stay 3."
+            " Three rows. An open stay runs to 2026-06-30 23:59; find each"
+            " admission's longest stay first, then count by its"
+            " stay_seq.\n\n"
+            "Return: stay_seq, admissions"
         ),
-        solution=("SELECT a.ward_id, COUNT(*) FROM ward_stays a JOIN ward_stays b"
-                  " ON b.admission_id = a.admission_id AND a.stay_seq = 1"
-                  " AND b.stay_seq = 3 AND b.ward_id = a.ward_id GROUP BY a.ward_id"),
-        trap_sql=("SELECT a.ward_id, COUNT(*) FROM ward_stays a JOIN ward_stays b"
-                  " ON b.admission_id = a.admission_id AND a.stay_seq = 1"
-                  " AND b.stay_seq = 2 AND b.ward_id = a.ward_id GROUP BY a.ward_id"),
-        note="Two specific rows of one admission -- the first stay and the"
-             " third -- are a self-join with both sequence numbers pinned."
-             " The trap pins the second stay instead, and consecutive"
-             " stays are never on the same ward -- a move is a move -- so"
-             " it finds nothing. Coming back means going somewhere else"
-             " in between, which is why the question says stay 3.",
-        claims=[("eight wards, a handful each",
-                 lambda rows, c: len(rows) == 8
-                 and all(0 < r[1] < 20 for r in rows))],
+        solution=("SELECT stay_seq, COUNT(*) FROM (SELECT stay_seq, ROW_NUMBER() OVER"
+                  " (PARTITION BY admission_id ORDER BY julianday(COALESCE(to_at,"
+                  " '2026-06-30 23:59')) - julianday(from_at) DESC) rn FROM ward_stays"
+                  " WHERE admission_id IN (SELECT admission_id FROM ward_stays"
+                  " GROUP BY admission_id HAVING COUNT(*) = 3)) WHERE rn = 1"
+                  " GROUP BY stay_seq"),
+        trap_sql=("SELECT stay_seq, COUNT(*) FROM (SELECT stay_seq, ROW_NUMBER() OVER"
+                  " (PARTITION BY admission_id ORDER BY julianday(COALESCE(to_at,"
+                  " '2026-06-30 23:59')) - julianday(from_at)) rn FROM ward_stays"
+                  " WHERE admission_id IN (SELECT admission_id FROM ward_stays"
+                  " GROUP BY admission_id HAVING COUNT(*) = 3)) WHERE rn = 1"
+                  " GROUP BY stay_seq"),
+        note="Top-1 per group, then a count of WHICH position won. The"
+             " admissions with three stays come from a HAVING COUNT(*) = 3"
+             " subquery; ROW_NUMBER ordered by length DESC marks the"
+             " longest; the outer query counts the winners by stay_seq."
+             " Without DESC the shortest wins, and the first stay is"
+             " shortest more often than it is longest.",
+        claims=[("three positions, the first stay winning most often",
+                 lambda rows, c: len(rows) == 3
+                 and max(rows, key=lambda r: r[1])[0] == 1
+                 and sum(r[1] for r in rows) == c.execute(
+                     "SELECT COUNT(*) FROM ward_stays WHERE stay_seq = 3").fetchone()[0])],
     ),
     # ============================================== 3 Dates and times
     dict(
-        id=5, ledger="Q791", concept="D1", tier="3 - Dates and times",
-        title="Crossing the month end",
+        id=5, ledger="Q806", concept="D2", tier="3 - Dates and times",
+        title="First and last day of the month",
         prompt=(
-            "For each month of admission, 'YYYY-MM': how many completed"
-            " admissions began in it, how many of them were discharged in"
-            " a LATER month than they were admitted, and the percentage to"
-            " one decimal. Compare months, not lengths of stay.\n\n"
-            "Return: month, admissions, crossed, pct"
+            "For admissions 1 to 5: the first and the last day of the"
+            " month they were admitted in, as dates. date() takes"
+            " modifiers: 'start of month', '+1 month', '-1 day'.\n\n"
+            "Return: admission_id, month_start, month_end"
         ),
-        solution=("SELECT strftime('%Y-%m', admitted_at), COUNT(*),"
-                  " SUM(strftime('%Y-%m', discharged_at) > strftime('%Y-%m', admitted_at)),"
-                  " ROUND(100.0 * SUM(strftime('%Y-%m', discharged_at)"
-                  " > strftime('%Y-%m', admitted_at)) / COUNT(*), 1)"
-                  " FROM admissions WHERE discharged_at IS NOT NULL GROUP BY 1"),
-        trap_sql=("SELECT strftime('%Y-%m', admitted_at), COUNT(*),"
-                  " SUM(julianday(discharged_at) - julianday(admitted_at) > 30),"
-                  " ROUND(100.0 * SUM(julianday(discharged_at) - julianday(admitted_at) > 30)"
-                  " / COUNT(*), 1)"
-                  " FROM admissions WHERE discharged_at IS NOT NULL GROUP BY 1"),
-        note="'A later month' is about calendar boundaries: a two-day stay"
-             " from 31 May crosses one, a 29-day stay from 1 May does not."
-             " No stay here runs 30 days, so the trap's column is all"
-             " zeros. Two 'YYYY-MM' strings compare correctly as text, so"
-             " > between them is the whole test.",
-        claims=[("eighteen months, up to a fifth crossing",
-                 lambda rows, c: len(rows) == 18
-                 and all(0 <= r[3] < 25 for r in rows)
-                 and sum(r[2] for r in rows) > 300)],
+        solution=("SELECT admission_id, date(admitted_at, 'start of month'),"
+                  " date(admitted_at, 'start of month', '+1 month', '-1 day')"
+                  " FROM admissions WHERE admission_id <= 5"),
+        trap_sql=("SELECT admission_id, date(admitted_at, 'start of month'),"
+                  " date(admitted_at, '+1 month', '-1 day')"
+                  " FROM admissions WHERE admission_id <= 5"),
+        note="Modifiers apply left to right, each to the result of the"
+             " last. 'start of month' first, then '+1 month' lands on the"
+             " first of the NEXT month, then '-1 day' steps back to the"
+             " last day of this one -- 28, 29, 30 or 31 without a lookup"
+             " table. '+1 month' straight from the 29th of March gives the"
+             " 29th of April, and '-1 day' from there is the 28th, which"
+             " is nobody's month end.",
+        claims=[("five rows, every month_end after its month_start",
+                 lambda rows, c: len(rows) == 5
+                 and all(r[1][:7] == r[2][:7] and r[1].endswith('-01')
+                         and r[2][8:] in ('28', '29', '30', '31') for r in rows))],
     ),
     dict(
-        id=6, ledger="Q792", concept="D2", tier="3 - Dates and times",
-        title="Weeks that start on Monday",
+        id=6, ledger="Q807", concept="D1", tier="3 - Dates and times",
+        title="Readings round the clock",
         prompt=(
-            "Admissions per week of 2026, for weeks 1 to 10, with the"
-            " week as an integer. A week starts on MONDAY, and week 1 is"
-            " the first week with a Monday in it -- which is what"
-            " strftime('%W') numbers. Its sibling '%U' starts weeks on"
-            " Sunday.\n\n"
-            "Return: week, admissions"
+            "Observations by the hour of day they were taken, 0 to 23 as"
+            " an integer: how many, and the average heart rate to one"
+            " decimal. strftime('%H') gives the hour, as text.\n\n"
+            "Return: hour, readings, avg_hr"
         ),
-        solution=("SELECT CAST(strftime('%W', admitted_at) AS INTEGER), COUNT(*)"
-                  " FROM admissions WHERE admitted_at >= '2026' GROUP BY 1"
-                  " HAVING CAST(strftime('%W', admitted_at) AS INTEGER) BETWEEN 1 AND 10"),
-        trap_sql=("SELECT CAST(strftime('%U', admitted_at) AS INTEGER), COUNT(*)"
-                  " FROM admissions WHERE admitted_at >= '2026' GROUP BY 1"
-                  " HAVING CAST(strftime('%U', admitted_at) AS INTEGER) BETWEEN 1 AND 10"),
-        note="strftime has two week numbers, one letter apart: %W counts"
-             " weeks from Monday, %U from Sunday, and every Sunday's"
-             " admissions land in a different week under each. Both are"
-             " zero-padded text, so CAST them. The BETWEEN on the week can"
-             " go in HAVING since it filters groups; WHERE on the"
-             " expression would work too.",
-        claims=[("ten weeks, sixty-odd admissions each",
-                 lambda rows, c: len(rows) == 10
-                 and {r[0] for r in rows} == set(range(1, 11))
-                 and all(40 < r[1] < 100 for r in rows))],
+        solution=("SELECT CAST(strftime('%H', taken_at) AS INTEGER), COUNT(*),"
+                  " ROUND(AVG(heart_rate), 1) FROM observations GROUP BY 1"),
+        trap_sql=("SELECT strftime('%H', taken_at), COUNT(*),"
+                  " ROUND(AVG(heart_rate), 1) FROM observations GROUP BY 1"),
+        note="%H is the two-digit hour, zero-padded, as text: '07'. The"
+             " question wants the integer, and CAST is the conversion. The"
+             " grouping is the same either way -- 24 groups -- so the"
+             " difference is purely in the type of the first column, which"
+             " the grader checks, and which any ORDER BY or comparison"
+             " downstream would feel.",
+        claims=[("twenty-four hours, rates in the eighties",
+                 lambda rows, c: len(rows) == 24
+                 and {r[0] for r in rows} == set(range(24))
+                 and all(80 < r[2] < 95 for r in rows))],
     ),
     # ==================================== 4 Intervals and occupancy
     dict(
-        id=7, ledger="Q793", concept="INT", tier="4 - Intervals and occupancy",
-        title="Each ward's peak in June",
+        id=7, ledger="Q808", concept="INT", tier="4 - Intervals and occupancy",
+        title="Two on the table at once",
         prompt=(
-            "The most patients each ward held at any one instant during"
-            " June 2026. Turn every ward stay into a +1 event at from_at"
-            " and a -1 at to_at, run a total per ward in time order over"
-            " ALL events, and take the highest value reached at an event"
-            " inside June. At the same instant, count the departure"
-            " before the arrival.\n\n"
-            "Return: ward_id, peak"
+            "For each theatre, how many PAIRS of procedures overlapped in"
+            " time -- a procedure runs from performed_at for"
+            " duration_minutes, and datetime(performed_at, '+' ||"
+            " duration_minutes || ' minutes') is when it ended. Only"
+            " procedures with a recorded duration; each pair once.\n\n"
+            "Return: theatre, overlapping_pairs"
         ),
-        solution=("WITH ev AS (SELECT ward_id, from_at t, 1 d FROM ward_stays UNION ALL"
-                  " SELECT ward_id, to_at, -1 FROM ward_stays WHERE to_at IS NOT NULL),"
-                  " run AS (SELECT ward_id, t, SUM(d) OVER (PARTITION BY ward_id"
-                  " ORDER BY t, d ROWS UNBOUNDED PRECEDING) occ FROM ev)"
-                  " SELECT ward_id, MAX(occ) FROM run"
-                  " WHERE t >= '2026-06-01' AND t < '2026-07-01' GROUP BY ward_id"),
-        trap_sql=("WITH ev AS (SELECT ward_id, from_at t, 1 d FROM ward_stays"
-                  " WHERE from_at >= '2026-06-01' AND from_at < '2026-07-01' UNION ALL"
-                  " SELECT ward_id, to_at, -1 FROM ward_stays WHERE to_at >= '2026-06-01'"
-                  " AND to_at < '2026-07-01'),"
-                  " run AS (SELECT ward_id, t, SUM(d) OVER (PARTITION BY ward_id"
-                  " ORDER BY t, d ROWS UNBOUNDED PRECEDING) occ FROM ev)"
-                  " SELECT ward_id, MAX(occ) FROM run GROUP BY ward_id"),
-        note="A running occupancy must start from empty, which means"
-             " running over EVERY event and only then keeping the June"
-             " ones -- the trap filters the events first, so the patients"
-             " already on the ward on 1 June are never counted in and the"
-             " peak is too low. ORDER BY t, d puts a -1 before a +1 at the"
-             " same instant, so a bed handed over does not count twice."
-             " ROWS UNBOUNDED PRECEDING makes the frame explicit.",
-        claims=[("eight wards, peaks under the bed count",
-                 lambda rows, c: len(rows) == 8
-                 and all(3 < r[1] <= c.execute(
-                     "SELECT beds FROM wards WHERE ward_id = ?", (r[0],)).fetchone()[0]
-                     for r in rows))],
+        solution=("SELECT a.theatre, COUNT(*) FROM procedures a JOIN procedures b"
+                  " ON b.theatre = a.theatre AND b.procedure_id > a.procedure_id"
+                  " AND a.duration_minutes IS NOT NULL AND b.duration_minutes IS NOT NULL"
+                  " AND a.performed_at < datetime(b.performed_at, '+' || b.duration_minutes"
+                  " || ' minutes') AND b.performed_at < datetime(a.performed_at, '+' ||"
+                  " a.duration_minutes || ' minutes') GROUP BY a.theatre"),
+        trap_sql=("SELECT a.theatre, COUNT(*) FROM procedures a JOIN procedures b"
+                  " ON b.theatre = a.theatre AND b.procedure_id <> a.procedure_id"
+                  " AND a.duration_minutes IS NOT NULL AND b.duration_minutes IS NOT NULL"
+                  " AND a.performed_at < datetime(b.performed_at, '+' || b.duration_minutes"
+                  " || ' minutes') AND b.performed_at < datetime(a.performed_at, '+' ||"
+                  " a.duration_minutes || ' minutes') GROUP BY a.theatre"),
+        note="An interval whose end has to be COMPUTED: datetime() with a"
+             " modifier built from a column, '+' || minutes || ' minutes'."
+             " Then the usual overlap test. The trap pairs each procedure"
+             " with every other, so each pair is counted twice, once from"
+             " each side -- b.procedure_id > a.procedure_id keeps one"
+             " ordering of the pair.",
+        claims=[("six theatres, dozens of overlaps each",
+                 lambda rows, c: len(rows) == 6
+                 and all(50 < r[1] < 150 for r in rows))],
     ),
     dict(
-        id=8, ledger="Q794", concept="INT", tier="4 - Intervals and occupancy",
-        title="Twice at once",
+        id=8, ledger="Q809", concept="INT", tier="4 - Intervals and occupancy",
+        title="Forty days in hospital",
         prompt=(
-            "For each drug, how many admissions had two prescriptions of"
-            " it RUNNING AT THE SAME TIME -- two rows of prescriptions for"
-            " the same admission and drug whose date ranges overlap. Count"
-            " each admission once. An open prescription runs to"
-            " 2026-06-30.\n\n"
-            "Return: drug, admissions"
+            "Patients who have spent more than 40 days in hospital"
+            " altogether, adding up every admission as of 2026-06-30 23:59"
+            " -- an open admission counts up to then. With their number of"
+            " admissions and the total to one decimal.\n\n"
+            "Return: patient_id, admissions, total_days"
         ),
-        solution=("SELECT d.name, COUNT(DISTINCT a.admission_id) FROM prescriptions a"
-                  " JOIN prescriptions b ON b.admission_id = a.admission_id"
-                  " AND b.drug_id = a.drug_id AND b.prescription_id > a.prescription_id"
-                  " AND a.started_on <= COALESCE(b.ended_on, '2026-06-30')"
-                  " AND b.started_on <= COALESCE(a.ended_on, '2026-06-30')"
-                  " JOIN drugs d ON d.drug_id = a.drug_id GROUP BY d.name"),
-        trap_sql=("SELECT d.name, COUNT(DISTINCT a.admission_id) FROM prescriptions a"
-                  " JOIN prescriptions b ON b.admission_id = a.admission_id"
-                  " AND b.drug_id = a.drug_id AND b.prescription_id > a.prescription_id"
-                  " JOIN drugs d ON d.drug_id = a.drug_id GROUP BY d.name"),
-        note="Same admission, same drug, two different rows: that is the"
-             " self-join, with the id inequality so each pair is seen"
-             " once. Then the overlap test -- each starts before the other"
-             " ends -- with the open ends supplied. Without it, a course"
-             " that ended in March and one that began in May count as"
-             " concurrent. COUNT(DISTINCT) because an admission with three"
-             " overlapping courses forms three pairs.",
-        claims=[("every drug, a dozen admissions at most",
-                 lambda rows, c: len(rows) == 40
-                 and all(0 < r[1] <= 15 for r in rows))],
+        solution=("SELECT patient_id, COUNT(*), ROUND(SUM(julianday(COALESCE(discharged_at,"
+                  " '2026-06-30 23:59')) - julianday(admitted_at)), 1) FROM admissions"
+                  " GROUP BY patient_id HAVING SUM(julianday(COALESCE(discharged_at,"
+                  " '2026-06-30 23:59')) - julianday(admitted_at)) > 40"),
+        trap_sql=("SELECT patient_id, COUNT(*), ROUND(SUM(julianday(discharged_at)"
+                  " - julianday(admitted_at)), 1) FROM admissions GROUP BY patient_id"
+                  " HAVING SUM(julianday(discharged_at) - julianday(admitted_at)) > 40"),
+        note="A sum of intervals with an open end supplied. Without the"
+             " COALESCE an open admission contributes NULL, SUM skips it,"
+             " and a patient still in after a long stay can fall below"
+             " the line -- five of the thirty-nine here have an open"
+             " admission. The HAVING repeats the SUM; an alias from the"
+             " SELECT list works in SQLite but not everywhere.",
+        claims=[("a few dozen patients, some with an admission still open",
+                 lambda rows, c: 20 < len(rows) < 60
+                 and all(r[2] > 40 for r in rows)
+                 and c.execute("SELECT COUNT(*) FROM admissions WHERE discharged_at IS NULL"
+                               " AND patient_id IN (%s)" % ",".join(str(r[0]) for r in rows)
+                               ).fetchone()[0] >= 3)],
     ),
     # ============================================== 5 Joins and grain
     dict(
-        id=9, ledger="Q795", concept="E2", tier="5 - Joins and grain",
-        title="Longer than the ward's usual",
+        id=9, ledger="Q810", concept="C2", tier="5 - Joins and grain",
+        title="Consultant and surgeon, a regular pair",
         prompt=(
-            "For completed admissions that began in June 2026, per"
-            " admitting ward: how many there were, and how many lasted"
-            " longer than THAT WARD's average completed length of stay"
-            " over all time. The comparison is against the ward's own"
-            " average, so it is a correlated subquery.\n\n"
-            "Return: ward_id, admissions, above_average"
+            "Pairs of consultant and surgeon who have worked on the same"
+            " admissions at least 25 times -- the consultant is on the"
+            " admission, the surgeon on the procedure -- with the number"
+            " of procedures and of distinct admissions.\n\n"
+            "Return: consultant_id, surgeon_id, procedures, admissions"
         ),
-        solution=("SELECT a.ward_id, COUNT(*), SUM(julianday(a.discharged_at)"
-                  " - julianday(a.admitted_at) > (SELECT AVG(julianday(x.discharged_at)"
-                  " - julianday(x.admitted_at)) FROM admissions x WHERE x.ward_id = a.ward_id"
-                  " AND x.discharged_at IS NOT NULL)) FROM admissions a"
-                  " WHERE a.discharged_at IS NOT NULL AND a.admitted_at >= '2026-06-01'"
-                  " GROUP BY a.ward_id"),
-        trap_sql=("SELECT a.ward_id, COUNT(*), SUM(julianday(a.discharged_at)"
-                  " - julianday(a.admitted_at) > (SELECT AVG(julianday(x.discharged_at)"
-                  " - julianday(x.admitted_at)) FROM admissions x"
-                  " WHERE x.discharged_at IS NOT NULL)) FROM admissions a"
-                  " WHERE a.discharged_at IS NOT NULL AND a.admitted_at >= '2026-06-01'"
-                  " GROUP BY a.ward_id"),
-        note="A correlated subquery is one that refers to the outer row --"
-             " here x.ward_id = a.ward_id -- and so is re-evaluated per"
-             " row against that row's ward. Leave the correlation out and"
-             " the subquery is one hospital-wide average, the same for"
-             " every ward, and a geriatric ward with long stays looks"
-             " uniformly 'above average'. A CTE of per-ward averages"
-             " joined in is the other spelling.",
-        claims=[("eight wards, a third or so above their own average",
-                 lambda rows, c: len(rows) == 8
-                 and all(0.1 < r[2] / r[1] < 0.6 for r in rows))],
+        solution=("SELECT a.consultant_id, p.surgeon_id, COUNT(*),"
+                  " COUNT(DISTINCT a.admission_id) FROM procedures p"
+                  " JOIN admissions a ON a.admission_id = p.admission_id"
+                  " GROUP BY a.consultant_id, p.surgeon_id HAVING COUNT(*) >= 25"),
+        trap_sql=("SELECT a.consultant_id, p.surgeon_id, COUNT(*),"
+                  " COUNT(DISTINCT a.admission_id) FROM procedures p"
+                  " JOIN admissions a ON a.admission_id = p.admission_id"
+                  " GROUP BY a.consultant_id, p.surgeon_id"
+                  " HAVING COUNT(DISTINCT a.admission_id) >= 25"),
+        note="Grouping by two columns from two tables makes the pair the"
+             " grain. Procedures and admissions are different counts of"
+             " the same rows -- one admission can carry several"
+             " procedures -- and the threshold is on procedures, so the"
+             " HAVING must use COUNT(*), not the DISTINCT count, or fewer"
+             " pairs pass.",
+        claims=[("around ten pairs, procedures at or above admissions",
+                 lambda rows, c: 5 < len(rows) < 20
+                 and all(r[2] >= 25 and r[2] >= r[3] for r in rows))],
     ),
     dict(
-        id=10, ledger="Q796", concept="C2", tier="5 - Joins and grain",
-        title="Three children of one admission",
+        id=10, ledger="Q811", concept="E1", tier="5 - Joins and grain",
+        title="Neither cut nor dosed",
         prompt=(
-            "For admissions 1 to 10: how many ward stays, procedures and"
-            " prescriptions each has. Three tables hang off admissions,"
-            " and joining all three at once multiplies each count by the"
-            " other two.\n\n"
-            "Return: admission_id, stays, procedures, prescriptions"
+            "For each admitting ward, how many admissions had NO procedure"
+            " AND NO prescription -- nothing done at all. Two NOT EXISTS,"
+            " and mind the connective.\n\n"
+            "Return: ward_id, admissions"
         ),
-        solution=("SELECT a.admission_id, (SELECT COUNT(*) FROM ward_stays s"
-                  " WHERE s.admission_id = a.admission_id), (SELECT COUNT(*)"
-                  " FROM procedures p WHERE p.admission_id = a.admission_id),"
-                  " (SELECT COUNT(*) FROM prescriptions x WHERE x.admission_id"
-                  " = a.admission_id) FROM admissions a WHERE a.admission_id <= 10"),
-        trap_sql=("SELECT a.admission_id, COUNT(DISTINCT s.stay_seq),"
-                  " COUNT(p.procedure_id), COUNT(x.prescription_id) FROM admissions a"
-                  " LEFT JOIN ward_stays s ON s.admission_id = a.admission_id"
-                  " LEFT JOIN procedures p ON p.admission_id = a.admission_id"
-                  " LEFT JOIN prescriptions x ON x.admission_id = a.admission_id"
-                  " WHERE a.admission_id <= 10 GROUP BY a.admission_id"),
-        note="Three one-to-many joins on the same parent make a product:"
-             " an admission with 2 stays, 3 procedures and 4 prescriptions"
-             " becomes 24 rows, and the plain counts are 24, not 2, 3, 4."
-             " COUNT(DISTINCT) rescues a count of distinct KEYS but not"
-             " here -- procedure_id and prescription_id are distinct on"
-             " every product row, so they are multiplied anyway. Count"
-             " each child on its own, in a subquery or a pre-aggregated"
-             " CTE, and only then bring the numbers together.",
-        claims=[("ten admissions, small counts, at least one with two stays",
-                 lambda rows, c: len(rows) == 10
-                 and all(r[1] <= 3 and r[2] < 10 and r[3] < 10 for r in rows)
-                 and any(r[1] >= 2 for r in rows))],
+        solution=("SELECT ward_id, COUNT(*) FROM admissions a WHERE NOT EXISTS"
+                  " (SELECT 1 FROM procedures p WHERE p.admission_id = a.admission_id)"
+                  " AND NOT EXISTS (SELECT 1 FROM prescriptions x"
+                  " WHERE x.admission_id = a.admission_id) GROUP BY ward_id"),
+        trap_sql=("SELECT ward_id, COUNT(*) FROM admissions a WHERE NOT EXISTS"
+                  " (SELECT 1 FROM procedures p WHERE p.admission_id = a.admission_id)"
+                  " OR NOT EXISTS (SELECT 1 FROM prescriptions x"
+                  " WHERE x.admission_id = a.admission_id) GROUP BY ward_id"),
+        note="'No procedure and no prescription' is two absences joined"
+             " by AND. Joined by OR it reads 'missing at least one', which"
+             " is six times as many admissions. De Morgan is the rule:"
+             " NOT (A OR B) is NOT A AND NOT B. Each NOT EXISTS is"
+             " correlated on the admission and tests one child table.",
+        claims=[("eight wards, a few dozen each",
+                 lambda rows, c: len(rows) == 8
+                 and all(20 < r[1] < 80 for r in rows))],
     ),
     # ============================================== 6 Window functions
     dict(
-        id=11, ledger="Q797", concept="W1", tier="6 - Window functions",
-        title="A week's worth, smoothed",
+        id=11, ledger="Q812", concept="W1", tier="6 - Window functions",
+        title="Behind the leader",
         prompt=(
-            "For each day of June 2026: the admissions that day, and the"
-            " seven-day moving average -- that day and the six before it,"
-            " to two decimals. Days early in the month average over what"
-            " there is. Every day of June has admissions, so a calendar is"
-            " not needed.\n\n"
-            "Return: day, admissions, avg7"
+            "Wards by admissions in June 2026: each ward's count, its"
+            " DENSE_RANK with 1 for the most, and how many admissions"
+            " behind the leading ward it is -- 0 for the leader."
+            " FIRST_VALUE over the same ordering gives the leader's"
+            " count on every row.\n\n"
+            "Return: ward_id, admissions, rank, behind"
         ),
-        solution=("SELECT day, n, ROUND(AVG(n) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING"
-                  " AND CURRENT ROW), 2) FROM (SELECT date(admitted_at) day, COUNT(*) n"
-                  " FROM admissions WHERE admitted_at >= '2026-06-01'"
-                  " AND admitted_at < '2026-07-01' GROUP BY 1)"),
-        trap_sql=("SELECT day, n, ROUND(AVG(n) OVER (ORDER BY day), 2)"
-                  " FROM (SELECT date(admitted_at) day, COUNT(*) n"
-                  " FROM admissions WHERE admitted_at >= '2026-06-01'"
-                  " AND admitted_at < '2026-07-01' GROUP BY 1)"),
-        note="A window with ORDER BY and no frame clause defaults to"
-             " everything from the first row to the current one -- a"
-             " running average, not a moving one. ROWS BETWEEN 6 PRECEDING"
-             " AND CURRENT ROW is the seven-day frame, and it shrinks at"
-             " the start of the month because there is nothing before"
-             " day 1. The daily counts are aggregated first, in the"
-             " subquery; the window runs over those rows.",
-        claims=[("thirty days, averages near a dozen",
-                 lambda rows, c: len(rows) == 30
-                 and all(5 < r[2] < 20 for r in rows))],
+        solution=("SELECT ward_id, n, DENSE_RANK() OVER (ORDER BY n DESC),"
+                  " FIRST_VALUE(n) OVER (ORDER BY n DESC) - n FROM (SELECT ward_id,"
+                  " COUNT(*) n FROM admissions WHERE admitted_at >= '2026-06-01'"
+                  " AND admitted_at < '2026-07-01' GROUP BY ward_id)"),
+        trap_sql=("SELECT ward_id, n, DENSE_RANK() OVER (ORDER BY n DESC),"
+                  " FIRST_VALUE(n) OVER (ORDER BY n) - n FROM (SELECT ward_id,"
+                  " COUNT(*) n FROM admissions WHERE admitted_at >= '2026-06-01'"
+                  " AND admitted_at < '2026-07-01' GROUP BY ward_id)"),
+        note="Two windows over the same ordering: DENSE_RANK for the"
+             " place, FIRST_VALUE for the top row's value on every row,"
+             " and the subtraction happens outside the window. Ordered"
+             " ascending, FIRST_VALUE is the SMALLEST count and 'behind'"
+             " goes negative. A named WINDOW clause would let the two"
+             " share one definition.",
+        claims=[("eight wards, the leader at 0, two tied",
+                 lambda rows, c: len(rows) == 8
+                 and min(r[3] for r in rows) == 0
+                 and all(r[3] >= 0 for r in rows)
+                 and len({r[2] for r in rows}) < 8)],
     ),
     dict(
-        id=12, ledger="Q798", concept="W2", tier="6 - Window functions",
-        title="Second-longest stay on each ward",
+        id=12, ledger="Q813", concept="W3", tier="6 - Window functions",
+        title="Running share of admissions",
         prompt=(
-            "For each admitting ward, the SECOND-longest completed"
-            " admission: its id and its length in days to two decimals."
-            " Ties by the lower admission_id.\n\n"
-            "Return: ward_id, admission_id, days"
+            "Wards ordered from most admissions to fewest, each with its"
+            " count and the CUMULATIVE share of all admissions up to and"
+            " including it, to one decimal -- the last row reaches 100."
+            " Ties by the lower ward_id. Two window SUMs: one ordered, one"
+            " not.\n\n"
+            "Return: ward_id, admissions, cumulative_pct"
         ),
-        solution=("SELECT ward_id, admission_id, ROUND(los, 2) FROM (SELECT ward_id,"
-                  " admission_id, julianday(discharged_at) - julianday(admitted_at) los,"
-                  " ROW_NUMBER() OVER (PARTITION BY ward_id ORDER BY julianday(discharged_at)"
-                  " - julianday(admitted_at) DESC, admission_id) rn FROM admissions"
-                  " WHERE discharged_at IS NOT NULL) WHERE rn = 2"),
-        trap_sql=("SELECT ward_id, admission_id, ROUND(los, 2) FROM (SELECT ward_id,"
-                  " admission_id, julianday(discharged_at) - julianday(admitted_at) los,"
-                  " ROW_NUMBER() OVER (PARTITION BY ward_id ORDER BY julianday(discharged_at)"
-                  " - julianday(admitted_at), admission_id) rn FROM admissions"
-                  " WHERE discharged_at IS NOT NULL) WHERE rn = 2"),
-        note="Top-N per group generalises: number the rows within each"
-             " partition in the order that matters and keep the number you"
-             " want -- 2 here. DESC is what makes 'second-longest' rather"
-             " than 'second-shortest', which is what the trap returns."
-             " The tiebreak decides which of two equal stays is second.",
-        claims=[("eight wards, stays of two to three weeks",
+        solution=("SELECT ward_id, n, ROUND(100.0 * SUM(n) OVER (ORDER BY n DESC, ward_id)"
+                  " / SUM(n) OVER (), 1) FROM (SELECT ward_id, COUNT(*) n FROM admissions"
+                  " GROUP BY ward_id)"),
+        trap_sql=("SELECT ward_id, n, ROUND(100.0 * SUM(n) OVER (ORDER BY n DESC, ward_id)"
+                  " / SUM(n) OVER (ORDER BY n DESC, ward_id), 1) FROM (SELECT ward_id,"
+                  " COUNT(*) n FROM admissions GROUP BY ward_id)"),
+        note="SUM OVER with an ORDER BY is a running total; the same SUM"
+             " OVER () with no ORDER BY is the grand total. Their ratio is"
+             " the cumulative share, and it climbs to 100 on the last row."
+             " Make the denominator a running total too and every row"
+             " divides itself by itself: 100.0 all the way down.",
+        claims=[("eight wards, climbing to 100",
                  lambda rows, c: len(rows) == 8
-                 and all(14 < r[2] < 28 for r in rows))],
+                 and max(r[2] for r in rows) == 100.0
+                 and len({r[2] for r in rows}) == 8)],
     ),
     # ============================================= 7 Changing the data
     dict(
-        id=13, ledger="Q799", concept="DDL", tier="7 - Changing the data",
+        id=13, ledger="Q814", concept="FK", tier="7 - Changing the data",
         kind="script",
-        title="Rename the key and the children follow",
+        title="Load first, check afterwards",
         prompt=(
-            "Create `ward_codes (code TEXT PRIMARY KEY, ward_id INTEGER NOT"
-            " NULL referencing wards)` and `ward_sections (section_id INTEGER"
-            " PRIMARY KEY, code TEXT NOT NULL referencing ward_codes, label"
-            " TEXT NOT NULL)`, such that changing a code in ward_codes"
-            " changes it in every section that uses it. Insert codes 'NIG'"
-            " for ward 1 and 'SEA' for ward 2, and sections 'bay A' and"
-            " 'bay B' under NIG and 'bay A' under SEA. After your script,"
-            " the question renames NIG to 'NGT'.\n\n"
-            "Checked: each section's code, in section order"
+            "Create `referrals (referral_id INTEGER PRIMARY KEY, patient_id"
+            " INTEGER NOT NULL referencing patients, referred_on TEXT NOT"
+            " NULL)`. Then, with foreign keys switched OFF by PRAGMA, insert"
+            " referrals for patients 1, 2 and 9999 -- the last does not"
+            " exist -- switch them back ON, and use PRAGMA foreign_key_check"
+            " (or the pragma_foreign_key_check table) to find and DELETE"
+            " the offending row.\n\n"
+            "Checked: the referrals left, and how many foreign-key"
+            " violations remain"
         ),
-        solution=("CREATE TABLE ward_codes (\n"
-                  "  code    TEXT    PRIMARY KEY,\n"
-                  "  ward_id INTEGER NOT NULL REFERENCES wards(ward_id)\n"
+        solution=("CREATE TABLE referrals (\n"
+                  "  referral_id INTEGER PRIMARY KEY,\n"
+                  "  patient_id  INTEGER NOT NULL REFERENCES patients(patient_id),\n"
+                  "  referred_on TEXT    NOT NULL\n"
                   ");\n"
-                  "CREATE TABLE ward_sections (\n"
-                  "  section_id INTEGER PRIMARY KEY,\n"
-                  "  code       TEXT NOT NULL REFERENCES ward_codes(code) ON UPDATE CASCADE,\n"
-                  "  label      TEXT NOT NULL\n"
+                  "PRAGMA foreign_keys = OFF;\n"
+                  "INSERT INTO referrals (patient_id, referred_on)\n"
+                  "VALUES (1, '2026-07-01'), (2, '2026-07-01'), (9999, '2026-07-01');\n"
+                  "PRAGMA foreign_keys = ON;\n"
+                  "DELETE FROM referrals WHERE rowid IN\n"
+                  "  (SELECT rowid FROM pragma_foreign_key_check('referrals'));"),
+        trap_sql=("CREATE TABLE referrals (\n"
+                  "  referral_id INTEGER PRIMARY KEY,\n"
+                  "  patient_id  INTEGER NOT NULL REFERENCES patients(patient_id),\n"
+                  "  referred_on TEXT    NOT NULL\n"
                   ");\n"
-                  "INSERT INTO ward_codes VALUES ('NIG', 1), ('SEA', 2);\n"
-                  "INSERT INTO ward_sections (code, label)\n"
-                  "VALUES ('NIG', 'bay A'), ('NIG', 'bay B'), ('SEA', 'bay A');"),
-        trap_sql=("CREATE TABLE ward_codes (\n"
-                  "  code    TEXT    PRIMARY KEY,\n"
-                  "  ward_id INTEGER NOT NULL REFERENCES wards(ward_id)\n"
-                  ");\n"
-                  "CREATE TABLE ward_sections (\n"
-                  "  section_id INTEGER PRIMARY KEY,\n"
-                  "  code       TEXT NOT NULL REFERENCES ward_codes(code),\n"
-                  "  label      TEXT NOT NULL\n"
-                  ");\n"
-                  "INSERT INTO ward_codes VALUES ('NIG', 1), ('SEA', 2);\n"
-                  "INSERT INTO ward_sections (code, label)\n"
-                  "VALUES ('NIG', 'bay A'), ('NIG', 'bay B'), ('SEA', 'bay A');"),
-        driver_sql="UPDATE ward_codes SET code = 'NGT' WHERE code = 'NIG';",
-        probe_sql="SELECT section_id, code FROM ward_sections ORDER BY section_id",
-        note="A foreign key has an ON UPDATE action as well as ON DELETE,"
-             " and it matters exactly when the parent key is a natural"
-             " value that can change, like a code. CASCADE rewrites the"
-             " children; the default refuses the rename while children"
-             " exist, which is what the trap does -- the update fails and"
-             " every section still says NIG. Surrogate integer keys never"
-             " change, which is one argument for them.",
-        claims=[("the two NIG sections now read NGT",
-                 lambda rows, c: rows == [(1, 'NGT'), (2, 'NGT'), (3, 'SEA')])],
+                  "PRAGMA foreign_keys = OFF;\n"
+                  "INSERT INTO referrals (patient_id, referred_on)\n"
+                  "VALUES (1, '2026-07-01'), (2, '2026-07-01'), (9999, '2026-07-01');\n"
+                  "PRAGMA foreign_keys = ON;"),
+        probe_sql=("SELECT (SELECT group_concat(patient_id) FROM (SELECT patient_id"
+                   " FROM referrals ORDER BY referral_id)),"
+                   " (SELECT COUNT(*) FROM pragma_foreign_key_check('referrals'))"),
+        note="Foreign keys are enforced only while PRAGMA foreign_keys is"
+             " ON, and turning it off is how a bulk load arrives in any"
+             " order. Nothing is re-checked when it goes back on -- the"
+             " bad row is simply there. pragma_foreign_key_check lists"
+             " every violating row with its table and rowid, which is"
+             " exactly the key a DELETE needs. Load, check, fix: the"
+             " check is the step people skip.",
+        claims=[("two referrals left, no violations",
+                 lambda rows, c: rows == [('1,2', 0)])],
     ),
     dict(
-        id=14, ledger="Q800", concept="JSN", tier="7 - Changing the data",
+        id=14, ledger="Q815", concept="JSN", tier="7 - Changing the data",
         kind="script",
-        title="A column that must hold JSON",
+        title="A route stored as JSON",
         prompt=(
-            "Create `device_readings (reading_id INTEGER PRIMARY KEY,"
-            " admission_id INTEGER NOT NULL referencing admissions, payload"
-            " TEXT NOT NULL)` where payload must be VALID JSON -- a CHECK"
-            " constraint can call json_valid(). After your script, the"
-            " question inserts three payloads for admission 1:"
-            " '{\"spo2\": 97}', 'spo2=97' and '[97, 98]'.\n\n"
-            "Checked: the payloads that were accepted, in insertion order"
+            "Add a column `route` (TEXT) to admissions and fill it, for"
+            " EVERY admission, with a JSON array of the ward_ids of its"
+            " stays in stay_seq order -- '[1,5,2]' for admission 12."
+            " json_group_array(... ORDER BY ...) builds the array; an UPDATE"
+            " with a correlated subquery fills the column.\n\n"
+            "Checked: admission 12's route, how many routes are valid JSON"
+            " arrays, and how many have three wards"
         ),
-        solution=("CREATE TABLE device_readings (\n"
-                  "  reading_id   INTEGER PRIMARY KEY,\n"
-                  "  admission_id INTEGER NOT NULL REFERENCES admissions(admission_id),\n"
-                  "  payload      TEXT    NOT NULL CHECK (json_valid(payload))\n"
+        solution=("ALTER TABLE admissions ADD COLUMN route TEXT;\n"
+                  "UPDATE admissions SET route = (\n"
+                  "  SELECT json_group_array(ward_id ORDER BY stay_seq)\n"
+                  "  FROM ward_stays s WHERE s.admission_id = admissions.admission_id\n"
                   ");"),
-        trap_sql=("CREATE TABLE device_readings (\n"
-                  "  reading_id   INTEGER PRIMARY KEY,\n"
-                  "  admission_id INTEGER NOT NULL REFERENCES admissions(admission_id),\n"
-                  "  payload      TEXT    NOT NULL CHECK (payload LIKE '{%')\n"
+        trap_sql=("ALTER TABLE admissions ADD COLUMN route TEXT;\n"
+                  "UPDATE admissions SET route = (\n"
+                  "  SELECT group_concat(ward_id, ',' ORDER BY stay_seq)\n"
+                  "  FROM ward_stays s WHERE s.admission_id = admissions.admission_id\n"
                   ");"),
-        driver_sql=("INSERT INTO device_readings (admission_id, payload)"
-                    " VALUES (1, '{\"spo2\": 97}');\n"
-                    "INSERT INTO device_readings (admission_id, payload)"
-                    " VALUES (1, 'spo2=97');\n"
-                    "INSERT INTO device_readings (admission_id, payload)"
-                    " VALUES (1, '[97, 98]');"),
-        probe_sql="SELECT payload FROM device_readings ORDER BY reading_id",
-        note="A CHECK constraint can call any deterministic function, and"
-             " json_valid() is one: it accepts the object and the array"
-             " and refuses the bare text. Testing for a leading brace"
-             " refuses the array, which is valid JSON, and would accept"
-             " '{not json' too. Once the column is known to hold JSON,"
-             " json_extract(payload, '$.spo2') and ->> can be used on it"
-             " without a guard.",
-        claims=[("the object and the array land, the bare text is refused",
-                 lambda rows, c: rows == [('{"spo2": 97}',), ('[97, 98]',)])],
+        probe_sql=("SELECT (SELECT route FROM admissions WHERE admission_id = 12),"
+                   " (SELECT COUNT(*) FROM admissions WHERE json_valid(route)"
+                   " AND json_type(route) = 'array'),"
+                   " (SELECT COUNT(*) FROM admissions WHERE json_array_length(route) = 3)"),
+        note="json_group_array is an aggregate that builds a JSON array,"
+             " and it takes an ORDER BY inside the call, so the route is"
+             " in stay order. group_concat gives '1,5,2', which looks"
+             " close but is not JSON: json_valid says no and"
+             " json_array_length errors. A JSON column can then be queried"
+             " with json_each and ->> without parsing text yourself.",
+        claims=[("admission 12 went 1, 5, 2; every route valid",
+                 lambda rows, c: rows[0][0] == '[1,5,2]' and rows[0][1] == 6000
+                 and rows[0][2] == c.execute(
+                     "SELECT COUNT(*) FROM ward_stays WHERE stay_seq = 3").fetchone()[0])],
     ),
     dict(
-        id=15, ledger="Q801", concept="VIEW", tier="7 - Changing the data",
+        id=15, ledger="Q816", concept="TRG", tier="7 - Changing the data",
         kind="script",
-        title="Editing through a view",
+        title="Discharge closes the stay",
         prompt=(
-            "Create a view `patient_contact (patient_id, name,"
-            " postcode_area)` over patients, and make an UPDATE of"
-            " postcode_area on the VIEW change the patient underneath --"
-            " an INSTEAD OF UPDATE trigger. After your script, the question"
-            " runs UPDATE patient_contact SET postcode_area = 'LS99' WHERE"
-            " patient_id = 3.\n\n"
-            "Checked: patient 3's postcode in the table, and how many"
-            " patients have postcode LS99"
+            "Write a trigger so that when an admission's discharged_at is"
+            " set -- an UPDATE OF that column from NULL to a value -- the"
+            " admission's OPEN ward stay gets that value as its to_at."
+            " After your script, the question discharges admission 173 at"
+            " '2026-07-01 09:00'.\n\n"
+            "Checked: admission 173's stays with their to_at, and how many"
+            " open stays it has left"
         ),
-        solution=("CREATE VIEW patient_contact AS\n"
-                  "  SELECT patient_id, name, postcode_area FROM patients;\n"
-                  "CREATE TRIGGER patient_contact_update\n"
-                  "INSTEAD OF UPDATE OF postcode_area ON patient_contact\n"
+        solution=("CREATE TRIGGER close_stay_on_discharge\n"
+                  "AFTER UPDATE OF discharged_at ON admissions\n"
+                  "WHEN OLD.discharged_at IS NULL AND NEW.discharged_at IS NOT NULL\n"
                   "BEGIN\n"
-                  "  UPDATE patients SET postcode_area = NEW.postcode_area\n"
-                  "  WHERE patient_id = OLD.patient_id;\n"
+                  "  UPDATE ward_stays SET to_at = NEW.discharged_at\n"
+                  "  WHERE admission_id = NEW.admission_id AND to_at IS NULL;\n"
                   "END;"),
-        trap_sql=("CREATE VIEW patient_contact AS\n"
-                  "  SELECT patient_id, name, postcode_area FROM patients;\n"
-                  "CREATE TRIGGER patient_contact_update\n"
-                  "INSTEAD OF UPDATE OF postcode_area ON patient_contact\n"
+        trap_sql=("CREATE TRIGGER close_stay_on_discharge\n"
+                  "AFTER UPDATE OF discharged_at ON admissions\n"
+                  "WHEN OLD.discharged_at IS NULL AND NEW.discharged_at IS NOT NULL\n"
                   "BEGIN\n"
-                  "  UPDATE patients SET postcode_area = NEW.postcode_area;\n"
+                  "  UPDATE ward_stays SET to_at = NEW.discharged_at\n"
+                  "  WHERE admission_id = NEW.admission_id;\n"
                   "END;"),
-        driver_sql="UPDATE patient_contact SET postcode_area = 'LS99' WHERE patient_id = 3;",
-        probe_sql=("SELECT (SELECT postcode_area FROM patients WHERE patient_id = 3),"
-                   " (SELECT COUNT(*) FROM patients WHERE postcode_area = 'LS99')"),
-        note="A view is read-only unless a trigger says what an UPDATE on"
-             " it means. INSTEAD OF UPDATE fires once per view row the"
-             " statement matched, with OLD and NEW for that row -- and the"
-             " trigger body has to say WHICH patient to change, by"
-             " OLD.patient_id. The trap's body has no WHERE, so the one"
-             " row that matched the view updates every patient in the"
-             " table. Without the trigger at all, the UPDATE is refused:"
-             " 'cannot modify patient_contact because it is a view'.",
-        claims=[("patient 3 moved, nobody else",
-                 lambda rows, c: rows == [('LS99', 1)])],
+        driver_sql=("UPDATE admissions SET discharged_at = '2026-07-01 09:00'"
+                    " WHERE admission_id = 173;"),
+        probe_sql=("SELECT stay_seq, to_at FROM ward_stays WHERE admission_id = 173"
+                   " UNION ALL SELECT 'open', COUNT(*) FROM ward_stays"
+                   " WHERE admission_id = 173 AND to_at IS NULL"),
+        note="UPDATE OF column fires only when that column is named in the"
+             " SET, and the WHEN clause narrows it to the NULL-to-value"
+             " transition. The body keeps two tables consistent, which is"
+             " what triggers are for. The trap's UPDATE has no to_at IS"
+             " NULL, so it rewrites the earlier, closed stay's end as"
+             " well -- admission 173 moved ward on the 28th, and that"
+             " history is lost.",
+        claims=[("the first stay untouched, the second closed, none open",
+                 lambda rows, c: rows == [(1, '2026-06-28 13:17'), (2, '2026-07-01 09:00'),
+                                          ('open', 0)])],
     ),
 ]
 
