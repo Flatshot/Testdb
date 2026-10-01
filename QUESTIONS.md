@@ -28,11 +28,11 @@ same kind of input with the same shape of answer is a duplicate.
 ## Live set
 
 Thirty questions in two tracks. **Fifteen SQL** on the district hospital (11
-tables, SEED 731 -- the same data as the five previous sets), at the level
-of the set before it, over the same seven stages with **three writable** on
-constructs no earlier writable stage used. **Fifteen Python**, a small step
-up: each asks for a function of one to three lines that RETURNS a value,
-graded on the return for several inputs, still built around one named tool.
+tables, SEED 731 -- the same data as the six previous sets), at the level
+of the two sets before it, over the same seven stages with **three
+writable** on constructs no earlier writable stage used. **Fifteen Python**,
+a step up again: each asks for a function of two to five lines that needs
+a for loop, a while loop or an if/else, graded on what it returns.
 
 ### The writable stage
 
@@ -42,58 +42,61 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `PRAGMA foreign_keys` off and on, `pragma_foreign_key_check` | the rows left, and the violations left |
-| 14 | a JSON column filled by `UPDATE` with `json_group_array` | one route, how many are valid arrays, how many have three wards |
-| 15 | `AFTER UPDATE OF` with `WHEN`, keeping a second table consistent | one admission's stays after a driven discharge |
+| 13 | a view with `RANK()` inside it | the view's rows |
+| 14 | `CHECK (code GLOB ...)` | which codes a driven insert got through |
+| 15 | `INSERT ... SELECT` over `json_each()` | the tags in order, and their count |
 
-15 carries a `driver_sql`: a statement the question runs after yours.
+14 carries a `driver_sql`: inserts the question runs after yours. A
+refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q802 | A1 conditional aggregation | Days and nights, side by side | ex 1 | 1 - Warm-up |
-| Q803 | A3 WHERE vs HAVING | Heavy on the controlled drugs | ex 2 | 1 - Warm-up |
-| Q804 | STR string functions | Reference numbers, zero-padded | ex 3 | 2 - Strings and sequences |
-| Q805 | SEQ sequences | Which of three stays was the longest | ex 4 | 2 - Strings and sequences |
-| Q806 | D2 date modifiers | First and last day of the month | ex 5 | 3 - Dates and times |
-| Q807 | D1 dates & times | Readings round the clock | ex 6 | 3 - Dates and times |
-| Q808 | INT intervals | Two on the table at once | ex 7 | 4 - Intervals and occupancy |
-| Q809 | INT intervals | Forty days in hospital | ex 8 | 4 - Intervals and occupancy |
-| Q810 | C2 grain | Consultant and surgeon, a regular pair | ex 9 | 5 - Joins and grain |
-| Q811 | E1 EXISTS | Neither cut nor dosed | ex 10 | 5 - Joins and grain |
-| Q812 | W1 window frames | Behind the leader | ex 11 | 6 - Window functions |
-| Q813 | W3 window vs GROUP BY | Running share of admissions | ex 12 | 6 - Window functions |
-| Q814 | FK foreign keys | Load first, check afterwards **(script)** | ex 13 | 7 - Changing the data |
-| Q815 | JSN JSON functions | A route stored as JSON **(script)** | ex 14 | 7 - Changing the data |
-| Q816 | TRG triggers | Discharge closes the stay **(script)** | ex 15 | 7 - Changing the data |
+| Q817 | A2 COUNT and AVG | Pence per minute in theatre | ex 1 | 1 - Warm-up |
+| Q818 | A3 WHERE vs HAVING | Wards above the hospital's pulse | ex 2 | 1 - Warm-up |
+| Q819 | STR string functions | The commonest forenames | ex 3 | 2 - Strings and sequences |
+| Q820 | SEQ sequences | Readings on the rise | ex 4 | 2 - Strings and sequences |
+| Q821 | D2 date modifiers | Arrived at the weekend | ex 5 | 3 - Dates and times |
+| Q822 | D1 dates & times | Days and hours, separately | ex 6 | 3 - Dates and times |
+| Q823 | INT intervals | Theatre 3 standing empty | ex 7 | 4 - Intervals and occupancy |
+| Q824 | INT intervals | Two in the morning and two in the afternoon | ex 8 | 4 - Intervals and occupancy |
+| Q825 | J1 self-joins | Two theatres in one day | ex 9 | 5 - Joins and grain |
+| Q826 | J2 outer joins | Theatre 6's tally, every type | ex 10 | 5 - Joins and grain |
+| Q827 | W1 window frames | The reading before and the reading after | ex 11 | 6 - Window functions |
+| Q828 | DST distributions | Where a stay sits on its ward | ex 12 | 6 - Window functions |
+| Q829 | VIEW views | A ranking you can query **(script)** | ex 13 | 7 - Changing the data |
+| Q830 | DDL constraints | A code with a shape **(script)** | ex 14 | 7 - Changing the data |
+| Q831 | JSN JSON functions | Rows out of a JSON list **(script)** | ex 15 | 7 - Changing the data |
 
 ### Python
 
-Fifteen functions, each one to three lines, each returning a value and
-graded on what it returns -- `sum()` handed back with `return`, `%` for
-even, `/` for an average, `upper()`, `strip()`, `split()`, `join()`, a
-slice, `max(key=len)`, `count()`, `[-1]`, a list comprehension, `set()` with
-`sorted()`, `get()` with a fallback, and `max(key=d.get)`. The traps are the
-first mistakes with each: printing instead of returning, a method without
-its parentheses, `//` for `/`, `names.join`, a set returned where a list was
-asked, 0 returned where False was.
+Fifteen functions, each two to five lines with a loop or a choice inside,
+graded on what they return: count the items over a limit, return the first
+one, keep the evens, drop the blanks, running totals, clamp every value, a
+while countdown, a digit sum, an age band, the second-largest distinct
+value, a duplicate test with a set, the longest streak, keys whose value
+passes, an inverted dict, and two tallies merged. The traps are the
+classic loop mistakes: a boundary with >= for >, a match recorded instead
+of returned, removing from the list being looped over, two ifs for an
+if/elif, a while that never changes its variable, add-then-test, and
+returning the current run instead of the best.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P071 | PY3 return | return: sum() handed back | py 1 | 1 - Numbers |
-| P072 | PY3 modulo | %: is it even | py 2 | 1 - Numbers |
-| P073 | PY3 division | /: an average to two decimals | py 3 | 1 - Numbers |
-| P074 | PY3 upper | upper(): shouting | py 4 | 2 - Strings |
-| P075 | PY3 strip | strip(): tidy input | py 5 | 2 - Strings |
-| P076 | PY3 split | split(): text into words | py 6 | 2 - Strings |
-| P077 | PY3 join | join(): words into text | py 7 | 2 - Strings |
-| P078 | PY3 slice | [start:stop]: the first three | py 8 | 2 - Strings |
-| P079 | PY3 max key | max(key=len): the longest | py 9 | 3 - Lists |
-| P080 | PY3 count | count(): how many of one value | py 10 | 3 - Lists |
-| P081 | PY3 negative index | [-1]: the last item | py 11 | 3 - Lists |
-| P082 | PY3 comprehension | [... for ...]: a list from a list | py 12 | 3 - Lists |
-| P083 | PY3 set | set(): the distinct values, sorted | py 13 | 3 - Lists |
-| P084 | PY3 dict get | get(): a lookup with a fallback | py 14 | 4 - Dictionaries |
-| P085 | PY3 max key dict | max(key=d.get): the key with the biggest value | py 15 | 4 - Dictionaries |
+| P086 | PY4 for+if count | for + if: count the ones over a limit | py 1 | 1 - Counting and filtering |
+| P087 | PY4 for+return | for + return: the first one over | py 2 | 1 - Counting and filtering |
+| P088 | PY4 filter list | for + append: keep the evens | py 3 | 1 - Counting and filtering |
+| P089 | PY4 filter strings | for + if: drop the blank strings | py 4 | 1 - Counting and filtering |
+| P090 | PY4 running total | for + accumulator: running totals | py 5 | 2 - Building a list |
+| P091 | PY4 if/elif in loop | for + if/elif: clamp every value | py 6 | 2 - Building a list |
+| P092 | PY4 while | while: count down to one | py 7 | 2 - Building a list |
+| P093 | PY4 while digits | while + // and %: add up the digits | py 8 | 2 - Building a list |
+| P094 | PY4 if/elif bands | if/elif/else: an age band | py 9 | 3 - Choosing |
+| P095 | PY4 two maxima | for + two variables: the second largest | py 10 | 3 - Choosing |
+| P096 | PY4 seen set | for + set: is anything repeated | py 11 | 3 - Choosing |
+| P097 | PY4 streak | for + reset: the longest streak | py 12 | 3 - Choosing |
+| P098 | PY4 dict filter | for + items(): keys whose value passes | py 13 | 4 - Dictionaries |
+| P099 | PY4 dict build | for + d[k] = v: invert a dictionary | py 14 | 4 - Dictionaries |
+| P100 | PY4 dict merge | for + get(): add two tallies together | py 15 | 4 - Dictionaries |
 
 ## Retired
 
@@ -402,6 +405,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q802 | A1 conditional aggregation | Days and nights, side by side | - | retired |
+| Q803 | A3 WHERE vs HAVING | Heavy on the controlled drugs | - | retired |
+| Q804 | STR string functions | Reference numbers, zero-padded | - | retired |
+| Q805 | SEQ sequences | Which of three stays was the longest | - | retired |
+| Q806 | D2 date modifiers | First and last day of the month | - | retired |
+| Q807 | D1 dates & times | Readings round the clock | - | retired |
+| Q808 | INT intervals | Two on the table at once | - | retired |
+| Q809 | INT intervals | Forty days in hospital | - | retired |
+| Q810 | C2 grain | Consultant and surgeon, a regular pair | - | retired |
+| Q811 | E1 EXISTS | Neither cut nor dosed | - | retired |
+| Q812 | W1 window frames | Behind the leader | - | retired |
+| Q813 | W3 window vs GROUP BY | Running share of admissions | - | retired |
+| Q814 | FK foreign keys | Load first, check afterwards **(script)** | - | retired |
+| Q815 | JSN JSON functions | A route stored as JSON **(script)** | - | retired |
+| Q816 | TRG triggers | Discharge closes the stay **(script)** | - | retired |
+| P071 | PY3 return | return: sum() handed back | - | retired |
+| P072 | PY3 modulo | %: is it even | - | retired |
+| P073 | PY3 division | /: an average to two decimals | - | retired |
+| P074 | PY3 upper | upper(): shouting | - | retired |
+| P075 | PY3 strip | strip(): tidy input | - | retired |
+| P076 | PY3 split | split(): text into words | - | retired |
+| P077 | PY3 join | join(): words into text | - | retired |
+| P078 | PY3 slice | [start:stop]: the first three | - | retired |
+| P079 | PY3 max key | max(key=len): the longest | - | retired |
+| P080 | PY3 count | count(): how many of one value | - | retired |
+| P081 | PY3 negative index | [-1]: the last item | - | retired |
+| P082 | PY3 comprehension | [... for ...]: a list from a list | - | retired |
+| P083 | PY3 set | set(): the distinct values, sorted | - | retired |
+| P084 | PY3 dict get | get(): a lookup with a fallback | - | retired |
+| P085 | PY3 max key dict | max(key=d.get): the key with the biggest value | - | retired |
 | Q787 | A2 COUNT and AVG | Milligrams a day, by form | - | retired |
 | Q788 | A3 WHERE vs HAVING | Mostly emergencies | - | retired |
 | Q789 | STR string functions | Surnames on the payroll | - | retired |
@@ -1165,3 +1198,14 @@ they still count as asked.
   filled by UPDATE with json_group_array, and an AFTER UPDATE OF trigger
   that closes the open stay. Python, fifteen tiny functions graded on their
   return, one tool each.
+- **Q817-Q831 and P086-P100** current set. Same hospital data (SEED 731).
+  SQL at the Q787 level, twelve SELECT -- a ratio of sums against an
+  average of ratios, HAVING against a scalar subquery, forenames by substr,
+  readings that rose on the previous one by LAG, weekend arrivals with
+  Sunday as '0', a stay split into days and hours by CAST, idle gaps in a
+  theatre from LAG of a computed end, a ward at two instants by two
+  conditional SUMs, a surgeon in two theatres on one day by self-join, a
+  LEFT JOIN whose filter stays in the ON, LAG beside LEAD, and CUME_DIST
+  within a partition -- and three writable: a view with RANK() in it, a
+  CHECK built on GLOB, and INSERT ... SELECT over json_each(). Python,
+  fifteen functions with a loop or an if inside, graded on their return.
