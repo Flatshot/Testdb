@@ -1,12 +1,14 @@
-"""Python practice exercises: fifteen tiny functions, one tool each.
+"""Python practice exercises: fifteen functions with a loop or an if inside.
 
-The fifth Python set, and a small step up from the three before it: every
-question asks for a FUNCTION of one to three lines that RETURNS a value,
-and is graded on what it returns for several inputs rather than on what it
-prints. Each is still built around one named tool -- sum(), max(key=),
-upper(), strip(), split(), join(), %, /, [-1], [start:stop], get(),
-count(), a list comprehension, set() -- and the title names it, so the
-tree on the left reads like a list of tools.
+The sixth Python set, and a step up from the one-line functions before it:
+every question asks for a FUNCTION of two to five lines that RETURNS a
+value and needs a for loop, a while loop or an if/else to get there --
+counting the items that pass a test, finding the first one, filtering a
+list, building a running total, clamping values, counting down, summing
+digits, banding a value, finding the second largest, spotting a
+duplicate, measuring a streak, and three small jobs on dictionaries. The
+title names the shape of the loop, so the tree on the left reads like a
+list of patterns.
 
 Two kinds of question, told apart by `kind`:
 
@@ -25,310 +27,498 @@ write, which check_questions.py proves the grader rejects. The `note` is
 shown when the answer is right, and says what the trap would have got wrong.
 
 The code runs in a separate interpreter with a time limit (see pyrun.py),
-so an infinite loop or a print in a loop is stopped, not fatal.
+so an infinite loop is stopped, not fatal -- and one of the traps here is
+exactly that.
 """
 
 import pyrun
 
 EXERCISES = [
-    # ============================================================== 1 Numbers
+    # ================================================ 1 Counting and filtering
     dict(
-        id=1, ledger="P071", concept="PY3 return", tier="1 - Numbers",
-        title="return: sum() handed back", kind="function",
-        func="total",
-        cases=[([16, 30, 18],), ([],), ([5],)],
+        id=1, ledger="P086", concept="PY4 for+if count", tier="1 - Counting and filtering",
+        title="for + if: count the ones over a limit", kind="function",
+        func="count_above",
+        cases=[([72, 118, 65, 101], 100), ([100, 100], 100), ([], 50)],
         prompt=(
-            "Write a function `total(nums)` that RETURNS the sum of the"
-            " numbers in the list, using sum():\n\n"
-            "  total([16, 30, 18]) -> 64\n\n"
-            "Return the value; do not print it. An empty list totals 0.\n\n"
-            "Return: the total."
+            "Write a function `count_above(rates, limit)` that returns how"
+            " many of the rates are STRICTLY greater than the limit, using"
+            " a for loop with an if and a counter:\n\n"
+            "  count_above([72, 118, 65, 101], 100) -> 2\n\n"
+            "Return: the count; 0 for an empty list."
         ),
-        solution="def total(nums):\n    return sum(nums)\n",
-        trap="def total(nums):\n    print(sum(nums))\n",
-        note="A function that prints its answer shows it on the screen and"
-             " returns None, so the caller gets nothing to use. return"
-             " hands the value back; printing is the caller's decision."
-             " sum() of an empty list is 0, so no special case is needed.",
+        solution=('def count_above(rates, limit):\n'
+                  '    count = 0\n'
+                  '    for r in rates:\n'
+                  '        if r > limit:\n'
+                  '            count += 1\n'
+                  '    return count\n'),
+        trap=('def count_above(rates, limit):\n'
+              '    count = 0\n'
+              '    for r in rates:\n'
+              '        if r >= limit:\n'
+              '            count += 1\n'
+              '    return count\n'),
+        note="The counting pattern: start at 0, add 1 inside the if, return"
+             " after the loop. 'Greater than' is >, and the boundary case"
+             " -- a rate equal to the limit -- is where >= goes wrong, which"
+             " is why the test cases include one. The one-liner is"
+             " sum(r > limit for r in rates), once the loop is second"
+             " nature.",
     ),
     dict(
-        id=2, ledger="P072", concept="PY3 modulo", tier="1 - Numbers",
-        title="%: is it even", kind="function",
-        func="is_even",
-        cases=[(4,), (7,), (0,), (-3,)],
+        id=2, ledger="P087", concept="PY4 for+return", tier="1 - Counting and filtering",
+        title="for + return: the first one over", kind="function",
+        func="first_above",
+        cases=[([72, 118, 65, 101], 100), ([72, 65], 100), ([], 0)],
         prompt=(
-            "Write a function `is_even(n)` that returns True when n is"
-            " even and False otherwise, using the remainder operator %:\n\n"
-            "  is_even(4) -> True\n"
-            "  is_even(7) -> False\n\n"
-            "Return: True or False, not a number."
+            "Write a function `first_above(rates, limit)` that returns the"
+            " FIRST rate greater than the limit, or None if there is"
+            " none:\n\n"
+            "  first_above([72, 118, 65, 101], 100) -> 118\n\n"
+            "Return: the rate, or None."
         ),
-        solution="def is_even(n):\n    return n % 2 == 0\n",
-        trap="def is_even(n):\n    return n % 2\n",
-        note="n % 2 is 0 or 1, and returning it gives a NUMBER, not a"
-             " boolean -- and the wrong way round, since 0 means even. The"
-             " comparison n % 2 == 0 is already True or False, so it can"
-             " be returned directly; no if/else needed. The grader tells"
-             " 0 from False, as a caller writing `if is_even(n)` would"
-             " not.",
+        solution=('def first_above(rates, limit):\n'
+                  '    for r in rates:\n'
+                  '        if r > limit:\n'
+                  '            return r\n'
+                  '    return None\n'),
+        trap=('def first_above(rates, limit):\n'
+              '    found = None\n'
+              '    for r in rates:\n'
+              '        if r > limit:\n'
+              '            found = r\n'
+              '    return found\n'),
+        note="A return inside the loop leaves the function the moment the"
+             " first match is found. Recording the match and carrying on"
+             " keeps overwriting it, so the LAST match comes back -- 101"
+             " instead of 118. The return None after the loop runs only"
+             " when nothing matched; a function that falls off the end"
+             " returns None anyway, but saying so is clearer.",
     ),
     dict(
-        id=3, ledger="P073", concept="PY3 division", tier="1 - Numbers",
-        title="/: an average to two decimals", kind="function",
-        func="average",
-        cases=[([1, 2, 3, 4],), ([36.8, 37.2, 38.1],), ([7],)],
+        id=3, ledger="P088", concept="PY4 filter list", tier="1 - Counting and filtering",
+        title="for + append: keep the evens", kind="function",
+        func="evens_only",
+        cases=[([1, 2, 3, 4, 6],), ([1, 3],), ([],)],
         prompt=(
-            "Write a function `average(nums)` that returns the mean of a"
-            " non-empty list, rounded to two decimal places, using / for"
-            " the division:\n\n"
-            "  average([1, 2, 3, 4]) -> 2.5\n\n"
-            "Return: the mean, rounded."
+            "Write a function `evens_only(nums)` that returns a NEW list"
+            " holding only the even numbers, in their original order --"
+            " an empty list to start with, append() inside the if:\n\n"
+            "  evens_only([1, 2, 3, 4, 6]) -> [2, 4, 6]\n\n"
+            "Return: the new list."
         ),
-        solution="def average(nums):\n    return round(sum(nums) / len(nums), 2)\n",
-        trap="def average(nums):\n    return round(sum(nums) // len(nums), 2)\n",
-        note="/ divides and keeps the fraction; // throws it away first,"
-             " so 10 // 4 is 2 and no rounding can bring the .5 back. Use"
-             " // only when you want whole-number division. round(x, 2)"
-             " keeps two decimals; on a value like 2.5 it prints as 2.5,"
-             " because a float does not carry trailing zeros.",
-    ),
-    # ============================================================== 2 Strings
-    dict(
-        id=4, ledger="P074", concept="PY3 upper", tier="2 - Strings",
-        title="upper(): shouting", kind="function",
-        func="shout",
-        cases=[("code blue",), ("Ward 5",), ("",)],
-        prompt=(
-            "Write a function `shout(text)` that returns the text in"
-            " capitals with an exclamation mark on the end, using"
-            " upper():\n\n"
-            "  shout(\"code blue\") -> \"CODE BLUE!\"\n\n"
-            "Return: the new string."
-        ),
-        solution='def shout(text):\n    return text.upper() + "!"\n',
-        trap='def shout(text):\n    return text.upper + "!"\n',
-        note="text.upper without parentheses is the method itself, not"
-             " its result, and adding a string to a method is a"
-             " TypeError. Call it: text.upper(). The + then joins two"
-             " strings. An empty string shouts as just '!'.",
+        solution=('def evens_only(nums):\n'
+                  '    evens = []\n'
+                  '    for n in nums:\n'
+                  '        if n % 2 == 0:\n'
+                  '            evens.append(n)\n'
+                  '    return evens\n'),
+        trap=('def evens_only(nums):\n'
+              '    for n in nums:\n'
+              '        if n % 2 == 1:\n'
+              '            nums.remove(n)\n'
+              '    return nums\n'),
+        note="Build a new list rather than removing from the one you are"
+             " looping over: removing shifts the items along, the loop"
+             " skips the one that moved into the gap, and [1, 3] comes"
+             " back as [3]. The filter pattern -- empty list, loop, if,"
+             " append -- is also what a comprehension abbreviates:"
+             " [n for n in nums if n % 2 == 0].",
     ),
     dict(
-        id=5, ledger="P075", concept="PY3 strip", tier="2 - Strings",
-        title="strip(): tidy input", kind="function",
-        func="clean",
-        cases=[("  Bay 3  ",), ("O+",), ("\tA B \n",)],
+        id=4, ledger="P089", concept="PY4 filter strings", tier="1 - Counting and filtering",
+        title="for + if: drop the blank strings", kind="function",
+        func="remove_blanks",
+        cases=[(["Bay A", "", "   ", "Bay B"],), (["", " "],), (["x"],)],
         prompt=(
-            "Write a function `clean(text)` that returns the text with"
-            " whitespace removed from both ends, using strip(). Spaces"
-            " inside the text stay:\n\n"
-            "  clean(\"  Bay 3  \") -> \"Bay 3\"\n\n"
-            "Return: the stripped string."
+            "Write a function `remove_blanks(strings)` that returns a new"
+            " list without the strings that are empty or only whitespace."
+            " strip() turns a whitespace-only string into an empty one,"
+            " and an empty string is false in an if:\n\n"
+            "  remove_blanks([\"Bay A\", \"\", \"   \", \"Bay B\"]) ->"
+            " [\"Bay A\", \"Bay B\"]\n\n"
+            "Return: the new list, with the kept strings unchanged."
         ),
-        solution="def clean(text):\n    return text.strip()\n",
-        trap='def clean(text):\n    return text.replace(" ", "")\n',
-        note="strip() trims the ends and nothing else, and it trims tabs"
-             " and newlines as well as spaces. replace(' ', '') deletes"
-             " every space, including the one in 'Bay 3', and leaves a"
-             " tab alone. lstrip() and rstrip() trim one end only.",
+        solution=('def remove_blanks(strings):\n'
+                  '    kept = []\n'
+                  '    for s in strings:\n'
+                  '        if s.strip():\n'
+                  '            kept.append(s)\n'
+                  '    return kept\n'),
+        trap=('def remove_blanks(strings):\n'
+              '    kept = []\n'
+              '    for s in strings:\n'
+              '        if s != "":\n'
+              '            kept.append(s)\n'
+              '    return kept\n'),
+        note="s != '' keeps '   ', which is not empty but is blank."
+             " s.strip() is '' for any whitespace-only string, and an"
+             " empty string is false, so `if s.strip():` reads 'if there"
+             " is anything left after trimming'. The kept strings are"
+             " appended as they were, not stripped -- the question says"
+             " unchanged.",
+    ),
+    # =================================================== 2 Building a list
+    dict(
+        id=5, ledger="P090", concept="PY4 running total", tier="2 - Building a list",
+        title="for + accumulator: running totals", kind="function",
+        func="running_total",
+        cases=[([3, 1, 4, 1],), ([],), ([10],)],
+        prompt=(
+            "Write a function `running_total(nums)` that returns a list"
+            " of the cumulative sums -- each item is the total so far:\n\n"
+            "  running_total([3, 1, 4, 1]) -> [3, 4, 8, 9]\n\n"
+            "Keep a total that grows as you go, and append it after each"
+            " addition.\n\n"
+            "Return: the list of totals."
+        ),
+        solution=('def running_total(nums):\n'
+                  '    totals = []\n'
+                  '    total = 0\n'
+                  '    for n in nums:\n'
+                  '        total += n\n'
+                  '        totals.append(total)\n'
+                  '    return totals\n'),
+        trap=('def running_total(nums):\n'
+              '    totals = []\n'
+              '    total = 0\n'
+              '    for n in nums:\n'
+              '        totals.append(total)\n'
+              '        total += n\n'
+              '    return totals\n'),
+        note="Two variables: the running total, and the list collecting"
+             " it. The order of the two lines in the body matters -- add,"
+             " then append -- or every entry is the total BEFORE the"
+             " current item and the list starts with 0. itertools."
+             "accumulate does this in one call, later.",
     ),
     dict(
-        id=6, ledger="P076", concept="PY3 split", tier="2 - Strings",
-        title="split(): text into words", kind="function",
-        func="words",
-        cases=[("Morphine Codeine Diazepam",), ("one",), ("",)],
+        id=6, ledger="P091", concept="PY4 if/elif in loop", tier="2 - Building a list",
+        title="for + if/elif: clamp every value", kind="function",
+        func="clamp_all",
+        cases=[([35.2, 36.8, 42.5], 36.0, 41.0), ([], 0, 1), ([5, 5], 5, 5)],
         prompt=(
-            "Write a function `words(text)` that returns the words of the"
-            " text as a list, using split():\n\n"
-            "  words(\"Morphine Codeine Diazepam\") -> [\"Morphine\","
-            " \"Codeine\", \"Diazepam\"]\n\n"
-            "Return: a list of strings; empty text gives an empty list."
+            "Write a function `clamp_all(values, lo, hi)` that returns a"
+            " new list where every value below lo becomes lo, every value"
+            " above hi becomes hi, and the rest are unchanged:\n\n"
+            "  clamp_all([35.2, 36.8, 42.5], 36.0, 41.0) -> [36.0, 36.8,"
+            " 41.0]\n\n"
+            "Return: the new list."
         ),
-        solution="def words(text):\n    return text.split()\n",
-        trap="def words(text):\n    return list(text)\n",
-        note="list(text) breaks a string into its CHARACTERS, one per"
-             " item. split() breaks it at whitespace into words, and with"
-             " no argument it also drops extra spaces and returns [] for"
-             " empty text. split(',') splits at commas instead.",
+        solution=('def clamp_all(values, lo, hi):\n'
+                  '    out = []\n'
+                  '    for v in values:\n'
+                  '        if v < lo:\n'
+                  '            out.append(lo)\n'
+                  '        elif v > hi:\n'
+                  '            out.append(hi)\n'
+                  '        else:\n'
+                  '            out.append(v)\n'
+                  '    return out\n'),
+        trap=('def clamp_all(values, lo, hi):\n'
+              '    out = []\n'
+              '    for v in values:\n'
+              '        if v < lo:\n'
+              '            out.append(lo)\n'
+              '        if v > hi:\n'
+              '            out.append(hi)\n'
+              '        else:\n'
+              '            out.append(v)\n'
+              '    return out\n'),
+        note="if / elif / else is ONE decision with three outcomes, and"
+             " exactly one branch runs. Two separate ifs are two decisions:"
+             " a value below lo appends lo in the first and then, being"
+             " not above hi, appends itself in the second's else -- two"
+             " items for one input. When the cases are exclusive, chain"
+             " them with elif. min(hi, max(lo, v)) is the one-line clamp.",
     ),
     dict(
-        id=7, ledger="P077", concept="PY3 join", tier="2 - Strings",
-        title="join(): words into text", kind="function",
-        func="joined",
-        cases=[(["Barry", "Bevan", "Cavell"],), (["Fleming"],), ([],)],
+        id=7, ledger="P092", concept="PY4 while", tier="2 - Building a list",
+        title="while: count down to one", kind="function",
+        func="countdown",
+        cases=[(3,), (1,), (0,)],
         prompt=(
-            "Write a function `joined(names)` that returns the names as one"
-            " string separated by ', ', using join():\n\n"
-            "  joined([\"Barry\", \"Bevan\"]) -> \"Barry, Bevan\"\n\n"
-            "Return: one string; an empty list gives an empty string."
+            "Write a function `countdown(n)` that returns the list n, n-1,"
+            " ... down to 1, using a while loop that appends and then"
+            " decrements. For 0 or less, return an empty list:\n\n"
+            "  countdown(3) -> [3, 2, 1]\n\n"
+            "Return: the list."
         ),
-        solution='def joined(names):\n    return ", ".join(names)\n',
-        trap='def joined(names):\n    return names.join(", ")\n',
-        note="join() is a STRING method: the separator calls it and the"
-             " list is the argument, ', '.join(names). Lists have no join,"
-             " so names.join(...) is an AttributeError. It joins any"
-             " number of items, including none, without a stray separator"
-             " at either end.",
+        solution=('def countdown(n):\n'
+                  '    out = []\n'
+                  '    while n > 0:\n'
+                  '        out.append(n)\n'
+                  '        n -= 1\n'
+                  '    return out\n'),
+        trap=('def countdown(n):\n'
+              '    out = []\n'
+              '    while n > 0:\n'
+              '        out.append(n)\n'
+              '    return out\n'),
+        note="A while loop runs until its condition is false, so something"
+             " in the body has to move towards that -- n -= 1 here."
+             " Without it the loop appends 3 forever, and the runner stops"
+             " it at the time limit. With a for loop the same list is"
+             " list(range(n, 0, -1)); while is for when the number of"
+             " passes is not known up front.",
     ),
     dict(
-        id=8, ledger="P078", concept="PY3 slice", tier="2 - Strings",
-        title="[start:stop]: the first three", kind="function",
-        func="first_three",
-        cases=[("Nightingale",), ("SRG-04",), ("ab",)],
+        id=8, ledger="P093", concept="PY4 while digits", tier="2 - Building a list",
+        title="while + // and %: add up the digits", kind="function",
+        func="digit_sum",
+        cases=[(1234,), (7,), (0,), (9999,)],
         prompt=(
-            "Write a function `first_three(text)` that returns the first"
-            " three characters of the text, using a slice. Shorter text"
-            " returns what there is:\n\n"
-            "  first_three(\"Nightingale\") -> \"Nig\"\n\n"
-            "Return: the slice."
+            "Write a function `digit_sum(n)` that returns the sum of the"
+            " digits of a non-negative integer, peeling the last digit off"
+            " with % 10 and dropping it with // 10 in a while loop:\n\n"
+            "  digit_sum(1234) -> 10\n\n"
+            "digit_sum(0) is 0.\n\n"
+            "Return: the sum."
         ),
-        solution="def first_three(text):\n    return text[:3]\n",
-        trap="def first_three(text):\n    return text[0:2]\n",
-        note="[0:3] or [:3] is three characters, because the stop is not"
-             " included; [0:2] is two. A slice past the end of a short"
-             " string returns what exists rather than raising, which is"
-             " why 'ab' needs no special case -- unlike text[2], which"
-             " would be an IndexError.",
+        solution=('def digit_sum(n):\n'
+                  '    total = 0\n'
+                  '    while n > 0:\n'
+                  '        total += n % 10\n'
+                  '        n = n // 10\n'
+                  '    return total\n'),
+        trap=('def digit_sum(n):\n'
+              '    total = 0\n'
+              '    while n > 0:\n'
+              '        total += n % 10\n'
+              '        n = n / 10\n'
+              '    return total\n'),
+        note="n % 10 is the last digit and n // 10 is the number without"
+             " it. With / instead of //, n becomes 123.4, then 12.34, and"
+             " the loop runs on through fractions -- the digits it adds"
+             " are of 123.4 % 10, which is 3.4 -- until n underflows to"
+             " 0 some three hundred passes later with a nonsense total."
+             " Integer arithmetic needs the integer operators. The other"
+             " route is sum(int(ch) for ch in str(n)).",
     ),
-    # ================================================================ 3 Lists
+    # ============================================================ 3 Choosing
     dict(
-        id=9, ledger="P079", concept="PY3 max key", tier="3 - Lists",
-        title="max(key=len): the longest", kind="function",
-        func="longest",
-        cases=[(["Barry", "Nightingale", "Bevan"],), (["a", "bb", "cc"],), (["x"],)],
+        id=9, ledger="P094", concept="PY4 if/elif bands", tier="3 - Choosing",
+        title="if/elif/else: an age band", kind="function",
+        func="band",
+        cases=[(7,), (18,), (64,), (65,), (90,)],
         prompt=(
-            "Write a function `longest(words)` that returns the longest"
-            " word in a non-empty list, using max() with key=len. On a tie"
-            " the first of the longest is returned:\n\n"
-            "  longest([\"Barry\", \"Nightingale\", \"Bevan\"]) ->"
-            " \"Nightingale\"\n\n"
-            "Return: the word."
+            "Write a function `band(age)` that returns 'child' for an age"
+            " under 18, 'adult' for 18 up to and including 64, and"
+            " 'senior' for 65 and over:\n\n"
+            "  band(64) -> 'adult'\n"
+            "  band(65) -> 'senior'\n\n"
+            "Return: one of the three strings."
         ),
-        solution="def longest(words):\n    return max(words, key=len)\n",
-        trap="def longest(words):\n    return max(words)\n",
-        note="max(words) compares the strings themselves, alphabetically,"
-             " so 'Nightingale' loses to 'Bevan'. key=len says compare by"
-             " length and return the word, not the length. max() keeps the"
-             " first of equal maximums, which is the tie rule here.",
-    ),
-    dict(
-        id=10, ledger="P080", concept="PY3 count", tier="3 - Lists",
-        title="count(): how many of one value", kind="function",
-        func="count_of",
-        cases=[(["day", "night", "day", "day"], "day"), (["day"], "night"), ([], "day")],
-        prompt=(
-            "Write a function `count_of(items, value)` that returns how"
-            " many times the value appears in the list, using the list's"
-            " count() method:\n\n"
-            "  count_of([\"day\", \"night\", \"day\"], \"day\") -> 2\n\n"
-            "Return: the count, 0 when it never appears."
-        ),
-        solution="def count_of(items, value):\n    return items.count(value)\n",
-        trap="def count_of(items, value):\n    return len(items)\n",
-        note="len() is how many items there are; count(value) is how many"
-             " of them equal the value. They agree only when every item"
-             " matches. count() returns 0 for a value that is not there,"
-             " unlike index(), which raises.",
-    ),
-    dict(
-        id=11, ledger="P081", concept="PY3 negative index", tier="3 - Lists",
-        title="[-1]: the last item", kind="function",
-        func="last",
-        cases=[([72, 118, 65],), (["only"],), ([1, 2],)],
-        prompt=(
-            "Write a function `last(items)` that returns the last item of a"
-            " non-empty list, using a negative index:\n\n"
-            "  last([72, 118, 65]) -> 65\n\n"
-            "Return: the item."
-        ),
-        solution="def last(items):\n    return items[-1]\n",
-        trap="def last(items):\n    return items[len(items)]\n",
-        note="Indexes run from 0 to len - 1, so items[len(items)] is one"
-             " past the end and an IndexError. items[-1] counts from the"
-             " end: -1 is the last, -2 the one before. It works for any"
-             " non-empty sequence, strings included.",
+        solution=('def band(age):\n'
+                  '    if age < 18:\n'
+                  '        return "child"\n'
+                  '    elif age < 65:\n'
+                  '        return "adult"\n'
+                  '    else:\n'
+                  '        return "senior"\n'),
+        trap=('def band(age):\n'
+              '    if age < 18:\n'
+              '        return "child"\n'
+              '    elif age <= 65:\n'
+              '        return "adult"\n'
+              '    else:\n'
+              '        return "senior"\n'),
+        note="Bands are tested in order, so each elif only sees what the"
+             " earlier tests let through: age < 65 already means 18 to 64"
+             " once age < 18 has been handled. The boundary is the whole"
+             " difficulty -- 65 is a senior, so the adult test is < 65,"
+             " not <= 65 -- and the cases probe both edges.",
     ),
     dict(
-        id=12, ledger="P082", concept="PY3 comprehension", tier="3 - Lists",
-        title="[... for ...]: a list from a list", kind="function",
-        func="doubled",
-        cases=[([1, 2, 3],), ([],), ([10],)],
+        id=10, ledger="P095", concept="PY4 two maxima", tier="3 - Choosing",
+        title="for + two variables: the second largest", kind="function",
+        func="second_largest",
+        cases=[([72, 118, 65, 101],), ([5, 5, 3],), ([1, 2],)],
         prompt=(
-            "Write a function `doubled(nums)` that returns a NEW list with"
-            " every number doubled, using a list comprehension:\n\n"
-            "  doubled([1, 2, 3]) -> [2, 4, 6]\n\n"
-            "Return: the new list; an empty list stays empty."
+            "Write a function `second_largest(nums)` that returns the"
+            " second-largest DISTINCT value in a list of at least two"
+            " distinct numbers:\n\n"
+            "  second_largest([72, 118, 65, 101]) -> 101\n"
+            "  second_largest([5, 5, 3]) -> 3\n\n"
+            "Return: the number."
         ),
-        solution="def doubled(nums):\n    return [n * 2 for n in nums]\n",
-        trap="def doubled(nums):\n    return nums * 2\n",
-        note="A list times 2 is the list REPEATED -- [1, 2, 3, 1, 2, 3] --"
-             " not each item doubled. A comprehension, [expression for"
-             " item in list], builds a new list by applying the expression"
-             " to each item; it is the one-line form of a for loop with"
-             " append().",
+        solution=('def second_largest(nums):\n'
+                  '    distinct = sorted(set(nums))\n'
+                  '    return distinct[-2]\n'),
+        trap=('def second_largest(nums):\n'
+              '    return sorted(nums)[-2]\n'),
+        note="sorted(nums)[-2] is the second item from the end, and when"
+             " the largest value appears twice that is the largest again"
+             " -- [5, 5, 3] gives 5, not 3. 'Distinct' is the word to act"
+             " on: set() drops the repeats first. The loop version keeps"
+             " two variables, best and second, and updates both as it"
+             " goes.",
     ),
     dict(
-        id=13, ledger="P083", concept="PY3 set", tier="3 - Lists",
-        title="set(): the distinct values, sorted", kind="function",
-        func="distinct_sorted",
-        cases=[(["day", "night", "day"],), ([3, 1, 3, 2, 1],), ([],)],
+        id=11, ledger="P096", concept="PY4 seen set", tier="3 - Choosing",
+        title="for + set: is anything repeated", kind="function",
+        func="has_duplicates",
+        cases=[([1, 2, 3, 2],), ([1, 2, 3],), ([],), (["a", "A"],)],
         prompt=(
-            "Write a function `distinct_sorted(items)` that returns the"
-            " distinct values of the list, sorted, as a LIST -- set() to"
-            " drop the repeats, sorted() to order them:\n\n"
-            "  distinct_sorted([\"day\", \"night\", \"day\"]) ->"
-            " [\"day\", \"night\"]\n\n"
-            "Return: a sorted list."
+            "Write a function `has_duplicates(items)` that returns True if"
+            " any value appears more than once, else False. Keep a set of"
+            " what you have seen; return True the moment an item is"
+            " already in it:\n\n"
+            "  has_duplicates([1, 2, 3, 2]) -> True\n\n"
+            "Return: True or False."
         ),
-        solution="def distinct_sorted(items):\n    return sorted(set(items))\n",
-        trap="def distinct_sorted(items):\n    return set(items)\n",
-        note="set(items) drops the repeats but has no order, and it is a"
-             " different type from a list -- a caller indexing result[0]"
-             " would fail. sorted() accepts a set and returns a list, so"
-             " the two together are the idiom. On an empty list it"
-             " returns [].",
+        solution=('def has_duplicates(items):\n'
+                  '    seen = set()\n'
+                  '    for item in items:\n'
+                  '        if item in seen:\n'
+                  '            return True\n'
+                  '        seen.add(item)\n'
+                  '    return False\n'),
+        trap=('def has_duplicates(items):\n'
+              '    seen = set()\n'
+              '    for item in items:\n'
+              '        seen.add(item)\n'
+              '        if item in seen:\n'
+              '            return True\n'
+              '    return False\n'),
+        note="Test, then add. Adding first means the item is always in"
+             " the set by the time it is tested, so the very first item"
+             " looks like a duplicate and every non-empty list returns"
+             " True. The one-liner is len(set(items)) < len(items), which"
+             " looks at everything; the loop can stop at the first repeat.",
+    ),
+    dict(
+        id=12, ledger="P097", concept="PY4 streak", tier="3 - Choosing",
+        title="for + reset: the longest streak", kind="function",
+        func="longest_run",
+        cases=[([True, True, False, True, True, True],), ([False, False],),
+               ([],), ([True],), ([True, True, True, False, True],)],
+        prompt=(
+            "Write a function `longest_run(flags)` that returns the length"
+            " of the longest unbroken run of True values in the list:\n\n"
+            "  longest_run([True, True, False, True, True, True]) -> 3\n\n"
+            "Keep a current run that grows on True and resets to 0 on"
+            " False, and a best that remembers the highest the current"
+            " run has reached.\n\n"
+            "Return: the length; 0 if there is no True."
+        ),
+        solution=('def longest_run(flags):\n'
+                  '    best = 0\n'
+                  '    current = 0\n'
+                  '    for f in flags:\n'
+                  '        if f:\n'
+                  '            current += 1\n'
+                  '            best = max(best, current)\n'
+                  '        else:\n'
+                  '            current = 0\n'
+                  '    return best\n'),
+        trap=('def longest_run(flags):\n'
+              '    current = 0\n'
+              '    for f in flags:\n'
+              '        if f:\n'
+              '            current += 1\n'
+              '        else:\n'
+              '            current = 0\n'
+              '    return current\n'),
+        note="Two counters: the run in progress, and the best run seen."
+             " Returning only the current run reports the LAST streak,"
+             " which is 0 whenever the list ends on a False. best = max"
+             "(best, current) is the update that remembers; it has to"
+             " happen as the run grows, not after the loop.",
     ),
     # ========================================================= 4 Dictionaries
     dict(
-        id=14, ledger="P084", concept="PY3 dict get", tier="4 - Dictionaries",
-        title="get(): a lookup with a fallback", kind="function",
-        func="beds_for",
-        cases=[("Fleming", {"Fleming": 16, "Barry": 30}),
-               ("Bevan", {"Fleming": 16, "Barry": 30}),
-               ("Barry", {})],
+        id=13, ledger="P098", concept="PY4 dict filter", tier="4 - Dictionaries",
+        title="for + items(): keys whose value passes", kind="function",
+        func="keys_above",
+        cases=[({"Fleming": 16, "Barry": 30, "Jenner": 18}, 17),
+               ({"a": 1}, 5), ({}, 0)],
         prompt=(
-            "Write a function `beds_for(ward, beds)` that returns the beds"
-            " for the ward from the dictionary, or 0 when the ward is not"
-            " in it, using get():\n\n"
-            "  beds_for(\"Bevan\", {\"Fleming\": 16}) -> 0\n\n"
-            "Return: a number."
+            "Write a function `keys_above(d, limit)` that returns a list"
+            " of the keys whose value is greater than the limit, in the"
+            " dictionary's order:\n\n"
+            "  keys_above({\"Fleming\": 16, \"Barry\": 30, \"Jenner\": 18},"
+            " 17) -> [\"Barry\", \"Jenner\"]\n\n"
+            "Return: a list of keys."
         ),
-        solution="def beds_for(ward, beds):\n    return beds.get(ward, 0)\n",
-        trap="def beds_for(ward, beds):\n    return beds[ward]\n",
-        note="beds[ward] raises KeyError when the ward is missing; get(ward,"
-             " 0) returns the 0 instead. The second argument is the"
-             " fallback, and it is None if you leave it out -- which a"
-             " caller adding the result to a number would then trip over.",
+        solution=('def keys_above(d, limit):\n'
+                  '    out = []\n'
+                  '    for key, value in d.items():\n'
+                  '        if value > limit:\n'
+                  '            out.append(key)\n'
+                  '    return out\n'),
+        trap=('def keys_above(d, limit):\n'
+              '    out = []\n'
+              '    for key, value in d.items():\n'
+              '        if value > limit:\n'
+              '            out.append(value)\n'
+              '    return out\n'),
+        note="items() gives both halves of each entry, and the if tests"
+             " one while the append collects the other -- the question"
+             " asks for the keys, and appending the values gives [30, 18]."
+             " A dict keeps insertion order, so the list comes out in the"
+             " order the entries were added.",
     ),
     dict(
-        id=15, ledger="P085", concept="PY3 max key dict", tier="4 - Dictionaries",
-        title="max(key=d.get): the key with the biggest value", kind="function",
-        func="fullest",
-        cases=[({"Fleming": 16, "Barry": 30, "Jenner": 18},),
-               ({"Zed": 1, "Amy": 2},), ({"one": 5},)],
+        id=14, ledger="P099", concept="PY4 dict build", tier="4 - Dictionaries",
+        title="for + d[k] = v: invert a dictionary", kind="function",
+        func="invert",
+        cases=[({"Fleming": 5, "Barry": 4},), ({},), ({"x": 1},)],
         prompt=(
-            "Write a function `fullest(beds)` that returns the KEY with the"
-            " largest value in a non-empty dictionary, using max() with"
-            " key=beds.get:\n\n"
-            "  fullest({\"Fleming\": 16, \"Barry\": 30}) -> \"Barry\"\n\n"
-            "Return: the key."
+            "Write a function `invert(d)` that returns a new dictionary"
+            " with the keys and values swapped. The values are unique:\n\n"
+            "  invert({\"Fleming\": 5, \"Barry\": 4}) -> {5: \"Fleming\","
+            " 4: \"Barry\"}\n\n"
+            "Return: the new dictionary."
         ),
-        solution="def fullest(beds):\n    return max(beds, key=beds.get)\n",
-        trap="def fullest(beds):\n    return max(beds.values())\n",
-        note="max(beds.values()) is the largest NUMBER, 30, but the"
-             " question wants the ward. Looping over a dict gives its"
-             " keys, and key=beds.get tells max() to judge each key by its"
-             " value while returning the key. The same key= works with"
-             " min() and sorted().",
+        solution=('def invert(d):\n'
+                  '    out = {}\n'
+                  '    for key, value in d.items():\n'
+                  '        out[value] = key\n'
+                  '    return out\n'),
+        trap=('def invert(d):\n'
+              '    out = {}\n'
+              '    for key, value in d.items():\n'
+              '        out[key] = value\n'
+              '    return out\n'),
+        note="Building a dictionary in a loop is assignment to a new key,"
+             " out[value] = key -- the value becomes the key. Assigning"
+             " out[key] = value just copies the dictionary. The"
+             " comprehension form is {v: k for k, v in d.items()}. If two"
+             " keys shared a value, the later one would win; the question"
+             " promises they do not.",
+    ),
+    dict(
+        id=15, ledger="P100", concept="PY4 dict merge", tier="4 - Dictionaries",
+        title="for + get(): add two tallies together", kind="function",
+        func="merge_counts",
+        cases=[({"day": 3, "night": 1}, {"night": 2, "late": 1}),
+               ({}, {"a": 1}), ({"a": 1}, {})],
+        prompt=(
+            "Write a function `merge_counts(a, b)` that returns a new"
+            " dictionary holding the sum of the counts in two tallies -- a"
+            " key in both is added up, a key in one keeps its count:\n\n"
+            "  merge_counts({\"day\": 3, \"night\": 1}, {\"night\": 2,"
+            " \"late\": 1}) -> {\"day\": 3, \"night\": 3, \"late\": 1}\n\n"
+            "Start from a copy of a, then loop over b with get(key, 0).\n\n"
+            "Return: the merged dictionary."
+        ),
+        solution=('def merge_counts(a, b):\n'
+                  '    out = dict(a)\n'
+                  '    for key, n in b.items():\n'
+                  '        out[key] = out.get(key, 0) + n\n'
+                  '    return out\n'),
+        trap=('def merge_counts(a, b):\n'
+              '    out = dict(a)\n'
+              '    for key, n in b.items():\n'
+              '        out[key] = n\n'
+              '    return out\n'),
+        note="out[key] = n overwrites: night becomes 2, not 3. get(key, 0)"
+             " + n reads what is there -- or 0 -- and adds. dict(a) makes"
+             " a copy so the caller's dictionary is not changed, which a"
+             " function should not do without saying so. collections."
+             "Counter supports a + b directly, for later.",
     ),
 ]
 
