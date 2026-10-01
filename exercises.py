@@ -89,9 +89,14 @@ EXERCISES = [
         id=3, ledger="Q804", concept="STR", tier="2 - Strings and sequences",
         title="Reference numbers, zero-padded",
         prompt=(
-            "Patients 1 to 5 with a reference of the form 'P00001' -- the"
-            " letter P and the id padded with zeros to five digits."
-            " printf('%05d', n) pads a number.\n\n"
+            "For patients 1 to 5, build a reference code: the letter P"
+            " followed by the patient_id written as FIVE digits, with"
+            " zeros in front to make up the width. Patient 1 becomes"
+            " 'P00001'; patient 23 would become 'P00023'.\n\n"
+            "The padding is what printf() does: printf('%05d', 7) gives"
+            " '00007' -- d means a whole number, 05 means at least five"
+            " characters wide, filled with zeros. Put the P in front with"
+            " ||, or inside the format string.\n\n"
             "Return: patient_id, reference"
         ),
         solution=("SELECT patient_id, printf('P%05d', patient_id) FROM patients"

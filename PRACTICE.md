@@ -136,8 +136,13 @@ position won.
 
 3. **Reference numbers, zero-padded** (Q804)
 
-   Patients 1 to 5 with a reference of the form 'P00001' -- the letter P and
-   the id padded with zeros to five digits. printf('%05d', n) pads a number.
+   For patients 1 to 5, build a reference code: the letter P followed by the
+   patient_id written as FIVE digits, with zeros in front to make up the
+   width. Patient 1 becomes 'P00001'; patient 23 would become 'P00023'.
+
+   The padding is what printf() does: printf('%05d', 7) gives '00007' -- d
+   means a whole number, 05 means at least five characters wide, filled with
+   zeros. Put the P in front with ||, or inside the format string.
 
    *Return: patient_id, reference*
 
