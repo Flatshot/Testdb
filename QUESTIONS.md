@@ -27,12 +27,16 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks. **Fifteen SQL** on the district hospital (11
-tables, SEED 731 -- the same data as the six previous sets), at the level
-of the two sets before it, over the same seven stages with **three
-writable** on constructs no earlier writable stage used. **Fifteen Python**,
-a step up again: each asks for a function of two to five lines that needs
-a for loop, a while loop or an if/else, graded on what it returns.
+Thirty questions in two tracks. **Fifteen SQL** on the district hospital,
+RE-SEEDED for the first time since Q702 (SEED 731 -> 846): every count,
+average and id has changed, so nothing remembered from the earlier sets
+carries over. At the level of the three sets before it, over the same seven
+stages with **three writable** on constructs no earlier writable stage used.
+**Fifteen Python** on hospital-shaped rows -- admissions as dicts, stays as
+tuples, patients as an id-to-name dict -- doing in Python what the SQL tab
+does in SQL: counts per ward, open admissions, totals, averages, HAVING,
+grouping, a join, a top-N, an occupancy, a readmission window, and a row
+check. Graded on what the functions return.
 
 ### The writable stage
 
@@ -42,61 +46,61 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | a view with `RANK()` inside it | the view's rows |
-| 14 | `CHECK (code GLOB ...)` | which codes a driven insert got through |
-| 15 | `INSERT ... SELECT` over `json_each()` | the tags in order, and their count |
+| 13 | `CHECK (date(x) IS x)`: a real date, and why IS not = | which bookings a driven insert got through |
+| 14 | `INSERT ... SELECT ... WHERE NOT EXISTS` | how many notes, how many placeholders |
+| 15 | a `UNIQUE` index on `lower(name)` | the drug count, and whether 'morphine' got in |
 
-14 carries a `driver_sql`: inserts the question runs after yours. A
+13 and 15 carry a `driver_sql`: inserts the question runs after yours. A
 refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q817 | A2 COUNT and AVG | Pence per minute in theatre | ex 1 | 1 - Warm-up |
-| Q818 | A3 WHERE vs HAVING | Wards above the hospital's pulse | ex 2 | 1 - Warm-up |
-| Q819 | STR string functions | The commonest forenames | ex 3 | 2 - Strings and sequences |
-| Q820 | SEQ sequences | Readings on the rise | ex 4 | 2 - Strings and sequences |
-| Q821 | D2 date modifiers | Arrived at the weekend | ex 5 | 3 - Dates and times |
-| Q822 | D1 dates & times | Days and hours, separately | ex 6 | 3 - Dates and times |
-| Q823 | INT intervals | Theatre 3 standing empty | ex 7 | 4 - Intervals and occupancy |
-| Q824 | INT intervals | Two in the morning and two in the afternoon | ex 8 | 4 - Intervals and occupancy |
-| Q825 | J1 self-joins | Two theatres in one day | ex 9 | 5 - Joins and grain |
-| Q826 | J2 outer joins | Theatre 6's tally, every type | ex 10 | 5 - Joins and grain |
-| Q827 | W1 window frames | The reading before and the reading after | ex 11 | 6 - Window functions |
-| Q828 | DST distributions | Where a stay sits on its ward | ex 12 | 6 - Window functions |
-| Q829 | VIEW views | A ranking you can query **(script)** | ex 13 | 7 - Changing the data |
-| Q830 | DDL constraints | A code with a shape **(script)** | ex 14 | 7 - Changing the data |
-| Q831 | JSN JSON functions | Rows out of a JSON list **(script)** | ex 15 | 7 - Changing the data |
+| Q832 | A2 COUNT and AVG | Temperatures taken | ex 1 | 1 - Warm-up |
+| Q833 | A3 WHERE vs HAVING | Well-typed postcodes | ex 2 | 1 - Warm-up |
+| Q834 | STR string functions | Short names | ex 3 | 2 - Strings and sequences |
+| Q835 | SEQ sequences | Longer the second time | ex 4 | 2 - Strings and sequences |
+| Q836 | D1 dates & times | Admissions by quarter | ex 5 | 3 - Dates and times |
+| Q837 | D2 date modifiers | Birthdays in the first week of July | ex 6 | 3 - Dates and times |
+| Q838 | INT intervals | Nights in hospital | ex 7 | 4 - Intervals and occupancy |
+| Q839 | INT intervals | Peak demand for each drug | ex 8 | 4 - Intervals and occupancy |
+| Q840 | C2 grain | Prescribed by their own consultant | ex 9 | 5 - Joins and grain |
+| Q841 | E1 all-or-none | Only ever one ward | ex 10 | 5 - Joins and grain |
+| Q842 | W2 window ranking | Each ward's busiest consultants | ex 11 | 6 - Window functions |
+| Q843 | W3 window vs GROUP BY | Patient 86, ward by ward | ex 12 | 6 - Window functions |
+| Q844 | DDL constraints | A column that must be a real date **(script)** | ex 13 | 7 - Changing the data |
+| Q845 | DML update & delete | Add only what is missing **(script)** | ex 14 | 7 - Changing the data |
+| Q846 | IDX expression index | Unique regardless of case **(script)** | ex 15 | 7 - Changing the data |
 
 ### Python
 
-Fifteen functions, each two to five lines with a loop or a choice inside,
-graded on what they return: count the items over a limit, return the first
-one, keep the evens, drop the blanks, running totals, clamp every value, a
-while countdown, a digit sum, an age band, the second-largest distinct
-value, a duplicate test with a set, the longest streak, keys whose value
-passes, an inverted dict, and two tallies merged. The traps are the
-classic loop mistakes: a boundary with >= for >, a match recorded instead
-of returned, removing from the list being looped over, two ifs for an
-if/elif, a while that never changes its variable, add-then-test, and
-returning the current run instead of the best.
+Fifteen functions over rows shaped like the database's, three to eight
+lines each, graded on what they return. The rows are plain Python values --
+what a query result looks like once fetched -- and each question names the
+SQL it mirrors: GROUP BY with COUNT, WHERE ... IS NULL, SUM with a filter,
+ORDER BY ... LIMIT 1, AVG, HAVING, grouping into lists, argmax, top-N,
+ORDER BY on a sequence, a LEFT JOIN by dict lookup, an interval test, LAG
+by a remembered value, a generic WHERE, and a CHECK constraint. The traps
+are the Python versions of the SQL mistakes: None where SQL has NULL, a
+count overwritten instead of incremented, the value where the key was
+wanted, rows in arrival order.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P086 | PY4 for+if count | for + if: count the ones over a limit | py 1 | 1 - Counting and filtering |
-| P087 | PY4 for+return | for + return: the first one over | py 2 | 1 - Counting and filtering |
-| P088 | PY4 filter list | for + append: keep the evens | py 3 | 1 - Counting and filtering |
-| P089 | PY4 filter strings | for + if: drop the blank strings | py 4 | 1 - Counting and filtering |
-| P090 | PY4 running total | for + accumulator: running totals | py 5 | 2 - Building a list |
-| P091 | PY4 if/elif in loop | for + if/elif: clamp every value | py 6 | 2 - Building a list |
-| P092 | PY4 while | while: count down to one | py 7 | 2 - Building a list |
-| P093 | PY4 while digits | while + // and %: add up the digits | py 8 | 2 - Building a list |
-| P094 | PY4 if/elif bands | if/elif/else: an age band | py 9 | 3 - Choosing |
-| P095 | PY4 two maxima | for + two variables: the second largest | py 10 | 3 - Choosing |
-| P096 | PY4 seen set | for + set: is anything repeated | py 11 | 3 - Choosing |
-| P097 | PY4 streak | for + reset: the longest streak | py 12 | 3 - Choosing |
-| P098 | PY4 dict filter | for + items(): keys whose value passes | py 13 | 4 - Dictionaries |
-| P099 | PY4 dict build | for + d[k] = v: invert a dictionary | py 14 | 4 - Dictionaries |
-| P100 | PY4 dict merge | for + get(): add two tallies together | py 15 | 4 - Dictionaries |
+| P101 | PY5 count by key | Admissions per ward | py 1 | 1 - One list of rows |
+| P102 | PY5 filter None | Still in: the open admissions | py 2 | 1 - One list of rows |
+| P103 | PY5 sum with filter | Total days on one ward | py 3 | 1 - One list of rows |
+| P104 | PY5 max by field | The longest completed stay | py 4 | 1 - One list of rows |
+| P105 | PY5 average | Average stay, rounded | py 5 | 1 - One list of rows |
+| P106 | PY5 having | Patients admitted more than n times | py 6 | 2 - Grouping and ranking |
+| P107 | PY5 group to lists | Ids grouped by priority | py 7 | 2 - Grouping and ranking |
+| P108 | PY5 argmax | The busiest ward | py 8 | 2 - Grouping and ranking |
+| P109 | PY5 top n | The n longest stays | py 9 | 2 - Grouping and ranking |
+| P110 | PY5 ordered sequence | The route through the wards | py 10 | 3 - Two tables |
+| P111 | PY5 dict join | Admissions with the patient's name | py 11 | 3 - Two tables |
+| P112 | PY5 interval count | Who was on the ward on day d | py 12 | 3 - Two tables |
+| P113 | PY5 readmission | Readmitted within a window | py 13 | 4 - Checks and windows |
+| P114 | PY5 generic filter | WHERE column = value, for any column | py 14 | 4 - Checks and windows |
+| P115 | PY5 validation | Problems with a row | py 15 | 4 - Checks and windows |
 
 ## Retired
 
@@ -405,6 +409,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q817 | A2 COUNT and AVG | Pence per minute in theatre | - | retired |
+| Q818 | A3 WHERE vs HAVING | Wards above the hospital's pulse | - | retired |
+| Q819 | STR string functions | The commonest forenames | - | retired |
+| Q820 | SEQ sequences | Readings on the rise | - | retired |
+| Q821 | D2 date modifiers | Arrived at the weekend | - | retired |
+| Q822 | D1 dates & times | Days and hours, separately | - | retired |
+| Q823 | INT intervals | Theatre 3 standing empty | - | retired |
+| Q824 | INT intervals | Two in the morning and two in the afternoon | - | retired |
+| Q825 | J1 self-joins | Two theatres in one day | - | retired |
+| Q826 | J2 outer joins | Theatre 6's tally, every type | - | retired |
+| Q827 | W1 window frames | The reading before and the reading after | - | retired |
+| Q828 | DST distributions | Where a stay sits on its ward | - | retired |
+| Q829 | VIEW views | A ranking you can query **(script)** | - | retired |
+| Q830 | DDL constraints | A code with a shape **(script)** | - | retired |
+| Q831 | JSN JSON functions | Rows out of a JSON list **(script)** | - | retired |
+| P086 | PY4 for+if count | for + if: count the ones over a limit | - | retired |
+| P087 | PY4 for+return | for + return: the first one over | - | retired |
+| P088 | PY4 filter list | for + append: keep the evens | - | retired |
+| P089 | PY4 filter strings | for + if: drop the blank strings | - | retired |
+| P090 | PY4 running total | for + accumulator: running totals | - | retired |
+| P091 | PY4 if/elif in loop | for + if/elif: clamp every value | - | retired |
+| P092 | PY4 while | while: count down to one | - | retired |
+| P093 | PY4 while digits | while + // and %: add up the digits | - | retired |
+| P094 | PY4 if/elif bands | if/elif/else: an age band | - | retired |
+| P095 | PY4 two maxima | for + two variables: the second largest | - | retired |
+| P096 | PY4 seen set | for + set: is anything repeated | - | retired |
+| P097 | PY4 streak | for + reset: the longest streak | - | retired |
+| P098 | PY4 dict filter | for + items(): keys whose value passes | - | retired |
+| P099 | PY4 dict build | for + d[k] = v: invert a dictionary | - | retired |
+| P100 | PY4 dict merge | for + get(): add two tallies together | - | retired |
 | Q802 | A1 conditional aggregation | Days and nights, side by side | - | retired |
 | Q803 | A3 WHERE vs HAVING | Heavy on the controlled drugs | - | retired |
 | Q804 | STR string functions | Reference numbers, zero-padded | - | retired |
@@ -1209,3 +1243,14 @@ they still count as asked.
   within a partition -- and three writable: a view with RANK() in it, a
   CHECK built on GLOB, and INSERT ... SELECT over json_each(). Python,
   fifteen functions with a loop or an if inside, graded on their return.
+- **Q832-Q846 and P101-P115** current set. The hospital RE-SEEDED (SEED 731
+  -> 846) for the first time since the schema arrived. SQL at the Q787
+  level, twelve SELECT -- COUNT(col) against COUNT(*) for temperatures,
+  two HAVING conditions on postcode areas, length() of a name, the second
+  stay against the first with NOT EXISTS for a third, quarters by (m+2)/3,
+  birthdays by '%m-%d', midnights by date() difference, peak concurrent
+  prescriptions per drug with the -1 on the day after, two foreign keys
+  compared, COUNT(DISTINCT) = 1 as all-or-none, RANK within a partition,
+  and LAG of a ward -- and three writable: CHECK (date(x) IS x), INSERT ...
+  SELECT WHERE NOT EXISTS, and a UNIQUE index on lower(name). Python,
+  fifteen functions over hospital-shaped rows mirroring SQL operations.

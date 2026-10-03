@@ -25,7 +25,7 @@ from datetime import date, datetime, timedelta
 
 import db
 
-SEED = 731
+SEED = 846
 
 # Admissions are spread across this window. observations is the big table --
 # a reading every four to eight hours of every stay -- so it is where a
