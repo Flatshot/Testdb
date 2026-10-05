@@ -1,19 +1,12 @@
-"""Python practice exercises: fifteen functions over hospital-shaped data.
+"""Python practice exercises: fifteen tiny functions, one tool each.
 
-The seventh Python set. Every question hands a function the kind of rows
-the database holds -- admissions as dictionaries with a ward, a patient
-and a length of stay, ward stays as (admission, sequence, ward) tuples,
-patients as an id-to-name dictionary -- and asks for the sort of answer the
-SQL tab asks for: a count per ward, the open admissions, a total, the
-longest, an average, patients over a threshold, the route through the
-wards, a grouping, the busiest ward, readmissions within a window, a
-filter, a join, a top-N, an occupancy, and a validation. The functions are
-three to eight lines, with loops and ifs, graded on what they return.
-
-The rows arrive as plain Python values, not from the database: a list of
-dicts is what a query result looks like once fetched, and these are the
-operations a program does with one. The two tabs ask the same questions
-in two languages.
+The eighth Python set, and a step back DOWN after the row-shaped set: every
+question asks for a function of one or two lines that returns a value, and
+each is built around one named tool the earlier function sets did not use
+-- round(), abs(), min(key=len), sorted(key=len), startswith(), the in
+test, dict(zip()), title(), index(), a filtering comprehension, [::-1],
+count(), split()[-1], and min() with max() for a clamp. The title names
+the tool, so the tree on the left reads like a list of tools.
 
 Two kinds of question, told apart by `kind`:
 
@@ -42,473 +35,303 @@ ADM = [{"id": 1, "patient": 7, "ward": "Fleming", "days": 3.5, "priority": "urge
           {"id": 5, "patient": 9, "ward": "Barry", "days": 2.0, "priority": "urgent"}]
 
 EXERCISES = [
-    # ========================================================= 1 One list
+    # ============================================================== 1 Numbers
     dict(
-        id=1, ledger="P101", concept="PY5 count by key", tier="1 - One list of rows",
-        title="Admissions per ward", kind="function",
-        func="count_by_ward",
-        cases=[(ADM,), ([],), ([ADM[0]],)],
+        id=1, ledger="P116", concept="PY3 round", tier="1 - Numbers",
+        title="round(): to the nearest whole number", kind="function",
+        func="nearest_whole",
+        cases=[(3.7,), (2.2,), (9.5,), (4,)],
         prompt=(
-            "Each admission is a dict with keys id, patient, ward, days"
-            " and priority; days is None while the patient is still in."
-            " Write `count_by_ward(admissions)` returning a dict from ward"
-            " name to how many admissions it has -- GROUP BY ward,"
-            " COUNT(*):\n\n"
-            "  count_by_ward(ADM) -> {'Fleming': 2, 'Barry': 2, 'Jenner': 1}\n\n"
-            "Return: the dict; an empty list gives an empty dict."
+            "Write a function `nearest_whole(x)` that returns x rounded to"
+            " the nearest whole number, as an integer, using round():\n\n"
+            "  nearest_whole(3.7) -> 4\n\n"
+            "Return: an integer."
         ),
-        solution=('def count_by_ward(admissions):\n'
-                  '    counts = {}\n'
-                  '    for a in admissions:\n'
-                  '        counts[a["ward"]] = counts.get(a["ward"], 0) + 1\n'
-                  '    return counts\n'),
-        trap=('def count_by_ward(admissions):\n'
-              '    counts = {}\n'
-              '    for a in admissions:\n'
-              '        counts[a["ward"]] = 1\n'
-              '    return counts\n'),
-        note="A dict keyed on the grouping column with get(key, 0) + 1 is"
-             " the Python shape of GROUP BY ... COUNT(*). Assigning 1 each"
-             " time records that the ward exists and forgets how often."
-             " a[\"ward\"] reads one field of one row, the way a.ward_id"
-             " does in SQL.",
+        solution="def nearest_whole(x):\n    return round(x)\n",
+        trap="def nearest_whole(x):\n    return round(x, 0)\n",
+        note="round(x) with no second argument returns an int; round(x, 0)"
+             " rounds to no decimals but keeps the float type, so 4.0 comes"
+             " back where 4 was asked. Note the half-way rule: Python rounds"
+             " 9.5 to 10 and 8.5 to 8 -- to the nearest EVEN number -- which"
+             " surprises people expecting schoolbook rounding.",
     ),
     dict(
-        id=2, ledger="P102", concept="PY5 filter None", tier="1 - One list of rows",
-        title="Still in: the open admissions", kind="function",
-        func="open_admissions",
-        cases=[(ADM,), ([],), ([ADM[0]],)],
+        id=2, ledger="P117", concept="PY3 abs", tier="1 - Numbers",
+        title="abs(): how far apart", kind="function",
+        func="distance",
+        cases=[(3, 10), (10, 3), (5, 5), (-2.5, 1)],
         prompt=(
-            "Write `open_admissions(admissions)` returning a list of the"
-            " ids of admissions whose days is None -- the patient has not"
-            " been discharged -- in the order given. WHERE discharged_at"
-            " IS NULL:\n\n"
-            "  open_admissions(ADM) -> [2]\n\n"
-            "Return: a list of ids."
+            "Write a function `distance(a, b)` that returns how far apart"
+            " two numbers are, always as a positive number, using abs():\n\n"
+            "  distance(10, 3) -> 7\n"
+            "  distance(3, 10) -> 7\n\n"
+            "Return: the distance."
         ),
-        solution=('def open_admissions(admissions):\n'
-                  '    return [a["id"] for a in admissions if a["days"] is None]\n'),
-        trap=('def open_admissions(admissions):\n'
-              '    return [a["id"] for a in admissions if a["days"] == 0]\n'),
-        note="None is Python's NULL and is tested with `is None`, not with"
-             " == 0: a stay of zero days would be a real value, and None"
-             " == 0 is False anyway. The comprehension filters and"
-             " projects in one line, the same two jobs as WHERE and the"
-             " SELECT list.",
+        solution="def distance(a, b):\n    return abs(a - b)\n",
+        trap="def distance(a, b):\n    return a - b\n",
+        note="a - b changes sign with the order of the arguments, and a"
+             " distance should not. abs() drops the sign. It works on"
+             " floats as well as ints, and abs(-2.5 - 1) is 3.5.",
     ),
     dict(
-        id=3, ledger="P103", concept="PY5 sum with filter", tier="1 - One list of rows",
-        title="Total days on one ward", kind="function",
-        func="total_days",
-        cases=[(ADM, "Fleming"), (ADM, "Barry"), (ADM, "Lister")],
+        id=3, ledger="P118", concept="PY3 percent", tier="1 - Numbers",
+        title="round(x, 1): a percentage to one decimal", kind="function",
+        func="percent",
+        cases=[(1, 3), (50, 200), (7, 7), (0, 5)],
         prompt=(
-            "Write `total_days(admissions, ward)` returning the sum of"
-            " days for completed admissions to that ward, skipping the"
-            " open ones (days None). SUM(days) WHERE ward = ? AND days IS"
-            " NOT NULL:\n\n"
-            "  total_days(ADM, 'Fleming') -> 4.5\n\n"
-            "Return: the total; 0 for a ward with none."
+            "Write a function `percent(part, whole)` that returns part as a"
+            " percentage of whole, rounded to one decimal place. whole is"
+            " never 0:\n\n"
+            "  percent(1, 3) -> 33.3\n\n"
+            "Return: the percentage."
         ),
-        solution=('def total_days(admissions, ward):\n'
-                  '    total = 0\n'
-                  '    for a in admissions:\n'
-                  '        if a["ward"] == ward and a["days"] is not None:\n'
-                  '            total += a["days"]\n'
-                  '    return total\n'),
-        trap=('def total_days(admissions, ward):\n'
-              '    total = 0\n'
-              '    for a in admissions:\n'
-              '        if a["ward"] == ward:\n'
-              '            total += a["days"]\n'
-              '    return total\n'),
-        note="SQL's SUM skips NULLs for you; Python's += does not, and"
-             " adding None to a number is a TypeError on the first open"
-             " admission it meets. Two conditions joined by and, one on"
-             " the ward and one on the value being present, is the"
-             " Python WHERE clause.",
+        solution="def percent(part, whole):\n    return round(100 * part / whole, 1)\n",
+        trap="def percent(part, whole):\n    return round(100 * part // whole, 1)\n",
+        note="/ keeps the fraction and // throws it away, so 100 * 1 // 3"
+             " is 33, not 33.3. The multiplication by 100 before the"
+             " division keeps the arithmetic simple; round(..., 1) then"
+             " trims to one decimal. 100 * 7 / 7 is 100.0, a float, which"
+             " the grader treats as equal to 100.",
     ),
     dict(
-        id=4, ledger="P104", concept="PY5 max by field", tier="1 - One list of rows",
-        title="The longest completed stay", kind="function",
-        func="longest_stay",
-        cases=[(ADM,), ([ADM[1], ADM[2]],), ([ADM[1]],)],
+        id=4, ledger="P119", concept="PY3 min max", tier="1 - Numbers",
+        title="min() and max(): keep a value in range", kind="function",
+        func="clamp",
+        cases=[(5, 0, 10), (-3, 0, 10), (42, 0, 10), (10, 0, 10)],
         prompt=(
-            "Write `longest_stay(admissions)` returning the id of the"
-            " completed admission with the most days, or None if there is"
-            " no completed admission. Open ones (days None) do not"
-            " count:\n\n"
-            "  longest_stay(ADM) -> 4\n\n"
-            "Return: an id, or None."
+            "Write a function `clamp(x, lo, hi)` that returns x if it is"
+            " between lo and hi, lo if it is below, and hi if it is above,"
+            " using min() and max() rather than an if:\n\n"
+            "  clamp(42, 0, 10) -> 10\n\n"
+            "Return: the clamped value."
         ),
-        solution=('def longest_stay(admissions):\n'
-                  '    best = None\n'
-                  '    for a in admissions:\n'
-                  '        if a["days"] is None:\n'
-                  '            continue\n'
-                  '        if best is None or a["days"] > best["days"]:\n'
-                  '            best = a\n'
-                  '    return None if best is None else best["id"]\n'),
-        trap=('def longest_stay(admissions):\n'
-              '    best = None\n'
-              '    for a in admissions:\n'
-              '        if best is None or a["days"] > best["days"]:\n'
-              '            best = a\n'
-              '    return None if best is None else best["id"]\n'),
-        note="ORDER BY days DESC LIMIT 1, by hand: keep the best row seen"
-             " and replace it on a strictly greater value. The open"
-             " admission has to be skipped first -- comparing None with a"
-             " number is a TypeError -- and `continue` jumps to the next"
-             " row. max(rows, key=...) does the same once the open ones"
-             " are filtered out.",
+        solution="def clamp(x, lo, hi):\n    return min(hi, max(lo, x))\n",
+        trap="def clamp(x, lo, hi):\n    return max(hi, min(lo, x))\n",
+        note="max(lo, x) lifts x up to lo if it is too low; min(hi, ...)"
+             " then brings it down to hi if it is too high. The other way"
+             " round -- min(lo, x) first -- pins everything to lo and then"
+             " max(hi, ...) pins it to hi, so every input returns hi."
+             " Read it inside out: the inner call runs first.",
+    ),
+    # ============================================================== 2 Strings
+    dict(
+        id=5, ledger="P120", concept="PY3 startswith", tier="2 - Strings",
+        title="startswith(): does it begin with", kind="function",
+        func="has_prefix",
+        cases=[("SRG-04", "SRG"), ("DIA-01", "SRG"), ("SRG-04", "RG"), ("", "a"), ("abc", "")],
+        prompt=(
+            "Write a function `has_prefix(text, prefix)` that returns True"
+            " if text begins with prefix and False otherwise, using"
+            " startswith():\n\n"
+            "  has_prefix(\"SRG-04\", \"SRG\") -> True\n\n"
+            "Return: True or False."
+        ),
+        solution="def has_prefix(text, prefix):\n    return text.startswith(prefix)\n",
+        trap="def has_prefix(text, prefix):\n    return prefix in text\n",
+        note="in asks whether prefix appears ANYWHERE in text; startswith()"
+             " asks about the beginning only, so 'RG' in 'SRG-04' is True"
+             " where has_prefix should be False. Every string starts with"
+             " the empty string, so the last case is True. endswith() is"
+             " the mirror.",
     ),
     dict(
-        id=5, ledger="P105", concept="PY5 average", tier="1 - One list of rows",
-        title="Average stay, rounded", kind="function",
-        func="average_days",
-        cases=[(ADM,), ([ADM[1]],), ([],)],
+        id=6, ledger="P121", concept="PY3 title", tier="2 - Strings",
+        title="title(): a capital on each word", kind="function",
+        func="tidy_name",
+        cases=[("florence nightingale",), ("MARY SEACOLE",), ("ada",)],
         prompt=(
-            "Write `average_days(admissions)` returning the mean days of"
-            " the completed admissions rounded to one decimal, or None if"
-            " there are none to average -- AVG(days):\n\n"
-            "  average_days(ADM) -> 3.7\n\n"
-            "Return: the mean, or None."
+            "Write a function `tidy_name(name)` that returns the name with"
+            " the first letter of each word in capitals and the rest in"
+            " lower case, using title():\n\n"
+            "  tidy_name(\"MARY SEACOLE\") -> \"Mary Seacole\"\n\n"
+            "Return: the tidied string."
         ),
-        solution=('def average_days(admissions):\n'
-                  '    values = [a["days"] for a in admissions if a["days"] is not None]\n'
-                  '    if not values:\n'
-                  '        return None\n'
-                  '    return round(sum(values) / len(values), 1)\n'),
-        trap=('def average_days(admissions):\n'
-              '    values = [a["days"] for a in admissions if a["days"] is not None]\n'
-              '    return round(sum(values) / len(admissions), 1)\n'),
-        note="AVG divides by the rows it did not skip, so the denominator"
-             " is the number of VALUES, not the number of rows -- the open"
-             " admission is left out of both. The empty case has to be"
-             " caught before the division: sum([]) is 0 but len([]) is 0"
-             " too, and 0 / 0 is a ZeroDivisionError. SQL's AVG of no rows"
-             " is NULL; here that is None.",
-    ),
-    # ================================================ 2 Grouping and ranking
-    dict(
-        id=6, ledger="P106", concept="PY5 having", tier="2 - Grouping and ranking",
-        title="Patients admitted more than n times", kind="function",
-        func="frequent_patients",
-        cases=[(ADM, 1), (ADM, 2), ([], 0)],
-        prompt=(
-            "Write `frequent_patients(admissions, n)` returning a SORTED"
-            " list of the patient ids with more than n admissions -- GROUP"
-            " BY patient HAVING COUNT(*) > n:\n\n"
-            "  frequent_patients(ADM, 1) -> [7, 9]\n\n"
-            "Return: a sorted list of patient ids."
-        ),
-        solution=('def frequent_patients(admissions, n):\n'
-                  '    counts = {}\n'
-                  '    for a in admissions:\n'
-                  '        counts[a["patient"]] = counts.get(a["patient"], 0) + 1\n'
-                  '    return sorted(p for p, c in counts.items() if c > n)\n'),
-        trap=('def frequent_patients(admissions, n):\n'
-              '    counts = {}\n'
-              '    for a in admissions:\n'
-              '        counts[a["patient"]] = counts.get(a["patient"], 0) + 1\n'
-              '    return sorted(p for p, c in counts.items() if c >= n)\n'),
-        note="Count first, then filter the counts: two passes, like GROUP"
-             " BY then HAVING. 'More than n' is > n; >= n admits every"
-             " patient with exactly n. sorted() over the surviving keys"
-             " gives the list a fixed order, which the grader needs and a"
-             " caller usually wants.",
+        solution="def tidy_name(name):\n    return name.title()\n",
+        trap="def tidy_name(name):\n    return name.capitalize()\n",
+        note="title() capitalises every word and lower-cases the rest of"
+             " each; capitalize() does only the first letter of the whole"
+             " string, giving 'Mary seacole'. Both return a new string and"
+             " leave name alone.",
     ),
     dict(
-        id=7, ledger="P107", concept="PY5 group to lists", tier="2 - Grouping and ranking",
-        title="Ids grouped by priority", kind="function",
-        func="by_priority",
-        cases=[(ADM,), ([],), ([ADM[3]],)],
+        id=7, ledger="P122", concept="PY3 count", tier="2 - Strings",
+        title="count(): how many of one letter", kind="function",
+        func="letters",
+        cases=[("observation", "o"), ("Observation", "o"), ("rhythm", "e")],
         prompt=(
-            "Write `by_priority(admissions)` returning a dict from each"
-            " priority to the LIST of admission ids with it, in the order"
-            " given:\n\n"
-            "  by_priority(ADM) -> {'urgent': [1, 5], 'routine': [2, 4],"
-            " 'immediate': [3]}\n\n"
-            "setdefault(key, []) gives you the list to append to, creating"
-            " it the first time.\n\n"
-            "Return: the dict of lists."
+            "Write a function `letters(text, ch)` that returns how many"
+            " times the character ch appears in text, case-sensitive,"
+            " using the string's count() method:\n\n"
+            "  letters(\"observation\", \"o\") -> 2\n\n"
+            "Return: the count, 0 when absent."
         ),
-        solution=('def by_priority(admissions):\n'
-                  '    groups = {}\n'
-                  '    for a in admissions:\n'
-                  '        groups.setdefault(a["priority"], []).append(a["id"])\n'
-                  '    return groups\n'),
-        trap=('def by_priority(admissions):\n'
-              '    groups = {}\n'
-              '    for a in admissions:\n'
-              '        groups[a["priority"]] = [a["id"]]\n'
-              '    return groups\n'),
-        note="Grouping rows rather than counting them: the value in the"
-             " dict is a list, and each row is appended to its group's"
-             " list. Assigning a fresh one-item list each time keeps only"
-             " the last id per priority. setdefault returns the existing"
-             " list or installs the empty one you pass; the if-not-in"
-             " form says the same in two lines.",
+        solution="def letters(text, ch):\n    return text.count(ch)\n",
+        trap="def letters(text, ch):\n    return text.find(ch)\n",
+        note="count() counts occurrences; find() returns the POSITION of"
+             " the first one, or -1, which happens to look plausible on"
+             " small inputs. 'Observation' with a capital O has one lower"
+             " o, because count() is case-sensitive; lower() the text"
+             " first if case should not matter.",
     ),
     dict(
-        id=8, ledger="P108", concept="PY5 argmax", tier="2 - Grouping and ranking",
-        title="The busiest ward", kind="function",
-        func="busiest_ward",
-        cases=[(ADM,), ([ADM[3]],), ([ADM[0], ADM[1]],)],
+        id=8, ledger="P123", concept="PY3 split last", tier="2 - Strings",
+        title="split()[-1]: the last word", kind="function",
+        func="last_word",
+        cases=[("the ward round starts at nine",), ("single",), ("  padded words  ",)],
         prompt=(
-            "Write `busiest_ward(admissions)` returning the ward with the"
-            " most admissions; on a tie, the one that appears FIRST in the"
-            " list. The list is never empty:\n\n"
-            "  busiest_ward(ADM) -> 'Fleming'\n\n"
-            "Return: the ward name."
+            "Write a function `last_word(text)` that returns the last word"
+            " of a non-empty sentence, using split() and a negative"
+            " index:\n\n"
+            "  last_word(\"the ward round starts at nine\") -> \"nine\"\n\n"
+            "Return: the word."
         ),
-        solution=('def busiest_ward(admissions):\n'
-                  '    counts = {}\n'
-                  '    for a in admissions:\n'
-                  '        counts[a["ward"]] = counts.get(a["ward"], 0) + 1\n'
-                  '    return max(counts, key=counts.get)\n'),
-        trap=('def busiest_ward(admissions):\n'
-              '    counts = {}\n'
-              '    for a in admissions:\n'
-              '        counts[a["ward"]] = counts.get(a["ward"], 0) + 1\n'
-              '    return max(counts.values())\n'),
-        note="Count, then max(counts, key=counts.get): iterate the keys,"
-             " judge each by its count, return the key. max(counts.values"
-             "()) is the count itself, 2, not the ward. Because dicts keep"
-             " insertion order and max() keeps the first of equal values,"
-             " the tie goes to the ward seen first -- ORDER BY n DESC,"
-             " first_seen LIMIT 1.",
+        solution="def last_word(text):\n    return text.split()[-1]\n",
+        trap="def last_word(text):\n    return text[-1]\n",
+        note="text[-1] is the last CHARACTER, 'e'. split() turns the text"
+             " into a list of words, and [-1] on that list is the last"
+             " word. With no argument split() ignores leading and trailing"
+             " spaces, so the padded case still gives 'words'.",
+    ),
+    # ================================================================ 3 Lists
+    dict(
+        id=9, ledger="P124", concept="PY3 min key", tier="3 - Lists",
+        title="min(key=len): the shortest", kind="function",
+        func="shortest",
+        cases=[(["Nightingale", "Barry", "Bevan"],), (["aa", "b", "cc"],), (["only"],)],
+        prompt=(
+            "Write a function `shortest(words)` that returns the shortest"
+            " word in a non-empty list, the first of them on a tie, using"
+            " min() with key=len:\n\n"
+            "  shortest([\"Nightingale\", \"Barry\", \"Bevan\"]) -> \"Barry\"\n\n"
+            "Return: the word."
+        ),
+        solution="def shortest(words):\n    return min(words, key=len)\n",
+        trap="def shortest(words):\n    return min(words)\n",
+        note="min(words) compares the strings alphabetically and returns"
+             " 'Barry' here by coincidence -- on ['aa', 'b', 'cc'] it"
+             " returns 'aa'. key=len compares by length and returns the"
+             " word; on a tie min() keeps the first it met.",
     ),
     dict(
-        id=9, ledger="P109", concept="PY5 top n", tier="2 - Grouping and ranking",
-        title="The n longest stays", kind="function",
-        func="top_n",
-        cases=[(ADM, 2), (ADM, 10), (ADM, 0)],
+        id=10, ledger="P125", concept="PY3 sorted key", tier="3 - Lists",
+        title="sorted(key=len): shortest to longest", kind="function",
+        func="by_length",
+        cases=[(["Nightingale", "Barry", "Jenner"],), (["Zed", "ab", "Mo"],), ([],)],
         prompt=(
-            "Write `top_n(admissions, n)` returning the ids of the n"
-            " completed admissions with the most days, longest first --"
-            " ORDER BY days DESC LIMIT n. Open admissions are excluded,"
-            " and fewer than n are returned if fewer exist:\n\n"
-            "  top_n(ADM, 2) -> [4, 1]\n\n"
-            "Return: a list of ids."
+            "Write a function `by_length(words)` that returns a new list"
+            " of the words ordered from shortest to longest, using"
+            " sorted() with key=len:\n\n"
+            "  by_length([\"Nightingale\", \"Barry\", \"Jenner\"]) ->"
+            " [\"Barry\", \"Jenner\", \"Nightingale\"]\n\n"
+            "Return: the sorted list."
         ),
-        solution=('def top_n(admissions, n):\n'
-                  '    done = [a for a in admissions if a["days"] is not None]\n'
-                  '    done.sort(key=lambda a: a["days"], reverse=True)\n'
-                  '    return [a["id"] for a in done[:n]]\n'),
-        trap=('def top_n(admissions, n):\n'
-              '    done = [a for a in admissions if a["days"] is not None]\n'
-              '    done.sort(key=lambda a: a["days"])\n'
-              '    return [a["id"] for a in done[:n]]\n'),
-        note="Filter, sort, slice: the three clauses in Python's order."
-             " sort(key=..., reverse=True) is ORDER BY days DESC; without"
-             " reverse it is ascending and the slice takes the shortest."
-             " A slice past the end returns what there is, so LIMIT 10 on"
-             " four rows needs no special case. The lambda names the"
-             " field to sort by.",
-    ),
-    # ========================================================= 3 Two tables
-    dict(
-        id=10, ledger="P110", concept="PY5 ordered sequence", tier="3 - Two tables",
-        title="The route through the wards", kind="function",
-        func="route",
-        cases=[([(1, 2, "Fleming"), (1, 1, "Barry"), (2, 1, "Jenner"), (1, 3, "Lister")], 1),
-               ([(1, 2, "Fleming"), (1, 1, "Barry")], 2)],
-        prompt=(
-            "Ward stays are tuples (admission_id, stay_seq, ward), not"
-            " necessarily in order. Write `route(stays, admission_id)`"
-            " returning the wards of that admission in stay_seq order:\n\n"
-            "  route([(1, 2, 'Fleming'), (1, 1, 'Barry'), (2, 1, 'Jenner')],"
-            " 1) -> ['Barry', 'Fleming']\n\n"
-            "Return: a list of ward names; empty if the admission has none."
-        ),
-        solution=('def route(stays, admission_id):\n'
-                  '    mine = [s for s in stays if s[0] == admission_id]\n'
-                  '    mine.sort(key=lambda s: s[1])\n'
-                  '    return [s[2] for s in mine]\n'),
-        trap=('def route(stays, admission_id):\n'
-              '    return [s[2] for s in stays if s[0] == admission_id]\n'),
-        note="Rows have no order until you sort them -- in SQL or in"
-             " Python. The trap keeps the wards in the order the tuples"
-             " happened to arrive, which here is wrong. Tuple fields are"
-             " reached by position, s[1] for the sequence, so the sort key"
-             " is a lambda picking that position. WHERE, then ORDER BY,"
-             " then SELECT.",
+        solution="def by_length(words):\n    return sorted(words, key=len)\n",
+        trap="def by_length(words):\n    return sorted(words)\n",
+        note="sorted(words) orders alphabetically; key=len says order by"
+             " the length instead and leaves the words themselves in the"
+             " result. The key is a function applied to each item, not"
+             " called -- len, not len(). sorted() returns a new list and"
+             " does not change the one passed in.",
     ),
     dict(
-        id=11, ledger="P111", concept="PY5 dict join", tier="3 - Two tables",
-        title="Admissions with the patient's name", kind="function",
-        func="with_names",
-        cases=[(ADM[:3], {7: "Ada Byron", 9: "Mary Seacole"}),
-               (ADM[:2], {7: "Ada Byron"}), ([], {})],
+        id=11, ledger="P126", concept="PY3 index", tier="3 - Lists",
+        title="index(): where in the list", kind="function",
+        func="position",
+        cases=[(["Barry", "Bevan", "Cavell"], "Bevan"), ([3, 1, 4, 1], 1), (["x"], "x")],
         prompt=(
-            "Patients are a dict from patient id to name. Write"
-            " `with_names(admissions, patients)` returning a list of"
-            " (admission id, patient name) tuples, one per admission in"
-            " order, with None for a patient not in the dict -- a LEFT"
-            " JOIN:\n\n"
-            "  with_names(ADM[:2], {7: 'Ada Byron'}) -> [(1, 'Ada Byron'),"
-            " (2, None)]\n\n"
-            "Return: a list of tuples."
+            "Write a function `position(items, value)` that returns the"
+            " index of the first occurrence of value in the list, which is"
+            " always present, using the list's index() method:\n\n"
+            "  position([\"Barry\", \"Bevan\", \"Cavell\"], \"Bevan\") -> 1\n\n"
+            "Return: an index, counting from 0."
         ),
-        solution=('def with_names(admissions, patients):\n'
-                  '    return [(a["id"], patients.get(a["patient"])) for a in admissions]\n'),
-        trap=('def with_names(admissions, patients):\n'
-              '    return [(a["id"], patients[a["patient"]]) for a in admissions]\n'),
-        note="A join in Python is a dict lookup per row, and the"
-             " dictionary keyed on the join column is the index. Square"
-             " brackets are the INNER join that fails loudly -- KeyError"
-             " -- on a missing patient; get() is the LEFT join that fills"
-             " in None. The result rows are tuples, as the question asks.",
+        solution="def position(items, value):\n    return items.index(value)\n",
+        trap="def position(items, value):\n    return items.index(value) + 1\n",
+        note="Positions count from 0 in Python, so the second item is at"
+             " 1 -- adding 1 to make it 'human' puts the answer out of"
+             " step with every other index in the language. index() finds"
+             " the FIRST match, which is 1 in [3, 1, 4, 1], and raises"
+             " ValueError if the value is absent.",
     ),
     dict(
-        id=12, ledger="P112", concept="PY5 interval count", tier="3 - Two tables",
-        title="Who was on the ward on day d", kind="function",
-        func="occupancy_on",
-        cases=[([(1, 3, 7), (2, 5, None), (3, 8, 9)], 5), ([(1, 3, 7), (2, 5, None), (3, 8, 9)], 9),
-               ([], 1)],
+        id=12, ledger="P127", concept="PY3 filter comprehension", tier="3 - Lists",
+        title="[x for x in ... if ...]: everything but one value", kind="function",
+        func="without",
+        cases=[(["day", "night", "day"], "day"), ([1, 2, 3], 4), ([],  "x")],
         prompt=(
-            "Stays on one ward are tuples (admission_id, from_day, to_day),"
-            " with to_day None while the stay is open. Write"
-            " `occupancy_on(stays, day)` returning how many stays cover"
-            " that day: began on or before it, and either open or ending"
-            " AFTER it:\n\n"
-            "  occupancy_on([(1, 3, 7), (2, 5, None), (3, 8, 9)], 5) -> 2\n\n"
-            "Return: the count."
+            "Write a function `without(items, value)` that returns a new"
+            " list with every occurrence of value removed, in one"
+            " comprehension:\n\n"
+            "  without([\"day\", \"night\", \"day\"], \"day\") -> [\"night\"]\n\n"
+            "Return: the new list."
         ),
-        solution=('def occupancy_on(stays, day):\n'
-                  '    count = 0\n'
-                  '    for _, start, end in stays:\n'
-                  '        if start <= day and (end is None or end > day):\n'
-                  '            count += 1\n'
-                  '    return count\n'),
-        trap=('def occupancy_on(stays, day):\n'
-              '    count = 0\n'
-              '    for _, start, end in stays:\n'
-              '        if start <= day and end > day:\n'
-              '            count += 1\n'
-              '    return count\n'),
-        note="The interval test from the SQL tab, in Python: start <= day"
-             " and not yet ended. The open end is None, and None > day is"
-             " a TypeError rather than SQL's quiet NULL -- so the None"
-             " case is spelled out with `or`, and it goes first, because"
-             " `or` stops at the first true operand. Unpacking the tuple"
-             " in the for line names the three fields.",
-    ),
-    # ================================================= 4 Checks and windows
-    dict(
-        id=13, ledger="P113", concept="PY5 readmission", tier="4 - Checks and windows",
-        title="Readmitted within a window", kind="function",
-        func="readmitted_within",
-        cases=[([(7, 1, 4), (9, 2, 6), (7, 20, 22), (9, 30, 31)], 14),
-               ([(7, 1, 20), (7, 30, 32)], 14), ([(7, 1, 4), (7, 30, 32)], 14), ([], 7)],
-        prompt=(
-            "Admissions are tuples (patient, admitted_day, discharged_day)"
-            " in admission order. Write `readmitted_within(admissions,"
-            " window)` returning the sorted list of patients who were"
-            " admitted again within `window` days of a previous"
-            " discharge -- admitted_day minus the earlier discharged_day"
-            " at most window:\n\n"
-            "  readmitted_within([(7, 1, 4), (9, 2, 6), (7, 20, 22),"
-            " (9, 30, 31)], 14) -> []\n"
-            "  readmitted_within([(7, 1, 4), (7, 10, 12)], 14) -> [7]\n\n"
-            "Return: a sorted list of patient ids, each once."
-        ),
-        solution=('def readmitted_within(admissions, window):\n'
-                  '    last_out = {}\n'
-                  '    hits = set()\n'
-                  '    for patient, start, end in admissions:\n'
-                  '        if patient in last_out and start - last_out[patient] <= window:\n'
-                  '            hits.add(patient)\n'
-                  '        last_out[patient] = end\n'
-                  '    return sorted(hits)\n'),
-        trap=('def readmitted_within(admissions, window):\n'
-              '    last_in = {}\n'
-              '    hits = set()\n'
-              '    for patient, start, end in admissions:\n'
-              '        if patient in last_in and start - last_in[patient] <= window:\n'
-              '            hits.add(patient)\n'
-              '        last_in[patient] = start\n'
-              '    return sorted(hits)\n'),
-        note="A dict remembering each patient's LAST DISCHARGE plays the"
-             " part LAG played in SQL: one pass, look up the previous"
-             " value, then store this row's. Remembering the previous"
-             " admission instead measures start to start, which includes"
-             " the stay and over-counts -- the second trap case. A set"
-             " collects each patient once; sorted() fixes the order.",
+        solution="def without(items, value):\n    return [x for x in items if x != value]\n",
+        trap="def without(items, value):\n    items.remove(value)\n    return items\n",
+        note="remove() takes out only the FIRST match, raises ValueError if"
+             " there is none, and changes the caller's list. The"
+             " comprehension builds a new list of the items that are not"
+             " the value, handling zero matches and many matches the same"
+             " way.",
     ),
     dict(
-        id=14, ledger="P114", concept="PY5 generic filter", tier="4 - Checks and windows",
-        title="WHERE column = value, for any column", kind="function",
-        func="where_equal",
-        cases=[(ADM, "ward", "Barry"), (ADM, "priority", "immediate"), (ADM, "ward", "Lister")],
+        id=13, ledger="P128", concept="PY3 reverse slice", tier="3 - Lists",
+        title="[::-1]: back to front", kind="function",
+        func="backwards",
+        cases=[([1, 2, 3],), (["a"],), ([],)],
         prompt=(
-            "Write `where_equal(rows, key, value)` returning the rows --"
-            " the dicts themselves -- whose field `key` equals `value`, in"
-            " order. The column name arrives as a string, so it indexes"
-            " the dict:\n\n"
-            "  where_equal(ADM, 'priority', 'immediate') -> [{'id': 3, ...}]\n\n"
-            "Return: a list of dicts."
+            "Write a function `backwards(items)` that returns a NEW list"
+            " with the items in reverse order, using a slice with a step"
+            " of -1:\n\n"
+            "  backwards([1, 2, 3]) -> [3, 2, 1]\n\n"
+            "Return: the reversed list."
         ),
-        solution=('def where_equal(rows, key, value):\n'
-                  '    return [r for r in rows if r[key] == value]\n'),
-        trap=('def where_equal(rows, key, value):\n'
-              '    return [r[key] for r in rows if r[key] == value]\n'),
-        note="r[key] with key a variable is what makes the filter generic:"
-             " the same function serves any column. The trap projects the"
-             " matched column instead of returning the row, so the result"
-             " is ['Barry', 'Barry'] where the rows were wanted. In SQL"
-             " the column name cannot be a parameter; in Python it is just"
-             " a string.",
+        solution="def backwards(items):\n    return items[::-1]\n",
+        trap="def backwards(items):\n    return items.reverse()\n",
+        note="reverse() reverses the list in place and returns None, so"
+             " returning its result returns None. items[::-1] is a slice"
+             " from end to start, a new list, leaving the original alone."
+             " reversed(items) is a third form, which gives an iterator"
+             " you would wrap in list().",
+    ),
+    # ========================================================== 4 Membership
+    dict(
+        id=14, ledger="P129", concept="PY3 in", tier="4 - Membership and pairs",
+        title="in: is it there", kind="function",
+        func="contains",
+        cases=[(["Morphine", "Codeine"], "Codeine"), (["Morphine"], "codeine"), ([], "x")],
+        prompt=(
+            "Write a function `contains(items, value)` that returns True"
+            " if value is in the list and False otherwise, using the in"
+            " operator:\n\n"
+            "  contains([\"Morphine\", \"Codeine\"], \"Codeine\") -> True\n\n"
+            "Return: True or False."
+        ),
+        solution="def contains(items, value):\n    return value in items\n",
+        trap="def contains(items, value):\n    return items.count(value)\n",
+        note="`value in items` is already a boolean, so it can be returned"
+             " as it is. count() returns a NUMBER -- 1 or 0 -- and the"
+             " grader, like a caller comparing with True, tells them apart."
+             " in compares with ==, so case has to match.",
     ),
     dict(
-        id=15, ledger="P115", concept="PY5 validation", tier="4 - Checks and windows",
-        title="Problems with a row", kind="function",
-        func="problems",
-        cases=[({"id": 1, "patient": 7, "ward": "Fleming", "days": 3.5, "priority": "urgent"},),
-               ({"id": 2, "ward": "", "days": -1, "priority": "high"},),
-               ({"id": 3, "patient": 1, "ward": "Barry", "days": None, "priority": "routine"},)],
+        id=15, ledger="P130", concept="PY3 dict zip", tier="4 - Membership and pairs",
+        title="dict(zip()): two lists into a dictionary", kind="function",
+        func="pair_up",
+        cases=[(["Fleming", "Barry"], [16, 30]), ([], []), (["a"], [1])],
         prompt=(
-            "Write `problems(row)` returning a list of the things wrong"
-            " with one admission dict, in this order and with these exact"
-            " strings: 'no patient' if the key patient is missing, 'no"
-            " ward' if ward is missing or empty, 'negative days' if days"
-            " is a number below 0 (None is fine), 'bad priority' if"
-            " priority is not one of immediate, urgent, routine:\n\n"
-            "  problems({'id': 2, 'ward': '', 'days': -1, 'priority':"
-            " 'high'}) -> ['no patient', 'no ward', 'negative days', 'bad"
-            " priority']\n\n"
-            "Return: the list; empty for a good row."
+            "Write a function `pair_up(keys, values)` that returns a"
+            " dictionary mapping each key to the value at the same"
+            " position, using dict() over zip():\n\n"
+            "  pair_up([\"Fleming\", \"Barry\"], [16, 30]) -> {\"Fleming\": 16,"
+            " \"Barry\": 30}\n\n"
+            "Return: the dictionary."
         ),
-        solution=('def problems(row):\n'
-                  '    out = []\n'
-                  '    if "patient" not in row:\n'
-                  '        out.append("no patient")\n'
-                  '    if not row.get("ward"):\n'
-                  '        out.append("no ward")\n'
-                  '    days = row.get("days")\n'
-                  '    if days is not None and days < 0:\n'
-                  '        out.append("negative days")\n'
-                  '    if row.get("priority") not in ("immediate", "urgent", "routine"):\n'
-                  '        out.append("bad priority")\n'
-                  '    return out\n'),
-        trap=('def problems(row):\n'
-              '    out = []\n'
-              '    if "patient" not in row:\n'
-              '        out.append("no patient")\n'
-              '    if not row.get("ward"):\n'
-              '        out.append("no ward")\n'
-              '    if row.get("days") < 0:\n'
-              '        out.append("negative days")\n'
-              '    if row.get("priority") not in ("immediate", "urgent", "routine"):\n'
-              '        out.append("bad priority")\n'
-              '    return out\n'),
-        note="A CHECK constraint as a function: each rule appends its"
-             " message, and the list is the verdict. `key in row` tests"
-             " for a key; row.get() reads one that may be missing without"
-             " a KeyError; `not row.get('ward')` catches both missing and"
-             " empty. None < 0 is a TypeError, so the days rule has to"
-             " test for None first -- the third case is a valid open"
-             " admission that the trap crashes on.",
+        solution="def pair_up(keys, values):\n    return dict(zip(keys, values))\n",
+        trap="def pair_up(keys, values):\n    return list(zip(keys, values))\n",
+        note="zip() pairs the lists position by position; dict() turns"
+             " pairs into a dictionary, and list() turns them into a list"
+             " of tuples -- the right pairs in the wrong container. Two"
+             " parallel lists into a lookup is what dict(zip(...)) is for.",
     ),
 ]
 

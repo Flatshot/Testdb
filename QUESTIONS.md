@@ -27,16 +27,15 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks. **Fifteen SQL** on the district hospital,
-RE-SEEDED for the first time since Q702 (SEED 731 -> 846): every count,
-average and id has changed, so nothing remembered from the earlier sets
-carries over. At the level of the three sets before it, over the same seven
-stages with **three writable** on constructs no earlier writable stage used.
-**Fifteen Python** on hospital-shaped rows -- admissions as dicts, stays as
-tuples, patients as an id-to-name dict -- doing in Python what the SQL tab
-does in SQL: counts per ward, open admissions, totals, averages, HAVING,
-grouping, a join, a top-N, an occupancy, a readmission window, and a row
-check. Graded on what the functions return.
+Thirty questions in two tracks, on a NEW schema: a public library service
+(9 tables, SEED 861), replacing the hospital. It keeps the hospital's shapes
+-- intervals with open ends (loans), two foreign keys to one table (the
+copy's branch and the member's home branch), a category with a natural
+order (staff roles) -- and adds two of its own: QUEUES, in the holds members
+place on a book, and MONEY OWED, in the fines a late return raises.
+**Fifteen SQL** at the level of the last hospital sets, over the same seven
+stages with **three writable**. **Fifteen Python**, a step back down: tiny
+one-tool functions on tools the earlier function sets did not use.
 
 ### The writable stage
 
@@ -46,61 +45,56 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `CHECK (date(x) IS x)`: a real date, and why IS not = | which bookings a driven insert got through |
-| 14 | `INSERT ... SELECT ... WHERE NOT EXISTS` | how many notes, how many placeholders |
-| 15 | a `UNIQUE` index on `lower(name)` | the drug count, and whether 'morphine' got in |
+| 13 | a `BEFORE INSERT` trigger whose WHEN sums another table | which of two driven loans exist |
+| 14 | an `UPDATE` with the WHERE that protects history | unpaid count and total, and how many carry the amnesty date |
+| 15 | a `VIEW` with two conditions | the view's size, and how many rows fail either test |
 
-13 and 15 carry a `driver_sql`: inserts the question runs after yours. A
-refusal is reported in the status bar, not treated as an error.
+13 carries a `driver_sql`: inserts the question runs after yours. A refusal
+is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q832 | A2 COUNT and AVG | Temperatures taken | ex 1 | 1 - Warm-up |
-| Q833 | A3 WHERE vs HAVING | Well-typed postcodes | ex 2 | 1 - Warm-up |
-| Q834 | STR string functions | Short names | ex 3 | 2 - Strings and sequences |
-| Q835 | SEQ sequences | Longer the second time | ex 4 | 2 - Strings and sequences |
-| Q836 | D1 dates & times | Admissions by quarter | ex 5 | 3 - Dates and times |
-| Q837 | D2 date modifiers | Birthdays in the first week of July | ex 6 | 3 - Dates and times |
-| Q838 | INT intervals | Nights in hospital | ex 7 | 4 - Intervals and occupancy |
-| Q839 | INT intervals | Peak demand for each drug | ex 8 | 4 - Intervals and occupancy |
-| Q840 | C2 grain | Prescribed by their own consultant | ex 9 | 5 - Joins and grain |
-| Q841 | E1 all-or-none | Only ever one ward | ex 10 | 5 - Joins and grain |
-| Q842 | W2 window ranking | Each ward's busiest consultants | ex 11 | 6 - Window functions |
-| Q843 | W3 window vs GROUP BY | Patient 86, ward by ward | ex 12 | 6 - Window functions |
-| Q844 | DDL constraints | A column that must be a real date **(script)** | ex 13 | 7 - Changing the data |
-| Q845 | DML update & delete | Add only what is missing **(script)** | ex 14 | 7 - Changing the data |
-| Q846 | IDX expression index | Unique regardless of case **(script)** | ex 15 | 7 - Changing the data |
+| Q847 | A2 COUNT and AVG | Copies per title, by genre | ex 1 | 1 - Warm-up |
+| Q848 | A3 WHERE vs HAVING | Heavy borrowers, often late | ex 2 | 1 - Warm-up |
+| Q849 | STR string functions | Titles that begin with The | ex 3 | 2 - Strings and sequences |
+| Q850 | SEQ sequences | The queue for book 587 | ex 4 | 2 - Strings and sequences |
+| Q851 | D1 dates & times | Late returns by month | ex 5 | 3 - Dates and times |
+| Q852 | D2 date modifiers | Overdue at the end of the data | ex 6 | 3 - Dates and times |
+| Q853 | INT intervals | On the shelf in mid-June | ex 7 | 4 - Intervals and queues |
+| Q854 | INT intervals | How long a hold waits | ex 8 | 4 - Intervals and queues |
+| Q855 | C2 grain | Copies and holds, per genre | ex 9 | 5 - Joins and grain |
+| Q856 | J2 outer joins | Borrowed away from home | ex 10 | 5 - Joins and grain |
+| Q857 | W2 window ranking | The most borrowed title in each genre | ex 11 | 6 - Window functions |
+| Q858 | W3 window vs GROUP BY | Each branch's genre mix | ex 12 | 6 - Window functions |
+| Q859 | TRG triggers | No new loans while fines are owed **(script)** | ex 13 | 7 - Changing the data |
+| Q860 | DML update & delete | Write off the small change **(script)** | ex 14 | 7 - Changing the data |
+| Q861 | VIEW views | What is actually on the shelf **(script)** | ex 15 | 7 - Changing the data |
 
 ### Python
 
-Fifteen functions over rows shaped like the database's, three to eight
-lines each, graded on what they return. The rows are plain Python values --
-what a query result looks like once fetched -- and each question names the
-SQL it mirrors: GROUP BY with COUNT, WHERE ... IS NULL, SUM with a filter,
-ORDER BY ... LIMIT 1, AVG, HAVING, grouping into lists, argmax, top-N,
-ORDER BY on a sequence, a LEFT JOIN by dict lookup, an interval test, LAG
-by a remembered value, a generic WHERE, and a CHECK constraint. The traps
-are the Python versions of the SQL mistakes: None where SQL has NULL, a
-count overwritten instead of incremented, the value where the key was
-wanted, rows in arrival order.
+Fifteen functions of one or two lines, each built around one tool the
+earlier function sets did not use: `round()`, `abs()`, a percentage,
+`min()` with `max()`, `startswith()`, `title()`, `count()`, `split()[-1]`,
+`min(key=len)`, `sorted(key=len)`, `index()`, a filtering comprehension,
+`[::-1]`, the `in` test, and `dict(zip())`. Graded on what they return.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P101 | PY5 count by key | Admissions per ward | py 1 | 1 - One list of rows |
-| P102 | PY5 filter None | Still in: the open admissions | py 2 | 1 - One list of rows |
-| P103 | PY5 sum with filter | Total days on one ward | py 3 | 1 - One list of rows |
-| P104 | PY5 max by field | The longest completed stay | py 4 | 1 - One list of rows |
-| P105 | PY5 average | Average stay, rounded | py 5 | 1 - One list of rows |
-| P106 | PY5 having | Patients admitted more than n times | py 6 | 2 - Grouping and ranking |
-| P107 | PY5 group to lists | Ids grouped by priority | py 7 | 2 - Grouping and ranking |
-| P108 | PY5 argmax | The busiest ward | py 8 | 2 - Grouping and ranking |
-| P109 | PY5 top n | The n longest stays | py 9 | 2 - Grouping and ranking |
-| P110 | PY5 ordered sequence | The route through the wards | py 10 | 3 - Two tables |
-| P111 | PY5 dict join | Admissions with the patient's name | py 11 | 3 - Two tables |
-| P112 | PY5 interval count | Who was on the ward on day d | py 12 | 3 - Two tables |
-| P113 | PY5 readmission | Readmitted within a window | py 13 | 4 - Checks and windows |
-| P114 | PY5 generic filter | WHERE column = value, for any column | py 14 | 4 - Checks and windows |
-| P115 | PY5 validation | Problems with a row | py 15 | 4 - Checks and windows |
+| P116 | PY3 round | round(): to the nearest whole number | py 1 | 1 - Numbers |
+| P117 | PY3 abs | abs(): how far apart | py 2 | 1 - Numbers |
+| P118 | PY3 percent | round(x, 1): a percentage to one decimal | py 3 | 1 - Numbers |
+| P119 | PY3 min max | min() and max(): keep a value in range | py 4 | 1 - Numbers |
+| P120 | PY3 startswith | startswith(): does it begin with | py 5 | 2 - Strings |
+| P121 | PY3 title | title(): a capital on each word | py 6 | 2 - Strings |
+| P122 | PY3 count | count(): how many of one letter | py 7 | 2 - Strings |
+| P123 | PY3 split last | split()[-1]: the last word | py 8 | 2 - Strings |
+| P124 | PY3 min key | min(key=len): the shortest | py 9 | 3 - Lists |
+| P125 | PY3 sorted key | sorted(key=len): shortest to longest | py 10 | 3 - Lists |
+| P126 | PY3 index | index(): where in the list | py 11 | 3 - Lists |
+| P127 | PY3 filter comprehension | [x for x in ... if ...]: everything but one value | py 12 | 3 - Lists |
+| P128 | PY3 reverse slice | [::-1]: back to front | py 13 | 3 - Lists |
+| P129 | PY3 in | in: is it there | py 14 | 4 - Membership and pairs |
+| P130 | PY3 dict zip | dict(zip()): two lists into a dictionary | py 15 | 4 - Membership and pairs |
 
 ## Retired
 
@@ -409,6 +403,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q832 | A2 COUNT and AVG | Temperatures taken | - | retired |
+| Q833 | A3 WHERE vs HAVING | Well-typed postcodes | - | retired |
+| Q834 | STR string functions | Short names | - | retired |
+| Q835 | SEQ sequences | Longer the second time | - | retired |
+| Q836 | D1 dates & times | Admissions by quarter | - | retired |
+| Q837 | D2 date modifiers | Birthdays in the first week of July | - | retired |
+| Q838 | INT intervals | Nights in hospital | - | retired |
+| Q839 | INT intervals | Peak demand for each drug | - | retired |
+| Q840 | C2 grain | Prescribed by their own consultant | - | retired |
+| Q841 | E1 all-or-none | Only ever one ward | - | retired |
+| Q842 | W2 window ranking | Each ward's busiest consultants | - | retired |
+| Q843 | W3 window vs GROUP BY | Patient 86, ward by ward | - | retired |
+| Q844 | DDL constraints | A column that must be a real date **(script)** | - | retired |
+| Q845 | DML update & delete | Add only what is missing **(script)** | - | retired |
+| Q846 | IDX expression index | Unique regardless of case **(script)** | - | retired |
+| P101 | PY5 count by key | Admissions per ward | - | retired |
+| P102 | PY5 filter None | Still in: the open admissions | - | retired |
+| P103 | PY5 sum with filter | Total days on one ward | - | retired |
+| P104 | PY5 max by field | The longest completed stay | - | retired |
+| P105 | PY5 average | Average stay, rounded | - | retired |
+| P106 | PY5 having | Patients admitted more than n times | - | retired |
+| P107 | PY5 group to lists | Ids grouped by priority | - | retired |
+| P108 | PY5 argmax | The busiest ward | - | retired |
+| P109 | PY5 top n | The n longest stays | - | retired |
+| P110 | PY5 ordered sequence | The route through the wards | - | retired |
+| P111 | PY5 dict join | Admissions with the patient's name | - | retired |
+| P112 | PY5 interval count | Who was on the ward on day d | - | retired |
+| P113 | PY5 readmission | Readmitted within a window | - | retired |
+| P114 | PY5 generic filter | WHERE column = value, for any column | - | retired |
+| P115 | PY5 validation | Problems with a row | - | retired |
 | Q817 | A2 COUNT and AVG | Pence per minute in theatre | - | retired |
 | Q818 | A3 WHERE vs HAVING | Wards above the hospital's pulse | - | retired |
 | Q819 | STR string functions | The commonest forenames | - | retired |
@@ -1254,3 +1278,16 @@ they still count as asked.
   and LAG of a ward -- and three writable: CHECK (date(x) IS x), INSERT ...
   SELECT WHERE NOT EXISTS, and a UNIQUE index on lower(name). Python,
   fifteen functions over hospital-shaped rows mirroring SQL operations.
+- **Q847-Q861 and P116-P130** current set, on a NEW schema: a public
+  library service (9 tables, SEED 861) replacing the hospital. Loans give
+  intervals with open ends, holds give queues, fines give money owed, and
+  the copy's branch against the member's home branch gives two keys to one
+  table. SQL, twelve SELECT -- copies per title with a LEFT JOIN, two
+  HAVING conditions on borrowers, LIKE 'The %%' anchored, the queue for one
+  book by ROW_NUMBER with the right WHERE, late returns against the stored
+  due date, overdue as two conditions, a day inside a loan with COALESCE,
+  fulfilled holds only, two children of a book, two keys to branches, top-1
+  per genre through two joins, and a share of the branch -- and three
+  writable: a trigger that sums unpaid fines, an UPDATE whose WHERE protects
+  paid dates, and a view of what is available. Python, fifteen one-tool
+  functions, a step back down after the row-shaped set.
