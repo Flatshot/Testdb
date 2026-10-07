@@ -1,25 +1,25 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the public library, the
-second set on this schema, with the topics mixed up -- six new tiers instead
-of the seven stages the hospital sets wore -- and **fifteen Python**: tiny
-functions of one or two lines, each about ONE tool named in the question's
-title, none of them used by an earlier set.
+third set on this schema and the second with the topics mixed up -- six
+tiers that neither library set before it used -- and **fifteen Python**:
+tiny functions of one or two lines, each about ONE tool named in the
+question's title, none of them used by an earlier set.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Set operations | 1-2 |
-| 2 - CASE | 3-4 |
-| 3 - Self-joins and EXISTS | 5-7 |
-| 4 - Recursive CTEs | 8-9 |
-| 5 - Text and NULLs | 10-12 |
-| 6 - Changing the data | 13-15 |
+| 1 - Subqueries | 1-2 |
+| 2 - String aggregation and DISTINCT | 3-4 |
+| 3 - Outer joins and NULL tests | 5-7 |
+| 4 - Window frames | 8-10 |
+| 5 - Ordering and limits | 11-12 |
+| 6 - Constraints | 13-15 |
 
 | Stage | Python questions |
 |---|---|
 | 1 - Strings | 1-5 |
 | 2 - Numbers | 6-9 |
-| 3 - Lists | 10-13 |
+| 3 - Sets and sequences | 10-13 |
 | 4 - Dictionaries | 14-15 |
 
 ## The schema
@@ -38,7 +38,7 @@ see its columns.
 **Dates are text**, 'YYYY-MM-DD', and `holds.placed_at` is a datetime,
 'YYYY-MM-DD HH:MM'. They compare correctly as text; `julianday()` turns
 either into a number of days you can subtract, and `date()` cuts a datetime
-to its day -- which question 2 and question 8 both need.
+to its day.
 
 **The data ends at 2026-06-30.** Anything that would have ended after that is
 open instead -- 685 loans have no return date, 118 of them already
@@ -61,38 +61,35 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-None of the three runs statements of its own afterwards; each is graded on
-what your script leaves behind.
+**Driver statements.** Questions 13 and 14 run inserts of their own *after*
+your script -- the bookings your CHECKs should sort, the holds your index
+should sort. Question 15 is graded on what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 13 | `CREATE TABLE` then `INSERT ... SELECT`, with the WHERE that keeps withdrawn copies out |
-| 14 | a `DELETE` with two conditions, where the forgotten one erases 324 debts |
-| 15 | `ALTER TABLE ADD COLUMN ... DEFAULT`, then an `UPDATE` by `NOT EXISTS` |
+| 13 | `CREATE TABLE` with a CHECK on one column and a CHECK comparing two |
+| 14 | `CREATE UNIQUE INDEX ... WHERE`: a partial index, where the unconditional one cannot be built |
+| 15 | `INSERT ... ON CONFLICT(name) DO UPDATE SET ... = excluded....` |
 
 ## Things the data does on purpose
 
-- **200 of the 1,500 members have never borrowed anything** -- the rows
-  that decide question 1's EXCEPT (members on the left gives 200 too
-  many) and question 15's UPDATE (a HAVING on MAX(loaned_on) cannot see
-  them; 212 members are lapsed, 200 of them for that reason).
-- **415 members have borrowed but never placed a hold**, question 1's
-  answer.
-- **20 of the 600 titles have no copies, and only 2
-  have copies that were never loaned** -- question 6's two rows, which a
-  NOT IN against copy ids inflates to twenty-nine.
-- **257 members owe a fine and have a book out at the same time**, but
-  never on the same loan: a fine's loan has been returned, which is why
-  question 7 needs two EXISTS and one join finds nobody.
-- **2026-03-07 is the one day of March 2026 with no hold placed**, the row
-  question 8's calendar exists to keep.
-- **117 copies are withdrawn**, the rows question 13's WHERE removes.
-- **778 fines issued before 2025-07-01 are paid and 324 are
-  not**; question 14 deletes the first group and must keep the second.
-- **19 of branch 4's members have no recorded postcode area**, the
-  group question 11 labels 'unknown'.
-- **Member 1149 owes 6,480 pence**, the debt question 9 pays off in seven
-  instalments.
+- **The average borrower has 18.4 loans; the average member has
+  16.0**, because 200 members have none. Question 2 wants the
+  first, and 170 borrowers are above it.
+- **100 authors have three or more books, and 11 have none**
+  -- question 3's groups and question 6's anti-join.
+- **27 of Old Town's members have no loan since 2026-01-01**,
+  the rows question 5 keeps only when the date test is in ON.
+- **109 members have no recorded postcode area**, the rows that `<>`
+  loses in question 7.
+- **441 member names are shared**, which is why question 11's page
+  needs member_id as a tie-break; and the tenth and eleventh most overdue
+  loans share a due date, which is why question 12's does.
+- **8 members have held the same book twice** in the history, so
+  question 14's unconditional UNIQUE index cannot even be created.
+- **Copies, staff and members all point at branch 6**, so question 15's
+  INSERT OR REPLACE, which deletes before it inserts, fails on a foreign
+  key.
 
 ## How the Python questions are graded
 
@@ -113,366 +110,363 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Set operations (2)
+## 1 - Subqueries (2)
 
-EXCEPT with the right table on the left, and UNION ALL over two queries whose
-third columns have to be made the same kind of text.
+A scalar subquery as a denominator, where the arithmetic around it has to be
+made floating-point, and a derived table in FROM so that per-member counts exist
+as rows before they are averaged.
 
-1. **Borrowers who never queue** (Q862)
+1. **Each branch's share of the stock** (Q877)
 
-   Members who have borrowed at least once but have never placed a hold. Use
-   EXCEPT: one SELECT over loans, one over holds. Members who have never
-   borrowed are not wanted.
+   For each branch: how many copies it holds, and what percentage of ALL
+   copies that is, to one decimal. The total is a scalar subquery -- (SELECT
+   COUNT(*) FROM copies) -- used inside the outer query's arithmetic.
 
-   *Return: member_id*
+   *Return: branch_id, copies, pct*
 
-2. **One member's history, in one list** (Q863)
+2. **Above the average borrower** (Q878)
 
-   Member 834's loans and holds as ONE list. Each loan is a row with the kind
-   'loan', the copy's book_id and loaned_on; each hold is a row with the kind
-   'hold', its book_id and the DAY it was placed, as 'YYYY-MM-DD' -- placed_at
-   carries a time of day as well.
+   Members who have borrowed more often than the AVERAGE BORROWER -- the
+   average of loans per member over the members who have at least one loan,
+   not over all 1,500 members. Build the per-member counts once as a derived
+   table in FROM, and take the average of that.
 
-   *Return: kind, book_id, on_day*
+   *Return: member_id, loans*
 
-## 2 - CASE (2)
+## 2 - String aggregation and DISTINCT (2)
 
-A pivot by SUM over a comparison, where COUNT with ELSE 0 counts the zeros, and
-a four-way CASE whose IS NULL branch has to come first.
+GROUP_CONCAT with the ORDER BY inside its parentheses, and COUNT(DISTINCT)
+beside a COUNT that is COUNT(*) under another name.
 
-3. **Condition of the stock, one row a branch** (Q864)
+3. **An author's titles on one line** (Q879)
 
-   For each branch, ONE row with the number of its copies in each condition as
-   three columns: good, worn, damaged. That is a pivot -- SUM over a CASE, or
-   over a comparison. Count withdrawn copies too.
+   For each author with three or more books in the catalogue: author_id and
+   their titles joined into ONE string with '; ' between them, in alphabetical
+   order of title. GROUP_CONCAT takes an ORDER BY inside its parentheses.
 
-   *Return: branch_id, good, worn, damaged*
+   *Return: author_id, titles*
 
-4. **How loans ended** (Q865)
+4. **Loans and readers, per genre** (Q880)
 
-   Put every loan in one of four classes and count each: 'out' when
-   returned_on is NULL, 'early' when it was returned before due_on, 'on time'
-   when returned on due_on, and 'late' when returned after it.
+   For each genre: how many loans its books have had, and how many DIFFERENT
+   members made them. A member who borrowed ten children's books is ten loans
+   and one reader.
 
-   *Return: class, loans*
+   *Return: genre, loans, readers*
 
-## 3 - Self-joins and EXISTS (3)
+## 3 - Outer joins and NULL tests (3)
 
-One table under two aliases with a strict inequality so each pair appears once;
-NOT EXISTS that has to reach the book through copies; and two EXISTS on one
-member that a single join cannot express.
+A date test that belongs in ON rather than WHERE, an anti-join that needs the
+right table on the left, and IS NOT where <> loses every NULL.
 
-5. **Colleagues in the same role** (Q866)
+5. **Every member of Old Town, borrowing or not** (Q881)
 
-   Pairs of staff who work at the same branch in the same role, each pair
-   ONCE, with the lower staff_id first. Nobody is paired with themselves.
+   For EVERY member whose home branch is 6: member_id and how many loans they
+   have taken out since 2026-01-01 -- 0 for the members with none, who must
+   still appear. The date test belongs in the join's ON clause, not in WHERE.
 
-   *Return: branch_id, role, staff_a, staff_b*
+   *Return: member_id, loans_2026*
 
-6. **Stocked but never borrowed** (Q867)
+6. **Authors with nothing in the catalogue** (Q882)
 
-   Books that have at least one copy and whose copies have NEVER been loaned:
-   book_id, title, and how many copies there are. A loan points at a copy, not
-   a book, so the test has to go through copies.
+   Authors who have no books at all, found with a LEFT JOIN and a test for
+   NULL on the books side -- an anti-join -- rather than NOT IN or NOT EXISTS.
 
-   *Return: book_id, title, copies*
+   *Return: author_id, name*
 
-7. **In debt and still holding a book** (Q868)
+7. **Everyone outside LS1** (Q883)
 
-   Members who owe an UNPAID fine and ALSO have a loan out right now --
-   returned_on NULL. A fine hangs off a loan that has come back, so the loan
-   that is out is a DIFFERENT loan: two separate tests on the member, not one
-   join.
+   For each home branch, how many of its members do NOT live in postcode area
+   'LS1' -- counting the members with no recorded area among them, since they
+   are not in LS1 either.
 
-   *Return: member_id*
+   *Return: home_branch_id, members*
 
-## 4 - Recursive CTEs (2)
+## 4 - Window frames (3)
 
-A calendar manufactured by recursion so the empty day keeps its zero, and a
-repayment loop whose stopping test and clamp are both needed.
+SUM(SUM()) OVER (ORDER BY) for a running total, LAG against LEAD, and ROWS
+BETWEEN 2 PRECEDING AND CURRENT ROW against the default frame.
 
-8. **Every day of March, holds or not** (Q869)
+8. **Fines issued in 2026, running total** (Q884)
 
-   For EVERY day of March 2026, how many holds were placed that day --
-   including the day with none, which a GROUP BY over holds alone cannot
-   produce. Build the days with a recursive CTE, date(day, '+1 day'), and
-   count the holds whose date(placed_at) is that day.
+   For each month of 2026 in the data: the pence of fines issued that month,
+   and the running total from January up to and including that month. A window
+   SUM over the monthly SUM, ordered by month.
 
-   *Return: day, holds*
+   *Return: month, pence, cumulative*
 
-9. **Paying it off in instalments** (Q870)
+9. **Loans month on month** (Q885)
 
-   Member 1149 owes 6480 pence. They pay 1000 pence on 2026-07-01 and the same
-   again every 7 days until nothing is owed. List the instalments: its number,
-   the day, and what remains AFTER it -- never below zero, so the last payment
-   only clears the 480 left. Use a recursive CTE.
+   For each month of the data: how many loans started, and the change from the
+   previous month -- this month minus last, NULL for the first month. LAG
+   looks back one row.
 
-   *Return: instalment, pay_on, remaining*
+   *Return: month, loans, change*
 
-## 5 - Text and NULLs (3)
+10. **A three-month moving average** (Q886)
 
-SUBSTR from INSTR plus one, COALESCE as the label of the NULL group, and
-MAX(days, 0) so that AVG sees a zero rather than skipping a NULL.
+    For each month of the data: the average number of loans started over that
+    month and the two before it, to one decimal -- so the first month averages
+    itself alone and the second averages two. The frame is ROWS BETWEEN 2
+    PRECEDING AND CURRENT ROW.
 
-10. **Surnames of the staff** (Q871)
+    *Return: month, moving_avg*
 
-    Each staff member's surname: the part of name AFTER the one space in it,
-    without the space. INSTR finds the space and SUBSTR takes from a position
-    to the end.
+## 5 - Ordering and limits (2)
 
-    *Return: staff_id, surname*
+OFFSET counts rows to skip, and a top ten is only right in the right direction
+with a tie-break on the boundary.
 
-11. **Where branch 4's members live** (Q872)
+11. **The third page of members** (Q887)
 
-    For the members whose home branch is 4: how many live in each postcode
-    area, with the members whose area was never recorded counted together
-    under the label 'unknown'.
+    The member list is shown twenty to a page, sorted by name and, where two
+    members share a name, by member_id. Return the THIRD page -- rows 41 to 60
+    of that ordering.
 
-    *Return: area, members*
+    *Return: member_id, name*
 
-12. **Days late on average, on time counting as zero** (Q873)
+12. **The ten most overdue loans** (Q888)
 
-    For each branch, over the RETURNED loans of its copies: the average number
-    of days late, to two decimals, where a loan returned on time or early
-    counts as 0 days late -- not as missing. julianday(returned_on) -
-    julianday(due_on) is the days late, negative when early.
+    As of 2026-06-30, the ten loans that are still out and furthest past their
+    due date: the earliest due_on first, ties broken by the lower loan_id.
+    Only loans with returned_on NULL and due_on before that day count.
 
-    *Return: branch_id, avg_days_late*
+    *Return: loan_id, due_on*
 
-## 6 - Changing the data (3)
+## 6 - Constraints (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. CREATE TABLE filled by INSERT ...
-SELECT, a DELETE whose second condition keeps the debts, and ALTER TABLE ADD
-COLUMN followed by an UPDATE that remembers the never-borrowers.
+question's probe query reads the result. A table with a column CHECK and a table
+CHECK, a partial UNIQUE index, and an UPSERT where OR REPLACE would break a
+foreign key.
 
-13. **A stock table from a query** (Q874)
+13. **A room-booking table that checks itself** (Q889)
 
-    Create a table `branch_stock (branch_id INTEGER PRIMARY KEY, copies
-    INTEGER NOT NULL)` and fill it with one row per branch: the number of its
-    copies that are NOT withdrawn. Use INSERT ... SELECT, not typed values.
+    Create a table `room_bookings (booking_id INTEGER PRIMARY KEY, member_id
+    INTEGER NOT NULL REFERENCES members(member_id), room TEXT NOT NULL,
+    starts_at TEXT NOT NULL, ends_at TEXT NOT NULL)` with two CHECKs: room is
+    'study' or 'meeting', and ends_at is after starts_at. The question then
+    tries three bookings: a good one, one in room 'garden', and one that ends
+    before it starts.
 
-    *Checked: the table's rows*
+    *Checked: how many bookings exist*
 
-14. **Clear out the old paid fines** (Q875)
+14. **One open hold per member per book** (Q890)
 
-    Delete the fines that are PAID and were issued before 2025-07-01. Unpaid
-    fines from that time stay, however old they are.
+    Create a UNIQUE index that stops a member holding more than ONE open hold
+    -- fulfilled_on and cancelled_on both NULL -- on the same book, while
+    leaving their closed holds alone: a PARTIAL index, with a WHERE. The
+    question then inserts a second open hold for member 844 on book 275, who
+    already has one waiting, and an open hold for member 842 on book 349,
+    whose earlier hold was fulfilled.
 
-    *Checked: how many fines remain, how many of those are unpaid, and what all the remaining fines add up to*
+    *Checked: how many holds exist, and how many open holds member 842 has on book 349*
 
-15. **A status column for members** (Q876)
+15. **Add or update a branch in one statement** (Q891)
 
-    Add a column `status TEXT NOT NULL DEFAULT 'active'` to members, then set
-    it to 'lapsed' for every member with no loan on or after 2026-01-01 --
-    INCLUDING the members who have never borrowed at all.
+    Record two branches so that the script works whether or not the name
+    exists: 'Old Town' in 'Castleford', and 'Westgate' in 'Leeds', both
+    opened_on '2026-09-01'. Where a branch of that name already exists, UPDATE
+    its town and leave its branch_id alone; otherwise insert it. Use INSERT
+    ... ON CONFLICT(name) DO UPDATE -- not INSERT OR REPLACE.
 
-    *Checked: how many members carry each status*
+    *Checked: every branch's branch_id, name and town*
 
 # Python
 
 ## 1 - Strings (5)
 
-capitalize() against title(), zfill() against rjust(), isalpha() against
-isalnum(), partition() against split(), and splitlines() against counting
-newlines.
+rstrip(chars) against rstrip(), swapcase() against upper(), removeprefix()
+against lstrip(), rfind() against find(), and casefold() against ==.
 
-1. **capitalize(): one capital at the front** (P131)
+1. **rstrip(chars): trailing punctuation off** (P146)
 
-   Write a function `sentence_case(s)` that returns s with its first character
-   in upper case and EVERYTHING else in lower case, using capitalize():
+   Write a function `no_trailing_punctuation(s)` that returns s with any run
+   of '.', ',', '!' or '?' removed from its END only, using rstrip() with
+   those characters as its argument:
 
    ```
-   sentence_case("hELLO wORLD") -> "Hello world"
+   no_trailing_punctuation("Wait...") -> "Wait"
    ```
 
    *Return: the new string.*
 
-2. **zfill(): padding a number with zeros** (P132)
+2. **swapcase(): upper for lower and back** (P147)
 
-   Write a function `pad_id(n, width)` that returns the number n as a string
-   of at least `width` characters, padded on the left with zeros, using str()
-   and zfill():
-
-   ```
-   pad_id(7, 4) -> "0007"
-   ```
-
-   A number already wider than width is returned as it is.
-
-   *Return: the string.*
-
-3. **isalpha(): letters and nothing else** (P133)
-
-   Write a function `only_letters(s)` that returns True when s is made of
-   letters only -- no digits, spaces or punctuation -- and False otherwise,
-   using isalpha():
+   Write a function `flip_case(s)` that returns s with every upper-case letter
+   made lower and every lower-case letter made upper, using swapcase():
 
    ```
-   only_letters("LS15") -> False
+   flip_case("Hello World") -> "hELLO wORLD"
    ```
 
-   *Return: True or False.*
+   *Return: the new string.*
 
-4. **partition(): split at the first sign** (P134)
+3. **removeprefix(): a title off the front** (P148)
 
-   Write a function `key_value(s)` that returns a tuple (key, value) from a
-   setting written as 'key=value', splitting at the FIRST '=' only, using
-   partition():
-
-   ```
-   key_value("eq=a=b") -> ("eq", "a=b")
-   ```
-
-   With no '=' at all the key is the whole string and the value is ''.
-
-   *Return: the tuple.*
-
-5. **splitlines(): how many lines** (P135)
-
-   Write a function `line_count(text)` that returns how many lines text has,
-   using splitlines(): a trailing newline does not start an extra line, and
-   the empty string has no lines at all.
+   Write a function `without_title(name)` that returns name with a leading 'Dr
+   ' removed -- and the name unchanged when it does not start with that --
+   using removeprefix():
 
    ```
-   line_count("a\nb\n") -> 2
+   without_title("Dr Draper") -> "Draper"
+   ```
+
+   *Return: the new string.*
+
+4. **rfind(): the last space** (P149)
+
+   Write a function `last_space(s)` that returns the position of the LAST
+   space in s, or -1 when there is none, using rfind():
+
+   ```
+   last_space("Bartholomew van Hollingsworth") -> 15
    ```
 
    *Return: an integer.*
+
+5. **casefold(): the same name, whatever the case** (P150)
+
+   Write a function `same_name(a, b)` that returns True when the two strings
+   are the same ignoring case, using casefold() on both before comparing:
+
+   ```
+   same_name("Leeds", "LEEDS") -> True
+   ```
+
+   *Return: True or False.*
 
 ## 2 - Numbers (4)
 
-** against ^, min() with default= for the empty list, isinstance() with a tuple
-of types, and math.ceil() against round().
+math.sqrt() of a sum, math.floor() against int() below zero, the , format spec,
+and statistics.median() against mean().
 
-6. ****: raising to a power** (P136)
+6. **math.sqrt(): the diagonal of a rectangle** (P151)
 
-   Write a function `cube(n)` that returns n to the power of 3, using the **
-   operator:
-
-   ```
-   cube(3) -> 27
-   ```
-
-   *Return: the number.*
-
-7. **min(default=): the smallest, or None** (P137)
-
-   Write a function `lowest(values)` that returns the smallest value in the
-   list, or None when the list is empty, using min() with its default=
-   argument:
+   Write a function `diagonal(w, h)` that returns the length of the diagonal
+   of a w by h rectangle -- the square root of w*w + h*h -- using math.sqrt().
+   Remember the import.
 
    ```
-   lowest([4, 2, 9]) -> 2
-   lowest([]) -> None
+   diagonal(3, 4) -> 5.0
    ```
 
-   *Return: the smallest value, or None.*
+   *Return: a float.*
 
-8. **isinstance(): is it a number?** (P138)
+7. **math.floor(): rounding down, below zero too** (P152)
 
-   Write a function `is_number(x)` that returns True when x is an int or a
-   float and False for anything else, using isinstance() with a tuple of
-   types:
-
-   ```
-   is_number(2.5) -> True
-   is_number("3") -> False
-   ```
-
-   *Return: True or False.*
-
-9. **math.ceil(): rounding up** (P139)
-
-   Write a function `boxes_needed(items, per_box)` that returns how many boxes
-   hold all the items when each box takes per_box -- a part-filled box still
-   counts -- using math.ceil() on the division. Remember the import.
+   Write a function `round_down(x)` that returns the largest whole number that
+   is not above x, as an int, using math.floor() -- so -2.5 goes DOWN to -3:
 
    ```
-   boxes_needed(7, 3) -> 3
+   round_down(-2.5) -> -3
    ```
 
    *Return: an integer.*
 
-## 3 - Lists (4)
+8. **f'{n:,}': thousands separators** (P153)
 
-any() and all() each against the other, len(set()) for distinct values, and
-[::2] against [1::2].
+   Write a function `with_commas(n)` that returns the integer n as a string
+   with a comma every three digits, using an f-string with the , format spec:
 
-10. **any(): is at least one true?** (P140)
+   ```
+   with_commas(1234567) -> "1,234,567"
+   ```
 
-    Write a function `has_negative(values)` that returns True when at least
-    one value in the list is below zero, using any() over a generator
-    expression:
+   *Return: the string.*
 
-    ```
-    has_negative([1, -2, 3]) -> True
-    ```
+9. **statistics.median(): the middle value** (P154)
 
-    *Return: True or False.*
+   Write a function `middle(values)` that returns the median of a non-empty
+   list -- the middle value once sorted, or the mean of the two middle values
+   when the count is even -- using statistics.median(). Remember the import.
 
-11. **all(): are they all true?** (P141)
+   ```
+   middle([1, 2, 10]) -> 2
+   ```
 
-    Write a function `all_passed(marks, pass_mark)` that returns True when
-    every mark is at least pass_mark, using all() over a generator expression.
-    An empty list passes -- nobody failed.
+   *Return: the median.*
 
-    ```
-    all_passed([50, 30], 40) -> False
-    ```
+## 3 - Sets and sequences (4)
 
-    *Return: True or False.*
+& against |, - the right way round, list(reversed()) against reverse(), and
+sorted(set()) against sorted().
 
-12. **len(set()): how many different values** (P142)
+10. **&: what two lists have in common** (P155)
 
-    Write a function `distinct_count(values)` that returns how many DIFFERENT
-    values the list holds, using len() of a set():
-
-    ```
-    distinct_count(["LS1", "LS1", "BD3"]) -> 2
-    ```
-
-    *Return: an integer.*
-
-13. **[::2]: every other item** (P143)
-
-    Write a function `every_other(values)` that returns a new list of the
-    items at positions 0, 2, 4, ... -- the first and then every second one --
-    using a slice with a step:
+    Write a function `common(a, b)` that returns a SET of the values that
+    appear in both lists, using set() on each and the & operator:
 
     ```
-    every_other([1, 2, 3, 4, 5]) -> [1, 3, 5]
+    common(["LS1", "LS9", "BD3"], ["BD3", "LS1", "WF1"]) -> {"LS1", "BD3"}
+    ```
+
+    *Return: the set.*
+
+11. **-: what is wanted but not held** (P156)
+
+    Write a function `still_needed(wanted, have)` that returns a SET of the
+    wanted values that are not in have, using set() on each and the -
+    operator:
+
+    ```
+    still_needed(["pen", "ink", "paper"], ["ink"]) -> {"pen", "paper"}
+    ```
+
+    *Return: the set.*
+
+12. **reversed(): a reversed copy** (P157)
+
+    Write a function `backwards_copy(values)` that returns a NEW list with the
+    items in the opposite order, leaving the original alone, using list() over
+    reversed():
+
+    ```
+    backwards_copy([1, 2, 3]) -> [3, 2, 1]
     ```
 
     *Return: the new list.*
 
+13. **sorted(set()): the distinct values, in order** (P158)
+
+    Write a function `distinct_sorted(values)` that returns a LIST of the
+    different values in the list, each once, in ascending order, using
+    sorted() over set():
+
+    ```
+    distinct_sorted(["LS9", "LS1", "LS9", "BD3"]) -> ["BD3", "LS1", "LS9"]
+    ```
+
+    *Return: the list.*
+
 ## 4 - Dictionaries (2)
 
-update() on a copy, because it returns None, and a dict comprehension that swaps
-key and value.
+pop() with a default against pop() without, and fromkeys() with a value against
+fromkeys() alone.
 
-14. **dict.update(): one dictionary over another** (P144)
+14. **dict.pop(key, default): take a value out** (P159)
 
-    Write a function `merged(a, b)` that returns a NEW dictionary with
-    everything from a and then everything from b, b winning where a key is in
-    both, using update() on a copy of a. Neither argument is changed.
-
-    ```
-    merged({"x": 1, "y": 2}, {"y": 3}) -> {"x": 1, "y": 3}
-    ```
-
-    *Return: the new dictionary.*
-
-15. **{k: v for ...}: a dictionary turned inside out** (P145)
-
-    Write a function `invert(d)` that returns a new dictionary with d's values
-    as keys and d's keys as values, using a dict comprehension over d.items():
+    Write a function `take(d, key)` that removes key from the dictionary and
+    returns its value -- or returns None, with nothing removed, when the key
+    is not there -- using pop() with a default:
 
     ```
-    invert({"a": 1, "b": 2}) -> {1: "a", 2: "b"}
+    take({"a": 1}, "z") -> None
     ```
 
-    *Return: the new dictionary.*
+    *Return: the value, or None.*
+
+15. **dict.fromkeys(): every key starting at zero** (P160)
+
+    Write a function `zero_counts(keys)` that returns a dictionary with every
+    key in the list mapped to 0 -- a tally ready to be counted into -- using
+    dict.fromkeys() with a value:
+
+    ```
+    zero_counts(["good", "worn"]) -> {"good": 0, "worn": 0}
+    ```
+
+    *Return: the dictionary.*
 
 ## The one concept with no question here
 
@@ -483,7 +477,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-991 retired ones.
+1,021 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
