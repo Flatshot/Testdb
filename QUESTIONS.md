@@ -27,12 +27,13 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the second set on the public library (SEED
-861). **Fifteen SQL** with the TOPICS mixed up: the seven stages the hospital
-sets wore are replaced by set operations, CASE, self-joins and EXISTS,
-recursive CTEs, text and NULLs, and changing the data -- at the same level,
-with **three writable**. **Fifteen Python**, the same shape as the last set:
-tiny one-tool functions on fifteen tools no earlier set used.
+Thirty questions in two tracks, the third set on the public library (SEED
+861) and the second with the SQL TOPICS mixed up: six tiers neither library
+set before it used -- subqueries, string aggregation and DISTINCT, outer
+joins and NULL tests, window frames, ordering and limits, and constraints --
+at the same level, with **three writable**. **Fifteen Python**, the same
+shape as the last two sets: tiny one-tool functions on fifteen tools no
+earlier set used.
 
 ### The writable stage
 
@@ -42,55 +43,56 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `CREATE TABLE` and `INSERT ... SELECT` with a WHERE | the new table's rows |
-| 14 | a `DELETE` with two conditions | fines remaining, how many unpaid, and their total |
-| 15 | `ALTER TABLE ADD COLUMN` with a DEFAULT, then an `UPDATE` by NOT EXISTS | members per status |
+| 13 | `CREATE TABLE` with a column CHECK and a table CHECK | how many of three driven bookings exist |
+| 14 | a partial `UNIQUE` index with a WHERE | the hold count, and one member's open holds on one book |
+| 15 | `INSERT ... ON CONFLICT DO UPDATE` | every branch's id, name and town |
 
-None of the three carries a `driver_sql`; each is graded on what the script
-leaves behind.
+13 and 14 carry a `driver_sql`: inserts the question runs after yours. A
+refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q862 | S1 set operations | Borrowers who never queue | ex 1 | 1 - Set operations |
-| Q863 | S1 set operations | One member's history, in one list | ex 2 | 1 - Set operations |
-| Q864 | C7 CASE | Condition of the stock, one row a branch | ex 3 | 2 - CASE |
-| Q865 | C7 CASE | How loans ended | ex 4 | 2 - CASE |
-| Q866 | J1 self-joins | Colleagues in the same role | ex 5 | 3 - Self-joins and EXISTS |
-| Q867 | E1 EXISTS | Stocked but never borrowed | ex 6 | 3 - Self-joins and EXISTS |
-| Q868 | E1 EXISTS | In debt and still holding a book | ex 7 | 3 - Self-joins and EXISTS |
-| Q869 | R1 recursive CTE | Every day of March, holds or not | ex 8 | 4 - Recursive CTEs |
-| Q870 | R1 recursive CTE | Paying it off in instalments | ex 9 | 4 - Recursive CTEs |
-| Q871 | STR string functions | Surnames of the staff | ex 10 | 5 - Text and NULLs |
-| Q872 | N1 NULLs | Where branch 4's members live | ex 11 | 5 - Text and NULLs |
-| Q873 | N1 NULLs | Days late on average, on time counting as zero | ex 12 | 5 - Text and NULLs |
-| Q874 | DDL tables & columns | A stock table from a query **(script)** | ex 13 | 6 - Changing the data |
-| Q875 | DML update & delete | Clear out the old paid fines **(script)** | ex 14 | 6 - Changing the data |
-| Q876 | DDL tables & columns | A status column for members **(script)** | ex 15 | 6 - Changing the data |
+| Q877 | X1 subqueries/EXISTS | Each branch's share of the stock | ex 1 | 1 - Subqueries |
+| Q878 | X1 subqueries/EXISTS | Above the average borrower | ex 2 | 1 - Subqueries |
+| Q879 | STR string aggregation | An author's titles on one line | ex 3 | 2 - String aggregation and DISTINCT |
+| Q880 | A2 COUNT and AVG | Loans and readers, per genre | ex 4 | 2 - String aggregation and DISTINCT |
+| Q881 | J2 outer joins | Every member of Old Town, borrowing or not | ex 5 | 3 - Outer joins and NULL tests |
+| Q882 | J2 outer joins | Authors with nothing in the catalogue | ex 6 | 3 - Outer joins and NULL tests |
+| Q883 | N1 NULLs | Everyone outside LS1 | ex 7 | 3 - Outer joins and NULL tests |
+| Q884 | W1 window frames | Fines issued in 2026, running total | ex 8 | 4 - Window frames |
+| Q885 | W1 window frames | Loans month on month | ex 9 | 4 - Window frames |
+| Q886 | W1 window frames | A three-month moving average | ex 10 | 4 - Window frames |
+| Q887 | O1 ordering & limits | The third page of members | ex 11 | 5 - Ordering and limits |
+| Q888 | O1 ordering & limits | The ten most overdue loans | ex 12 | 5 - Ordering and limits |
+| Q889 | DDL constraints | A room-booking table that checks itself **(script)** | ex 13 | 6 - Constraints |
+| Q890 | DDL constraints | One open hold per member per book **(script)** | ex 14 | 6 - Constraints |
+| Q891 | DML upsert | Add or update a branch in one statement **(script)** | ex 15 | 6 - Constraints |
 
 ### Python
 
 Fifteen functions of one or two lines, each built around one tool named in
-its title: capitalize(), zfill(), isalpha(), partition(), splitlines(), **,
-min(default=), isinstance(), math.ceil(), any(), all(), len(set()), [::2],
-dict.update() and a dict comprehension.
+its title: rstrip(chars), swapcase(), removeprefix(), rfind(), casefold(),
+math.sqrt(), math.floor(), the , format spec, statistics.median(), set &
+and set -, reversed(), sorted(set()), dict.pop(key, default) and
+dict.fromkeys().
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P131 | PY3 capitalize | capitalize(): one capital at the front | py 1 | 1 - Strings |
-| P132 | PY3 zfill | zfill(): padding a number with zeros | py 2 | 1 - Strings |
-| P133 | PY3 isalpha | isalpha(): letters and nothing else | py 3 | 1 - Strings |
-| P134 | PY3 partition | partition(): split at the first sign | py 4 | 1 - Strings |
-| P135 | PY3 splitlines | splitlines(): how many lines | py 5 | 1 - Strings |
-| P136 | PY3 power | **: raising to a power | py 6 | 2 - Numbers |
-| P137 | PY3 min default | min(default=): the smallest, or None | py 7 | 2 - Numbers |
-| P138 | PY3 isinstance | isinstance(): is it a number? | py 8 | 2 - Numbers |
-| P139 | PY3 math ceil | math.ceil(): rounding up | py 9 | 2 - Numbers |
-| P140 | PY3 any | any(): is at least one true? | py 10 | 3 - Lists |
-| P141 | PY3 all | all(): are they all true? | py 11 | 3 - Lists |
-| P142 | PY3 len set | len(set()): how many different values | py 12 | 3 - Lists |
-| P143 | PY3 slice step | [::2]: every other item | py 13 | 3 - Lists |
-| P144 | PY3 dict update | dict.update(): one dictionary over another | py 14 | 4 - Dictionaries |
-| P145 | PY3 dict comprehension | {k: v for ...}: a dictionary turned inside out | py 15 | 4 - Dictionaries |
+| P146 | PY3 rstrip chars | rstrip(chars): trailing punctuation off | py 1 | 1 - Strings |
+| P147 | PY3 swapcase | swapcase(): upper for lower and back | py 2 | 1 - Strings |
+| P148 | PY3 removeprefix | removeprefix(): a title off the front | py 3 | 1 - Strings |
+| P149 | PY3 rfind | rfind(): the last space | py 4 | 1 - Strings |
+| P150 | PY3 casefold | casefold(): the same name, whatever the case | py 5 | 1 - Strings |
+| P151 | PY3 math sqrt | math.sqrt(): the diagonal of a rectangle | py 6 | 2 - Numbers |
+| P152 | PY3 math floor | math.floor(): rounding down, below zero too | py 7 | 2 - Numbers |
+| P153 | PY3 format comma | f'{n:,}': thousands separators | py 8 | 2 - Numbers |
+| P154 | PY3 statistics median | statistics.median(): the middle value | py 9 | 2 - Numbers |
+| P155 | PY3 set intersection | &: what two lists have in common | py 10 | 3 - Sets and sequences |
+| P156 | PY3 set difference | -: what is wanted but not held | py 11 | 3 - Sets and sequences |
+| P157 | PY3 reversed | reversed(): a reversed copy | py 12 | 3 - Sets and sequences |
+| P158 | PY3 sorted set | sorted(set()): the distinct values, in order | py 13 | 3 - Sets and sequences |
+| P159 | PY3 dict pop default | dict.pop(key, default): take a value out | py 14 | 4 - Dictionaries |
+| P160 | PY3 dict fromkeys | dict.fromkeys(): every key starting at zero | py 15 | 4 - Dictionaries |
 
 ## Retired
 
@@ -399,6 +401,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q862 | S1 set operations | Borrowers who never queue | - | retired |
+| Q863 | S1 set operations | One member's history, in one list | - | retired |
+| Q864 | C7 CASE | Condition of the stock, one row a branch | - | retired |
+| Q865 | C7 CASE | How loans ended | - | retired |
+| Q866 | J1 self-joins | Colleagues in the same role | - | retired |
+| Q867 | E1 EXISTS | Stocked but never borrowed | - | retired |
+| Q868 | E1 EXISTS | In debt and still holding a book | - | retired |
+| Q869 | R1 recursive CTE | Every day of March, holds or not | - | retired |
+| Q870 | R1 recursive CTE | Paying it off in instalments | - | retired |
+| Q871 | STR string functions | Surnames of the staff | - | retired |
+| Q872 | N1 NULLs | Where branch 4's members live | - | retired |
+| Q873 | N1 NULLs | Days late on average, on time counting as zero | - | retired |
+| Q874 | DDL tables & columns | A stock table from a query **(script)** | - | retired |
+| Q875 | DML update & delete | Clear out the old paid fines **(script)** | - | retired |
+| Q876 | DDL tables & columns | A status column for members **(script)** | - | retired |
+| P131 | PY3 capitalize | capitalize(): one capital at the front | - | retired |
+| P132 | PY3 zfill | zfill(): padding a number with zeros | - | retired |
+| P133 | PY3 isalpha | isalpha(): letters and nothing else | - | retired |
+| P134 | PY3 partition | partition(): split at the first sign | - | retired |
+| P135 | PY3 splitlines | splitlines(): how many lines | - | retired |
+| P136 | PY3 power | **: raising to a power | - | retired |
+| P137 | PY3 min default | min(default=): the smallest, or None | - | retired |
+| P138 | PY3 isinstance | isinstance(): is it a number? | - | retired |
+| P139 | PY3 math ceil | math.ceil(): rounding up | - | retired |
+| P140 | PY3 any | any(): is at least one true? | - | retired |
+| P141 | PY3 all | all(): are they all true? | - | retired |
+| P142 | PY3 len set | len(set()): how many different values | - | retired |
+| P143 | PY3 slice step | [::2]: every other item | - | retired |
+| P144 | PY3 dict update | dict.update(): one dictionary over another | - | retired |
+| P145 | PY3 dict comprehension | {k: v for ...}: a dictionary turned inside out | - | retired |
 | Q847 | A2 COUNT and AVG | Copies per title, by genre | - | retired |
 | Q848 | A3 WHERE vs HAVING | Heavy borrowers, often late | - | retired |
 | Q849 | STR string functions | Titles that begin with The | - | retired |
@@ -1317,7 +1349,7 @@ they still count as asked.
   writable: a trigger that sums unpaid fines, an UPDATE whose WHERE protects
   paid dates, and a view of what is available. Python, fifteen one-tool
   functions, a step back down after the row-shaped set.
-- **Q862-Q876 and P131-P145** current set. The library again (SEED 861),
+- **Q862-Q876 and P131-P145** retired set. The library again (SEED 861),
   with the SQL TOPICS mixed up: EXCEPT for borrowers who never queue, UNION
   ALL for one member's loans and holds with date() on the datetime, a
   condition pivot by SUM over a comparison, four classes of loan with the
@@ -1329,3 +1361,15 @@ they still count as asked.
   SELECT, a DELETE with two conditions, and ALTER TABLE ADD COLUMN with an
   UPDATE by NOT EXISTS. Python, fifteen one-tool functions on tools no
   earlier set used.
+- **Q877-Q891 and P146-P160** current set. The library again (SEED 861),
+  the SQL TOPICS mixed up a second time: a scalar subquery as a
+  denominator, a derived table to average the borrowers, GROUP_CONCAT with
+  its own ORDER BY, COUNT(DISTINCT) beside COUNT, a date test that belongs
+  in ON, an anti-join by LEFT JOIN ... IS NULL, IS NOT where <> loses the
+  NULLs, a running total by SUM(SUM()) OVER (ORDER BY), LAG for
+  month-on-month change, ROWS BETWEEN 2 PRECEDING for a moving average, a
+  page by OFFSET with a tie-break, a top ten in the right direction -- and
+  three writable on constraints: a CREATE TABLE with two CHECKs driven by
+  three inserts, a partial UNIQUE index where the unconditional one cannot
+  be built, and an UPSERT where OR REPLACE breaks a foreign key. Python,
+  fifteen one-tool functions on tools no earlier set used.
