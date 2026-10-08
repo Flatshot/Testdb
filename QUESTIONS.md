@@ -27,13 +27,13 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the third set on the public library (SEED
-861) and the second with the SQL TOPICS mixed up: six tiers neither library
-set before it used -- subqueries, string aggregation and DISTINCT, outer
-joins and NULL tests, window frames, ordering and limits, and constraints --
-at the same level, with **three writable**. **Fifteen Python**, the same
-shape as the last two sets: tiny one-tool functions on fifteen tools no
-earlier set used.
+Thirty questions in two tracks, the fourth set on the public library (SEED
+861) and a REVISION set: the SQL tiers pair up concepts the three library
+sets before it introduced -- dates with set operations, grain with CASE,
+windows with recursion, EXISTS with text, intervals with NULLs -- in a new
+order, every question new, at the same level, with **three writable**.
+**Fifteen Python** in three shapes: five one-tool functions, five with a
+loop or an if, five over library-shaped rows.
 
 ### The writable stage
 
@@ -43,56 +43,56 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `CREATE TABLE` with a column CHECK and a table CHECK | how many of three driven bookings exist |
-| 14 | a partial `UNIQUE` index with a WHERE | the hold count, and one member's open holds on one book |
-| 15 | `INSERT ... ON CONFLICT DO UPDATE` | every branch's id, name and town |
+| 13 | an `AFTER UPDATE OF` trigger with OLD and NEW in its WHEN | the new fines, and whether the on-time return went through |
+| 14 | an `UPDATE` whose WHERE holds a correlated COUNT | copies per condition |
+| 15 | a `VIEW` of a grouped query with a WHERE | the view's size, its total, and one member's row |
 
-13 and 14 carry a `driver_sql`: inserts the question runs after yours. A
-refusal is reported in the status bar, not treated as an error.
+13 carries a `driver_sql`: two returns the question records after your
+script. A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q877 | X1 subqueries/EXISTS | Each branch's share of the stock | ex 1 | 1 - Subqueries |
-| Q878 | X1 subqueries/EXISTS | Above the average borrower | ex 2 | 1 - Subqueries |
-| Q879 | STR string aggregation | An author's titles on one line | ex 3 | 2 - String aggregation and DISTINCT |
-| Q880 | A2 COUNT and AVG | Loans and readers, per genre | ex 4 | 2 - String aggregation and DISTINCT |
-| Q881 | J2 outer joins | Every member of Old Town, borrowing or not | ex 5 | 3 - Outer joins and NULL tests |
-| Q882 | J2 outer joins | Authors with nothing in the catalogue | ex 6 | 3 - Outer joins and NULL tests |
-| Q883 | N1 NULLs | Everyone outside LS1 | ex 7 | 3 - Outer joins and NULL tests |
-| Q884 | W1 window frames | Fines issued in 2026, running total | ex 8 | 4 - Window frames |
-| Q885 | W1 window frames | Loans month on month | ex 9 | 4 - Window frames |
-| Q886 | W1 window frames | A three-month moving average | ex 10 | 4 - Window frames |
-| Q887 | O1 ordering & limits | The third page of members | ex 11 | 5 - Ordering and limits |
-| Q888 | O1 ordering & limits | The ten most overdue loans | ex 12 | 5 - Ordering and limits |
-| Q889 | DDL constraints | A room-booking table that checks itself **(script)** | ex 13 | 6 - Constraints |
-| Q890 | DDL constraints | One open hold per member per book **(script)** | ex 14 | 6 - Constraints |
-| Q891 | DML upsert | Add or update a branch in one statement **(script)** | ex 15 | 6 - Constraints |
+| Q892 | D1 dates & times | Loans by day of the week | ex 1 | 1 - Dates and set operations |
+| Q893 | S1 set operations | Fined and waiting | ex 2 | 1 - Dates and set operations |
+| Q894 | C2 grain | Staff and copies, per branch | ex 3 | 2 - Grain and CASE |
+| Q895 | C7 CASE | Fines in bands | ex 4 | 2 - Grain and CASE |
+| Q896 | W2 window ranking | The runner-up in each genre | ex 5 | 3 - Windows and recursion |
+| Q897 | W3 window vs GROUP BY | How long copy 1 sat on the shelf | ex 6 | 3 - Windows and recursion |
+| Q898 | R1 recursive CTE | Twelve weeks of loans | ex 7 | 3 - Windows and recursion |
+| Q899 | E1 EXISTS | Stocked at every branch | ex 8 | 4 - EXISTS and text |
+| Q900 | STR string functions | Words per title | ex 9 | 4 - EXISTS and text |
+| Q901 | STR string functions | Staff initials | ex 10 | 4 - EXISTS and text |
+| Q902 | INT intervals | Two books out at once | ex 11 | 5 - Intervals and NULLs |
+| Q903 | N1 NULLs | Holds, three ways, per branch | ex 12 | 5 - Intervals and NULLs |
+| Q904 | TRG triggers | A fine the moment a book comes back late **(script)** | ex 13 | 6 - Changing the data |
+| Q905 | DML update & delete | Well-thumbed copies **(script)** | ex 14 | 6 - Changing the data |
+| Q906 | VIEW views | What each member owes **(script)** | ex 15 | 6 - Changing the data |
 
 ### Python
 
-Fifteen functions of one or two lines, each built around one tool named in
-its title: rstrip(chars), swapcase(), removeprefix(), rfind(), casefold(),
-math.sqrt(), math.floor(), the , format spec, statistics.median(), set &
-and set -, reversed(), sorted(set()), dict.pop(key, default) and
-dict.fromkeys().
+Three shapes. Five one-tool functions on tools no earlier set used:
+endswith() with a tuple, round() to a negative place, split(maxsplit=1),
+enumerate(start=1) and ljust() with a fill. Five functions with one loop or
+one if. Five functions over lists of dicts shaped like loans, fines, copies
+and holds, each the Python form of a familiar SQL question.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P146 | PY3 rstrip chars | rstrip(chars): trailing punctuation off | py 1 | 1 - Strings |
-| P147 | PY3 swapcase | swapcase(): upper for lower and back | py 2 | 1 - Strings |
-| P148 | PY3 removeprefix | removeprefix(): a title off the front | py 3 | 1 - Strings |
-| P149 | PY3 rfind | rfind(): the last space | py 4 | 1 - Strings |
-| P150 | PY3 casefold | casefold(): the same name, whatever the case | py 5 | 1 - Strings |
-| P151 | PY3 math sqrt | math.sqrt(): the diagonal of a rectangle | py 6 | 2 - Numbers |
-| P152 | PY3 math floor | math.floor(): rounding down, below zero too | py 7 | 2 - Numbers |
-| P153 | PY3 format comma | f'{n:,}': thousands separators | py 8 | 2 - Numbers |
-| P154 | PY3 statistics median | statistics.median(): the middle value | py 9 | 2 - Numbers |
-| P155 | PY3 set intersection | &: what two lists have in common | py 10 | 3 - Sets and sequences |
-| P156 | PY3 set difference | -: what is wanted but not held | py 11 | 3 - Sets and sequences |
-| P157 | PY3 reversed | reversed(): a reversed copy | py 12 | 3 - Sets and sequences |
-| P158 | PY3 sorted set | sorted(set()): the distinct values, in order | py 13 | 3 - Sets and sequences |
-| P159 | PY3 dict pop default | dict.pop(key, default): take a value out | py 14 | 4 - Dictionaries |
-| P160 | PY3 dict fromkeys | dict.fromkeys(): every key starting at zero | py 15 | 4 - Dictionaries |
+| P161 | PY3 endswith tuple | endswith(tuple): is it an image file? | py 1 | 1 - One tool |
+| P162 | PY3 round negative | round(n, -2): to the nearest hundred | py 2 | 1 - One tool |
+| P163 | PY3 split maxsplit | split(maxsplit=1): the first word and the rest | py 3 | 1 - One tool |
+| P164 | PY3 enumerate start | enumerate(start=1): numbering from one | py 4 | 1 - One tool |
+| P165 | PY3 ljust fill | ljust(width, '.'): a dotted leader | py 5 | 1 - One tool |
+| P166 | PY4 loop max | The longest word, by a loop | py 6 | 2 - A loop or an if |
+| P167 | PY4 if cap | A late fee with a cap | py 7 | 2 - A loop or an if |
+| P168 | PY4 loop count if | Overdue dates, counted | py 8 | 2 - A loop or an if |
+| P169 | PY4 loop find index | Where the first negative is | py 9 | 2 - A loop or an if |
+| P170 | PY4 while | Squares below a limit | py 10 | 2 - A loop or an if |
+| P171 | PY5 filter None | Loans still out | py 11 | 3 - Library rows |
+| P172 | PY5 sum by key | Unpaid fines, per member | py 12 | 3 - Library rows |
+| P173 | PY5 argmax count | The branch with the most copies | py 13 | 3 - Library rows |
+| P174 | PY5 count with None | Late returns, counted | py 14 | 3 - Library rows |
+| P175 | PY5 having | Members with enough holds | py 15 | 3 - Library rows |
 
 ## Retired
 
@@ -401,6 +401,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q877 | X1 subqueries/EXISTS | Each branch's share of the stock | - | retired |
+| Q878 | X1 subqueries/EXISTS | Above the average borrower | - | retired |
+| Q879 | STR string aggregation | An author's titles on one line | - | retired |
+| Q880 | A2 COUNT and AVG | Loans and readers, per genre | - | retired |
+| Q881 | J2 outer joins | Every member of Old Town, borrowing or not | - | retired |
+| Q882 | J2 outer joins | Authors with nothing in the catalogue | - | retired |
+| Q883 | N1 NULLs | Everyone outside LS1 | - | retired |
+| Q884 | W1 window frames | Fines issued in 2026, running total | - | retired |
+| Q885 | W1 window frames | Loans month on month | - | retired |
+| Q886 | W1 window frames | A three-month moving average | - | retired |
+| Q887 | O1 ordering & limits | The third page of members | - | retired |
+| Q888 | O1 ordering & limits | The ten most overdue loans | - | retired |
+| Q889 | DDL constraints | A room-booking table that checks itself **(script)** | - | retired |
+| Q890 | DDL constraints | One open hold per member per book **(script)** | - | retired |
+| Q891 | DML upsert | Add or update a branch in one statement **(script)** | - | retired |
+| P146 | PY3 rstrip chars | rstrip(chars): trailing punctuation off | - | retired |
+| P147 | PY3 swapcase | swapcase(): upper for lower and back | - | retired |
+| P148 | PY3 removeprefix | removeprefix(): a title off the front | - | retired |
+| P149 | PY3 rfind | rfind(): the last space | - | retired |
+| P150 | PY3 casefold | casefold(): the same name, whatever the case | - | retired |
+| P151 | PY3 math sqrt | math.sqrt(): the diagonal of a rectangle | - | retired |
+| P152 | PY3 math floor | math.floor(): rounding down, below zero too | - | retired |
+| P153 | PY3 format comma | f'{n:,}': thousands separators | - | retired |
+| P154 | PY3 statistics median | statistics.median(): the middle value | - | retired |
+| P155 | PY3 set intersection | &: what two lists have in common | - | retired |
+| P156 | PY3 set difference | -: what is wanted but not held | - | retired |
+| P157 | PY3 reversed | reversed(): a reversed copy | - | retired |
+| P158 | PY3 sorted set | sorted(set()): the distinct values, in order | - | retired |
+| P159 | PY3 dict pop default | dict.pop(key, default): take a value out | - | retired |
+| P160 | PY3 dict fromkeys | dict.fromkeys(): every key starting at zero | - | retired |
 | Q862 | S1 set operations | Borrowers who never queue | - | retired |
 | Q863 | S1 set operations | One member's history, in one list | - | retired |
 | Q864 | C7 CASE | Condition of the stock, one row a branch | - | retired |
@@ -1361,7 +1391,7 @@ they still count as asked.
   SELECT, a DELETE with two conditions, and ALTER TABLE ADD COLUMN with an
   UPDATE by NOT EXISTS. Python, fifteen one-tool functions on tools no
   earlier set used.
-- **Q877-Q891 and P146-P160** current set. The library again (SEED 861),
+- **Q877-Q891 and P146-P160** retired set. The library again (SEED 861),
   the SQL TOPICS mixed up a second time: a scalar subquery as a
   denominator, a derived table to average the borrowers, GROUP_CONCAT with
   its own ORDER BY, COUNT(DISTINCT) beside COUNT, a date test that belongs
@@ -1373,3 +1403,15 @@ they still count as asked.
   three inserts, a partial UNIQUE index where the unconditional one cannot
   be built, and an UPSERT where OR REPLACE breaks a foreign key. Python,
   fifteen one-tool functions on tools no earlier set used.
+- **Q892-Q906 and P161-P175** current set. The library again (SEED 861),
+  as a REVISION set: tiers pairing concepts the earlier library sets
+  introduced -- %w against %W, INTERSECT against UNION, two children of a
+  branch without multiplying, a CASE whose WHEN order matters, ROW_NUMBER
+  against RANK for a runner-up, LAG over the previous return, a calendar of
+  weeks with a half-open boundary, a double NOT EXISTS for 'every', words
+  by LENGTH and REPLACE plus one, initials by ||, overlapping loans with
+  COALESCE for the open end, holds counted three ways -- and three
+  writable: an AFTER UPDATE trigger that prices a late return, an UPDATE
+  with a correlated COUNT, and a view of unpaid totals. Python in three
+  shapes: five one-tool functions, five with a loop or an if, five over
+  library-shaped rows.
