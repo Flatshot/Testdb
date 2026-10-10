@@ -27,13 +27,13 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the fourth set on the public library (SEED
-861) and a REVISION set: the SQL tiers pair up concepts the three library
-sets before it introduced -- dates with set operations, grain with CASE,
-windows with recursion, EXISTS with text, intervals with NULLs -- in a new
-order, every question new, at the same level, with **three writable**.
-**Fifteen Python** in three shapes: five one-tool functions, five with a
-loop or an if, five over library-shaped rows.
+Thirty questions in two tracks, the fifth set on the public library (SEED
+861) and the second REVISION set: the SQL tiers pair up the library's
+concepts differently from last time -- windows with text, intervals with
+CASE, recursion with set operations, subqueries with dates, EXISTS with
+grain -- every question new, at the same level, with **four writable**.
+**Fifteen Python**, one-tool functions again, on fifteen tools no earlier
+set used.
 
 ### The writable stage
 
@@ -43,56 +43,57 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | an `AFTER UPDATE OF` trigger with OLD and NEW in its WHEN | the new fines, and whether the on-time return went through |
-| 14 | an `UPDATE` whose WHERE holds a correlated COUNT | copies per condition |
-| 15 | a `VIEW` of a grouped query with a WHERE | the view's size, its total, and one member's row |
+| 12 | a `BEFORE INSERT` trigger whose WHEN counts the member's open holds | which of two driven holds exist |
+| 13 | an `UPDATE` with a `CASE` in its SET, and the ELSE that matters | total salary per role |
+| 14 | `CREATE TABLE ... AS SELECT`, then a `DELETE` with the same WHERE | rows in both tables, and open holds left |
+| 15 | a `VIEW` holding a window function over a filtered table | the view's size, holds at position 1, the longest queue |
 
-13 carries a `driver_sql`: two returns the question records after your
-script. A refusal is reported in the status bar, not treated as an error.
+12 carries a `driver_sql`: two inserts the question runs after your script.
+A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q892 | D1 dates & times | Loans by day of the week | ex 1 | 1 - Dates and set operations |
-| Q893 | S1 set operations | Fined and waiting | ex 2 | 1 - Dates and set operations |
-| Q894 | C2 grain | Staff and copies, per branch | ex 3 | 2 - Grain and CASE |
-| Q895 | C7 CASE | Fines in bands | ex 4 | 2 - Grain and CASE |
-| Q896 | W2 window ranking | The runner-up in each genre | ex 5 | 3 - Windows and recursion |
-| Q897 | W3 window vs GROUP BY | How long copy 1 sat on the shelf | ex 6 | 3 - Windows and recursion |
-| Q898 | R1 recursive CTE | Twelve weeks of loans | ex 7 | 3 - Windows and recursion |
-| Q899 | E1 EXISTS | Stocked at every branch | ex 8 | 4 - EXISTS and text |
-| Q900 | STR string functions | Words per title | ex 9 | 4 - EXISTS and text |
-| Q901 | STR string functions | Staff initials | ex 10 | 4 - EXISTS and text |
-| Q902 | INT intervals | Two books out at once | ex 11 | 5 - Intervals and NULLs |
-| Q903 | N1 NULLs | Holds, three ways, per branch | ex 12 | 5 - Intervals and NULLs |
-| Q904 | TRG triggers | A fine the moment a book comes back late **(script)** | ex 13 | 6 - Changing the data |
-| Q905 | DML update & delete | Well-thumbed copies **(script)** | ex 14 | 6 - Changing the data |
-| Q906 | VIEW views | What each member owes **(script)** | ex 15 | 6 - Changing the data |
+| Q907 | W2 window ranking | Each branch's three keenest borrowers | ex 1 | 1 - Windows and text |
+| Q908 | STR string functions | Titles by their first word | ex 2 | 1 - Windows and text |
+| Q909 | INT intervals | Holds fulfilled within the week | ex 3 | 2 - Intervals and CASE |
+| Q910 | C7 CASE | Renewed once, twice, or not at all | ex 4 | 2 - Intervals and CASE |
+| Q911 | R1 recursive CTE | Branches opened, decade by decade | ex 5 | 3 - Recursion and set operations |
+| Q912 | S1 set operations | At Central but not at Old Town | ex 6 | 3 - Recursion and set operations |
+| Q913 | X1 subqueries/EXISTS | Late starters | ex 7 | 4 - Subqueries and dates |
+| Q914 | D1 dates & times | Loans by quarter | ex 8 | 4 - Subqueries and dates |
+| Q915 | X1 subqueries/EXISTS | Paid against the role's average | ex 9 | 4 - Subqueries and dates |
+| Q916 | E1 EXISTS | Waiting while a copy sits on a shelf | ex 10 | 5 - EXISTS and grain |
+| Q917 | C2 grain | Books and copies, per author | ex 11 | 5 - EXISTS and grain |
+| Q918 | TRG triggers | Three open holds at most **(script)** | ex 12 | 6 - Changing the data |
+| Q919 | DML update & delete | A pay rise by role **(script)** | ex 13 | 6 - Changing the data |
+| Q920 | DDL tables & columns | Archive the closed holds **(script)** | ex 14 | 6 - Changing the data |
+| Q921 | VIEW views | The queue, as a view **(script)** | ex 15 | 6 - Changing the data |
 
 ### Python
 
-Three shapes. Five one-tool functions on tools no earlier set used:
-endswith() with a tuple, round() to a negative place, split(maxsplit=1),
-enumerate(start=1) and ljust() with a fill. Five functions with one loop or
-one if. Five functions over lists of dicts shaped like loans, fines, copies
-and holds, each the Python form of a familiar SQL question.
+Fifteen functions of one or two lines, each built around one tool named in
+its title: strip(chars), istitle(), replace() with a count, removesuffix(),
+isspace(), int(s, 2), format(n, 'b'), math.gcd(), the .1% spec,
+sorted(key=str.lower), list.count(), range() with a step, <= on sets,
+setdefault(), and in on a dict.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P161 | PY3 endswith tuple | endswith(tuple): is it an image file? | py 1 | 1 - One tool |
-| P162 | PY3 round negative | round(n, -2): to the nearest hundred | py 2 | 1 - One tool |
-| P163 | PY3 split maxsplit | split(maxsplit=1): the first word and the rest | py 3 | 1 - One tool |
-| P164 | PY3 enumerate start | enumerate(start=1): numbering from one | py 4 | 1 - One tool |
-| P165 | PY3 ljust fill | ljust(width, '.'): a dotted leader | py 5 | 1 - One tool |
-| P166 | PY4 loop max | The longest word, by a loop | py 6 | 2 - A loop or an if |
-| P167 | PY4 if cap | A late fee with a cap | py 7 | 2 - A loop or an if |
-| P168 | PY4 loop count if | Overdue dates, counted | py 8 | 2 - A loop or an if |
-| P169 | PY4 loop find index | Where the first negative is | py 9 | 2 - A loop or an if |
-| P170 | PY4 while | Squares below a limit | py 10 | 2 - A loop or an if |
-| P171 | PY5 filter None | Loans still out | py 11 | 3 - Library rows |
-| P172 | PY5 sum by key | Unpaid fines, per member | py 12 | 3 - Library rows |
-| P173 | PY5 argmax count | The branch with the most copies | py 13 | 3 - Library rows |
-| P174 | PY5 count with None | Late returns, counted | py 14 | 3 - Library rows |
-| P175 | PY5 having | Members with enough holds | py 15 | 3 - Library rows |
+| P176 | PY3 strip chars | strip(chars): quotes off both ends | py 1 | 1 - Strings |
+| P177 | PY3 istitle | istitle(): is every word capitalised? | py 2 | 1 - Strings |
+| P178 | PY3 replace count | replace(old, new, 1): only the first one | py 3 | 1 - Strings |
+| P179 | PY3 removesuffix | removesuffix(): the extension off the end | py 4 | 1 - Strings |
+| P180 | PY3 isspace | isspace(): nothing but whitespace | py 5 | 1 - Strings |
+| P181 | PY3 int base | int(s, 2): a binary string to a number | py 6 | 2 - Numbers |
+| P182 | PY3 format binary | format(n, 'b'): a number as binary digits | py 7 | 2 - Numbers |
+| P183 | PY3 math gcd | math.gcd(): the greatest common divisor | py 8 | 2 - Numbers |
+| P184 | PY3 percent spec | f'{x:.1%}': a fraction as a percentage | py 9 | 2 - Numbers |
+| P185 | PY3 sorted key lower | sorted(key=str.lower): alphabetical, not ASCII | py 10 | 3 - Lists |
+| P186 | PY3 list count | list.count(): how many times | py 11 | 3 - Lists |
+| P187 | PY3 range step | range(start, stop, step): the even numbers | py 12 | 3 - Lists |
+| P188 | PY3 set subset | <= on sets: is everything wanted available? | py 13 | 4 - Sets and dictionaries |
+| P189 | PY3 dict setdefault | setdefault(): a list for each key, made on demand | py 14 | 4 - Sets and dictionaries |
+| P190 | PY3 in dict | in on a dict: is the key there? | py 15 | 4 - Sets and dictionaries |
 
 ## Retired
 
@@ -401,6 +402,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q892 | D1 dates & times | Loans by day of the week | - | retired |
+| Q893 | S1 set operations | Fined and waiting | - | retired |
+| Q894 | C2 grain | Staff and copies, per branch | - | retired |
+| Q895 | C7 CASE | Fines in bands | - | retired |
+| Q896 | W2 window ranking | The runner-up in each genre | - | retired |
+| Q897 | W3 window vs GROUP BY | How long copy 1 sat on the shelf | - | retired |
+| Q898 | R1 recursive CTE | Twelve weeks of loans | - | retired |
+| Q899 | E1 EXISTS | Stocked at every branch | - | retired |
+| Q900 | STR string functions | Words per title | - | retired |
+| Q901 | STR string functions | Staff initials | - | retired |
+| Q902 | INT intervals | Two books out at once | - | retired |
+| Q903 | N1 NULLs | Holds, three ways, per branch | - | retired |
+| Q904 | TRG triggers | A fine the moment a book comes back late **(script)** | - | retired |
+| Q905 | DML update & delete | Well-thumbed copies **(script)** | - | retired |
+| Q906 | VIEW views | What each member owes **(script)** | - | retired |
+| P161 | PY3 endswith tuple | endswith(tuple): is it an image file? | - | retired |
+| P162 | PY3 round negative | round(n, -2): to the nearest hundred | - | retired |
+| P163 | PY3 split maxsplit | split(maxsplit=1): the first word and the rest | - | retired |
+| P164 | PY3 enumerate start | enumerate(start=1): numbering from one | - | retired |
+| P165 | PY3 ljust fill | ljust(width, '.'): a dotted leader | - | retired |
+| P166 | PY4 loop max | The longest word, by a loop | - | retired |
+| P167 | PY4 if cap | A late fee with a cap | - | retired |
+| P168 | PY4 loop count if | Overdue dates, counted | - | retired |
+| P169 | PY4 loop find index | Where the first negative is | - | retired |
+| P170 | PY4 while | Squares below a limit | - | retired |
+| P171 | PY5 filter None | Loans still out | - | retired |
+| P172 | PY5 sum by key | Unpaid fines, per member | - | retired |
+| P173 | PY5 argmax count | The branch with the most copies | - | retired |
+| P174 | PY5 count with None | Late returns, counted | - | retired |
+| P175 | PY5 having | Members with enough holds | - | retired |
 | Q877 | X1 subqueries/EXISTS | Each branch's share of the stock | - | retired |
 | Q878 | X1 subqueries/EXISTS | Above the average borrower | - | retired |
 | Q879 | STR string aggregation | An author's titles on one line | - | retired |
@@ -1403,7 +1434,7 @@ they still count as asked.
   three inserts, a partial UNIQUE index where the unconditional one cannot
   be built, and an UPSERT where OR REPLACE breaks a foreign key. Python,
   fifteen one-tool functions on tools no earlier set used.
-- **Q892-Q906 and P161-P175** current set. The library again (SEED 861),
+- **Q892-Q906 and P161-P175** retired set. The library again (SEED 861),
   as a REVISION set: tiers pairing concepts the earlier library sets
   introduced -- %w against %W, INTERSECT against UNION, two children of a
   branch without multiplying, a CASE whose WHEN order matters, ROW_NUMBER
@@ -1415,3 +1446,14 @@ they still count as asked.
   with a correlated COUNT, and a view of unpaid totals. Python in three
   shapes: five one-tool functions, five with a loop or an if, five over
   library-shaped rows.
+- **Q907-Q921 and P176-P190** current set. The library again (SEED 861),
+  a second REVISION set with the concepts re-paired: DENSE_RANK for the
+  top three with ties, SUBSTR's length one less than INSTR, julianday
+  inside a conditional SUM, a simple CASE on renewals, a recursive run of
+  decades with the empty ones kept, EXCEPT the right way round, HAVING on
+  MIN for a first loan, quarters by (month + 2) / 3, a correlated role
+  average, EXISTS inside EXISTS for a copy on a shelf, three grains of
+  author, book and copy -- and four writable: a trigger that counts open
+  holds, an UPDATE with a CASE and its ELSE, CREATE TABLE AS SELECT with a
+  matching DELETE, and a view with a window function. Python, fifteen
+  one-tool functions on tools no earlier set used.
