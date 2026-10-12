@@ -1,25 +1,25 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the public library, the
-fifth set on this schema and a second revision set: five tiers that pair up
-the library's concepts differently from last time, every question new, plus
-four writable questions. **Fifteen Python**: tiny functions of one or two
-lines, each about ONE tool named in the question's title, none of them used
-by an earlier set.
+sixth set on this schema, on six tiers none of the library sets have used:
+JSON, LIKE and GLOB, date modifiers, query plans, aggregates over windows,
+and three writable statements new to the library. **Fifteen Python**: tiny
+functions of one or two lines, each about ONE tool named in the question's
+title, none of them used by an earlier set.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Windows and text | 1-2 |
-| 2 - Intervals and CASE | 3-4 |
-| 3 - Recursion and set operations | 5-6 |
-| 4 - Subqueries and dates | 7-9 |
-| 5 - EXISTS and grain | 10-11 |
-| 6 - Changing the data | 12-15 |
+| 1 - JSON | 1-3 |
+| 2 - LIKE and GLOB | 4-5 |
+| 3 - Date modifiers | 6-8 |
+| 4 - Query plans | 9-10 |
+| 5 - Aggregates over windows | 11-12 |
+| 6 - Changing the data | 13-15 |
 
 | Stage | Python questions |
 |---|---|
-| 1 - Strings | 1-5 |
-| 2 - Numbers | 6-9 |
+| 1 - Strings | 1-4 |
+| 2 - Numbers and None | 5-9 |
 | 3 - Lists | 10-12 |
 | 4 - Sets and dictionaries | 13-15 |
 
@@ -49,7 +49,7 @@ past due; 337 holds are still waiting; 1,380 fines are unpaid.
 
 SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
 instead is constraints, triggers, views, DDL and plain DML -- and each of
-questions 12 to 15 is one of those.
+questions 13 to 15 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -62,40 +62,42 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Question 12 runs two inserts of its own *after* your
-script -- the holds your trigger should refuse and allow. Questions 13 to 15
-are graded on what your script leaves behind.
+None of the three runs statements of its own afterwards; each is graded on
+what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 12 | `BEFORE INSERT ... WHEN (SELECT COUNT(*) ... open holds ...) >= 3` |
-| 13 | `UPDATE ... SET salary = CASE role WHEN ... ELSE salary END` |
-| 14 | `CREATE TABLE ... AS SELECT ... WHERE closed`, then `DELETE ... WHERE closed` |
-| 15 | a `VIEW` with `ROW_NUMBER() OVER (PARTITION BY book_id ORDER BY placed_at)` over the open holds |
+| 13 | `UPDATE loans SET ... FROM copies WHERE copies.copy_id = loans.copy_id AND ... AND loans.returned_on IS NULL` |
+| 14 | `DELETE ... WHERE hold_id IN (SELECT hold_id FROM (... ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...) ...) WHERE rn > 1)` |
+| 15 | `ALTER TABLE books ADD COLUMN size TEXT GENERATED ALWAYS AS (CASE ...) VIRTUAL` |
+
+## The query-plan stage
+
+Questions 9 and 10 cannot be graded on their rows alone, because the slow
+query and the fast one return exactly the same rows. Each opens with the
+slow query already in the editor -- correct, and the thing to improve --
+and **Check answer** also runs `EXPLAIN QUERY PLAN` on yours: 9 must mention
+`idx_loans_member`, 10 must say SEARCH and not SCAN. **Explain plan** (the
+button, or F6) shows you the plan of whatever is in the editor.
 
 ## Things the data does on purpose
 
-- **The top three borrowers of each branch are 19 members, not eighteen**
-  -- one branch has a tie, which is why question 1 asks for DENSE_RANK.
-- **Titles begin with 35 different first words**, five of them from
-  the title frames (The, A, Beyond, Poems, Notes).
-- **156 of 863 fulfilled holds were met within a week**;
-  subtracting the date strings instead of their julianday() says all of
-  them were.
-- **149 books are at Central but not Old Town, and
-  131 the other way round** -- question 6's EXCEPT reversed is
-  a different answer.
-- **Only 24 members took their first loan in or after June
-  2025**; a WHERE on the date instead of a HAVING on MIN makes it almost
-  everyone.
-- **316 of the 337 waiting holds are for a book with a copy on
-  a shelf somewhere** -- the queue is at the wrong branch, which is
-  question 10.
-- **Members 930 and 1454 each have three open holds**, the limit question
-  12's trigger enforces; the second driven member's holds are all closed.
-- **1,163 holds are closed and 337 open**, the split question 14's
-  archive and question 15's queue both depend on; 140 books have
-  someone waiting.
+- **133 titles begin with a capital vowel, and none with a lower-case
+  one** -- GLOB '[aeiou]*' finds nothing, because GLOB is case-sensitive.
+- **589 members live in an LS1x district and 95 in LS1 itself**; LIKE
+  'LS1%' lumps them together, LIKE 'LS1_' does not.
+- **716 fines were issued in the ninety days to 2026-06-30, and
+  736 in the three months** -- two days apart, and a few fines
+  with them.
+- **762 members have a birthday still to come in 2026** on
+  30 June, and a difference of years makes every one of them a year too
+  old.
+- **Member 1149 has 214 loans**, one of the heaviest readers, which
+  is why question 9 looks them up by the index.
+- **8 members hold the same book twice**, the pairs question 14
+  thins to one.
+- **Old Town's copies have 102 loans out and 3,617
+  returned**; question 13's UPDATE must move only the first group.
 
 ## How the Python questions are graded
 
@@ -116,360 +118,367 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Windows and text (2)
+## 1 - JSON (3)
 
-DENSE_RANK against ROW_NUMBER and RANK when members tie, and SUBSTR whose length
-has to be one less than where INSTR found the space.
+json_group_array with the ORDER BY inside the call, json_each as a table in
+FROM, and json_object against json_array.
 
-1. **Each branch's three keenest borrowers** (Q907)
+1. **Each branch's staff, as a JSON list** (Q922)
 
-   For each home branch, the members with the three highest loan counts -- ALL
-   of them when members tie, so a branch may show more than three rows.
-   DENSE_RANK within the branch, by loans descending.
+   For each branch, its staff names as ONE JSON array, in alphabetical order
+   of name: json_group_array with an ORDER BY inside its parentheses.
 
-   *Return: home_branch_id, member_id, loans, place*
+   *Return: branch_id, names*
 
-2. **Titles by their first word** (Q908)
+2. **A list of books, from JSON to rows** (Q923)
 
-   How many titles begin with each first word -- the text before the first
-   space, without the space. Every title has at least two words. SUBSTR(text,
-   start, length) with INSTR finding the space.
+   Given the JSON list '[587, 12, 40, 275]' of book ids, how many members are
+   WAITING on each -- an open hold, neither fulfilled nor cancelled --
+   including 0 for a book nobody is waiting for. json_each() turns the list
+   into rows with a `value` column.
 
-   *Return: first_word, titles*
+   *Return: book_id, waiting*
 
-## 2 - Intervals and CASE (2)
+3. **A card for each manager** (Q924)
 
-julianday arithmetic inside a conditional SUM, where subtracting two date
-strings gives 0, and a simple CASE on renewals whose WHENs cannot overlap.
+   For each manager, a JSON object with the keys id, name and branch holding
+   their staff_id, name and branch_id -- built with json_object(key, value,
+   key, value, ...).
 
-3. **Holds fulfilled within the week** (Q909)
+   *Return: staff_id, card*
 
-   For each branch the hold was placed at: how many holds were fulfilled, how
-   many of those within 7 days of being placed, and how many took longer. The
-   wait is julianday arithmetic -- placed_at carries a time, which julianday
-   handles -- and the split is a conditional SUM.
+## 2 - LIKE and GLOB (2)
 
-   *Return: branch_id, fulfilled, within_week, longer*
+A character class that only GLOB has, and is case-sensitive, and the underscore
+that LIKE treats as exactly one character.
 
-4. **Renewed once, twice, or not at all** (Q910)
+4. **Titles that begin with a vowel** (Q925)
 
-   Loans by how often they were renewed -- labelled 'none', 'once', 'twice'
-   from the renewals column -- with the count and the percentage returned
-   late, to one decimal. A loan still out is not late.
+   How many titles begin with each capital vowel -- A, E, I, O or U -- one row
+   per letter that occurs. GLOB has a character class, [AEIOU], that LIKE does
+   not, and GLOB is case-sensitive.
 
-   *Return: renewed, loans, pct_late*
+   *Return: letter, titles*
 
-## 3 - Recursion and set operations (2)
+5. **The LS1x districts** (Q926)
 
-Twelve decades manufactured by recursion so the empty ones keep a 0, and EXCEPT
-with the branch that must have the book on the left.
+   How many members live in each postcode area of exactly four characters
+   beginning 'LS1' -- LS10 to LS19 -- but NOT in 'LS1' itself. In LIKE, _
+   matches exactly one character.
 
-5. **Branches opened, decade by decade** (Q911)
+   *Return: postcode_area, members*
 
-   For every decade from 1900 to 2010 -- 1900, 1910, ..., 2010 -- how many
-   branches opened in it, 0 for the decades with none. Build the decades with
-   a recursive CTE and count the branches whose opened_on falls in each.
+## 3 - Date modifiers (3)
 
-   *Return: decade, branches*
+'-90 days' is not '-3 months', 'weekday 0' moves forward to a Sunday, and an age
+in whole years needs the birthday test.
 
-6. **At Central but not at Old Town** (Q912)
+6. **Fines from the last ninety days** (Q927)
 
-   Books with a copy at Central (branch 1) but no copy at Old Town (branch 6),
-   using EXCEPT between two queries over copies. Each book once.
+   Fines issued in the ninety days ending 2026-06-30 -- strictly after
+   date('2026-06-30', '-90 days') -- split into unpaid and paid: a 0/1 flag
+   for paid, the count, and the pence.
 
-   *Return: book_id*
+   *Return: paid, fines, pence*
 
-## 4 - Subqueries and dates (3)
+7. **Weeks ending on a Sunday** (Q928)
 
-HAVING on MIN rather than WHERE on the date, quarters from the month by (m + 2)
-/ 3, and a correlated subquery that is the role average only because it refers
-to the outer row.
+   For the loans started from 2026-01-01 to 2026-03-31: how many started in
+   each week, labelled by the SUNDAY that ends it -- date(loaned_on, 'weekday
+   0') gives the next Sunday on or after a date. Fourteen weeks, the first and
+   last of them partial.
 
-7. **Late starters** (Q913)
+   *Return: week_ending, loans*
 
-   Members whose FIRST loan was on or after 2025-06-01: their member_id and
-   the date of that first loan. A member with loans before that date is
-   excluded even if they also borrowed after it.
+8. **Members by decade of age** (Q929)
 
-   *Return: member_id, first_loan*
+   How many members fall in each decade of age on 2026-06-30: 0 for under ten,
+   10 for ten to nineteen, and so on. An age in whole years is the difference
+   in years MINUS ONE when the birthday has not yet come round -- compare the
+   '%m-%d' parts.
 
-8. **Loans by quarter** (Q914)
+   *Return: decade, members*
 
-   How many loans started in each quarter of each year: the year as a number,
-   the quarter as 1 to 4. There is no strftime code for the quarter; derive it
-   from the month number with integer arithmetic.
+## 4 - Query plans (2)
 
-   *Return: year, quarter, loans*
+Two questions graded on EXPLAIN QUERY PLAN: the slow query is already in the
+editor and returns the right rows. An index is lost to arithmetic on the column,
+and a NOCASE index is found by asking for its collation.
 
-9. **Paid against the role's average** (Q915)
+9. **Let the index find the member** (Q930)
 
-   Each staff member's salary, the average salary of their ROLE rounded to
-   whole pounds, and how far above or below it they are. The role average is a
-   correlated subquery that refers to the outer row's role.
+   Member 1149's loans: loan_id and loaned_on. The query in the editor is
+   correct and reads every one of the 24,000 loans. There is an index on
+   loans(member_id); write the WHERE so that SQLite can use it. Your plan must
+   mention idx_loans_member.
 
-   *Return: staff_id, salary, role_avg, diff*
+   *Return: loan_id, loaned_on*
 
-## 5 - EXISTS and grain (2)
+10. **A title lookup that ignores case, through the index** (Q931)
 
-EXISTS inside EXISTS for 'a copy on a shelf somewhere', with the withdrawn test
-that is easy to drop, and author, book and copy counted at three grains.
+    The book whose title is 'the glass path' in any mix of case: book_id and
+    title. The query in the editor lower-cases every title to compare, which
+    scans the table. The index idx_books_title is declared COLLATE NOCASE, so
+    a comparison that asks for that collation can SEARCH it: your plan must
+    say SEARCH, not SCAN.
 
-10. **Waiting while a copy sits on a shelf** (Q916)
+    *Return: book_id, title*
 
-    Open holds -- fulfilled_on and cancelled_on both NULL -- whose book has a
-    copy available RIGHT NOW somewhere in the service: a copy not withdrawn
-    and with no open loan. Return the hold and its book.
+## 5 - Aggregates over windows (2)
 
-    *Return: hold_id, book_id*
+A window over the grouped rows, where PARTITION BY the group itself makes every
+group its own average, and a share of the branch that needs PARTITION BY the
+branch.
 
-11. **Books and copies, per author** (Q917)
+11. **Genres busier than the average genre** (Q932)
 
-    For each author who has at least one book: how many books, and how many
-    copies of them in all. Books with no copies still count as books. Author,
-    book and copy are three grains, and the join to copies multiplies the book
-    rows.
+    Genres whose loan count is above the AVERAGE genre's loan count -- the
+    average of the eight per-genre totals. Group first, then a window AVG over
+    the grouped counts, then filter in an outer query.
 
-    *Return: author_id, books, copies*
+    *Return: genre, loans*
 
-## 6 - Changing the data (4)
+12. **A genre that is a fifth of its branch** (Q933)
+
+    For each branch and genre: the genre's share of that BRANCH's loans as a
+    percentage to one decimal, keeping only the pairs above 20 per cent. The
+    branch total is a window SUM over the grouped counts, partitioned by
+    branch.
+
+    *Return: branch_id, genre, pct*
+
+## 6 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A trigger that counts open holds, an
-UPDATE with a CASE whose ELSE keeps the managers, CREATE TABLE AS SELECT with a
-matching DELETE, and a view with a window function over a filtered table.
+question's probe query reads the result. UPDATE ... FROM with the condition that
+keeps history, a DELETE of duplicates numbered by ROW_NUMBER in a subquery, and
+a VIRTUAL generated column added by ALTER TABLE.
 
-12. **Three open holds at most** (Q918)
+13. **A week's grace at Old Town** (Q934)
 
-    Write a BEFORE INSERT trigger on holds that refuses a new hold --
-    RAISE(ABORT, ...) -- when the member already has three or more OPEN holds,
-    fulfilled_on and cancelled_on both NULL. The question then inserts a hold
-    for member 930, who has three waiting, and one for member 1, who has none.
+    Old Town (branch 6) is closing for a week. Give every loan that is still
+    OUT on one of its copies seven more days: due_on = date(due_on, '+7
+    days'). Use UPDATE ... FROM to bring copies into the WHERE. Returned loans
+    and other branches' loans are untouched.
 
-    *Checked: which of the two holds exist*
+    *Checked: the total loan length in days of Old Town's open loans, of its returned loans, and of open loans elsewhere*
 
-13. **A pay rise by role** (Q919)
+14. **One hold per member per book, the earliest kept** (Q935)
 
-    Give every assistant a 5 per cent rise and every librarian 3 per cent,
-    rounded to whole pounds with ROUND; managers' salaries do not change. One
-    UPDATE with a CASE in its SET.
+    Eight members hold the same book twice. Delete the LATER hold of each such
+    pair -- by placed_at -- keeping the earliest, with ROW_NUMBER over
+    (member_id, book_id) in a subquery that picks the hold_ids to delete.
 
-    *Checked: the total salary of each role*
+    *Checked: how many holds remain, the sum of their hold_ids, and how many (member, book) pairs still repeat*
 
-14. **Archive the closed holds** (Q920)
+15. **A column that computes itself** (Q936)
 
-    Move the CLOSED holds -- fulfilled or cancelled -- out of holds into a new
-    table `holds_archive` with the same columns: CREATE TABLE ... AS SELECT to
-    copy them, then DELETE them from holds with the same condition. Open holds
-    stay where they are.
+    Add a VIRTUAL generated column `size` to books: 'short' under 200 pages,
+    'medium' under 500, 'long' otherwise -- ALTER TABLE books ADD COLUMN size
+    TEXT GENERATED ALWAYS AS (...) VIRTUAL. Nothing is stored; the value is
+    computed from pages whenever it is read.
 
-    *Checked: how many rows holds and holds_archive each have, and how many open holds are left in holds*
-
-15. **The queue, as a view** (Q921)
-
-    Create a view `hold_queue (hold_id, book_id, member_id, position)` of the
-    OPEN holds, numbered within each book by placed_at from 1 -- the queue
-    position. Closed holds are not in the view and do not take a number.
-
-    *Checked: the view's size, how many holds are at position 1 -- one per book with a queue -- and the longest queue*
+    *Checked: how many books of each size*
 
 # Python
 
-## 1 - Strings (5)
+## 1 - Strings (4)
 
-strip(chars) against replace(), istitle() against the first letter, replace()
-with a count, removesuffix() against a slice, and isspace() against strip() ==
-''.
+center() against ljust(), isupper() against == upper(), the format() method
+against + with an int, and ord() against int().
 
-1. **strip(chars): quotes off both ends** (P176)
+1. **center(width, '*'): a label in the middle** (P191)
 
-   Write a function `unquote(s)` that returns s with any double quote
-   characters removed from its two ENDS -- and nothing removed from the middle
-   -- using strip() with the quote as its argument:
-
-   ```
-   unquote('"Leeds"') -> 'Leeds'
-   ```
-
-   *Return: the new string.*
-
-2. **istitle(): is every word capitalised?** (P177)
-
-   Write a function `is_title_case(s)` that returns True when every word in s
-   starts with a capital and continues in lower case, using istitle():
+   Write a function `banner(label, width)` that returns the label centred in a
+   field of the given width, padded on both sides with '*', using center()
+   with a fill character:
 
    ```
-   is_title_case("The glass path") -> False
+   banner("Hi", 8) -> "***Hi***"
+   ```
+
+   A label wider than width is returned unchanged.
+
+   *Return: the string.*
+
+2. **isupper(): is it all capitals?** (P192)
+
+   Write a function `is_shouting(s)` that returns True when every letter in s
+   is upper case and there is at least one letter, using isupper():
+
+   ```
+   is_shouting("LS15") -> True
+   is_shouting("123") -> False
    ```
 
    *Return: True or False.*
 
-3. **replace(old, new, 1): only the first one** (P178)
+3. **format(): slots filled in order** (P193)
 
-   Write a function `replace_first(s, old, new)` that returns s with only the
-   FIRST occurrence of old replaced by new, using replace() with its count
-   argument:
-
-   ```
-   replace_first("a-b-c", "-", "+") -> "a+b-c"
-   ```
-
-   *Return: the new string.*
-
-4. **removesuffix(): the extension off the end** (P179)
-
-   Write a function `drop_txt(filename)` that returns the name without a
-   trailing '.txt' -- and unchanged when it does not end in that -- using
-   removesuffix():
+   Write a function `loan_line(name, n)` that returns the sentence '<name> has
+   <n> loans' using the string format() method with {} slots:
 
    ```
-   drop_txt("notes.txt") -> "notes"
-   drop_txt("notes.csv") -> "notes.csv"
+   loan_line("Aisha", 3) -> "Aisha has 3 loans"
    ```
 
-   *Return: the new string.*
+   *Return: the string.*
 
-5. **isspace(): nothing but whitespace** (P180)
+4. **ord(): a character's code** (P194)
 
-   Write a function `is_blank(s)` that returns True when s is made only of
-   whitespace -- spaces, tabs, newlines -- and has at least one character,
-   using isspace():
+   Write a function `code_point(ch)` that returns the Unicode code of a single
+   character as an integer, using ord():
 
    ```
-   is_blank("   ") -> True
-   is_blank("") -> False
+   code_point("A") -> 65
+   ```
+
+   *Return: an integer.*
+
+## 2 - Numbers and None (5)
+
+is None against not x, math.isclose() against ==, is_integer() against
+isinstance, math.prod() against sum(), and min(key=abs) against min().
+
+5. **is None: missing, not merely empty** (P195)
+
+   Write a function `is_missing(x)` that returns True only when x is None --
+   not when it is 0, an empty string or an empty list -- using the is None
+   test:
+
+   ```
+   is_missing(None) -> True
+   is_missing(0) -> False
    ```
 
    *Return: True or False.*
 
-## 2 - Numbers (4)
+6. **math.isclose(): equal enough** (P196)
 
-int(s, 2) against int(s), format(n, 'b') against bin(), math.gcd() against
-min(), and the .1% spec against .1f with a % typed after it.
-
-6. **int(s, 2): a binary string to a number** (P181)
-
-   Write a function `from_binary(s)` that returns the integer a string of 0s
-   and 1s stands for in base two, using int() with a base:
+   Write a function `about_equal(a, b)` that returns True when two floats are
+   equal within floating-point noise -- 0.1 + 0.2 against 0.3 -- using
+   math.isclose() with its default tolerance. Remember the import.
 
    ```
-   from_binary("101") -> 5
+   about_equal(0.1 + 0.2, 0.3) -> True
    ```
 
-   *Return: an integer.*
+   *Return: True or False.*
 
-7. **format(n, 'b'): a number as binary digits** (P182)
+7. **is_integer(): a float with nothing after the point** (P197)
 
-   Write a function `to_binary(n)` that returns the binary digits of a non-
-   negative integer as a string, with no prefix, using format() with the 'b'
-   spec:
-
-   ```
-   to_binary(5) -> "101"
-   ```
-
-   *Return: the string.*
-
-8. **math.gcd(): the greatest common divisor** (P183)
-
-   Write a function `common_factor(a, b)` that returns the largest whole
-   number that divides both a and b, using math.gcd(). Remember the import.
+   Write a function `is_whole(x)` that returns True when the float x has no
+   fractional part, using the float method is_integer():
 
    ```
-   common_factor(12, 18) -> 6
+   is_whole(4.0) -> True
+   is_whole(4.5) -> False
    ```
 
-   *Return: an integer.*
+   *Return: True or False.*
 
-9. **f'{x:.1%}': a fraction as a percentage** (P184)
+8. **math.prod(): multiply them all** (P198)
 
-   Write a function `as_percent(x)` that returns the fraction x as a
-   percentage string with one decimal and a % sign, using the .1% format spec
-   in an f-string:
+   Write a function `product(values)` that returns all the numbers multiplied
+   together, 1 for an empty list, using math.prod(). Remember the import.
 
    ```
-   as_percent(0.258) -> "25.8%"
+   product([2, 3, 4]) -> 24
    ```
 
-   *Return: the string.*
+   *Return: the product.*
+
+9. **min(key=abs): nearest to zero** (P199)
+
+   Write a function `closest_to_zero(values)` that returns the value in a non-
+   empty list nearest to zero -- the FIRST such value when two are equally
+   near -- using min() with key=abs:
+
+   ```
+   closest_to_zero([3, -1, 2]) -> -1
+   ```
+
+   *Return: the value.*
 
 ## 3 - Lists (3)
 
-sorted(key=str.lower) against sorted(), count() against in, and range() with a
-step whose stop is one past the end.
+sort() returns None, extend() against append(), and list(map()) against str() of
+the whole list.
 
-10. **sorted(key=str.lower): alphabetical, not ASCII** (P185)
+10. **sort(): in place, returning None** (P200)
 
-    Write a function `alphabetical(words)` that returns the words sorted
-    alphabetically IGNORING case, using sorted() with key=str.lower:
-
-    ```
-    alphabetical(["banana", "Apple", "cherry"]) -> ["Apple", "banana", "cherry"]
-    ```
-
-    *Return: the new list.*
-
-11. **list.count(): how many times** (P186)
-
-    Write a function `times(values, x)` that returns how many times x appears
-    in the list, as an integer, using the list's count() method:
+    Write a function `sort_in_place(values)` that sorts the list itself with
+    its sort() method and then returns that same list:
 
     ```
-    times(["LS1", "BD3", "LS1"], "LS1") -> 2
-    ```
-
-    *Return: an integer.*
-
-12. **range(start, stop, step): the even numbers** (P187)
-
-    Write a function `evens_up_to(n)` that returns the list of even numbers
-    from 0 up to and INCLUDING n when n is even, using list() over range()
-    with a step of 2:
-
-    ```
-    evens_up_to(10) -> [0, 2, 4, 6, 8, 10]
+    sort_in_place([3, 1, 2]) -> [1, 2, 3]
     ```
 
     *Return: the list.*
 
+11. **extend(): one list onto the end of another** (P201)
+
+    Write a function `joined(a, b)` that returns a NEW list holding a's items
+    followed by b's, using extend() on a copy of a:
+
+    ```
+    joined([1, 2], [3, 4]) -> [1, 2, 3, 4]
+    ```
+
+    *Return: the new list.*
+
+12. **map(): the same function over every item** (P202)
+
+    Write a function `as_strings(values)` that returns a list of the items
+    each converted to a string, using list() over map() with str:
+
+    ```
+    as_strings([1, 2, 3]) -> ["1", "2", "3"]
+    ```
+
+    *Return: the new list.*
+
 ## 4 - Sets and dictionaries (3)
 
-<= on sets the right way round, setdefault() against assigning a fresh list, and
-in on a dict against in on its values.
+discard() against remove(), ^ against |, and | on dicts against a + that does
+not exist.
 
-13. **<= on sets: is everything wanted available?** (P188)
+13. **discard(): remove if present** (P203)
 
-    Write a function `all_available(wanted, stock)` that returns True when
-    every wanted item is in stock, using set() on each and the <= operator --
-    subset:
-
-    ```
-    all_available(["pen", "ink"], ["ink", "pen", "paper"]) -> True
-    ```
-
-    *Return: True or False.*
-
-14. **setdefault(): a list for each key, made on demand** (P189)
-
-    Write a function `add_to_group(groups, key, item)` that appends item to
-    the list stored under key in the dict, creating an empty list there first
-    if the key is new, and returns the dict -- using setdefault():
+    Write a function `without(items, x)` that returns a SET of the items with
+    x removed -- and simply the set of items when x was never there -- using
+    set() and discard():
 
     ```
-    add_to_group({"fiction": ["A"]}, "fiction", "B") -> {"fiction": ["A", "B"]}
+    without([1, 2, 3], 2) -> {1, 3}
+    without([1, 2], 9) -> {1, 2}
     ```
 
-    *Return: the dictionary.*
+    *Return: the set.*
 
-15. **in on a dict: is the key there?** (P190)
+14. **^ on sets: in one but not both** (P204)
 
-    Write a function `has_area(counts, area)` that returns True when area is a
-    KEY of the dict, whatever its value, using the in test on the dict itself:
+    Write a function `either_not_both(a, b)` that returns a SET of the values
+    in exactly one of the two lists -- in a or in b but not in both -- using
+    set() on each and the ^ operator:
 
     ```
-    has_area({"LS1": 95}, "LS1") -> True
+    either_not_both(["LS1", "BD3"], ["BD3", "WF1"]) -> {"LS1", "WF1"}
     ```
 
-    *Return: True or False.*
+    *Return: the set.*
+
+15. **| on dicts: merged, the right one winning** (P205)
+
+    Write a function `combined(a, b)` that returns a NEW dict with everything
+    from a and everything from b, b winning where a key is in both, using the
+    | operator on dicts:
+
+    ```
+    combined({"x": 1, "y": 2}, {"y": 3}) -> {"x": 1, "y": 3}
+    ```
+
+    *Return: the new dictionary.*
 
 ## The one concept with no question here
 
@@ -480,7 +489,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,081 retired ones.
+1,111 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
