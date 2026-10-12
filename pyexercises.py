@@ -1,13 +1,12 @@
 """Python practice exercises: fifteen tiny functions, one tool each.
 
-The twelfth Python set, back to one-tool functions: every question asks
+The thirteenth Python set, one-tool functions again: every question asks
 for a function of one or two lines that returns a value, built around one
-named tool no earlier set used -- strip() with an argument, istitle(),
-replace() with a count, removesuffix(), isspace(), int() with a base,
-format() with 'b', math.gcd(), the .1% format spec, sorted() with
-key=str.lower, list.count(), range() with a step, set <= for subset,
-dict.setdefault(), and the in test on a dictionary. The title names the
-tool, so the tree on the left reads like a list of tools.
+named tool no earlier set used -- center() with a fill, isupper(), the
+format() method, ord(), the is None test, math.isclose(), float's
+is_integer(), math.prod(), min() with key=abs, list.sort() in place,
+extend(), map(), set.discard(), ^ on sets and | on dicts. The title names
+the tool, so the tree on the left reads like a list of tools.
 
 Two kinds of question, told apart by `kind`:
 
@@ -32,309 +31,313 @@ import pyrun
 EXERCISES = [
     # ============================================================== 1 Strings
     dict(
-        id=1, ledger="P176", concept="PY3 strip chars", tier="1 - Strings",
-        title="strip(chars): quotes off both ends", kind="function",
-        func="unquote",
-        cases=[('"Leeds"',), ('"a" and "b"',), ("plain",), ('""',)],
+        id=1, ledger="P191", concept="PY3 center fill", tier="1 - Strings",
+        title="center(width, '*'): a label in the middle", kind="function",
+        func="banner",
+        cases=[("Hi", 8), ("Odd", 8), ("Far too long", 5), ("", 4)],
         prompt=(
-            "Write a function `unquote(s)` that returns s with any double"
-            " quote characters removed from its two ENDS -- and nothing"
-            " removed from the middle -- using strip() with the quote as"
-            " its argument:\n\n"
-            "  unquote('\"Leeds\"') -> 'Leeds'\n\n"
-            "Return: the new string."
-        ),
-        solution="def unquote(s):\n    return s.strip(\"\\\"\")\n",
-        trap="def unquote(s):\n    return s.replace(\"\\\"\", \"\")\n",
-        note="strip(chars) takes the given characters off both ends and"
-             " stops at the first character that is not one of them;"
-             " replace() removes every occurrence, including the quotes"
-             " INSIDE the text. The two agree on '\"Leeds\"' and"
-             " disagree the moment a quote appears in the middle.",
-    ),
-    dict(
-        id=2, ledger="P177", concept="PY3 istitle", tier="1 - Strings",
-        title="istitle(): is every word capitalised?", kind="function",
-        func="is_title_case",
-        cases=[("The Glass Path",), ("The glass path",), ("THE GLASS PATH",), ("",)],
-        prompt=(
-            "Write a function `is_title_case(s)` that returns True when"
-            " every word in s starts with a capital and continues in"
-            " lower case, using istitle():\n\n"
-            "  is_title_case(\"The glass path\") -> False\n\n"
-            "Return: True or False."
-        ),
-        solution="def is_title_case(s):\n    return s.istitle()\n",
-        trap="def is_title_case(s):\n    return s[:1].isupper()\n",
-        note="istitle() checks every word, and also that the letters"
-             " after each capital are lower case -- so 'THE GLASS PATH'"
-             " is False. Testing the first character alone says yes to"
-             " both of the wrong cases. The empty string is False: there"
-             " is no cased character in it.",
-    ),
-    dict(
-        id=3, ledger="P178", concept="PY3 replace count", tier="1 - Strings",
-        title="replace(old, new, 1): only the first one", kind="function",
-        func="replace_first",
-        cases=[("a-b-c", "-", "+"), ("none here", "x", "y"), ("aaa", "a", "b"), ("", "a", "b")],
-        prompt=(
-            "Write a function `replace_first(s, old, new)` that returns s"
-            " with only the FIRST occurrence of old replaced by new,"
-            " using replace() with its count argument:\n\n"
-            "  replace_first(\"a-b-c\", \"-\", \"+\") -> \"a+b-c\"\n\n"
-            "Return: the new string."
-        ),
-        solution="def replace_first(s, old, new):\n    return s.replace(old, new, 1)\n",
-        trap="def replace_first(s, old, new):\n    return s.replace(old, new)\n",
-        note="replace() has a third argument, the maximum number of"
-             " replacements, and 1 means the first match only. Without"
-             " it every match is replaced. A string with no match is"
-             " returned unchanged either way.",
-    ),
-    dict(
-        id=4, ledger="P179", concept="PY3 removesuffix", tier="1 - Strings",
-        title="removesuffix(): the extension off the end", kind="function",
-        func="drop_txt",
-        cases=[("notes.txt",), ("notes.csv",), ("txt",), ("a.txt.txt",)],
-        prompt=(
-            "Write a function `drop_txt(filename)` that returns the name"
-            " without a trailing '.txt' -- and unchanged when it does not"
-            " end in that -- using removesuffix():\n\n"
-            "  drop_txt(\"notes.txt\") -> \"notes\"\n"
-            "  drop_txt(\"notes.csv\") -> \"notes.csv\"\n\n"
-            "Return: the new string."
-        ),
-        solution="def drop_txt(filename):\n    return filename.removesuffix(\".txt\")\n",
-        trap="def drop_txt(filename):\n    return filename[:-4]\n",
-        note="removesuffix() removes the ending only when it is there,"
-             " and only once. Slicing off the last four characters cuts"
-             " 'notes.csv' down to 'notes' as well, and takes 'txt' to"
-             " nothing. The pair to removeprefix() from an earlier set.",
-    ),
-    dict(
-        id=5, ledger="P180", concept="PY3 isspace", tier="1 - Strings",
-        title="isspace(): nothing but whitespace", kind="function",
-        func="is_blank",
-        cases=[("   ",), ("",), (" a ",), ("\t\n",)],
-        prompt=(
-            "Write a function `is_blank(s)` that returns True when s is"
-            " made only of whitespace -- spaces, tabs, newlines -- and"
-            " has at least one character, using isspace():\n\n"
-            "  is_blank(\"   \") -> True\n"
-            "  is_blank(\"\") -> False\n\n"
-            "Return: True or False."
-        ),
-        solution="def is_blank(s):\n    return s.isspace()\n",
-        trap="def is_blank(s):\n    return s.strip() == \"\"\n",
-        note="isspace() is True only when every character is whitespace"
-             " AND there is at least one -- the empty string is False,"
-             " like the other is...() methods. strip() == '' is also"
-             " True for the empty string, which the question excludes.",
-    ),
-    # ============================================================== 2 Numbers
-    dict(
-        id=6, ledger="P181", concept="PY3 int base", tier="2 - Numbers",
-        title="int(s, 2): a binary string to a number", kind="function",
-        func="from_binary",
-        cases=[("101",), ("0",), ("11111111",), ("10",)],
-        prompt=(
-            "Write a function `from_binary(s)` that returns the integer a"
-            " string of 0s and 1s stands for in base two, using int()"
-            " with a base:\n\n"
-            "  from_binary(\"101\") -> 5\n\n"
-            "Return: an integer."
-        ),
-        solution="def from_binary(s):\n    return int(s, 2)\n",
-        trap="def from_binary(s):\n    return int(s)\n",
-        note="int() takes an optional base, and 2 reads the digits as"
-             " binary. Without it the string is read as decimal, so"
-             " '101' is a hundred and one. The same call with 16 reads"
-             " hexadecimal.",
-    ),
-    dict(
-        id=7, ledger="P182", concept="PY3 format binary", tier="2 - Numbers",
-        title="format(n, 'b'): a number as binary digits", kind="function",
-        func="to_binary",
-        cases=[(5,), (0,), (255,), (2,)],
-        prompt=(
-            "Write a function `to_binary(n)` that returns the binary"
-            " digits of a non-negative integer as a string, with no"
-            " prefix, using format() with the 'b' spec:\n\n"
-            "  to_binary(5) -> \"101\"\n\n"
+            "Write a function `banner(label, width)` that returns the"
+            " label centred in a field of the given width, padded on"
+            " both sides with '*', using center() with a fill"
+            " character:\n\n"
+            "  banner(\"Hi\", 8) -> \"***Hi***\"\n\n"
+            "A label wider than width is returned unchanged.\n\n"
             "Return: the string."
         ),
-        solution="def to_binary(n):\n    return format(n, \"b\")\n",
-        trap="def to_binary(n):\n    return bin(n)\n",
-        note="bin() returns '0b101', with the prefix that marks a binary"
-             " literal in source code. format(n, 'b') is the bare digits"
-             " -- the same spec as f'{n:b}'. 'x' gives hexadecimal and"
-             " 'o' octal the same way.",
+        solution="def banner(label, width):\n    return label.center(width, \"*\")\n",
+        trap="def banner(label, width):\n    return label.ljust(width, \"*\")\n",
+        note="center() splits the padding between the two sides, giving"
+             " the odd character to the right; ljust() puts it all on"
+             " the right. Like its siblings it never truncates, and the"
+             " fill character defaults to a space.",
     ),
     dict(
-        id=8, ledger="P183", concept="PY3 math gcd", tier="2 - Numbers",
-        title="math.gcd(): the greatest common divisor", kind="function",
-        func="common_factor",
-        cases=[(12, 18), (7, 13), (0, 9), (100, 75)],
+        id=2, ledger="P192", concept="PY3 isupper", tier="1 - Strings",
+        title="isupper(): is it all capitals?", kind="function",
+        func="is_shouting",
+        cases=[("HELLO",), ("Hello",), ("123",), ("",), ("LS15",)],
         prompt=(
-            "Write a function `common_factor(a, b)` that returns the"
-            " largest whole number that divides both a and b, using"
-            " math.gcd(). Remember the import.\n\n"
-            "  common_factor(12, 18) -> 6\n\n"
+            "Write a function `is_shouting(s)` that returns True when"
+            " every letter in s is upper case and there is at least one"
+            " letter, using isupper():\n\n"
+            "  is_shouting(\"LS15\") -> True\n"
+            "  is_shouting(\"123\") -> False\n\n"
+            "Return: True or False."
+        ),
+        solution="def is_shouting(s):\n    return s.isupper()\n",
+        trap="def is_shouting(s):\n    return s == s.upper()\n",
+        note="isupper() needs at least one cased character and no"
+             " lower-case ones; digits and punctuation are ignored."
+             " Comparing with upper() says yes to '123' and to the empty"
+             " string, which have no letters to be upper case.",
+    ),
+    dict(
+        id=3, ledger="P193", concept="PY3 str format", tier="1 - Strings",
+        title="format(): slots filled in order", kind="function",
+        func="loan_line",
+        cases=[("Aisha", 3), ("Kwame", 0), ("Rosa", 150)],
+        prompt=(
+            "Write a function `loan_line(name, n)` that returns the"
+            " sentence '<name> has <n> loans' using the string format()"
+            " method with {} slots:\n\n"
+            "  loan_line(\"Aisha\", 3) -> \"Aisha has 3 loans\"\n\n"
+            "Return: the string."
+        ),
+        solution="def loan_line(name, n):\n    return \"{} has {} loans\".format(name, n)\n",
+        trap="def loan_line(name, n):\n    return name + \" has \" + n + \" loans\"\n",
+        note="format() fills each {} from its arguments in order and"
+             " converts them to text on the way, so an int slots in"
+             " without str(). Concatenation with + refuses to join a str"
+             " to an int and raises TypeError. f-strings do the same job"
+             " inline; format() is the older form you will meet in"
+             " existing code.",
+    ),
+    dict(
+        id=4, ledger="P194", concept="PY3 ord", tier="1 - Strings",
+        title="ord(): a character's code", kind="function",
+        func="code_point",
+        cases=[("A",), ("a",), ("7",), (" ",)],
+        prompt=(
+            "Write a function `code_point(ch)` that returns the Unicode"
+            " code of a single character as an integer, using ord():\n\n"
+            "  code_point(\"A\") -> 65\n\n"
             "Return: an integer."
+        ),
+        solution="def code_point(ch):\n    return ord(ch)\n",
+        trap="def code_point(ch):\n    return int(ch)\n",
+        note="ord() gives the number a character is stored as -- 65 for"
+             " 'A', 97 for 'a', 55 for the digit '7'. int('7') is the"
+             " VALUE seven, and int('A') is a ValueError. chr() goes the"
+             " other way.",
+    ),
+    # ====================================================== 2 Numbers and None
+    dict(
+        id=5, ledger="P195", concept="PY3 is None", tier="2 - Numbers and None",
+        title="is None: missing, not merely empty", kind="function",
+        func="is_missing",
+        cases=[(None,), (0,), ("",), ("x",), ([],)],
+        prompt=(
+            "Write a function `is_missing(x)` that returns True only when"
+            " x is None -- not when it is 0, an empty string or an empty"
+            " list -- using the is None test:\n\n"
+            "  is_missing(None) -> True\n"
+            "  is_missing(0) -> False\n\n"
+            "Return: True or False."
+        ),
+        solution="def is_missing(x):\n    return x is None\n",
+        trap="def is_missing(x):\n    return not x\n",
+        note="'not x' is True for every falsy value: None, 0, '', [] and"
+             " False alike. 'is None' is True for None only, which is the"
+             " difference between 'no value was given' and 'the value"
+             " is zero'. It is SQL's IS NULL, and the reason the row-"
+             "shaped questions tested returned is None.",
+    ),
+    dict(
+        id=6, ledger="P196", concept="PY3 math isclose", tier="2 - Numbers and None",
+        title="math.isclose(): equal enough", kind="function",
+        func="about_equal",
+        cases=[(0.30000000000000004, 0.3), (1.0, 1.0), (1.0, 1.1), (100.0, 100.0000000001)],
+        prompt=(
+            "Write a function `about_equal(a, b)` that returns True when"
+            " two floats are equal within floating-point noise -- 0.1 +"
+            " 0.2 against 0.3 -- using math.isclose() with its default"
+            " tolerance. Remember the import.\n\n"
+            "  about_equal(0.1 + 0.2, 0.3) -> True\n\n"
+            "Return: True or False."
         ),
         solution=("import math\n\n"
-                  "def common_factor(a, b):\n"
-                  "    return math.gcd(a, b)\n"),
-        trap="def common_factor(a, b):\n    return min(a, b)\n",
-        note="The smaller number is the gcd only when it divides the"
-             " larger: 12 and 18 share 6, not 12. math.gcd() does the"
-             " Euclidean algorithm for you, and gcd(0, n) is n.",
+                  "def about_equal(a, b):\n"
+                  "    return math.isclose(a, b)\n"),
+        trap="def about_equal(a, b):\n    return a == b\n",
+        note="0.1 + 0.2 is 0.30000000000000004 in binary floating point,"
+             " and == is exact, so it is not 0.3. math.isclose() allows a"
+             " relative tolerance of one part in a billion by default,"
+             " which absorbs that noise and still calls 1.0 and 1.1"
+             " different. Never compare computed floats with ==.",
     ),
     dict(
-        id=9, ledger="P184", concept="PY3 percent spec", tier="2 - Numbers",
-        title="f'{x:.1%}': a fraction as a percentage", kind="function",
-        func="as_percent",
-        cases=[(0.258,), (1.0,), (0.0,), (0.04567,)],
+        id=7, ledger="P197", concept="PY3 is_integer", tier="2 - Numbers and None",
+        title="is_integer(): a float with nothing after the point", kind="function",
+        func="is_whole",
+        cases=[(4.0,), (4.5,), (0.0,), (-3.0,)],
         prompt=(
-            "Write a function `as_percent(x)` that returns the fraction x"
-            " as a percentage string with one decimal and a % sign,"
-            " using the .1% format spec in an f-string:\n\n"
-            "  as_percent(0.258) -> \"25.8%\"\n\n"
-            "Return: the string."
+            "Write a function `is_whole(x)` that returns True when the"
+            " float x has no fractional part, using the float method"
+            " is_integer():\n\n"
+            "  is_whole(4.0) -> True\n"
+            "  is_whole(4.5) -> False\n\n"
+            "Return: True or False."
         ),
-        solution="def as_percent(x):\n    return f\"{x:.1%}\"\n",
-        trap="def as_percent(x):\n    return f\"{x:.1f}%\"\n",
-        note="The % spec multiplies by 100, rounds to the decimals asked"
-             " for and appends the sign, all in one. .1f with a % typed"
-             " after it formats the raw fraction, so 0.258 becomes"
-             " '0.3%'.",
+        solution="def is_whole(x):\n    return x.is_integer()\n",
+        trap="def is_whole(x):\n    return isinstance(x, int)\n",
+        note="4.0 is a float, so isinstance(4.0, int) is False however"
+             " whole its value. is_integer() asks about the VALUE: is"
+             " there anything after the point? It is a method of float,"
+             " and the question that matters after a division.",
+    ),
+    dict(
+        id=8, ledger="P198", concept="PY3 math prod", tier="2 - Numbers and None",
+        title="math.prod(): multiply them all", kind="function",
+        func="product",
+        cases=[([2, 3, 4],), ([],), ([5],), ([1.5, 2],)],
+        prompt=(
+            "Write a function `product(values)` that returns all the"
+            " numbers multiplied together, 1 for an empty list, using"
+            " math.prod(). Remember the import.\n\n"
+            "  product([2, 3, 4]) -> 24\n\n"
+            "Return: the product."
+        ),
+        solution=("import math\n\n"
+                  "def product(values):\n"
+                  "    return math.prod(values)\n"),
+        trap="def product(values):\n    return sum(values)\n",
+        note="math.prod() is to multiplication what sum() is to addition,"
+             " and its empty result is 1 -- the number that multiplies"
+             " nothing -- as sum()'s is 0. Before Python 3.8 this needed"
+             " a loop or functools.reduce.",
+    ),
+    dict(
+        id=9, ledger="P199", concept="PY3 min key abs", tier="2 - Numbers and None",
+        title="min(key=abs): nearest to zero", kind="function",
+        func="closest_to_zero",
+        cases=[([3, -1, 2],), ([-5, 4],), ([0, 7],), ([-2, 2],)],
+        prompt=(
+            "Write a function `closest_to_zero(values)` that returns the"
+            " value in a non-empty list nearest to zero -- the FIRST such"
+            " value when two are equally near -- using min() with"
+            " key=abs:\n\n"
+            "  closest_to_zero([3, -1, 2]) -> -1\n\n"
+            "Return: the value."
+        ),
+        solution="def closest_to_zero(values):\n    return min(values, key=abs)\n",
+        trap="def closest_to_zero(values):\n    return min(values)\n",
+        note="key=abs compares the values by their distance from zero"
+             " but returns the value itself, sign and all. Plain min()"
+             " returns the most negative number, which is usually the"
+             " FURTHEST from zero. For a tie, min() keeps the first.",
     ),
     # ================================================================ 3 Lists
     dict(
-        id=10, ledger="P185", concept="PY3 sorted key lower", tier="3 - Lists",
-        title="sorted(key=str.lower): alphabetical, not ASCII", kind="function",
-        func="alphabetical",
-        cases=[(["banana", "Apple", "cherry"],), (["b", "A", "C", "a"],), ([],)],
+        id=10, ledger="P200", concept="PY3 list sort", tier="3 - Lists",
+        title="sort(): in place, returning None", kind="function",
+        func="sort_in_place",
+        cases=[([3, 1, 2],), ([],), (["b", "a"],)],
         prompt=(
-            "Write a function `alphabetical(words)` that returns the"
-            " words sorted alphabetically IGNORING case, using sorted()"
-            " with key=str.lower:\n\n"
-            "  alphabetical([\"banana\", \"Apple\", \"cherry\"]) ->"
-            " [\"Apple\", \"banana\", \"cherry\"]\n\n"
-            "Return: the new list."
-        ),
-        solution="def alphabetical(words):\n    return sorted(words, key=str.lower)\n",
-        trap="def alphabetical(words):\n    return sorted(words)\n",
-        note="Plain sorted() orders by character code, and every capital"
-             " comes before every lower-case letter, so 'Zoo' sorts"
-             " before 'apple'. key=str.lower sorts by the lower-cased"
-             " word while returning the original spelling. Equal keys"
-             " keep their original order.",
-    ),
-    dict(
-        id=11, ledger="P186", concept="PY3 list count", tier="3 - Lists",
-        title="list.count(): how many times", kind="function",
-        func="times",
-        cases=[(["LS1", "BD3", "LS1"], "LS1"), ([1, 2, 3], 4), ([], "x"), ([None, None], None)],
-        prompt=(
-            "Write a function `times(values, x)` that returns how many"
-            " times x appears in the list, as an integer, using the"
-            " list's count() method:\n\n"
-            "  times([\"LS1\", \"BD3\", \"LS1\"], \"LS1\") -> 2\n\n"
-            "Return: an integer."
-        ),
-        solution="def times(values, x):\n    return values.count(x)\n",
-        trap="def times(values, x):\n    return x in values\n",
-        note="count() returns a number, 0 when the value is absent; the"
-             " in test returns True or False and says nothing about how"
-             " many. True is not 2, and the grader keeps bool and int"
-             " apart. Lists and strings both have a count() method.",
-    ),
-    dict(
-        id=12, ledger="P187", concept="PY3 range step", tier="3 - Lists",
-        title="range(start, stop, step): the even numbers", kind="function",
-        func="evens_up_to",
-        cases=[(10,), (7,), (0,), (1,)],
-        prompt=(
-            "Write a function `evens_up_to(n)` that returns the list of"
-            " even numbers from 0 up to and INCLUDING n when n is even,"
-            " using list() over range() with a step of 2:\n\n"
-            "  evens_up_to(10) -> [0, 2, 4, 6, 8, 10]\n\n"
+            "Write a function `sort_in_place(values)` that sorts the list"
+            " itself with its sort() method and then returns that same"
+            " list:\n\n"
+            "  sort_in_place([3, 1, 2]) -> [1, 2, 3]\n\n"
             "Return: the list."
         ),
-        solution="def evens_up_to(n):\n    return list(range(0, n + 1, 2))\n",
-        trap="def evens_up_to(n):\n    return list(range(0, n, 2))\n",
-        note="range() stops BEFORE its stop value, so including n means"
-             " stopping at n + 1. The third argument is the step. list()"
-             " is needed because range() is a lazy sequence, not a list.",
+        solution="def sort_in_place(values):\n    values.sort()\n    return values\n",
+        trap="def sort_in_place(values):\n    return values.sort()\n",
+        note="list.sort() rearranges the list it is called on and returns"
+             " None; sorted() leaves the list alone and returns a new"
+             " one. 'return values.sort()' returns the None. Two lines:"
+             " sort, then return the list.",
+    ),
+    dict(
+        id=11, ledger="P201", concept="PY3 extend", tier="3 - Lists",
+        title="extend(): one list onto the end of another", kind="function",
+        func="joined",
+        cases=[([1, 2], [3, 4]), ([], [1]), (["a"], []), ([1], [[2]])],
+        prompt=(
+            "Write a function `joined(a, b)` that returns a NEW list"
+            " holding a's items followed by b's, using extend() on a"
+            " copy of a:\n\n"
+            "  joined([1, 2], [3, 4]) -> [1, 2, 3, 4]\n\n"
+            "Return: the new list."
+        ),
+        solution="def joined(a, b):\n    out = list(a)\n    out.extend(b)\n    return out\n",
+        trap="def joined(a, b):\n    out = list(a)\n    out.append(b)\n    return out\n",
+        note="extend() adds each ITEM of b; append() adds b itself as one"
+             " item, so [1, 2] becomes [1, 2, [3, 4]], a list with a list"
+             " inside it. a + b builds the same result as extend on a"
+             " copy. The copy is what keeps the caller's a unchanged.",
+    ),
+    dict(
+        id=12, ledger="P202", concept="PY3 map", tier="3 - Lists",
+        title="map(): the same function over every item", kind="function",
+        func="as_strings",
+        cases=[([1, 2, 3],), ([],), ([2.5, None],)],
+        prompt=(
+            "Write a function `as_strings(values)` that returns a list of"
+            " the items each converted to a string, using list() over"
+            " map() with str:\n\n"
+            "  as_strings([1, 2, 3]) -> [\"1\", \"2\", \"3\"]\n\n"
+            "Return: the new list."
+        ),
+        solution="def as_strings(values):\n    return list(map(str, values))\n",
+        trap="def as_strings(values):\n    return str(values)\n",
+        note="map(f, items) applies f to each item and yields the results"
+             " lazily; list() collects them. str(values) converts the"
+             " whole list to ONE string, '[1, 2, 3]'. A comprehension,"
+             " [str(v) for v in values], is the other spelling of the"
+             " same thing.",
     ),
     # ========================================================= 4 Sets and dicts
     dict(
-        id=13, ledger="P188", concept="PY3 set subset", tier="4 - Sets and dictionaries",
-        title="<= on sets: is everything wanted available?", kind="function",
-        func="all_available",
-        cases=[(["pen", "ink"], ["ink", "pen", "paper"]), (["pen", "glue"], ["ink", "pen"]),
-               ([], ["ink"]), (["ink"], [])],
+        id=13, ledger="P203", concept="PY3 set discard", tier="4 - Sets and dictionaries",
+        title="discard(): remove if present", kind="function",
+        func="without",
+        cases=[([1, 2, 3], 2), ([1, 2], 9), ([], 1), (["a", "a"], "a")],
         prompt=(
-            "Write a function `all_available(wanted, stock)` that returns"
-            " True when every wanted item is in stock, using set() on"
-            " each and the <= operator -- subset:\n\n"
-            "  all_available([\"pen\", \"ink\"], [\"ink\", \"pen\","
-            " \"paper\"]) -> True\n\n"
-            "Return: True or False."
+            "Write a function `without(items, x)` that returns a SET of"
+            " the items with x removed -- and simply the set of items"
+            " when x was never there -- using set() and discard():\n\n"
+            "  without([1, 2, 3], 2) -> {1, 3}\n"
+            "  without([1, 2], 9) -> {1, 2}\n\n"
+            "Return: the set."
         ),
-        solution="def all_available(wanted, stock):\n    return set(wanted) <= set(stock)\n",
-        trap="def all_available(wanted, stock):\n    return set(stock) <= set(wanted)\n",
-        note="a <= b on sets asks whether a is a subset of b -- every"
-             " member of a is in b. Reversed, it asks whether the whole"
-             " stock is wanted, a different question. The empty set is a"
-             " subset of everything, so wanting nothing is always"
-             " satisfied. issubset() is the same test spelled out.",
+        solution="def without(items, x):\n    s = set(items)\n    s.discard(x)\n    return s\n",
+        trap="def without(items, x):\n    s = set(items)\n    s.remove(x)\n    return s\n",
+        note="remove() raises KeyError when the value is absent;"
+             " discard() does nothing. Both change the set in place and"
+             " return None, which is why the set is built first and"
+             " returned afterwards.",
     ),
     dict(
-        id=14, ledger="P189", concept="PY3 dict setdefault", tier="4 - Sets and dictionaries",
-        title="setdefault(): a list for each key, made on demand", kind="function",
-        func="add_to_group",
-        cases=[({"fiction": ["A"]}, "fiction", "B"), ({"fiction": ["A"]}, "poetry", "C"),
-               ({}, "x", 1)],
+        id=14, ledger="P204", concept="PY3 set symmetric", tier="4 - Sets and dictionaries",
+        title="^ on sets: in one but not both", kind="function",
+        func="either_not_both",
+        cases=[(["LS1", "BD3"], ["BD3", "WF1"]), ([1, 2], [1, 2]), ([], [1]), ([1], [2])],
         prompt=(
-            "Write a function `add_to_group(groups, key, item)` that"
-            " appends item to the list stored under key in the dict,"
-            " creating an empty list there first if the key is new, and"
-            " returns the dict -- using setdefault():\n\n"
-            "  add_to_group({\"fiction\": [\"A\"]}, \"fiction\", \"B\")"
-            " -> {\"fiction\": [\"A\", \"B\"]}\n\n"
-            "Return: the dictionary."
+            "Write a function `either_not_both(a, b)` that returns a SET"
+            " of the values in exactly one of the two lists -- in a or"
+            " in b but not in both -- using set() on each and the ^"
+            " operator:\n\n"
+            "  either_not_both([\"LS1\", \"BD3\"], [\"BD3\", \"WF1\"]) ->"
+            " {\"LS1\", \"WF1\"}\n\n"
+            "Return: the set."
         ),
-        solution=("def add_to_group(groups, key, item):\n"
-                  "    groups.setdefault(key, []).append(item)\n"
-                  "    return groups\n"),
-        trap=("def add_to_group(groups, key, item):\n"
-              "    groups[key] = [item]\n"
-              "    return groups\n"),
-        note="setdefault(key, []) returns the list already under key, or"
-             " stores and returns a new empty one -- so the append lands"
-             " in the right place either way. Assigning a fresh [item]"
-             " throws away whatever the key already held.",
+        solution="def either_not_both(a, b):\n    return set(a) ^ set(b)\n",
+        trap="def either_not_both(a, b):\n    return set(a) | set(b)\n",
+        note="^ is the symmetric difference: the union minus the"
+             " intersection. | is the union, which keeps the shared"
+             " values too. Two equal sets have an empty symmetric"
+             " difference. symmetric_difference() is the same operator"
+             " spelled out.",
     ),
     dict(
-        id=15, ledger="P190", concept="PY3 in dict", tier="4 - Sets and dictionaries",
-        title="in on a dict: is the key there?", kind="function",
-        func="has_area",
-        cases=[({"LS1": 95, "BD3": 90}, "LS1"), ({"LS1": 95}, "95"), ({}, "LS1"), ({"a": None}, "a")],
+        id=15, ledger="P205", concept="PY3 dict union", tier="4 - Sets and dictionaries",
+        title="| on dicts: merged, the right one winning", kind="function",
+        func="combined",
+        cases=[({"a": 1}, {"b": 2}), ({"a": 1}, {"a": 5}), ({}, {}), ({"x": 1, "y": 2}, {"y": 3})],
         prompt=(
-            "Write a function `has_area(counts, area)` that returns True"
-            " when area is a KEY of the dict, whatever its value, using"
-            " the in test on the dict itself:\n\n"
-            "  has_area({\"LS1\": 95}, \"LS1\") -> True\n\n"
-            "Return: True or False."
+            "Write a function `combined(a, b)` that returns a NEW dict"
+            " with everything from a and everything from b, b winning"
+            " where a key is in both, using the | operator on dicts:\n\n"
+            "  combined({\"x\": 1, \"y\": 2}, {\"y\": 3}) -> {\"x\": 1,"
+            " \"y\": 3}\n\n"
+            "Return: the new dictionary."
         ),
-        solution="def has_area(counts, area):\n    return area in counts\n",
-        trap="def has_area(counts, area):\n    return area in counts.values()\n",
-        note="in on a dict tests the KEYS; counts.values() tests the"
-             " values, and counts.items() the pairs. A key whose value is"
-             " None is still present, which is why 'in' and not 'get()'"
-             " is the test for presence.",
+        solution="def combined(a, b):\n    return a | b\n",
+        trap="def combined(a, b):\n    return a + b\n",
+        note="Dicts have no +, and the TypeError says so. | merges them"
+             " into a new dict, keys from the right operand overriding,"
+             " and leaves both arguments alone -- what dict.update() on a"
+             " copy did in an earlier set, in one expression. Available"
+             " since Python 3.9.",
     ),
 ]
 
