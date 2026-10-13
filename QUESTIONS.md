@@ -27,12 +27,12 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the sixth set on the public library (SEED
-861), on six SQL tiers none of the library sets have used: JSON, LIKE and
-GLOB, date modifiers, query plans, aggregates over windows, and three
-writable statements new to the library -- at the same level, with **three
-writable**. **Fifteen Python**, one-tool functions again, on fifteen tools
-no earlier set used.
+Thirty questions in two tracks, the seventh set on the public library (SEED
+861), on five SQL tiers none of the library sets have used: CTE chains; IN,
+EXISTS and JOIN; formatting with printf and strftime; numeric functions;
+and three writable statements new to the library -- at the same level, with
+**three writable**. **Fifteen Python**, one-tool functions again, on fifteen
+tools no earlier set used.
 
 ### The writable stage
 
@@ -42,61 +42,55 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `UPDATE ... FROM` with a condition on each table | loan lengths at Old Town, open and returned, and elsewhere |
-| 14 | a `DELETE` of duplicates by `ROW_NUMBER` in a subquery | holds left, the sum of their ids, pairs still repeating |
-| 15 | `ALTER TABLE ... ADD COLUMN ... GENERATED ALWAYS AS ... VIRTUAL` | books per size |
+| 13 | a `BEFORE DELETE` trigger with OLD in its WHEN | which of three driven deletes went through |
+| 14 | a `VIEW` built on another `VIEW` | the second view's rows |
+| 15 | an `UPDATE` whose WHERE is `= (SELECT ... ORDER BY ... LIMIT 1)` | managers per branch, and who Old Town's is |
 
-None of the three carries a `driver_sql`; each is graded on what the script
-leaves behind.
-
-### The query-plan stage
-
-Questions 9 and 10 open with a correct but slow query in the editor and are
-graded on EXPLAIN QUERY PLAN as well as on their rows: 9 must mention
-`idx_loans_member`, 10 must SEARCH rather than SCAN.
+13 carries a `driver_sql`: three deletes the question runs after your
+script. A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q922 | JSN JSON functions | Each branch's staff, as a JSON list | ex 1 | 1 - JSON |
-| Q923 | JSN JSON functions | A list of books, from JSON to rows | ex 2 | 1 - JSON |
-| Q924 | JSN JSON functions | A card for each manager | ex 3 | 1 - JSON |
-| Q925 | LIK LIKE and GLOB | Titles that begin with a vowel | ex 4 | 2 - LIKE and GLOB |
-| Q926 | LIK LIKE and GLOB | The LS1x districts | ex 5 | 2 - LIKE and GLOB |
-| Q927 | D2 date modifiers | Fines from the last ninety days | ex 6 | 3 - Date modifiers |
-| Q928 | D2 date modifiers | Weeks ending on a Sunday | ex 7 | 3 - Date modifiers |
-| Q929 | D2 date modifiers | Members by decade of age | ex 8 | 3 - Date modifiers |
-| Q930 | X5 query plans | Let the index find the member | ex 9 | 4 - Query plans |
-| Q931 | X5 query plans | A title lookup that ignores case, through the index | ex 10 | 4 - Query plans |
-| Q932 | W3 window vs GROUP BY | Genres busier than the average genre | ex 11 | 5 - Aggregates over windows |
-| Q933 | W3 window vs GROUP BY | A genre that is a fifth of its branch | ex 12 | 5 - Aggregates over windows |
-| Q934 | DML update & delete | A week's grace at Old Town **(script)** | ex 13 | 6 - Changing the data |
-| Q935 | DML update & delete | One hold per member per book, the earliest kept **(script)** | ex 14 | 6 - Changing the data |
-| Q936 | DDL tables & columns | A column that computes itself **(script)** | ex 15 | 6 - Changing the data |
+| Q937 | CTE common table expressions | Above the average for their own branch | ex 1 | 1 - CTE chains |
+| Q938 | CTE common table expressions | The busiest day of each month | ex 2 | 1 - CTE chains |
+| Q939 | CTE common table expressions | Each month's share of its year | ex 3 | 1 - CTE chains |
+| Q940 | X1 subqueries/EXISTS | Members who have ever been fined | ex 4 | 2 - IN, EXISTS and JOIN |
+| Q941 | N1 NULLs | Days with loans but no hold fulfilled | ex 5 | 2 - IN, EXISTS and JOIN |
+| Q942 | E1 EXISTS | A hold at their own branch | ex 6 | 2 - IN, EXISTS and JOIN |
+| Q943 | FMT formatting | Membership codes | ex 7 | 3 - Formatting |
+| Q944 | FMT formatting | What the biggest debtors owe, in pounds | ex 8 | 3 - Formatting |
+| Q945 | FMT formatting | Opening dates, written the British way | ex 9 | 3 - Formatting |
+| Q946 | NUM numeric functions | Average pages per genre, to the nearest page | ex 10 | 4 - Numeric functions |
+| Q947 | NUM numeric functions | How far each branch is from the average stock | ex 11 | 4 - Numeric functions |
+| Q948 | NUM numeric functions | Pounds and pence, split | ex 12 | 4 - Numeric functions |
+| Q949 | TRG triggers | Open holds cannot be deleted **(script)** | ex 13 | 5 - Changing the data |
+| Q950 | VIEW views | A view on a view **(script)** | ex 14 | 5 - Changing the data |
+| Q951 | DML update & delete | Old Town gets a manager **(script)** | ex 15 | 5 - Changing the data |
 
 ### Python
 
 Fifteen functions of one or two lines, each built around one tool named in
-its title: center() with a fill, isupper(), the format() method, ord(), is
-None, math.isclose(), is_integer(), math.prod(), min(key=abs), sort() in
-place, extend(), map(), discard(), ^ on sets and | on dicts.
+its title: rpartition(), rjust(), rsplit() with a count, isascii(),
+math.hypot(), math.comb(), statistics.mode(), hex(), del, [x] * n,
+filter(None, ...), tuple(), set.add(), isdisjoint() and dict() over pairs.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P191 | PY3 center fill | center(width, '*'): a label in the middle | py 1 | 1 - Strings |
-| P192 | PY3 isupper | isupper(): is it all capitals? | py 2 | 1 - Strings |
-| P193 | PY3 str format | format(): slots filled in order | py 3 | 1 - Strings |
-| P194 | PY3 ord | ord(): a character's code | py 4 | 1 - Strings |
-| P195 | PY3 is None | is None: missing, not merely empty | py 5 | 2 - Numbers and None |
-| P196 | PY3 math isclose | math.isclose(): equal enough | py 6 | 2 - Numbers and None |
-| P197 | PY3 is_integer | is_integer(): a float with nothing after the point | py 7 | 2 - Numbers and None |
-| P198 | PY3 math prod | math.prod(): multiply them all | py 8 | 2 - Numbers and None |
-| P199 | PY3 min key abs | min(key=abs): nearest to zero | py 9 | 2 - Numbers and None |
-| P200 | PY3 list sort | sort(): in place, returning None | py 10 | 3 - Lists |
-| P201 | PY3 extend | extend(): one list onto the end of another | py 11 | 3 - Lists |
-| P202 | PY3 map | map(): the same function over every item | py 12 | 3 - Lists |
-| P203 | PY3 set discard | discard(): remove if present | py 13 | 4 - Sets and dictionaries |
-| P204 | PY3 set symmetric | ^ on sets: in one but not both | py 14 | 4 - Sets and dictionaries |
-| P205 | PY3 dict union | | on dicts: merged, the right one winning | py 15 | 4 - Sets and dictionaries |
+| P206 | PY3 rpartition | rpartition(): split at the LAST dot | py 1 | 1 - Strings |
+| P207 | PY3 rjust | rjust(): numbers lined up on the right | py 2 | 1 - Strings |
+| P208 | PY3 rsplit | rsplit(maxsplit=1): everything but the last word | py 3 | 1 - Strings |
+| P209 | PY3 isascii | isascii(): plain characters only | py 4 | 1 - Strings |
+| P210 | PY3 math hypot | math.hypot(): straight-line distance | py 5 | 2 - Numbers |
+| P211 | PY3 math comb | math.comb(): ways to choose | py 6 | 2 - Numbers |
+| P212 | PY3 statistics mode | statistics.mode(): the commonest value | py 7 | 2 - Numbers |
+| P213 | PY3 hex | hex(): a number in base sixteen | py 8 | 2 - Numbers |
+| P214 | PY3 del | del: remove the item at a position | py 9 | 3 - Lists |
+| P215 | PY3 list repeat | [x] * n: a list of n copies | py 10 | 3 - Lists |
+| P216 | PY3 filter None | filter(None, ...): drop everything falsy | py 11 | 3 - Lists |
+| P217 | PY3 tuple | tuple(): a list made unchangeable | py 12 | 3 - Lists |
+| P218 | PY3 set add | add(): one more member of a set | py 13 | 4 - Sets and dictionaries |
+| P219 | PY3 isdisjoint | isdisjoint(): nothing in common? | py 14 | 4 - Sets and dictionaries |
+| P220 | PY3 dict pairs | dict(pairs): a dictionary from (key, value) tuples | py 15 | 4 - Sets and dictionaries |
 
 ## Retired
 
@@ -405,6 +399,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q922 | JSN JSON functions | Each branch's staff, as a JSON list | - | retired |
+| Q923 | JSN JSON functions | A list of books, from JSON to rows | - | retired |
+| Q924 | JSN JSON functions | A card for each manager | - | retired |
+| Q925 | LIK LIKE and GLOB | Titles that begin with a vowel | - | retired |
+| Q926 | LIK LIKE and GLOB | The LS1x districts | - | retired |
+| Q927 | D2 date modifiers | Fines from the last ninety days | - | retired |
+| Q928 | D2 date modifiers | Weeks ending on a Sunday | - | retired |
+| Q929 | D2 date modifiers | Members by decade of age | - | retired |
+| Q930 | X5 query plans | Let the index find the member | - | retired |
+| Q931 | X5 query plans | A title lookup that ignores case, through the index | - | retired |
+| Q932 | W3 window vs GROUP BY | Genres busier than the average genre | - | retired |
+| Q933 | W3 window vs GROUP BY | A genre that is a fifth of its branch | - | retired |
+| Q934 | DML update & delete | A week's grace at Old Town **(script)** | - | retired |
+| Q935 | DML update & delete | One hold per member per book, the earliest kept **(script)** | - | retired |
+| Q936 | DDL tables & columns | A column that computes itself **(script)** | - | retired |
+| P191 | PY3 center fill | center(width, '*'): a label in the middle | - | retired |
+| P192 | PY3 isupper | isupper(): is it all capitals? | - | retired |
+| P193 | PY3 str format | format(): slots filled in order | - | retired |
+| P194 | PY3 ord | ord(): a character's code | - | retired |
+| P195 | PY3 is None | is None: missing, not merely empty | - | retired |
+| P196 | PY3 math isclose | math.isclose(): equal enough | - | retired |
+| P197 | PY3 is_integer | is_integer(): a float with nothing after the point | - | retired |
+| P198 | PY3 math prod | math.prod(): multiply them all | - | retired |
+| P199 | PY3 min key abs | min(key=abs): nearest to zero | - | retired |
+| P200 | PY3 list sort | sort(): in place, returning None | - | retired |
+| P201 | PY3 extend | extend(): one list onto the end of another | - | retired |
+| P202 | PY3 map | map(): the same function over every item | - | retired |
+| P203 | PY3 set discard | discard(): remove if present | - | retired |
+| P204 | PY3 set symmetric | ^ on sets: in one but not both | - | retired |
+| P205 | PY3 dict union | | on dicts: merged, the right one winning | - | retired |
 | Q907 | W2 window ranking | Each branch's three keenest borrowers | - | retired |
 | Q908 | STR string functions | Titles by their first word | - | retired |
 | Q909 | INT intervals | Holds fulfilled within the week | - | retired |
@@ -1490,7 +1514,7 @@ they still count as asked.
   holds, an UPDATE with a CASE and its ELSE, CREATE TABLE AS SELECT with a
   matching DELETE, and a view with a window function. Python, fifteen
   one-tool functions on tools no earlier set used.
-- **Q922-Q936 and P191-P205** current set. The library again (SEED 861),
+- **Q922-Q936 and P191-P205** retired set. The library again (SEED 861),
   on six tiers none of the library sets used: JSON (json_group_array with
   its own ORDER BY, json_each as a table, json_object), LIKE and GLOB (a
   character class, the underscore wildcard), date modifiers ('-90 days'
@@ -1500,3 +1524,13 @@ they still count as asked.
   a share by PARTITION BY), and three writable: UPDATE ... FROM, a DELETE
   of duplicates by ROW_NUMBER, and a VIRTUAL generated column. Python,
   fifteen one-tool functions on tools no earlier set used.
+- **Q937-Q951 and P206-P220** current set. The library again (SEED 861),
+  on five tiers none of the library sets used: CTE chains (per-member
+  counts to per-branch averages, days ranked within months, months
+  against their year's total), IN/EXISTS/JOIN (a join that needs
+  DISTINCT, NOT IN undone by a NULL, two conditions on one hold),
+  formatting (printf('%04d'), printf('£%.2f'), strftime('%d/%m/%Y')),
+  numeric functions (ROUND against CAST, ABS, / with %), and three
+  writable: a BEFORE DELETE trigger, a view on a view, and an UPDATE
+  whose WHERE is a LIMIT 1 subquery. Python, fifteen one-tool functions
+  on tools no earlier set used.
