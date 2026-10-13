@@ -284,10 +284,14 @@ EXERCISES = [
         id=11, ledger="Q932", concept="W3", tier="5 - Aggregates over windows",
         title="Genres busier than the average genre",
         prompt=(
-            "Genres whose loan count is above the AVERAGE genre's loan"
-            " count -- the average of the eight per-genre totals. Group"
-            " first, then a window AVG over the grouped counts, then"
-            " filter in an outer query.\n\n"
+            "Count the loans of each genre: eight totals, one per genre."
+            " Then work out the average of those eight totals, and return"
+            " only the genres whose total is above that average.\n\n"
+            "Two layers: an inner query that groups loans by genre and"
+            " counts them, with AVG(COUNT(*)) OVER () alongside, which"
+            " puts the average of all eight totals on every row; then an"
+            " outer query that keeps the rows whose count is above it."
+            " A loan reaches its genre through copies and books.\n\n"
             "Return: genre, loans"
         ),
         solution=("SELECT genre, n FROM (SELECT b.genre, COUNT(*) AS n, AVG(COUNT(*)) OVER () AS avg_n"
