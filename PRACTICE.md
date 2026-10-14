@@ -1,18 +1,18 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the public library, the
-seventh set on this schema, on five tiers none of the library sets have
-used: CTE chains; IN, EXISTS and JOIN; formatting; numeric functions; and
-three writable statements new to the library. **Fifteen Python**: tiny
-functions of one or two lines, each about ONE tool named in the question's
-title, none of them used by an earlier set.
+eighth set on this schema, on five tiers none of the library sets have
+used: aggregates and totals, string tricks, pivots both ways, SQLite's bare
+columns, and three writable statements new to the library. **Fifteen
+Python**: tiny functions of one or two lines, each about ONE tool named in
+the question's title, none of them used by an earlier set.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - CTE chains | 1-3 |
-| 2 - IN, EXISTS and JOIN | 4-6 |
-| 3 - Formatting | 7-9 |
-| 4 - Numeric functions | 10-12 |
+| 1 - Aggregates and totals | 1-5 |
+| 2 - String tricks | 6-8 |
+| 3 - Pivots both ways | 9-10 |
+| 4 - SQLite bare columns | 11-12 |
 | 5 - Changing the data | 13-15 |
 
 | Stage | Python questions |
@@ -20,7 +20,7 @@ title, none of them used by an earlier set.
 | 1 - Strings | 1-4 |
 | 2 - Numbers | 5-8 |
 | 3 - Lists | 9-12 |
-| 4 - Sets and dictionaries | 13-15 |
+| 4 - Dictionaries | 13-15 |
 
 ## The schema
 
@@ -61,33 +61,35 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Question 13 runs three deletes of its own *after*
-your script -- an open hold, a fulfilled one and a cancelled one. Questions
-14 and 15 are graded on what your script leaves behind.
+**Driver statements.** Question 13 runs two updates of its own *after* your
+script -- two real changes and one re-save of the same value, which your
+trigger should log and ignore respectively. Questions 14 and 15 are graded
+on what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 13 | `BEFORE DELETE ON holds WHEN OLD.fulfilled_on IS NULL AND OLD.cancelled_on IS NULL` |
-| 14 | `CREATE VIEW open_loans ...; CREATE VIEW overdue_by_branch AS SELECT ... FROM open_loans ...` |
-| 15 | `UPDATE staff SET role = 'manager' WHERE staff_id = (SELECT ... ORDER BY hired_on LIMIT 1)` |
+| 13 | `CREATE TABLE condition_log ...; CREATE TRIGGER ... AFTER UPDATE OF condition ON copies WHEN OLD.condition <> NEW.condition` |
+| 14 | `DELETE FROM holds WHERE <open> AND NOT EXISTS (SELECT 1 FROM copies c WHERE c.book_id = holds.book_id AND c.branch_id = holds.branch_id)` |
+| 15 | `INSERT INTO copies (...) SELECT ... FROM books b WHERE NOT EXISTS (SELECT 1 FROM copies c WHERE c.book_id = b.book_id)` |
 
 ## Things the data does on purpose
 
-- **211 members are above their own branch's average borrower,
-  170 above the service's** -- question 1's chain against one
-  global average.
-- **1,181 members have had a fine, and there are 4,085 fines**; a join
-  without DISTINCT returns the second number of rows for question 4.
-- **110 days saw loans but no hold fulfilled**; NOT IN against
-  fulfilled_on returns none of them, because the column holds NULLs.
-- **213 members have a hold at their own branch, out of 885
-  who have placed one** -- question 6's single EXISTS against two INs.
-- **4 members owe 5,000 pence or more**, question 8's rows;
-  1149 owes the most, 1,380 fines are unpaid in all.
-- **Old Town has 2 librarians and no manager**; question
-  15 promotes the longer-serving one, and only that one.
-- **Holds 1, 2 and 7 are open, fulfilled and cancelled respectively**, the
-  three question 13's trigger must tell apart.
+- **Eastfield's copies are 12.5 per cent damaged**, the highest
+  share; question 1 wants the branches over ten per cent AND over 350
+  copies, both facts about the whole branch.
+- **83 members have ten or more loans and have never been late**
+  -- a SUM of the late test equal to zero, which COUNT of it never is.
+- **22,453 distinct member-and-title pairs account for the 23,976 loans**;
+  re-borrowing is the gap question 5 measures.
+- **54 poetry titles**, questions 6 and 7's rows; **61 titles
+  begin 'Poems for a', and 3 of those go on with a P** -- the ones
+  LTRIM mangles in question 8.
+- **strftime returns text**, so '2025' is never 2025 and question 9's
+  pivot comes out all zeros when compared with a number.
+- **176 open holds are at a branch with no copy of the book, and
+  780 holds in all**; question 14 deletes the first group only.
+- **20 books have no copies**, the rows question 15's INSERT ...
+  SELECT fills in, once.
 
 ## How the Python questions are graded
 
@@ -108,361 +110,362 @@ indentation of the line above.
 
 # SQL
 
-## 1 - CTE chains (3)
+## 1 - Aggregates and totals (5)
 
-Two or three WITH clauses that read each other: counts, then averages of the
-counts; days, then days ranked within months; months, then years summed from
-them.
+HAVING with two or three aggregate conditions, where a WHERE would change what
+is averaged; a total row by UNION ALL; and COUNT(DISTINCT) over two columns
+joined with a separator.
 
-1. **Above the average for their own branch** (Q937)
+1. **Big branches with a damage problem** (Q952)
 
-   Members who have borrowed more often than the average borrower of THEIR OWN
-   home branch. Three steps in WITH: loans per member with their home branch;
-   the average of those counts per branch; then the members above their
-   branch's figure.
+   Branches holding at least 350 copies of which more than 10 per cent are
+   damaged: branch_id, copies, and the damaged percentage to one decimal. Both
+   conditions are about the branch as a whole, so both go in HAVING -- a WHERE
+   on condition would change what is being counted.
 
-   *Return: member_id, home_branch_id, loans*
+   *Return: branch_id, copies, pct_damaged*
 
-2. **The busiest day of each month** (Q938)
+2. **Regulars who are never late** (Q953)
 
-   For each month of the data, the day with the most loans started, and how
-   many: a CTE of loans per day, a second CTE that numbers the days within
-   their month by loans descending -- ties broken by the earlier day -- and a
-   final SELECT of the days numbered 1.
+   Members with at least 10 loans, NONE of which came back late: member_id and
+   their loan count. 'None late' is an aggregate condition -- a SUM of the
+   late test equal to zero -- not a WHERE.
 
-   *Return: month, day, loans*
+   *Return: member_id, loans*
 
-3. **Each month's share of its year** (Q939)
+3. **Long books from a long way back** (Q954)
 
-   For each month: its loans, and what percentage of THAT YEAR's loans they
-   are, to one decimal. A CTE of loans per month that also carries the year, a
-   second CTE summing the first per year, and a join between the two on the
-   year.
+   Genres whose books average more than 480 pages AND whose earliest
+   publication year is before 1900: genre, the average pages rounded to a
+   whole number, and that earliest year. The average is over ALL the genre's
+   books.
 
-   *Return: month, loans, pct_of_year*
+   *Return: genre, avg_pages, earliest*
 
-## 2 - IN, EXISTS and JOIN (3)
+4. **Copies per branch, with a total row** (Q955)
 
-Three spellings of 'has at least one', where the join needs DISTINCT; a NOT IN
-that a single NULL turns into nothing; and two conditions that must hold for the
-same row.
+   Copies per branch as six rows with the branch_id as text, plus a seventh
+   row labelled 'all' with the total: a GROUP BY query UNION ALL a one-row
+   total query. CAST the id to TEXT so the two queries' first columns agree.
 
-4. **Members who have ever been fined** (Q940)
+   *Return: branch, copies*
 
-   Every member who has had at least one fine, paid or not, ONCE each:
-   member_id and name. Fines reach the member through loans. EXISTS, IN or a
-   join with DISTINCT all work; a plain join does not.
+5. **Readers of a title, not loans of it** (Q956)
 
-   *Return: member_id, name*
+   For each genre: loans, and how many DISTINCT member-and-title pairs those
+   loans are -- a member who borrowed the same title three times is one pair.
+   COUNT(DISTINCT) takes one expression, so join the two ids into one with ||.
 
-5. **Days with loans but no hold fulfilled** (Q941)
+   *Return: genre, loans, pairs*
 
-   Days on which loans started but NO hold was fulfilled: the day and how many
-   loans. Beware NOT IN against holds.fulfilled_on, which is NULL for the open
-   holds -- a single NULL in a NOT IN list makes the whole test unknown for
-   every row. Exclude the NULLs, or use NOT EXISTS.
+## 2 - String tricks (3)
 
-   *Return: day, loans*
+printf's minus sign for left justification, LOWER inside REPLACE for a slug, and
+LTRIM's second argument, which is a set of characters and not a prefix.
 
-6. **A hold at their own branch** (Q942)
+6. **A column of titles, padded to the right** (Q957)
 
-   Members who have placed a hold to collect at their OWN home branch -- a
-   single hold whose branch_id equals the member's home_branch_id. Two
-   conditions on the same hold row, which is one correlated EXISTS, not two IN
-   tests.
+   The poetry titles each padded with spaces on the RIGHT to 24 characters and
+   followed by '|', so the bars line up in a fixed-width listing: printf with
+   %-24s.
 
-   *Return: member_id*
+   *Return: book_id, padded*
 
-## 3 - Formatting (3)
+7. **Slugs for the poetry titles** (Q958)
 
-printf for a zero-padded code and for money with two decimals, and strftime for
-a date written the British way -- formatting as the last step, with the stored
-form left alone.
+   A web slug for each poetry title: the title in lower case with every space
+   replaced by a hyphen -- 'lost-library'. LOWER and REPLACE, one inside the
+   other.
 
-7. **Membership codes** (Q943)
+   *Return: book_id, slug*
 
-   For the members of branch 6: a membership code made of 'M' and the
-   member_id zero-padded to four digits -- M0011, M0014 -- using
-   printf('%04d', ...) and ||.
+8. **After 'Poems for a'** (Q959)
 
-   *Return: member_id, code*
+   For the titles that begin 'Poems for a ', the rest of the title after that
+   prefix -- 'Paper Tower' from 'Poems for a Paper Tower'. The prefix is
+   twelve characters, so SUBSTR from position 13. LTRIM(title, 'Poems for a ')
+   is NOT the same thing.
 
-8. **What the biggest debtors owe, in pounds** (Q944)
+   *Return: book_id, rest*
 
-   Members whose UNPAID fines add up to 5000 pence or more: member_id and the
-   total as text in pounds with exactly two decimals and a leading pound sign
-   -- '£55.60', not 55.6. printf('%.2f', ...) does the decimals.
+## 3 - Pivots both ways (2)
 
-   *Return: member_id, owed*
+Three SUMs into one row, where strftime's text never equals an integer, and
+three counts into three rows by UNION ALL.
 
-9. **Opening dates, written the British way** (Q945)
+9. **Loans per genre, one column a year** (Q960)
 
-   Each branch's opening date written day/month/year -- 12/05/1902 for
-   1902-05-12 -- using strftime.
+   For each genre, its loans in 2025 and in 2026 as two columns: a pivot by
+   conditional SUM. Compare the year as text -- strftime returns text, and
+   '2025' is not 2025.
 
-   *Return: branch_id, opened*
+   *Return: genre, loans_2025, loans_2026*
 
-## 4 - Numeric functions (3)
+10. **Branch 4's holds, one row a status** (Q961)
 
-ROUND against CAST, ABS for a distance from the average, and / with % to split
-pence into pounds and pence.
+    The holds placed at branch 4 as THREE rows -- 'fulfilled', 'cancelled',
+    'waiting' -- each with its count: an unpivot, three one-row queries joined
+    by UNION ALL.
 
-10. **Average pages per genre, to the nearest page** (Q946)
+    *Return: status, holds*
 
-    The average page count of each genre's books, as a whole number rounded to
-    the NEAREST page -- ROUND, not CAST, which truncates.
+## 4 - SQLite bare columns (2)
 
-    *Return: genre, avg_pages*
+A column selected beside a single MIN or MAX comes from that row -- SQLite's
+rule, and not most databases' -- so the latest loan's copy and the longest-
+serving person's name need no subquery.
 
-11. **How far each branch is from the average stock** (Q947)
+11. **Each Old Town member's latest loan** (Q962)
 
-    For each branch: its copies, and how far that is from the average branch's
-    copies -- total copies over six -- as a whole number that is never
-    negative: ABS of the difference, rounded.
+    For each member whose home branch is 6 and who has borrowed: their latest
+    loaned_on, and the copy_id of THAT loan. In SQLite, a column selected
+    alongside a single MAX comes from the row the MAX was found in -- a 'bare
+    column' -- so no subquery is needed.
 
-    *Return: branch_id, copies, deviation*
+    *Return: member_id, last_loan, copy_id*
 
-12. **Pounds and pence, split** (Q948)
+12. **The longest-serving person at each branch** (Q963)
 
-    The total of fines, unpaid and paid separately, split into whole pounds
-    and the pence left over -- 4149 pounds and 60 pence from 414,960 -- with
-    integer division and the % remainder operator.
+    For each branch: the name and hired_on of its longest-serving member of
+    staff, using MIN(hired_on) and the bare name column beside it.
 
-    *Return: paid, pounds, pence*
+    *Return: branch_id, name, hired_on*
 
 ## 5 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A BEFORE DELETE trigger that protects
-open holds, a view built on a view, and an UPDATE whose WHERE is a LIMIT 1
-subquery.
+question's probe query reads the result. A trigger that logs a change only when
+there was one, a correlated DELETE that keeps history, and an INSERT ... SELECT
+that can run twice.
 
-13. **Open holds cannot be deleted** (Q949)
+13. **A log of condition changes** (Q964)
 
-    Write a BEFORE DELETE trigger on holds that refuses -- RAISE(ABORT, ...)
-    -- to delete a hold that is still OPEN, fulfilled_on and cancelled_on both
-    NULL; closed holds may go. The question then deletes hold 1 (open), hold 2
-    (fulfilled) and hold 7 (cancelled).
+    Create a table `condition_log (log_id INTEGER PRIMARY KEY, copy_id INTEGER
+    NOT NULL, old_condition TEXT NOT NULL, new_condition TEXT NOT NULL)` and
+    an AFTER UPDATE OF condition trigger on copies that inserts a row into it
+    -- only when the condition actually CHANGED. The question then marks
+    copies 1 and 2 damaged and re-saves copy 3 unchanged.
 
-    *Checked: which of the three holds still exist*
+    *Checked: the log's copy_id, old and new, in log order*
 
-14. **A view on a view** (Q950)
+14. **Holds that can never be met where they stand** (Q965)
 
-    Create a view `open_loans (loan_id, copy_id, member_id, due_on)` of the
-    loans with no returned_on, then a second view `overdue_by_branch
-    (branch_id, overdue)` that reads open_loans -- not loans -- joined to
-    copies, counting per branch the open loans due before 2026-06-30.
+    Delete the OPEN holds -- fulfilled_on and cancelled_on both NULL -- placed
+    at a branch that holds no copy of the book at all. Closed holds stay,
+    whatever branch they name. The test on copies is a correlated NOT EXISTS
+    inside the DELETE's WHERE.
 
-    *Checked: the second view's rows*
+    *Checked: how many holds remain, how many of them are open, and how many open holds are still at a branch without the book*
 
-15. **Old Town gets a manager** (Q951)
+15. **A copy for every title, and no more than that** (Q966)
 
-    Branch 6 has no manager. Promote its longest-serving librarian -- the
-    earliest hired_on among branch 6's librarians -- to 'manager', and nobody
-    else. One UPDATE whose WHERE finds that one staff_id with a subquery.
+    Give every book that has NO copies one copy at Central (branch 1),
+    acquired '2026-07-01', in 'good' condition -- with a single INSERT ...
+    SELECT whose WHERE NOT EXISTS skips the books already stocked, so running
+    it twice adds nothing the second time.
 
-    *Checked: how many managers each branch has, and who branch 6's is*
+    *Checked: how many copies there are, how many books still have none, and how many copies were acquired on 2026-07-01*
 
 # Python
 
 ## 1 - Strings (4)
 
-rpartition() against partition(), rjust() against ljust(), rsplit(maxsplit=1)
-against split(), and isascii() against isalpha().
+The + spec against str(), lstrip(chars) against strip(chars), textwrap.shorten()
+against a slice, and !r against a plain f-string.
 
-1. **rpartition(): split at the LAST dot** (P206)
+1. **f'{n:+}': always show the sign** (P221)
 
-   Write a function `name_and_extension(filename)` that returns a tuple (name,
-   extension) split at the LAST '.', using rpartition(). With no dot,
-   rpartition puts the whole string in the last part, so the name is '' and
-   the extension is the string.
-
-   ```
-   name_and_extension("archive.tar.gz") -> ("archive.tar", "gz")
-   ```
-
-   *Return: the tuple.*
-
-2. **rjust(): numbers lined up on the right** (P207)
-
-   Write a function `right_aligned(s, width)` that returns s padded on the
-   LEFT with spaces to the given width, so that a column of them lines up on
-   the right, using rjust():
+   Write a function `signed(n)` that returns the number as a string with its
+   sign always shown -- '+5' as well as '-3' -- using the + format spec in an
+   f-string:
 
    ```
-   right_aligned("42", 6) -> "    42"
-   ```
-
-   A string already wider than width is returned unchanged.
-
-   *Return: the string.*
-
-3. **rsplit(maxsplit=1): everything but the last word** (P208)
-
-   Write a function `without_last_word(s)` that returns s with its last word
-   removed -- and a one-word string unchanged -- using rsplit() with a single
-   split from the right and taking the first part:
-
-   ```
-   without_last_word("The Glass Path") -> "The Glass"
+   signed(5) -> "+5"
    ```
 
    *Return: the string.*
 
-4. **isascii(): plain characters only** (P209)
+2. **lstrip(chars): leading zeros off** (P222)
 
-   Write a function `plain_ascii(s)` that returns True when every character in
-   s is plain ASCII -- no accents, no symbols beyond the keyboard -- using
-   isascii(). The empty string counts as True.
+   Write a function `without_leading_zeros(s)` that returns s with any zeros
+   removed from its LEFT end only -- the zeros inside or at the end stay --
+   using lstrip() with '0':
 
    ```
-   plain_ascii("LS15!") -> True
+   without_leading_zeros("0042") -> "42"
+   without_leading_zeros("100") -> "100"
    ```
 
-   *Return: True or False.*
+   *Return: the new string.*
+
+3. **textwrap.shorten(): cut at a word, with a marker** (P223)
+
+   Write a function `shortened(text, width)` that returns the text cut to at
+   most width characters at a WORD boundary, ending in ' [...]' when something
+   was cut, using textwrap.shorten(). Text that already fits is returned as it
+   is. Remember the import.
+
+   ```
+   shortened("one two three four", 13) -> "one two [...]"
+   ```
+
+   *Return: the string.*
+
+4. **f'{s!r}': the value as Python would write it** (P224)
+
+   Write a function `quoted(s)` that returns s wrapped in the quotes Python
+   itself would print it with -- repr form -- using !r inside an f-string:
+
+   ```
+   quoted("Leeds") -> "'Leeds'"
+   ```
+
+   *Return: the string.*
 
 ## 2 - Numbers (4)
 
-math.hypot() against adding the legs, math.comb() against math.perm(),
-statistics.mode() against max(), and hex() against format(n, 'x').
+math.isqrt() against ** 0.5, bit_length() against len(bin()), math.dist()
+against the taxi-cab sum, and pow(b, e, m) against a remainder by 10.
 
-5. **math.hypot(): straight-line distance** (P210)
+5. **math.isqrt(): the whole-number square root** (P225)
 
-   Write a function `distance(dx, dy)` that returns the straight-line distance
-   covered by moving dx across and dy up, using math.hypot(). Remember the
+   Write a function `whole_root(n)` that returns the largest whole number
+   whose square is at most n, as an int, using math.isqrt(). Remember the
    import.
 
    ```
-   distance(3, 4) -> 5.0
-   ```
-
-   *Return: a float.*
-
-6. **math.comb(): ways to choose** (P211)
-
-   Write a function `ways_to_choose(n, k)` that returns how many different
-   groups of k can be picked from n items, order not mattering, using
-   math.comb(). Remember the import.
-
-   ```
-   ways_to_choose(5, 2) -> 10
+   whole_root(17) -> 4
    ```
 
    *Return: an integer.*
 
-7. **statistics.mode(): the commonest value** (P212)
+6. **bit_length(): how many binary digits** (P226)
 
-   Write a function `most_common(values)` that returns the value that appears
-   most often in a non-empty list -- the first one met, when several tie --
-   using statistics.mode(). Remember the import.
-
-   ```
-   most_common(["b", "a", "a"]) -> "a"
-   ```
-
-   *Return: the value.*
-
-8. **hex(): a number in base sixteen** (P213)
-
-   Write a function `as_hex(n)` that returns the hexadecimal form of a non-
-   negative integer as a string WITH the 0x prefix, using hex():
+   Write a function `bits_needed(n)` that returns how many binary digits a
+   non-negative integer needs -- 0 for zero, 8 for 255, 9 for 256 -- using the
+   int method bit_length():
 
    ```
-   as_hex(255) -> "0xff"
+   bits_needed(255) -> 8
    ```
 
-   *Return: the string.*
+   *Return: an integer.*
+
+7. **math.dist(): distance between two points** (P227)
+
+   Write a function `distance_between(p, q)` that returns the straight-line
+   distance between two points given as (x, y) tuples, using math.dist().
+   Remember the import.
+
+   ```
+   distance_between((0, 0), (3, 4)) -> 5.0
+   ```
+
+   *Return: a float.*
+
+8. **pow(b, e, m): a power, reduced as it goes** (P228)
+
+   Write a function `last_two_digits(b, e)` that returns the last two digits
+   of b to the power e -- the remainder on division by 100 -- using the three-
+   argument form of pow():
+
+   ```
+   last_two_digits(2, 10) -> 24
+   ```
+
+   *Return: an integer.*
 
 ## 3 - Lists (4)
 
-del against pop(), [x] * n against x * n, filter(None) against a test for None,
-and tuple() against list().
+accumulate() for running totals, nlargest() against a slice of sorted(),
+itemgetter(1) against sorting the tuples, and Counter() against fromkeys().
 
-9. **del: remove the item at a position** (P214)
+9. **itertools.accumulate(): running totals** (P229)
 
-   Write a function `drop_at(values, i)` that returns a NEW list with the item
-   at position i removed, leaving the original alone, using the del statement
-   on a copy:
+   Write a function `running_total(values)` that returns a list where each
+   item is the sum of the values up to and including that position, using
+   list() over itertools.accumulate(). Remember the import.
 
    ```
-   drop_at([1, 2, 3], 1) -> [1, 3]
+   running_total([1, 2, 3]) -> [1, 3, 6]
    ```
 
    *Return: the new list.*
 
-10. **[x] * n: a list of n copies** (P215)
+10. **heapq.nlargest(): the top three** (P230)
 
-    Write a function `repeated(x, n)` that returns a list holding x n times,
-    using list repetition with *:
+    Write a function `top_three(values)` that returns the three largest
+    values, largest first -- fewer when the list is shorter -- using
+    heapq.nlargest(). Remember the import.
 
     ```
-    repeated("ab", 3) -> ["ab", "ab", "ab"]
+    top_three([5, 1, 9, 3, 7]) -> [9, 7, 5]
     ```
 
     *Return: the list.*
 
-11. **filter(None, ...): drop everything falsy** (P216)
+11. **itemgetter(): sort pairs by their second item** (P231)
 
-    Write a function `truthy_only(values)` that returns a list of the values
-    that count as true -- dropping 0, '', None, empty lists and the like --
-    using list() over filter() with None as the function:
+    Write a function `by_second(pairs)` that returns the list of (name,
+    number) pairs sorted by the NUMBER, using sorted() with key=itemgetter(1)
+    from the operator module. Remember the import.
 
     ```
-    truthy_only([0, 1, "", "a", None]) -> [1, "a"]
+    by_second([("a", 3), ("b", 1), ("c", 2)]) -> [("b", 1), ("c", 2), ("a", 3)]
     ```
 
     *Return: the new list.*
 
-12. **tuple(): a list made unchangeable** (P217)
+12. **Counter(): how many of each** (P232)
 
-    Write a function `freeze(values)` that returns the items of the list as a
-    tuple, using tuple():
-
-    ```
-    freeze([1, 2]) -> (1, 2)
-    ```
-
-    *Return: the tuple.*
-
-## 4 - Sets and dictionaries (3)
-
-add() returns None, isdisjoint() against !=, and dict(pairs) against
-dict.fromkeys(pairs).
-
-13. **add(): one more member of a set** (P218)
-
-    Write a function `with_added(items, x)` that returns a SET of the items
-    with x included -- the set is unchanged when x was already in it -- using
-    set() and add():
+    Write a function `tally(values)` that returns a dictionary mapping each
+    value to how many times it appears, using collections.Counter(). Remember
+    the import.
 
     ```
-    with_added([1, 2], 3) -> {1, 2, 3}
-    ```
-
-    *Return: the set.*
-
-14. **isdisjoint(): nothing in common?** (P219)
-
-    Write a function `no_overlap(a, b)` that returns True when the two lists
-    share no value at all, using set() on a and isdisjoint():
-
-    ```
-    no_overlap([1, 2], [3]) -> True
-    ```
-
-    *Return: True or False.*
-
-15. **dict(pairs): a dictionary from (key, value) tuples** (P220)
-
-    Write a function `to_dict(pairs)` that returns a dictionary built from a
-    list of (key, value) tuples, using dict(). When a key appears twice, the
-    later value wins.
-
-    ```
-    to_dict([("a", 1), ("b", 2)]) -> {"a": 1, "b": 2}
+    tally(["a", "b", "a"]) -> {"a": 2, "b": 1}
     ```
 
     *Return: the dictionary.*
+
+## 4 - Dictionaries (3)
+
+sorted(d, key=d.get) against sorted(d), next(iter(d)) against d[0], and
+sum(d.values()) against sum(d).
+
+13. **sorted(d, key=d.get): keys in order of their values** (P233)
+
+    Write a function `keys_by_value(d)` that returns the dictionary's keys as
+    a list ordered by their VALUES, smallest value first, using sorted() over
+    the dict with key=d.get:
+
+    ```
+    keys_by_value({"a": 3, "b": 1, "c": 2}) -> ["b", "c", "a"]
+    ```
+
+    *Return: the list of keys.*
+
+14. **next(iter(d)): the first key** (P234)
+
+    Write a function `first_key(d)` that returns the first key of a non-empty
+    dictionary -- the one inserted first -- using next() over iter():
+
+    ```
+    first_key({"a": 1, "b": 2}) -> "a"
+    ```
+
+    *Return: the key.*
+
+15. **sum(d.values()): the total of a tally** (P235)
+
+    Write a function `total_of(d)` that returns the sum of all the
+    dictionary's values, using sum() over values():
+
+    ```
+    total_of({"a": 1, "b": 2}) -> 3
+    ```
+
+    *Return: the total.*
 
 ## The one concept with no question here
 
@@ -473,7 +476,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,141 retired ones.
+1,171 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
