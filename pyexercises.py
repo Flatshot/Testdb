@@ -1,12 +1,13 @@
 """Python practice exercises: fifteen tiny functions, one tool each.
 
-The fourteenth Python set, one-tool functions again: every question asks
+The fifteenth Python set, one-tool functions again: every question asks
 for a function of one or two lines that returns a value, built around one
-named tool no earlier set used -- rpartition(), rjust(), rsplit() with a
-count, isascii(), math.hypot(), math.comb(), statistics.mode(), hex(), the
-del statement, list repetition with *, filter(None, ...), tuple(),
-set.add(), isdisjoint() and dict() over pairs. The title names the tool,
-so the tree on the left reads like a list of tools.
+named tool no earlier set used -- the + format spec, lstrip() with an
+argument, textwrap.shorten(), !r in an f-string, math.isqrt(),
+int.bit_length(), math.dist(), pow() with a modulus, itertools.accumulate(),
+heapq.nlargest(), operator.itemgetter(), collections.Counter(), sorted()
+with key=d.get, next(iter()) and sum() over values(). The title names the
+tool, so the tree on the left reads like a list of tools.
 
 Two kinds of question, told apart by `kind`:
 
@@ -31,321 +32,329 @@ import pyrun
 EXERCISES = [
     # ============================================================== 1 Strings
     dict(
-        id=1, ledger="P206", concept="PY3 rpartition", tier="1 - Strings",
-        title="rpartition(): split at the LAST dot", kind="function",
-        func="name_and_extension",
-        cases=[("notes.txt",), ("archive.tar.gz",), ("README",), (".hidden",)],
+        id=1, ledger="P221", concept="PY3 sign spec", tier="1 - Strings",
+        title="f'{n:+}': always show the sign", kind="function",
+        func="signed",
+        cases=[(5,), (-3,), (0,), (2.5,)],
         prompt=(
-            "Write a function `name_and_extension(filename)` that returns"
-            " a tuple (name, extension) split at the LAST '.', using"
-            " rpartition(). With no dot, rpartition puts the whole string"
-            " in the last part, so the name is '' and the extension is"
-            " the string.\n\n"
-            "  name_and_extension(\"archive.tar.gz\") -> (\"archive.tar\","
-            " \"gz\")\n\n"
-            "Return: the tuple."
-        ),
-        solution=("def name_and_extension(filename):\n"
-                  "    name, _, ext = filename.rpartition(\".\")\n"
-                  "    return (name, ext)\n"),
-        trap=("def name_and_extension(filename):\n"
-              "    name, _, ext = filename.partition(\".\")\n"
-              "    return (name, ext)\n"),
-        note="partition() splits at the FIRST separator, rpartition() at"
-             " the last -- the difference between 'archive' with"
-             " extension 'tar.gz' and 'archive.tar' with extension 'gz'."
-             " Both return three parts; the middle one is the separator"
-             " itself, or '' when it was not found.",
-    ),
-    dict(
-        id=2, ledger="P207", concept="PY3 rjust", tier="1 - Strings",
-        title="rjust(): numbers lined up on the right", kind="function",
-        func="right_aligned",
-        cases=[("42", 6), ("1234", 2), ("", 3), ("7", 1)],
-        prompt=(
-            "Write a function `right_aligned(s, width)` that returns s"
-            " padded on the LEFT with spaces to the given width, so that"
-            " a column of them lines up on the right, using rjust():\n\n"
-            "  right_aligned(\"42\", 6) -> \"    42\"\n\n"
-            "A string already wider than width is returned unchanged.\n\n"
+            "Write a function `signed(n)` that returns the number as a"
+            " string with its sign always shown -- '+5' as well as '-3'"
+            " -- using the + format spec in an f-string:\n\n"
+            "  signed(5) -> \"+5\"\n\n"
             "Return: the string."
         ),
-        solution="def right_aligned(s, width):\n    return s.rjust(width)\n",
-        trap="def right_aligned(s, width):\n    return s.ljust(width)\n",
-        note="rjust() puts the padding BEFORE the text, which is how"
-             " numbers are aligned in a column; ljust() puts it after,"
-             " which is for words. Neither cuts a string that is already"
-             " too wide. The default fill is a space.",
+        solution="def signed(n):\n    return f\"{n:+}\"\n",
+        trap="def signed(n):\n    return str(n)\n",
+        note="The + in a format spec asks for a sign on positive numbers"
+             " too; str() and the default spec show only the minus. Zero"
+             " gets a plus. It combines with the rest -- {n:+.2f} for a"
+             " signed amount to two decimals.",
     ),
     dict(
-        id=3, ledger="P208", concept="PY3 rsplit", tier="1 - Strings",
-        title="rsplit(maxsplit=1): everything but the last word", kind="function",
-        func="without_last_word",
-        cases=[("The Glass Path",), ("Hidden",), ("A B C D",), ("Notes from the Salt Map",)],
+        id=2, ledger="P222", concept="PY3 lstrip chars", tier="1 - Strings",
+        title="lstrip(chars): leading zeros off", kind="function",
+        func="without_leading_zeros",
+        cases=[("0042",), ("100",), ("000",), ("7",)],
         prompt=(
-            "Write a function `without_last_word(s)` that returns s with"
-            " its last word removed -- and a one-word string unchanged --"
-            " using rsplit() with a single split from the right and taking"
-            " the first part:\n\n"
-            "  without_last_word(\"The Glass Path\") -> \"The Glass\"\n\n"
+            "Write a function `without_leading_zeros(s)` that returns s"
+            " with any zeros removed from its LEFT end only -- the zeros"
+            " inside or at the end stay -- using lstrip() with '0':\n\n"
+            "  without_leading_zeros(\"0042\") -> \"42\"\n"
+            "  without_leading_zeros(\"100\") -> \"100\"\n\n"
+            "Return: the new string."
+        ),
+        solution="def without_leading_zeros(s):\n    return s.lstrip(\"0\")\n",
+        trap="def without_leading_zeros(s):\n    return s.strip(\"0\")\n",
+        note="lstrip() works on the left end only; strip() does both"
+             " ends, so '100' loses its trailing zeros and becomes '1'."
+             " A string that is all zeros strips to '' -- there is no"
+             " zero left to keep -- which is what the question asked for.",
+    ),
+    dict(
+        id=3, ledger="P223", concept="PY3 textwrap shorten", tier="1 - Strings",
+        title="textwrap.shorten(): cut at a word, with a marker", kind="function",
+        func="shortened",
+        cases=[("The quick brown fox jumps over the lazy dog", 20), ("short", 10),
+               ("one two three four", 13)],
+        prompt=(
+            "Write a function `shortened(text, width)` that returns the"
+            " text cut to at most width characters at a WORD boundary,"
+            " ending in ' [...]' when something was cut, using"
+            " textwrap.shorten(). Text that already fits is returned as it"
+            " is. Remember the import.\n\n"
+            "  shortened(\"one two three four\", 13) -> \"one two [...]\"\n\n"
             "Return: the string."
         ),
-        solution="def without_last_word(s):\n    return s.rsplit(\" \", 1)[0]\n",
-        trap="def without_last_word(s):\n    return s.split(\" \", 1)[0]\n",
-        note="split(' ', 1) makes one cut from the LEFT, so [0] is the"
-             " first word alone; rsplit(' ', 1) makes one cut from the"
-             " right, and [0] is everything before the last word. With"
-             " no space to cut at, both return the whole string.",
+        solution=("import textwrap\n\n"
+                  "def shortened(text, width):\n"
+                  "    return textwrap.shorten(text, width)\n"),
+        trap="def shortened(text, width):\n    return text[:width]\n",
+        note="Slicing cuts in the middle of a word and gives no sign that"
+             " anything is missing. shorten() breaks at a space and"
+             " appends its placeholder, keeping the whole result within"
+             " width. It also collapses runs of whitespace, as the rest"
+             " of textwrap does.",
     ),
     dict(
-        id=4, ledger="P209", concept="PY3 isascii", tier="1 - Strings",
-        title="isascii(): plain characters only", kind="function",
-        func="plain_ascii",
-        cases=[("Leeds",), ("Zo\u00eb",), ("",), ("LS15!",)],
+        id=4, ledger="P224", concept="PY3 repr spec", tier="1 - Strings",
+        title="f'{s!r}': the value as Python would write it", kind="function",
+        func="quoted",
+        cases=[("Leeds",), ("",), ("it's",), ("a b",)],
         prompt=(
-            "Write a function `plain_ascii(s)` that returns True when"
-            " every character in s is plain ASCII -- no accents, no"
-            " symbols beyond the keyboard -- using isascii(). The empty"
-            " string counts as True.\n\n"
-            "  plain_ascii(\"LS15!\") -> True\n\n"
-            "Return: True or False."
+            "Write a function `quoted(s)` that returns s wrapped in the"
+            " quotes Python itself would print it with -- repr form --"
+            " using !r inside an f-string:\n\n"
+            "  quoted(\"Leeds\") -> \"'Leeds'\"\n\n"
+            "Return: the string."
         ),
-        solution="def plain_ascii(s):\n    return s.isascii()\n",
-        trap="def plain_ascii(s):\n    return s.isalpha()\n",
-        note="isascii() asks about the character SET -- codes under 128 --"
-             " so digits and punctuation pass and an accented letter does"
-             " not. isalpha() asks whether every character is a letter,"
-             " which refuses 'LS15!' and accepts an accented name. It is"
-             " also one of the few is...() methods that is True for ''.",
+        solution="def quoted(s):\n    return f\"{s!r}\"\n",
+        trap="def quoted(s):\n    return f\"{s}\"\n",
+        note="!r asks for repr() of the value instead of str(): for a"
+             " string that means quotes around it, with the quote style"
+             " chosen so a string containing an apostrophe comes out in"
+             " double quotes. Without !r an f-string shows the bare text."
+             " !r is what makes a debugging message say which value was"
+             " a string.",
     ),
     # ============================================================== 2 Numbers
     dict(
-        id=5, ledger="P210", concept="PY3 math hypot", tier="2 - Numbers",
-        title="math.hypot(): straight-line distance", kind="function",
-        func="distance",
-        cases=[(3, 4), (0, 0), (5, 12), (1, 1)],
+        id=5, ledger="P225", concept="PY3 math isqrt", tier="2 - Numbers",
+        title="math.isqrt(): the whole-number square root", kind="function",
+        func="whole_root",
+        cases=[(16,), (17,), (0,), (1000000,)],
         prompt=(
-            "Write a function `distance(dx, dy)` that returns the"
-            " straight-line distance covered by moving dx across and dy"
-            " up, using math.hypot(). Remember the import.\n\n"
-            "  distance(3, 4) -> 5.0\n\n"
-            "Return: a float."
-        ),
-        solution=("import math\n\n"
-                  "def distance(dx, dy):\n"
-                  "    return math.hypot(dx, dy)\n"),
-        trap="def distance(dx, dy):\n    return abs(dx) + abs(dy)\n",
-        note="math.hypot(a, b) is the square root of a squared plus b"
-             " squared -- Pythagoras in one call, and it avoids the"
-             " overflow that squaring large numbers can cause. Adding the"
-             " two legs is the walking distance around the block, not"
-             " across it.",
-    ),
-    dict(
-        id=6, ledger="P211", concept="PY3 math comb", tier="2 - Numbers",
-        title="math.comb(): ways to choose", kind="function",
-        func="ways_to_choose",
-        cases=[(5, 2), (6, 0), (4, 4), (10, 3)],
-        prompt=(
-            "Write a function `ways_to_choose(n, k)` that returns how"
-            " many different groups of k can be picked from n items,"
-            " order not mattering, using math.comb(). Remember the"
-            " import.\n\n"
-            "  ways_to_choose(5, 2) -> 10\n\n"
+            "Write a function `whole_root(n)` that returns the largest"
+            " whole number whose square is at most n, as an int, using"
+            " math.isqrt(). Remember the import.\n\n"
+            "  whole_root(17) -> 4\n\n"
             "Return: an integer."
         ),
         solution=("import math\n\n"
-                  "def ways_to_choose(n, k):\n"
-                  "    return math.comb(n, k)\n"),
-        trap=("import math\n\n"
-              "def ways_to_choose(n, k):\n"
-              "    return math.perm(n, k)\n"),
-        note="comb() counts groups, perm() counts ORDERED arrangements,"
-             " so perm(5, 2) is 20 because choosing A then B and B then A"
-             " are different arrangements of the same pair. Both are exact"
-             " integers; math.factorial is the long way round.",
+                  "def whole_root(n):\n"
+                  "    return math.isqrt(n)\n"),
+        trap="def whole_root(n):\n    return n ** 0.5\n",
+        note="n ** 0.5 is a FLOAT -- 4.123 for 17, and 4.0 rather than 4"
+             " for 16 -- and for very large n it is not even exact."
+             " math.isqrt() works in integers throughout and returns an"
+             " int, rounded down.",
     ),
     dict(
-        id=7, ledger="P212", concept="PY3 statistics mode", tier="2 - Numbers",
-        title="statistics.mode(): the commonest value", kind="function",
-        func="most_common",
-        cases=[(["LS1", "BD3", "LS1"],), ([1, 1, 2, 2, 3],), ([7],), (["b", "a", "a"],)],
+        id=6, ledger="P226", concept="PY3 bit_length", tier="2 - Numbers",
+        title="bit_length(): how many binary digits", kind="function",
+        func="bits_needed",
+        cases=[(0,), (1,), (255,), (256,)],
         prompt=(
-            "Write a function `most_common(values)` that returns the"
-            " value that appears most often in a non-empty list -- the"
-            " first one met, when several tie -- using statistics.mode()."
-            " Remember the import.\n\n"
-            "  most_common([\"b\", \"a\", \"a\"]) -> \"a\"\n\n"
-            "Return: the value."
+            "Write a function `bits_needed(n)` that returns how many"
+            " binary digits a non-negative integer needs -- 0 for zero,"
+            " 8 for 255, 9 for 256 -- using the int method"
+            " bit_length():\n\n"
+            "  bits_needed(255) -> 8\n\n"
+            "Return: an integer."
         ),
-        solution=("import statistics\n\n"
-                  "def most_common(values):\n"
-                  "    return statistics.mode(values)\n"),
-        trap="def most_common(values):\n    return max(values)\n",
-        note="mode() is the most FREQUENT value; max() is the largest,"
-             " which is a different question that happens to agree on"
-             " some lists. Since Python 3.8 mode() breaks a tie by taking"
-             " the first value encountered, and works on strings as well"
-             " as numbers.",
+        solution="def bits_needed(n):\n    return n.bit_length()\n",
+        trap="def bits_needed(n):\n    return len(bin(n))\n",
+        note="bit_length() is a method every int has, and it answers"
+             " without building a string. len(bin(n)) counts the '0b'"
+             " prefix as two extra digits, and says zero needs three.",
     ),
     dict(
-        id=8, ledger="P213", concept="PY3 hex", tier="2 - Numbers",
-        title="hex(): a number in base sixteen", kind="function",
-        func="as_hex",
-        cases=[(255,), (0,), (16,), (4096,)],
+        id=7, ledger="P227", concept="PY3 math dist", tier="2 - Numbers",
+        title="math.dist(): distance between two points", kind="function",
+        func="distance_between",
+        cases=[((0, 0), (3, 4)), ((1, 1), (1, 1)), ((2, 3), (5, 7)), ((-1, 0), (1, 0))],
         prompt=(
-            "Write a function `as_hex(n)` that returns the hexadecimal"
-            " form of a non-negative integer as a string WITH the 0x"
-            " prefix, using hex():\n\n"
-            "  as_hex(255) -> \"0xff\"\n\n"
-            "Return: the string."
+            "Write a function `distance_between(p, q)` that returns the"
+            " straight-line distance between two points given as (x, y)"
+            " tuples, using math.dist(). Remember the import.\n\n"
+            "  distance_between((0, 0), (3, 4)) -> 5.0\n\n"
+            "Return: a float."
         ),
-        solution="def as_hex(n):\n    return hex(n)\n",
-        trap="def as_hex(n):\n    return format(n, \"x\")\n",
-        note="hex() writes the prefix that marks a hexadecimal literal in"
-             " source code, '0xff'; format(n, 'x') gives the bare digits"
-             " 'ff'. Which one you want depends on who reads it -- the"
-             " question asked for the prefix. int('0xff', 16) reads it"
-             " back.",
+        solution=("import math\n\n"
+                  "def distance_between(p, q):\n"
+                  "    return math.dist(p, q)\n"),
+        trap=("def distance_between(p, q):\n"
+              "    return abs(p[0] - q[0]) + abs(p[1] - q[1])\n"),
+        note="math.dist() takes two points of any dimension and returns"
+             " the Euclidean distance -- hypot of the differences, done"
+             " for you. Adding the two differences is the taxi-cab"
+             " distance, which is longer whenever the points are not in"
+             " line.",
+    ),
+    dict(
+        id=8, ledger="P228", concept="PY3 pow mod", tier="2 - Numbers",
+        title="pow(b, e, m): a power, reduced as it goes", kind="function",
+        func="last_two_digits",
+        cases=[(7, 2), (2, 10), (3, 0), (12, 3)],
+        prompt=(
+            "Write a function `last_two_digits(b, e)` that returns the"
+            " last two digits of b to the power e -- the remainder on"
+            " division by 100 -- using the three-argument form of"
+            " pow():\n\n"
+            "  last_two_digits(2, 10) -> 24\n\n"
+            "Return: an integer."
+        ),
+        solution="def last_two_digits(b, e):\n    return pow(b, e, 100)\n",
+        trap="def last_two_digits(b, e):\n    return pow(b, e) % 10\n",
+        note="pow(b, e, m) computes b ** e modulo m without ever forming"
+             " the full power, which matters when e is in the thousands."
+             " The trap takes the remainder by 10, which is the last ONE"
+             " digit. Anything to the power 0 is 1, so the last two digits"
+             " are 01 -- the integer 1.",
     ),
     # ================================================================ 3 Lists
     dict(
-        id=9, ledger="P214", concept="PY3 del", tier="3 - Lists",
-        title="del: remove the item at a position", kind="function",
-        func="drop_at",
-        cases=[([1, 2, 3], 1), (["a"], 0), ([1, 2, 3], -1), ([5, 6, 7, 8], 0)],
+        id=9, ledger="P229", concept="PY3 accumulate", tier="3 - Lists",
+        title="itertools.accumulate(): running totals", kind="function",
+        func="running_total",
+        cases=[([1, 2, 3],), ([],), ([5],), ([2, -2, 2],)],
         prompt=(
-            "Write a function `drop_at(values, i)` that returns a NEW"
-            " list with the item at position i removed, leaving the"
-            " original alone, using the del statement on a copy:\n\n"
-            "  drop_at([1, 2, 3], 1) -> [1, 3]\n\n"
+            "Write a function `running_total(values)` that returns a list"
+            " where each item is the sum of the values up to and including"
+            " that position, using list() over itertools.accumulate()."
+            " Remember the import.\n\n"
+            "  running_total([1, 2, 3]) -> [1, 3, 6]\n\n"
             "Return: the new list."
         ),
-        solution="def drop_at(values, i):\n    out = list(values)\n    del out[i]\n    return out\n",
-        trap="def drop_at(values, i):\n    out = list(values)\n    return out.pop(i)\n",
-        note="del out[i] removes the item and returns nothing; pop(i)"
-             " removes it and returns the ITEM, so 'return out.pop(i)'"
-             " hands back 2 instead of [1, 3]. del is a statement, not a"
-             " function -- no parentheses -- and works on slices too.",
+        solution=("import itertools\n\n"
+                  "def running_total(values):\n"
+                  "    return list(itertools.accumulate(values))\n"),
+        trap="def running_total(values):\n    return list(values)\n",
+        note="accumulate() yields the running sum, one value per input,"
+             " and it is SQL's SUM() OVER (ORDER BY ...) in Python. A"
+             " function can be passed to accumulate differently -- max"
+             " for a running maximum, for instance. The empty list"
+             " accumulates to an empty list.",
     ),
     dict(
-        id=10, ledger="P215", concept="PY3 list repeat", tier="3 - Lists",
-        title="[x] * n: a list of n copies", kind="function",
-        func="repeated",
-        cases=[("ab", 3), (0, 4), ("x", 0), (None, 2)],
+        id=10, ledger="P230", concept="PY3 heapq nlargest", tier="3 - Lists",
+        title="heapq.nlargest(): the top three", kind="function",
+        func="top_three",
+        cases=[([5, 1, 9, 3, 7],), ([1, 2],), ([],), ([4, 4, 4, 4],)],
         prompt=(
-            "Write a function `repeated(x, n)` that returns a list"
-            " holding x n times, using list repetition with *:\n\n"
-            "  repeated(\"ab\", 3) -> [\"ab\", \"ab\", \"ab\"]\n\n"
+            "Write a function `top_three(values)` that returns the three"
+            " largest values, largest first -- fewer when the list is"
+            " shorter -- using heapq.nlargest(). Remember the import.\n\n"
+            "  top_three([5, 1, 9, 3, 7]) -> [9, 7, 5]\n\n"
             "Return: the list."
         ),
-        solution="def repeated(x, n):\n    return [x] * n\n",
-        trap="def repeated(x, n):\n    return x * n\n",
-        note="[x] * n repeats the one-item LIST; x * n repeats x itself,"
-             " which for a string is 'ababab' and for a number is"
-             " multiplication. The brackets are the whole difference."
-             " Beware [[]] * n: the inner lists are the same object.",
+        solution=("import heapq\n\n"
+                  "def top_three(values):\n"
+                  "    return heapq.nlargest(3, values)\n"),
+        trap="def top_three(values):\n    return sorted(values)[:3]\n",
+        note="sorted() ascending then [:3] is the three SMALLEST; the top"
+             " three need reverse=True, or [-3:] reversed. nlargest(n,"
+             " values) says what it means, returns largest first, and"
+             " does not sort the whole list to find them. nsmallest is"
+             " its twin.",
     ),
     dict(
-        id=11, ledger="P216", concept="PY3 filter None", tier="3 - Lists",
-        title="filter(None, ...): drop everything falsy", kind="function",
-        func="truthy_only",
-        cases=[([0, 1, "", "a", None, [], [2]],), ([],), ([None, 0],)],
+        id=11, ledger="P231", concept="PY3 itemgetter", tier="3 - Lists",
+        title="itemgetter(): sort pairs by their second item", kind="function",
+        func="by_second",
+        cases=[([("a", 3), ("b", 1), ("c", 2)],), ([],), ([("x", 0)],),
+               ([("p", 2), ("q", 2), ("r", 1)],)],
         prompt=(
-            "Write a function `truthy_only(values)` that returns a list"
-            " of the values that count as true -- dropping 0, '', None,"
-            " empty lists and the like -- using list() over filter() with"
-            " None as the function:\n\n"
-            "  truthy_only([0, 1, \"\", \"a\", None]) -> [1, \"a\"]\n\n"
+            "Write a function `by_second(pairs)` that returns the list of"
+            " (name, number) pairs sorted by the NUMBER, using sorted()"
+            " with key=itemgetter(1) from the operator module. Remember"
+            " the import.\n\n"
+            "  by_second([(\"a\", 3), (\"b\", 1), (\"c\", 2)]) ->"
+            " [(\"b\", 1), (\"c\", 2), (\"a\", 3)]\n\n"
             "Return: the new list."
         ),
-        solution="def truthy_only(values):\n    return list(filter(None, values))\n",
-        trap="def truthy_only(values):\n    return [v for v in values if v is not None]\n",
-        note="filter(None, values) keeps the items that are truthy -- None"
-             " in place of a function means 'test the item itself'. A"
-             " test for 'is not None' keeps 0, '' and [], which are"
-             " not None but are falsy. [v for v in values if v] says the"
-             " same as filter(None, ...).",
+        solution=("from operator import itemgetter\n\n"
+                  "def by_second(pairs):\n"
+                  "    return sorted(pairs, key=itemgetter(1))\n"),
+        trap="def by_second(pairs):\n    return sorted(pairs)\n",
+        note="Plain sorted() compares tuples item by item, so it sorts by"
+             " the name first. itemgetter(1) is a ready-made key function"
+             " that picks item 1 -- the same as key=lambda p: p[1], a"
+             " little faster and with a name that says what it does."
+             " Equal numbers keep their original order.",
     ),
     dict(
-        id=12, ledger="P217", concept="PY3 tuple", tier="3 - Lists",
-        title="tuple(): a list made unchangeable", kind="function",
-        func="freeze",
-        cases=[([1, 2],), ([],), (["a"],), ([[1], [2]],)],
+        id=12, ledger="P232", concept="PY3 Counter", tier="3 - Lists",
+        title="Counter(): how many of each", kind="function",
+        func="tally",
+        cases=[(["a", "b", "a"],), ([],), ([1, 1, 1],), (["LS1", "BD3", "LS1", "WF1"],)],
         prompt=(
-            "Write a function `freeze(values)` that returns the items of"
-            " the list as a tuple, using tuple():\n\n"
-            "  freeze([1, 2]) -> (1, 2)\n\n"
-            "Return: the tuple."
-        ),
-        solution="def freeze(values):\n    return tuple(values)\n",
-        trap="def freeze(values):\n    return list(values)\n",
-        note="tuple() builds an immutable sequence from any iterable; the"
-             " same items in a list are a different type, and the grader"
-             " keeps them apart as Python does -- a tuple can be a dict"
-             " key or a set member, a list cannot. A one-item tuple"
-             " prints as (1,), comma and all.",
-    ),
-    # ========================================================= 4 Sets and dicts
-    dict(
-        id=13, ledger="P218", concept="PY3 set add", tier="4 - Sets and dictionaries",
-        title="add(): one more member of a set", kind="function",
-        func="with_added",
-        cases=[([1, 2], 3), ([1, 2], 2), ([], "a"), (["x", "x"], "y")],
-        prompt=(
-            "Write a function `with_added(items, x)` that returns a SET"
-            " of the items with x included -- the set is unchanged when x"
-            " was already in it -- using set() and add():\n\n"
-            "  with_added([1, 2], 3) -> {1, 2, 3}\n\n"
-            "Return: the set."
-        ),
-        solution="def with_added(items, x):\n    s = set(items)\n    s.add(x)\n    return s\n",
-        trap="def with_added(items, x):\n    s = set(items)\n    return s.add(x)\n",
-        note="add() changes the set in place and returns None, like"
-             " append() on a list -- so 'return s.add(x)' returns nothing."
-             " Add, then return the set. A set has no append(): there is"
-             " no end to append to.",
-    ),
-    dict(
-        id=14, ledger="P219", concept="PY3 isdisjoint", tier="4 - Sets and dictionaries",
-        title="isdisjoint(): nothing in common?", kind="function",
-        func="no_overlap",
-        cases=[([1, 2], [3]), ([1, 2], [2, 3]), ([], []), (["a"], ["a"])],
-        prompt=(
-            "Write a function `no_overlap(a, b)` that returns True when"
-            " the two lists share no value at all, using set() on a and"
-            " isdisjoint():\n\n"
-            "  no_overlap([1, 2], [3]) -> True\n\n"
-            "Return: True or False."
-        ),
-        solution="def no_overlap(a, b):\n    return set(a).isdisjoint(b)\n",
-        trap="def no_overlap(a, b):\n    return set(a) != set(b)\n",
-        note="isdisjoint() is True when the intersection is empty, and"
-             " takes any iterable as its argument. 'Not equal' is a"
-             " different test: [1, 2] and [2, 3] are unequal and still"
-             " share a value. Two empty lists are disjoint -- there is"
-             " nothing to share.",
-    ),
-    dict(
-        id=15, ledger="P220", concept="PY3 dict pairs", tier="4 - Sets and dictionaries",
-        title="dict(pairs): a dictionary from (key, value) tuples", kind="function",
-        func="to_dict",
-        cases=[([("a", 1), ("b", 2)],), ([],), ([("a", 1), ("a", 2)],)],
-        prompt=(
-            "Write a function `to_dict(pairs)` that returns a dictionary"
-            " built from a list of (key, value) tuples, using dict()."
-            " When a key appears twice, the later value wins.\n\n"
-            "  to_dict([(\"a\", 1), (\"b\", 2)]) -> {\"a\": 1, \"b\": 2}\n\n"
+            "Write a function `tally(values)` that returns a dictionary"
+            " mapping each value to how many times it appears, using"
+            " collections.Counter(). Remember the import.\n\n"
+            "  tally([\"a\", \"b\", \"a\"]) -> {\"a\": 2, \"b\": 1}\n\n"
             "Return: the dictionary."
         ),
-        solution="def to_dict(pairs):\n    return dict(pairs)\n",
-        trap="def to_dict(pairs):\n    return dict.fromkeys(pairs)\n",
-        note="dict() accepts a sequence of two-item pairs and makes each"
-             " the key and value; a repeated key keeps the last value."
-             " dict.fromkeys(pairs) makes each whole TUPLE a key with the"
-             " value None -- a dictionary, but not the one asked for."
-             " dict(zip(keys, values)) is the same tool with the pairs"
-             " made on the way in.",
+        solution=("from collections import Counter\n\n"
+                  "def tally(values):\n"
+                  "    return Counter(values)\n"),
+        trap="def tally(values):\n    return dict.fromkeys(values, 1)\n",
+        note="Counter is a dict subclass that counts for you -- the"
+             " counting loop with get(key, 0) + 1 from the earlier sets,"
+             " in one call -- and it compares equal to a plain dict with"
+             " the same counts. fromkeys(values, 1) gives every value a"
+             " count of 1 however often it appears.",
+    ),
+    # ========================================================= 4 Dictionaries
+    dict(
+        id=13, ledger="P233", concept="PY3 sorted key get", tier="4 - Dictionaries",
+        title="sorted(d, key=d.get): keys in order of their values", kind="function",
+        func="keys_by_value",
+        cases=[({"a": 3, "b": 1, "c": 2},), ({},), ({"x": 1},), ({"p": 2, "q": 2, "r": 1},)],
+        prompt=(
+            "Write a function `keys_by_value(d)` that returns the"
+            " dictionary's keys as a list ordered by their VALUES,"
+            " smallest value first, using sorted() over the dict with"
+            " key=d.get:\n\n"
+            "  keys_by_value({\"a\": 3, \"b\": 1, \"c\": 2}) -> [\"b\","
+            " \"c\", \"a\"]\n\n"
+            "Return: the list of keys."
+        ),
+        solution="def keys_by_value(d):\n    return sorted(d, key=d.get)\n",
+        trap="def keys_by_value(d):\n    return sorted(d)\n",
+        note="Iterating a dict gives its keys, and d.get is a function"
+             " from key to value -- so key=d.get sorts the keys by what"
+             " they map to. sorted(d) alone sorts the keys by themselves,"
+             " alphabetically. This is the idiom behind max(d, key=d.get)"
+             " from an earlier set.",
+    ),
+    dict(
+        id=14, ledger="P234", concept="PY3 next iter", tier="4 - Dictionaries",
+        title="next(iter(d)): the first key", kind="function",
+        func="first_key",
+        cases=[({"a": 1, "b": 2},), ({"z": 0},), ({3: "x", 1: "y"},)],
+        prompt=(
+            "Write a function `first_key(d)` that returns the first key"
+            " of a non-empty dictionary -- the one inserted first --"
+            " using next() over iter():\n\n"
+            "  first_key({\"a\": 1, \"b\": 2}) -> \"a\"\n\n"
+            "Return: the key."
+        ),
+        solution="def first_key(d):\n    return next(iter(d))\n",
+        trap="def first_key(d):\n    return d[0]\n",
+        note="d[0] looks up the KEY 0, which is a KeyError unless the"
+             " dict happens to have one -- dictionaries are not"
+             " positional. iter(d) walks the keys in insertion order and"
+             " next() takes the first, without building a list of all of"
+             " them. next(iter(d), None) is the safe form for an empty"
+             " dict.",
+    ),
+    dict(
+        id=15, ledger="P235", concept="PY3 sum values", tier="4 - Dictionaries",
+        title="sum(d.values()): the total of a tally", kind="function",
+        func="total_of",
+        cases=[({"a": 1, "b": 2},), ({},), ({"x": 2.5, "y": 0.5},), ({"only": 7},)],
+        prompt=(
+            "Write a function `total_of(d)` that returns the sum of all"
+            " the dictionary's values, using sum() over values():\n\n"
+            "  total_of({\"a\": 1, \"b\": 2}) -> 3\n\n"
+            "Return: the total."
+        ),
+        solution="def total_of(d):\n    return sum(d.values())\n",
+        trap="def total_of(d):\n    return sum(d)\n",
+        note="sum(d) iterates the KEYS, which for string keys is a"
+             " TypeError -- strings do not add to 0 -- and for numeric"
+             " keys is the wrong number quietly. values() is the view of"
+             " what the keys map to, and sum() of an empty view is 0.",
     ),
 ]
 
