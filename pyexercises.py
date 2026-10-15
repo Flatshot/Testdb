@@ -1,13 +1,12 @@
-"""Python practice exercises: fifteen tiny functions, one tool each.
+"""Python practice exercises: fifteen functions of two or three tools.
 
-The fifteenth Python set, one-tool functions again: every question asks
-for a function of one or two lines that returns a value, built around one
-named tool no earlier set used -- the + format spec, lstrip() with an
-argument, textwrap.shorten(), !r in an f-string, math.isqrt(),
-int.bit_length(), math.dist(), pow() with a modulus, itertools.accumulate(),
-heapq.nlargest(), operator.itemgetter(), collections.Counter(), sorted()
-with key=d.get, next(iter()) and sum() over values(). The title names the
-tool, so the tree on the left reads like a list of tools.
+The sixteenth Python set, and a step UP from the one-tool sets: every
+question asks for a function that combines two or three tools, and the
+prompt NAMES every tool it needs -- split() and join() and title(), a
+Counter and its most_common(), sorted() with a lambda key, a set
+comprehension with int() and strip(), date.fromisoformat() with strftime(),
+dict.fromkeys() for order-keeping deduplication, and so on. The title
+names the task; the prompt lists the tools.
 
 Two kinds of question, told apart by `kind`:
 
@@ -32,329 +31,353 @@ import pyrun
 EXERCISES = [
     # ============================================================== 1 Strings
     dict(
-        id=1, ledger="P221", concept="PY3 sign spec", tier="1 - Strings",
-        title="f'{n:+}': always show the sign", kind="function",
-        func="signed",
-        cases=[(5,), (-3,), (0,), (2.5,)],
+        id=1, ledger="P236", concept="PY6 split join title", tier="1 - Strings",
+        title="A name tidied up", kind="function",
+        func="tidy_name",
+        cases=[("  aisha   ekwueme ",), ("KWAME BAXTER",), ("rosa",), ("",)],
         prompt=(
-            "Write a function `signed(n)` that returns the number as a"
-            " string with its sign always shown -- '+5' as well as '-3'"
-            " -- using the + format spec in an f-string:\n\n"
-            "  signed(5) -> \"+5\"\n\n"
-            "Return: the string."
-        ),
-        solution="def signed(n):\n    return f\"{n:+}\"\n",
-        trap="def signed(n):\n    return str(n)\n",
-        note="The + in a format spec asks for a sign on positive numbers"
-             " too; str() and the default spec show only the minus. Zero"
-             " gets a plus. It combines with the rest -- {n:+.2f} for a"
-             " signed amount to two decimals.",
-    ),
-    dict(
-        id=2, ledger="P222", concept="PY3 lstrip chars", tier="1 - Strings",
-        title="lstrip(chars): leading zeros off", kind="function",
-        func="without_leading_zeros",
-        cases=[("0042",), ("100",), ("000",), ("7",)],
-        prompt=(
-            "Write a function `without_leading_zeros(s)` that returns s"
-            " with any zeros removed from its LEFT end only -- the zeros"
-            " inside or at the end stay -- using lstrip() with '0':\n\n"
-            "  without_leading_zeros(\"0042\") -> \"42\"\n"
-            "  without_leading_zeros(\"100\") -> \"100\"\n\n"
+            "Write a function `tidy_name(s)` that returns the name with"
+            " extra spaces removed -- one space between words, none at"
+            " the ends -- and each word capitalised. Tools: split() with"
+            " no argument to break on any whitespace, \" \".join() to"
+            " put the words back, and title() for the capitals.\n\n"
+            "  tidy_name(\"  aisha   ekwueme \") -> \"Aisha Ekwueme\"\n\n"
             "Return: the new string."
         ),
-        solution="def without_leading_zeros(s):\n    return s.lstrip(\"0\")\n",
-        trap="def without_leading_zeros(s):\n    return s.strip(\"0\")\n",
-        note="lstrip() works on the left end only; strip() does both"
-             " ends, so '100' loses its trailing zeros and becomes '1'."
-             " A string that is all zeros strips to '' -- there is no"
-             " zero left to keep -- which is what the question asked for.",
+        solution="def tidy_name(s):\n    return \" \".join(s.split()).title()\n",
+        trap="def tidy_name(s):\n    return s.title()\n",
+        note="split() with no argument splits on any run of whitespace"
+             " and drops the empty pieces, so joining the words with one"
+             " space normalises the spacing in one move. title() alone"
+             " fixes the capitals and leaves every stray space where it"
+             " was.",
     ),
     dict(
-        id=3, ledger="P223", concept="PY3 textwrap shorten", tier="1 - Strings",
-        title="textwrap.shorten(): cut at a word, with a marker", kind="function",
-        func="shortened",
-        cases=[("The quick brown fox jumps over the lazy dog", 20), ("short", 10),
-               ("one two three four", 13)],
+        id=2, ledger="P237", concept="PY6 split comprehension join", tier="1 - Strings",
+        title="Initials from a full name", kind="function",
+        func="initials",
+        cases=[("aisha ekwueme",), ("Bartholomew van Hollingsworth",), ("Rosa",), ("",)],
         prompt=(
-            "Write a function `shortened(text, width)` that returns the"
-            " text cut to at most width characters at a WORD boundary,"
-            " ending in ' [...]' when something was cut, using"
-            " textwrap.shorten(). Text that already fits is returned as it"
-            " is. Remember the import.\n\n"
-            "  shortened(\"one two three four\", 13) -> \"one two [...]\"\n\n"
+            "Write a function `initials(name)` that returns the first"
+            " letter of each word, upper case, run together. Tools:"
+            " split() to get the words, a generator or list"
+            " comprehension taking w[0] from each, \"\".join() to"
+            " combine them, and upper().\n\n"
+            "  initials(\"aisha ekwueme\") -> \"AE\"\n\n"
             "Return: the string."
         ),
-        solution=("import textwrap\n\n"
-                  "def shortened(text, width):\n"
-                  "    return textwrap.shorten(text, width)\n"),
-        trap="def shortened(text, width):\n    return text[:width]\n",
-        note="Slicing cuts in the middle of a word and gives no sign that"
-             " anything is missing. shorten() breaks at a space and"
-             " appends its placeholder, keeping the whole result within"
-             " width. It also collapses runs of whitespace, as the rest"
-             " of textwrap does.",
+        solution="def initials(name):\n    return \"\".join(w[0] for w in name.split()).upper()\n",
+        trap="def initials(name):\n    return \"\".join(w[0] for w in name.split())\n",
+        note="Three tools in a row: split into words, take the first"
+             " character of each, join with nothing between. upper()"
+             " on the result handles a name typed in lower case; without"
+             " it 'aisha ekwueme' gives 'ae'. The empty string splits to"
+             " no words and joins to ''.",
     ),
     dict(
-        id=4, ledger="P224", concept="PY3 repr spec", tier="1 - Strings",
-        title="f'{s!r}': the value as Python would write it", kind="function",
-        func="quoted",
-        cases=[("Leeds",), ("",), ("it's",), ("a b",)],
+        id=3, ledger="P238", concept="PY6 Counter most_common", tier="1 - Strings",
+        title="The two commonest words", kind="function",
+        func="top_two_words",
+        cases=[("the cat and the dog and the bird",), ("The the THE",), ("one",), ("a b b a",)],
         prompt=(
-            "Write a function `quoted(s)` that returns s wrapped in the"
-            " quotes Python itself would print it with -- repr form --"
-            " using !r inside an f-string:\n\n"
-            "  quoted(\"Leeds\") -> \"'Leeds'\"\n\n"
+            "Write a function `top_two_words(text)` that returns a list"
+            " of the two most frequent words as (word, count) tuples,"
+            " commonest first, counting words regardless of case and"
+            " reporting them in lower case. Tools: lower(), split(),"
+            " collections.Counter and its most_common(2). Remember the"
+            " import.\n\n"
+            "  top_two_words(\"the cat and the dog and the bird\") ->"
+            " [(\"the\", 3), (\"and\", 2)]\n\n"
+            "Return: the list of tuples."
+        ),
+        solution=("from collections import Counter\n\n"
+                  "def top_two_words(text):\n"
+                  "    return Counter(text.lower().split()).most_common(2)\n"),
+        trap=("from collections import Counter\n\n"
+              "def top_two_words(text):\n"
+              "    return Counter(text.split()).most_common(2)\n"),
+        note="lower() BEFORE counting is what makes 'The' and 'the' one"
+             " word; counted as typed they are two. most_common(n)"
+             " returns the n biggest counts as (value, count) tuples,"
+             " ties in first-seen order, and fewer than n when there are"
+             " fewer distinct words.",
+    ),
+    dict(
+        id=4, ledger="P239", concept="PY6 format specs", tier="1 - Strings",
+        title="A line of a price list", kind="function",
+        func="price_line",
+        cases=[("Fine", 220), ("Replacement copy", 1500), ("Card", 5)],
+        prompt=(
+            "Write a function `price_line(label, pence)` that returns the"
+            " label padded on the right to 18 characters followed by the"
+            " amount in pounds, right-aligned in 8 characters with two"
+            " decimals. Tools: an f-string with the :<18 spec for the"
+            " label and the :>8.2f spec for pence / 100.\n\n"
+            "  price_line(\"Fine\", 220) -> \"Fine                  2.20\"\n\n"
             "Return: the string."
         ),
-        solution="def quoted(s):\n    return f\"{s!r}\"\n",
-        trap="def quoted(s):\n    return f\"{s}\"\n",
-        note="!r asks for repr() of the value instead of str(): for a"
-             " string that means quotes around it, with the quote style"
-             " chosen so a string containing an apostrophe comes out in"
-             " double quotes. Without !r an f-string shows the bare text."
-             " !r is what makes a debugging message say which value was"
-             " a string.",
+        solution="def price_line(label, pence):\n    return f\"{label:<18}{pence / 100:>8.2f}\"\n",
+        trap="def price_line(label, pence):\n    return f\"{label} {pence / 100:.2f}\"\n",
+        note="A format spec can set width and alignment as well as"
+             " decimals: <18 pads the label on the right to a fixed"
+             " column, >8.2f right-aligns the number in eight characters"
+             " with two decimals, so a list of these lines up. Without"
+             " the widths the amounts wander with the label's length.",
     ),
-    # ============================================================== 2 Numbers
     dict(
-        id=5, ledger="P225", concept="PY3 math isqrt", tier="2 - Numbers",
-        title="math.isqrt(): the whole-number square root", kind="function",
-        func="whole_root",
-        cases=[(16,), (17,), (0,), (1000000,)],
+        id=5, ledger="P240", concept="PY6 lstrip float round", tier="1 - Strings",
+        title="Pounds in text to pence", kind="function",
+        func="pence_from_text",
+        cases=[("£12.40",), ("£0.29",), ("£3",), ("£1.15",)],
         prompt=(
-            "Write a function `whole_root(n)` that returns the largest"
-            " whole number whose square is at most n, as an int, using"
-            " math.isqrt(). Remember the import.\n\n"
-            "  whole_root(17) -> 4\n\n"
+            "Write a function `pence_from_text(s)` that turns an amount"
+            " written like '£12.40' into whole pence. Tools: lstrip('£')"
+            " to drop the sign, float() to read the number, multiply by"
+            " 100, and round() -- NOT int() -- to get back to a whole"
+            " number.\n\n"
+            "  pence_from_text(\"£12.40\") -> 1240\n\n"
             "Return: an integer."
         ),
-        solution=("import math\n\n"
-                  "def whole_root(n):\n"
-                  "    return math.isqrt(n)\n"),
-        trap="def whole_root(n):\n    return n ** 0.5\n",
-        note="n ** 0.5 is a FLOAT -- 4.123 for 17, and 4.0 rather than 4"
-             " for 16 -- and for very large n it is not even exact."
-             " math.isqrt() works in integers throughout and returns an"
-             " int, rounded down.",
+        solution="def pence_from_text(s):\n    return round(float(s.lstrip(\"£\")) * 100)\n",
+        trap="def pence_from_text(s):\n    return int(float(s.lstrip(\"£\")) * 100)\n",
+        note="0.29 is not exactly representable, and 0.29 * 100 comes"
+             " out as 28.999999999999996; int() truncates that to 28,"
+             " round() takes it to 29. Whenever a float is turned into a"
+             " count of smaller units, round, do not truncate.",
     ),
+    # ==================================================== 2 Numbers and dates
     dict(
-        id=6, ledger="P226", concept="PY3 bit_length", tier="2 - Numbers",
-        title="bit_length(): how many binary digits", kind="function",
-        func="bits_needed",
-        cases=[(0,), (1,), (255,), (256,)],
+        id=6, ledger="P241", concept="PY6 sum len round", tier="2 - Numbers and dates",
+        title="An average to one decimal", kind="function",
+        func="average",
+        cases=[([3, 4, 5],), ([1, 2],), ([7],), ([1.25, 1.75, 2.5],)],
         prompt=(
-            "Write a function `bits_needed(n)` that returns how many"
-            " binary digits a non-negative integer needs -- 0 for zero,"
-            " 8 for 255, 9 for 256 -- using the int method"
-            " bit_length():\n\n"
-            "  bits_needed(255) -> 8\n\n"
-            "Return: an integer."
-        ),
-        solution="def bits_needed(n):\n    return n.bit_length()\n",
-        trap="def bits_needed(n):\n    return len(bin(n))\n",
-        note="bit_length() is a method every int has, and it answers"
-             " without building a string. len(bin(n)) counts the '0b'"
-             " prefix as two extra digits, and says zero needs three.",
-    ),
-    dict(
-        id=7, ledger="P227", concept="PY3 math dist", tier="2 - Numbers",
-        title="math.dist(): distance between two points", kind="function",
-        func="distance_between",
-        cases=[((0, 0), (3, 4)), ((1, 1), (1, 1)), ((2, 3), (5, 7)), ((-1, 0), (1, 0))],
-        prompt=(
-            "Write a function `distance_between(p, q)` that returns the"
-            " straight-line distance between two points given as (x, y)"
-            " tuples, using math.dist(). Remember the import.\n\n"
-            "  distance_between((0, 0), (3, 4)) -> 5.0\n\n"
+            "Write a function `average(values)` that returns the mean of"
+            " a non-empty list rounded to one decimal. Tools: sum(),"
+            " len() and round() with a second argument.\n\n"
+            "  average([1, 2]) -> 1.5\n\n"
             "Return: a float."
         ),
-        solution=("import math\n\n"
-                  "def distance_between(p, q):\n"
-                  "    return math.dist(p, q)\n"),
-        trap=("def distance_between(p, q):\n"
-              "    return abs(p[0] - q[0]) + abs(p[1] - q[1])\n"),
-        note="math.dist() takes two points of any dimension and returns"
-             " the Euclidean distance -- hypot of the differences, done"
-             " for you. Adding the two differences is the taxi-cab"
-             " distance, which is longer whenever the points are not in"
-             " line.",
+        solution="def average(values):\n    return round(sum(values) / len(values), 1)\n",
+        trap="def average(values):\n    return round(sum(values) / len(values))\n",
+        note="The second argument of round() is the number of decimals;"
+             " without it the mean of 1 and 2 becomes 2 -- an int, and"
+             " the wrong one. sum() over len() is the mean; statistics."
+             "mean() would say the same.",
     ),
     dict(
-        id=8, ledger="P228", concept="PY3 pow mod", tier="2 - Numbers",
-        title="pow(b, e, m): a power, reduced as it goes", kind="function",
-        func="last_two_digits",
-        cases=[(7, 2), (2, 10), (3, 0), (12, 3)],
+        id=7, ledger="P242", concept="PY6 fromisoformat strftime", tier="2 - Numbers and dates",
+        title="What day of the week a date falls on", kind="function",
+        func="weekday_name",
+        cases=[("2026-06-30",), ("2025-01-01",), ("2026-02-28",)],
         prompt=(
-            "Write a function `last_two_digits(b, e)` that returns the"
-            " last two digits of b to the power e -- the remainder on"
-            " division by 100 -- using the three-argument form of"
-            " pow():\n\n"
-            "  last_two_digits(2, 10) -> 24\n\n"
+            "Write a function `weekday_name(date_str)` that returns the"
+            " full English weekday name of a 'YYYY-MM-DD' date. Tools:"
+            " datetime.date.fromisoformat() to parse it, then strftime("
+            "'%A') for the name. Remember the import.\n\n"
+            "  weekday_name(\"2026-06-30\") -> \"Tuesday\"\n\n"
+            "Return: the string."
+        ),
+        solution=("from datetime import date\n\n"
+                  "def weekday_name(date_str):\n"
+                  "    return date.fromisoformat(date_str).strftime(\"%A\")\n"),
+        trap=("from datetime import date\n\n"
+              "def weekday_name(date_str):\n"
+              "    return date.fromisoformat(date_str).strftime(\"%a\")\n"),
+        note="fromisoformat() turns the text into a real date, which"
+             " knows its weekday; strftime's %A is the full name, %a the"
+             " three-letter one. The pair of tools is the Python form of"
+             " SQLite's strftime('%w', ...), with names instead of"
+             " numbers.",
+    ),
+    dict(
+        id=8, ledger="P243", concept="PY6 date subtraction abs", tier="2 - Numbers and dates",
+        title="Days between two dates, either way round", kind="function",
+        func="days_between",
+        cases=[("2026-06-01", "2026-06-30"), ("2026-06-30", "2026-06-01"), ("2026-01-01", "2026-01-01"),
+               ("2025-12-31", "2026-01-01")],
+        prompt=(
+            "Write a function `days_between(a, b)` that returns the"
+            " number of days between two 'YYYY-MM-DD' dates as a"
+            " non-negative integer, whichever is earlier. Tools:"
+            " date.fromisoformat() on each, subtraction of the two dates"
+            " giving a timedelta whose .days is the count, and abs()."
+            " Remember the import.\n\n"
+            "  days_between(\"2026-06-30\", \"2026-06-01\") -> 29\n\n"
             "Return: an integer."
         ),
-        solution="def last_two_digits(b, e):\n    return pow(b, e, 100)\n",
-        trap="def last_two_digits(b, e):\n    return pow(b, e) % 10\n",
-        note="pow(b, e, m) computes b ** e modulo m without ever forming"
-             " the full power, which matters when e is in the thousands."
-             " The trap takes the remainder by 10, which is the last ONE"
-             " digit. Anything to the power 0 is 1, so the last two digits"
-             " are 01 -- the integer 1.",
+        solution=("from datetime import date\n\n"
+                  "def days_between(a, b):\n"
+                  "    return abs((date.fromisoformat(b) - date.fromisoformat(a)).days)\n"),
+        trap=("from datetime import date\n\n"
+              "def days_between(a, b):\n"
+              "    return (date.fromisoformat(b) - date.fromisoformat(a)).days\n"),
+        note="Subtracting two dates gives a timedelta, and .days is the"
+             " whole days in it -- negative when the first date is later."
+             " abs() makes the answer a distance. This is julianday(b) -"
+             " julianday(a) from the SQL side, with the parsing done"
+             " explicitly.",
     ),
     # ================================================================ 3 Lists
     dict(
-        id=9, ledger="P229", concept="PY3 accumulate", tier="3 - Lists",
-        title="itertools.accumulate(): running totals", kind="function",
-        func="running_total",
-        cases=[([1, 2, 3],), ([],), ([5],), ([2, -2, 2],)],
+        id=9, ledger="P244", concept="PY6 min max key len", tier="3 - Lists",
+        title="The shortest and the longest", kind="function",
+        func="shortest_and_longest",
+        cases=[(["pen", "paper", "ink"],), (["zebra", "ox"],), (["one"],)],
         prompt=(
-            "Write a function `running_total(values)` that returns a list"
-            " where each item is the sum of the values up to and including"
-            " that position, using list() over itertools.accumulate()."
-            " Remember the import.\n\n"
-            "  running_total([1, 2, 3]) -> [1, 3, 6]\n\n"
-            "Return: the new list."
+            "Write a function `shortest_and_longest(words)` that returns"
+            " a tuple of the shortest word and the longest word in a"
+            " non-empty list, the first of each when lengths tie. Tools:"
+            " min() and max(), both with key=len, packed into a tuple.\n\n"
+            "  shortest_and_longest([\"pen\", \"paper\", \"ink\"]) ->"
+            " (\"pen\", \"paper\")\n\n"
+            "Return: the tuple."
         ),
-        solution=("import itertools\n\n"
-                  "def running_total(values):\n"
-                  "    return list(itertools.accumulate(values))\n"),
-        trap="def running_total(values):\n    return list(values)\n",
-        note="accumulate() yields the running sum, one value per input,"
-             " and it is SQL's SUM() OVER (ORDER BY ...) in Python. A"
-             " function can be passed to accumulate differently -- max"
-             " for a running maximum, for instance. The empty list"
-             " accumulates to an empty list.",
+        solution="def shortest_and_longest(words):\n    return (min(words, key=len), max(words, key=len))\n",
+        trap="def shortest_and_longest(words):\n    return (min(words), max(words))\n",
+        note="Without key=len, min() and max() compare the words"
+             " alphabetically and return the first and last in"
+             " dictionary order, which has nothing to do with length."
+             " Both keep the FIRST of equals, so 'pen' beats 'ink' for"
+             " shortest.",
     ),
     dict(
-        id=10, ledger="P230", concept="PY3 heapq nlargest", tier="3 - Lists",
-        title="heapq.nlargest(): the top three", kind="function",
-        func="top_three",
-        cases=[([5, 1, 9, 3, 7],), ([1, 2],), ([],), ([4, 4, 4, 4],)],
+        id=10, ledger="P245", concept="PY6 strip int set sorted", tier="3 - Lists",
+        title="Ids typed by hand, cleaned up", kind="function",
+        func="clean_ids",
+        cases=[([" 12", "7 ", "12", "003"],), ([],), (["5"],), (["2", " 1 ", "2 "],)],
         prompt=(
-            "Write a function `top_three(values)` that returns the three"
-            " largest values, largest first -- fewer when the list is"
-            " shorter -- using heapq.nlargest(). Remember the import.\n\n"
-            "  top_three([5, 1, 9, 3, 7]) -> [9, 7, 5]\n\n"
+            "Write a function `clean_ids(strings)` that turns a list of"
+            " id strings with stray spaces and leading zeros into a"
+            " sorted list of distinct integers. Tools: strip() and int()"
+            " on each string inside a SET comprehension, then sorted()"
+            " over the set.\n\n"
+            "  clean_ids([\" 12\", \"7 \", \"12\", \"003\"]) -> [3, 7, 12]\n\n"
             "Return: the list."
         ),
-        solution=("import heapq\n\n"
-                  "def top_three(values):\n"
-                  "    return heapq.nlargest(3, values)\n"),
-        trap="def top_three(values):\n    return sorted(values)[:3]\n",
-        note="sorted() ascending then [:3] is the three SMALLEST; the top"
-             " three need reverse=True, or [-3:] reversed. nlargest(n,"
-             " values) says what it means, returns largest first, and"
-             " does not sort the whole list to find them. nsmallest is"
-             " its twin.",
+        solution="def clean_ids(strings):\n    return sorted({int(s.strip()) for s in strings})\n",
+        trap="def clean_ids(strings):\n    return sorted([int(s.strip()) for s in strings])\n",
+        note="A set comprehension, with braces, drops the duplicates as"
+             " it builds; a list comprehension keeps them, and 12 appears"
+             " twice. int() ignores the leading zeros and strip() the"
+             " spaces, and sorted() turns the set back into an ordered"
+             " list.",
     ),
     dict(
-        id=11, ledger="P231", concept="PY3 itemgetter", tier="3 - Lists",
-        title="itemgetter(): sort pairs by their second item", kind="function",
-        func="by_second",
-        cases=[([("a", 3), ("b", 1), ("c", 2)],), ([],), ([("x", 0)],),
-               ([("p", 2), ("q", 2), ("r", 1)],)],
+        id=11, ledger="P246", concept="PY6 sorted lambda tuple key", tier="3 - Lists",
+        title="Shortest first, then alphabetical", kind="function",
+        func="by_length_then_alpha",
+        cases=[(["bb", "aa", "c", "ddd"],), ([],), (["b", "a"],), (["pear", "fig", "kiwi", "date"],)],
         prompt=(
-            "Write a function `by_second(pairs)` that returns the list of"
-            " (name, number) pairs sorted by the NUMBER, using sorted()"
-            " with key=itemgetter(1) from the operator module. Remember"
-            " the import.\n\n"
-            "  by_second([(\"a\", 3), (\"b\", 1), (\"c\", 2)]) ->"
-            " [(\"b\", 1), (\"c\", 2), (\"a\", 3)]\n\n"
+            "Write a function `by_length_then_alpha(words)` that returns"
+            " the words sorted by length, and alphabetically among words"
+            " of the same length. Tools: sorted() with key=lambda w:"
+            " (len(w), w) -- a tuple key, compared item by item.\n\n"
+            "  by_length_then_alpha([\"bb\", \"aa\", \"c\"]) -> [\"c\","
+            " \"aa\", \"bb\"]\n\n"
             "Return: the new list."
         ),
-        solution=("from operator import itemgetter\n\n"
-                  "def by_second(pairs):\n"
-                  "    return sorted(pairs, key=itemgetter(1))\n"),
-        trap="def by_second(pairs):\n    return sorted(pairs)\n",
-        note="Plain sorted() compares tuples item by item, so it sorts by"
-             " the name first. itemgetter(1) is a ready-made key function"
-             " that picks item 1 -- the same as key=lambda p: p[1], a"
-             " little faster and with a name that says what it does."
-             " Equal numbers keep their original order.",
+        solution="def by_length_then_alpha(words):\n    return sorted(words, key=lambda w: (len(w), w))\n",
+        trap="def by_length_then_alpha(words):\n    return sorted(words, key=len)\n",
+        note="A key that returns a tuple sorts by its first item and"
+             " breaks ties by the second, which is ORDER BY length, word"
+             " in SQL. key=len alone leaves equal-length words in their"
+             " ORIGINAL order -- sorted() is stable -- so 'bb' stays"
+             " before 'aa'.",
     ),
     dict(
-        id=12, ledger="P232", concept="PY3 Counter", tier="3 - Lists",
-        title="Counter(): how many of each", kind="function",
-        func="tally",
-        cases=[(["a", "b", "a"],), ([],), ([1, 1, 1],), (["LS1", "BD3", "LS1", "WF1"],)],
+        id=12, ledger="P247", concept="PY6 fromkeys list", tier="3 - Lists",
+        title="Duplicates dropped, order kept", kind="function",
+        func="dedupe",
+        cases=[(["b", "a", "b", "c", "a"],), ([],), ([3, 1, 3],), (["x"],)],
         prompt=(
-            "Write a function `tally(values)` that returns a dictionary"
-            " mapping each value to how many times it appears, using"
-            " collections.Counter(). Remember the import.\n\n"
-            "  tally([\"a\", \"b\", \"a\"]) -> {\"a\": 2, \"b\": 1}\n\n"
-            "Return: the dictionary."
+            "Write a function `dedupe(values)` that returns the values"
+            " with repeats removed, keeping the FIRST occurrence of each"
+            " and the original order. Tools: dict.fromkeys() -- a dict"
+            " keeps insertion order and cannot repeat a key -- and list()"
+            " over it.\n\n"
+            "  dedupe([\"b\", \"a\", \"b\", \"c\", \"a\"]) -> [\"b\","
+            " \"a\", \"c\"]\n\n"
+            "Return: the new list."
         ),
-        solution=("from collections import Counter\n\n"
-                  "def tally(values):\n"
-                  "    return Counter(values)\n"),
-        trap="def tally(values):\n    return dict.fromkeys(values, 1)\n",
-        note="Counter is a dict subclass that counts for you -- the"
-             " counting loop with get(key, 0) + 1 from the earlier sets,"
-             " in one call -- and it compares equal to a plain dict with"
-             " the same counts. fromkeys(values, 1) gives every value a"
-             " count of 1 however often it appears.",
+        solution="def dedupe(values):\n    return list(dict.fromkeys(values))\n",
+        trap="def dedupe(values):\n    return sorted(set(values))\n",
+        note="set() removes repeats but forgets the order, and sorting"
+             " afterwards imposes a different one. dict.fromkeys() builds"
+             " a dict with the values as keys, in the order first seen,"
+             " and list() of a dict is its keys -- the standard idiom for"
+             " an order-preserving dedupe.",
+    ),
+    dict(
+        id=13, ledger="P248", concept="PY6 range step slice", tier="3 - Lists",
+        title="A list cut into chunks", kind="function",
+        func="chunks",
+        cases=[([1, 2, 3, 4, 5], 2), ([], 3), (["a", "b", "c"], 3), ([1, 2, 3, 4], 1)],
+        prompt=(
+            "Write a function `chunks(values, n)` that returns a list of"
+            " lists, each holding the next n values, the last one shorter"
+            " if the count does not divide. Tools: range() from 0 to"
+            " len(values) with a step of n, a slice values[i:i + n] for"
+            " each start, inside a list comprehension.\n\n"
+            "  chunks([1, 2, 3, 4, 5], 2) -> [[1, 2], [3, 4], [5]]\n\n"
+            "Return: the list of lists."
+        ),
+        solution="def chunks(values, n):\n    return [values[i:i + n] for i in range(0, len(values), n)]\n",
+        trap="def chunks(values, n):\n    return [values[i:i + n] for i in range(len(values))]\n",
+        note="The step in range() is what makes the starts 0, n, 2n ...;"
+             " without it every position starts a chunk and the chunks"
+             " overlap. A slice past the end is simply shorter, which is"
+             " why the last chunk needs no special case.",
     ),
     # ========================================================= 4 Dictionaries
     dict(
-        id=13, ledger="P233", concept="PY3 sorted key get", tier="4 - Dictionaries",
-        title="sorted(d, key=d.get): keys in order of their values", kind="function",
+        id=14, ledger="P249", concept="PY6 keys union get comprehension", tier="4 - Dictionaries",
+        title="Two tallies added together", kind="function",
+        func="merge_counts",
+        cases=[({"a": 1, "b": 2}, {"b": 3, "c": 4}), ({}, {"x": 1}), ({"k": 5}, {"k": 5}), ({}, {})],
+        prompt=(
+            "Write a function `merge_counts(a, b)` that returns a new"
+            " dict with every key from either tally and the SUM of its"
+            " counts from both. Tools: a.keys() | b.keys() for the set of"
+            " all keys, get(k, 0) on each dict, and a dict comprehension"
+            " over the keys.\n\n"
+            "  merge_counts({\"a\": 1, \"b\": 2}, {\"b\": 3, \"c\": 4}) ->"
+            " {\"a\": 1, \"b\": 5, \"c\": 4}\n\n"
+            "Return: the new dictionary."
+        ),
+        solution=("def merge_counts(a, b):\n"
+                  "    return {k: a.get(k, 0) + b.get(k, 0) for k in a.keys() | b.keys()}\n"),
+        trap="def merge_counts(a, b):\n    return a | b\n",
+        note="a | b merges the dicts but lets b's value REPLACE a's where"
+             " a key is in both -- 'b' becomes 3, not 5. Adding needs"
+             " every key from either side, which keys() | keys() gives,"
+             " and get(k, 0) so a key missing from one side contributes"
+             " nothing rather than an error.",
+    ),
+    dict(
+        id=15, ledger="P250", concept="PY6 set values comprehension sorted", tier="4 - Dictionaries",
+        title="Grouped by value", kind="function",
         func="keys_by_value",
-        cases=[({"a": 3, "b": 1, "c": 2},), ({},), ({"x": 1},), ({"p": 2, "q": 2, "r": 1},)],
+        cases=[({"a": 1, "b": 2, "c": 1},), ({},), ({"x": "y"},), ({"p": 0, "q": 0, "r": 0},)],
         prompt=(
-            "Write a function `keys_by_value(d)` that returns the"
-            " dictionary's keys as a list ordered by their VALUES,"
-            " smallest value first, using sorted() over the dict with"
-            " key=d.get:\n\n"
-            "  keys_by_value({\"a\": 3, \"b\": 1, \"c\": 2}) -> [\"b\","
-            " \"c\", \"a\"]\n\n"
-            "Return: the list of keys."
+            "Write a function `keys_by_value(d)` that returns a dict"
+            " mapping each distinct VALUE of d to the sorted list of the"
+            " keys that have it. Tools: set(d.values()) for the distinct"
+            " values, a dict comprehension over them, and inside it"
+            " sorted() of a comprehension picking the keys k where d[k]"
+            " equals the value.\n\n"
+            "  keys_by_value({\"a\": 1, \"b\": 2, \"c\": 1}) -> {1: [\"a\","
+            " \"c\"], 2: [\"b\"]}\n\n"
+            "Return: the new dictionary."
         ),
-        solution="def keys_by_value(d):\n    return sorted(d, key=d.get)\n",
-        trap="def keys_by_value(d):\n    return sorted(d)\n",
-        note="Iterating a dict gives its keys, and d.get is a function"
-             " from key to value -- so key=d.get sorts the keys by what"
-             " they map to. sorted(d) alone sorts the keys by themselves,"
-             " alphabetically. This is the idiom behind max(d, key=d.get)"
-             " from an earlier set.",
-    ),
-    dict(
-        id=14, ledger="P234", concept="PY3 next iter", tier="4 - Dictionaries",
-        title="next(iter(d)): the first key", kind="function",
-        func="first_key",
-        cases=[({"a": 1, "b": 2},), ({"z": 0},), ({3: "x", 1: "y"},)],
-        prompt=(
-            "Write a function `first_key(d)` that returns the first key"
-            " of a non-empty dictionary -- the one inserted first --"
-            " using next() over iter():\n\n"
-            "  first_key({\"a\": 1, \"b\": 2}) -> \"a\"\n\n"
-            "Return: the key."
-        ),
-        solution="def first_key(d):\n    return next(iter(d))\n",
-        trap="def first_key(d):\n    return d[0]\n",
-        note="d[0] looks up the KEY 0, which is a KeyError unless the"
-             " dict happens to have one -- dictionaries are not"
-             " positional. iter(d) walks the keys in insertion order and"
-             " next() takes the first, without building a list of all of"
-             " them. next(iter(d), None) is the safe form for an empty"
-             " dict.",
-    ),
-    dict(
-        id=15, ledger="P235", concept="PY3 sum values", tier="4 - Dictionaries",
-        title="sum(d.values()): the total of a tally", kind="function",
-        func="total_of",
-        cases=[({"a": 1, "b": 2},), ({},), ({"x": 2.5, "y": 0.5},), ({"only": 7},)],
-        prompt=(
-            "Write a function `total_of(d)` that returns the sum of all"
-            " the dictionary's values, using sum() over values():\n\n"
-            "  total_of({\"a\": 1, \"b\": 2}) -> 3\n\n"
-            "Return: the total."
-        ),
-        solution="def total_of(d):\n    return sum(d.values())\n",
-        trap="def total_of(d):\n    return sum(d)\n",
-        note="sum(d) iterates the KEYS, which for string keys is a"
-             " TypeError -- strings do not add to 0 -- and for numeric"
-             " keys is the wrong number quietly. values() is the view of"
-             " what the keys map to, and sum() of an empty view is 0.",
+        solution=("def keys_by_value(d):\n"
+                  "    return {v: sorted(k for k in d if d[k] == v) for v in set(d.values())}\n"),
+        trap="def keys_by_value(d):\n    return {v: k for k, v in d.items()}\n",
+        note="Inverting a dict one-to-one loses every key but the last"
+             " for a repeated value. Grouping keeps them all: the outer"
+             " comprehension runs once per distinct value, and the inner"
+             " one collects the keys that map to it. This is GROUP BY"
+             " value with GROUP_CONCAT(key) in SQL.",
     ),
 ]
 

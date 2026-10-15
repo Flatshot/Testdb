@@ -1,26 +1,26 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the public library, the
-eighth set on this schema, on five tiers none of the library sets have
-used: aggregates and totals, string tricks, pivots both ways, SQLite's bare
-columns, and three writable statements new to the library. **Fifteen
-Python**: tiny functions of one or two lines, each about ONE tool named in
-the question's title, none of them used by an earlier set.
+ninth set on this schema and a step up: every question combines TWO tools
+the earlier sets taught separately, and the three writable questions each
+take two steps. **Fifteen Python** functions of two or three tools each,
+with every tool named in the prompt.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Aggregates and totals | 1-5 |
-| 2 - String tricks | 6-8 |
-| 3 - Pivots both ways | 9-10 |
-| 4 - SQLite bare columns | 11-12 |
-| 5 - Changing the data | 13-15 |
+| 1 - Windows over CTEs | 1-3 |
+| 2 - EXISTS, CASE and HAVING | 4-6 |
+| 3 - Recursion meets intervals | 7-8 |
+| 4 - JSON in aggregates | 9-10 |
+| 5 - Text with aggregation | 11-12 |
+| 6 - Changing the data | 13-15 |
 
 | Stage | Python questions |
 |---|---|
-| 1 - Strings | 1-4 |
-| 2 - Numbers | 5-8 |
-| 3 - Lists | 9-12 |
-| 4 - Dictionaries | 13-15 |
+| 1 - Strings | 1-5 |
+| 2 - Numbers and dates | 6-8 |
+| 3 - Lists | 9-13 |
+| 4 - Dictionaries | 14-15 |
 
 ## The schema
 
@@ -61,35 +61,34 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Question 13 runs two updates of its own *after* your
-script -- two real changes and one re-save of the same value, which your
-trigger should log and ignore respectively. Questions 14 and 15 are graded
-on what your script leaves behind.
+**Driver statements.** Question 13 runs two inserts of its own *after* your
+script -- a copy that is out and one that is not -- and question 15 runs an
+UPDATE against your view. Question 14 is graded on what your script leaves
+behind.
 
 | # | Construct |
 |---|---|
-| 13 | `CREATE TABLE condition_log ...; CREATE TRIGGER ... AFTER UPDATE OF condition ON copies WHEN OLD.condition <> NEW.condition` |
-| 14 | `DELETE FROM holds WHERE <open> AND NOT EXISTS (SELECT 1 FROM copies c WHERE c.book_id = holds.book_id AND c.branch_id = holds.branch_id)` |
-| 15 | `INSERT INTO copies (...) SELECT ... FROM books b WHERE NOT EXISTS (SELECT 1 FROM copies c WHERE c.book_id = b.book_id)` |
+| 13 | `BEFORE INSERT ON loans WHEN EXISTS (SELECT 1 FROM loans l WHERE l.copy_id = NEW.copy_id AND l.returned_on IS NULL)` |
+| 14 | `WITH ranked AS (SELECT ..., ROW_NUMBER() OVER (...) ...) UPDATE loans SET ... WHERE loan_id IN (SELECT ... WHERE rn <= 5)` |
+| 15 | `CREATE VIEW member_contact ...; CREATE TRIGGER ... INSTEAD OF UPDATE OF area ON member_contact BEGIN UPDATE members ... END` |
 
 ## Things the data does on purpose
 
-- **Eastfield's copies are 12.5 per cent damaged**, the highest
-  share; question 1 wants the branches over ten per cent AND over 350
-  copies, both facts about the whole branch.
-- **83 members have ten or more loans and have never been late**
-  -- a SUM of the late test equal to zero, which COUNT of it never is.
-- **22,453 distinct member-and-title pairs account for the 23,976 loans**;
-  re-borrowing is the gap question 5 measures.
-- **54 poetry titles**, questions 6 and 7's rows; **61 titles
-  begin 'Poems for a', and 3 of those go on with a P** -- the ones
-  LTRIM mangles in question 8.
-- **strftime returns text**, so '2025' is never 2025 and question 9's
-  pivot comes out all zeros when compared with a number.
-- **176 open holds are at a branch with no copy of the book, and
-  780 holds in all**; question 14 deletes the first group only.
-- **20 books have no copies**, the rows question 15's INSERT ...
-  SELECT fills in, once.
+- **108 copies have never been loaned**, the count question 4's SUM
+  of an EXISTS reaches and a join to loans cannot.
+- **719 members owe a fine, and every one of them has borrowed** --
+  so question 5's CASE must test 'debtor' before 'borrower'.
+- **127 books are at three or more branches but not Central;
+  256 if Central's copies are filtered out first** -- question
+  6's HAVING against a WHERE.
+- **The heaviest borrower has 237 loans**, which is why question
+  2's top quartile runs from 17 into the hundreds.
+- **685 loans are still out at the end of the data**, the figure question
+  7's June 2026 row shows only when COALESCE supplies the open end.
+- **24 author surnames are shared**, and two authors are both
+  called Priya Achebe -- question 12 groups by the surname, not the name.
+- **Copy 4 is out and copy 1 is on the shelf after 14 loans**, the
+  two question 13's trigger must tell apart.
 
 ## How the Python questions are graded
 
@@ -100,8 +99,8 @@ result with the reference function's. Values are compared, not their printed
 form, so a dictionary in a different order is the same dictionary -- but the
 type counts: a tuple is not a list, a set is not a list, and 0 is not False.
 A function that prints its answer instead of returning it returns None, and
-None matches nothing. Each question here is one or two lines about one tool,
-named in its title.
+None matches nothing. Each question here combines two or three tools, and
+the prompt names every one of them.
 
 Your code runs in a separate interpreter with a five-second limit, so a loop
 that never ends is stopped and reported, not fatal. It cannot see the
@@ -110,362 +109,394 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Aggregates and totals (5)
+## 1 - Windows over CTEs (3)
 
-HAVING with two or three aggregate conditions, where a WHERE would change what
-is averaged; a total row by UNION ALL; and COUNT(DISTINCT) over two columns
-joined with a separator.
+A CTE does the grouping, a window ranks or tiles the grouped rows, and the final
+SELECT filters on the result: DENSE_RANK partitioned by year, NTILE into
+quartiles, LAG then LIMIT 1.
 
-1. **Big branches with a damage problem** (Q952)
+1. **Each month's rank within its year** (Q967)
 
-   Branches holding at least 350 copies of which more than 10 per cent are
-   damaged: branch_id, copies, and the damaged percentage to one decimal. Both
-   conditions are about the branch as a whole, so both go in HAVING -- a WHERE
-   on condition would change what is being counted.
+   For each month of the data: its loans, and its rank within ITS YEAR by
+   loans, 1 for the year's busiest month. A CTE of loans per month that also
+   carries the year, then DENSE_RANK partitioned by that year.
 
-   *Return: branch_id, copies, pct_damaged*
+   *Return: month, loans, rank_in_year*
 
-2. **Regulars who are never late** (Q953)
+2. **Borrowers in quartiles** (Q968)
 
-   Members with at least 10 loans, NONE of which came back late: member_id and
-   their loan count. 'None late' is an aggregate condition -- a SUM of the
-   late test equal to zero -- not a WHERE.
+   Split the borrowers -- members with at least one loan -- into four equal
+   groups by loan count, quartile 1 the LIGHTEST readers: for each quartile,
+   the loans its members made in all, and the smallest and largest loan count
+   in it. A CTE of loans per member, NTILE(4) over it, then a GROUP BY the
+   tile.
 
-   *Return: member_id, loans*
+   *Return: quartile, loans, min_loans, max_loans*
 
-3. **Long books from a long way back** (Q954)
+3. **The biggest jump in a day** (Q969)
 
-   Genres whose books average more than 480 pages AND whose earliest
-   publication year is before 1900: genre, the average pages rounded to a
-   whole number, and that earliest year. The average is over ALL the genre's
-   books.
+   The 2026 day whose loan count rose most over the previous day: the day, its
+   loans and the rise. A CTE of loans per day over ALL the data, a second with
+   LAG for the change, then the largest change among 2026's days -- ORDER BY
+   and LIMIT 1, ties to the earlier day.
 
-   *Return: genre, avg_pages, earliest*
+   *Return: day, loans, rise*
 
-4. **Copies per branch, with a total row** (Q955)
+## 2 - EXISTS, CASE and HAVING (3)
 
-   Copies per branch as six rows with the branch_id as text, plus a seventh
-   row labelled 'all' with the total: a GROUP BY query UNION ALL a one-row
-   total query. CAST the id to TEXT so the two queries' first columns agree.
+SUM of an EXISTS to count copies rather than loans, a CASE whose WHENs are
+EXISTS tests in the right order, and two HAVING conditions where a WHERE would
+hide the thing being excluded.
 
-   *Return: branch, copies*
+4. **Copies that have never gone out** (Q970)
 
-5. **Readers of a title, not loans of it** (Q956)
+   For each branch: its copies, how many of them have been loaned at least
+   once, and how many never. The 'at least once' is an EXISTS per copy, summed
+   -- a loan join would count loans, not copies.
 
-   For each genre: loans, and how many DISTINCT member-and-title pairs those
-   loans are -- a member who borrowed the same title three times is one pair.
-   COUNT(DISTINCT) takes one expression, so join the two ids into one with ||.
+   *Return: branch_id, copies, loaned_ever, never*
 
-   *Return: genre, loans, pairs*
+5. **Debtor, borrower or lapsed** (Q971)
 
-## 2 - String tricks (3)
+   Put every member in one class and count each: 'debtor' if they have an
+   UNPAID fine; otherwise 'borrower' if they have any loan; otherwise
+   'lapsed'. A CASE whose WHENs are EXISTS tests, in that order.
 
-printf's minus sign for left justification, LOWER inside REPLACE for a slug, and
-LTRIM's second argument, which is a set of characters and not a prefix.
+   *Return: class, members*
 
-6. **A column of titles, padded to the right** (Q957)
+6. **Spread out, but not at Central** (Q972)
 
-   The poetry titles each padded with spaces on the RIGHT to 24 characters and
-   followed by '|', so the bars line up in a fixed-width listing: printf with
-   %-24s.
+   Books with copies at three or more DIFFERENT branches but no copy at
+   Central (branch 1): book_id and the number of branches. Both conditions are
+   about the book's whole set of copies, so both are HAVING -- a WHERE
+   branch_id <> 1 would hide Central's copies rather than exclude the book.
 
-   *Return: book_id, padded*
+   *Return: book_id, branches*
 
-7. **Slugs for the poetry titles** (Q958)
+## 3 - Recursion meets intervals (2)
 
-   A web slug for each poetry title: the title in lower case with every space
-   replaced by a hyphen -- 'lost-library'. LOWER and REPLACE, one inside the
-   other.
+A recursive calendar of month ends and one of days, each with a correlated
+interval test that supplies the open end.
 
-   *Return: book_id, slug*
+7. **Loans open at each month's end** (Q973)
 
-8. **After 'Poems for a'** (Q959)
+   For each month from 2025-01 to 2026-06, how many loans were OUT on the last
+   day of the month: started on or before it, and not returned by it -- NULL
+   returned_on means still out. A recursive CTE of month starts, date(first,
+   '+1 month', '-1 day') for the last day, and the interval test with
+   COALESCE.
 
-   For the titles that begin 'Poems for a ', the rest of the title after that
-   prefix -- 'Paper Tower' from 'Poems for a Paper Tower'. The prefix is
-   twelve characters, so SUBSTR from position 13. LTRIM(title, 'Poems for a ')
-   is NOT the same thing.
+   *Return: month_start, open_at_end*
 
-   *Return: book_id, rest*
+8. **Old Town's copies out, day by day** (Q974)
 
-## 3 - Pivots both ways (2)
+   For every day of June 2026, how many of branch 6's copies were out on loan
+   that day -- loaned on or before the day and not back before it. A recursive
+   CTE of days, and per day a count over loans joined to copies, with the open
+   end supplied.
 
-Three SUMs into one row, where strftime's text never equals an integer, and
-three counts into three rows by UNION ALL.
+   *Return: day, copies_out*
 
-9. **Loans per genre, one column a year** (Q960)
+## 4 - JSON in aggregates (2)
 
-   For each genre, its loans in 2025 and in 2026 as two columns: a pivot by
-   conditional SUM. Compare the year as text -- strftime returns text, and
-   '2025' is not 2025.
+json_object inside json_group_array over a grouped CTE, and a ranked CTE
+filtered to its top three and packed into an array.
 
-   *Return: genre, loans_2025, loans_2026*
+9. **Each genre's stock by condition, as JSON** (Q975)
 
-10. **Branch 4's holds, one row a status** (Q961)
+   For each genre, ONE JSON array of objects, one object per condition in
+   alphabetical order, each with keys condition and copies: a CTE counting
+   copies per genre and condition, then json_group_array of a json_object,
+   with ORDER BY condition inside the json_group_array.
 
-    The holds placed at branch 4 as THREE rows -- 'fulfilled', 'cancelled',
-    'waiting' -- each with its count: an unpivot, three one-row queries joined
-    by UNION ALL.
+   *Return: genre, stock*
 
-    *Return: status, holds*
+10. **The three most borrowed titles per genre, as a list** (Q976)
 
-## 4 - SQLite bare columns (2)
+    For each genre, a JSON array of its three most borrowed titles, most
+    borrowed first -- ties by lower book_id. A CTE that counts loans per book
+    and numbers the books within their genre by ROW_NUMBER, then
+    json_group_array of the titles numbered 3 or less, ordered by that number.
 
-A column selected beside a single MIN or MAX comes from that row -- SQLite's
-rule, and not most databases' -- so the latest loan's copy and the longest-
-serving person's name need no subquery.
+    *Return: genre, top3*
 
-11. **Each Old Town member's latest loan** (Q962)
+## 5 - Text with aggregation (2)
 
-    For each member whose home branch is 6 and who has borrowed: their latest
-    loaned_on, and the copy_id of THAT loan. In SQLite, a column selected
-    alongside a single MAX comes from the row the MAX was found in -- a 'bare
-    column' -- so no subquery is needed.
+GROUP_CONCAT DISTINCT over an extracted surname, and GROUP BY an extracted
+surname with a HAVING on the group.
 
-    *Return: member_id, last_loan, copy_id*
+11. **The surnames at each branch, once each** (Q977)
 
-12. **The longest-serving person at each branch** (Q963)
+    For each branch, the DISTINCT surnames of its staff -- the part of name
+    after the space -- joined into one comma-separated string in alphabetical
+    order. GROUP_CONCAT(DISTINCT ... ORDER BY ...) over a SUBSTR; two
+    colleagues who share a surname contribute it once.
 
-    For each branch: the name and hired_on of its longest-serving member of
-    staff, using MIN(hired_on) and the bare name column beside it.
+    *Return: branch_id, surnames*
 
-    *Return: branch_id, name, hired_on*
+12. **Authors who share a surname** (Q978)
 
-## 5 - Changing the data (3)
+    Surnames held by MORE THAN ONE author: the surname, how many authors have
+    it, and their full names joined with ', ' in alphabetical order. The
+    surname is a SUBSTR from INSTR; group by that expression and filter the
+    groups in HAVING.
+
+    *Return: surname, authors, names*
+
+## 6 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A trigger that logs a change only when
-there was one, a correlated DELETE that keeps history, and an INSERT ... SELECT
-that can run twice.
+question's probe query reads the result. A trigger whose WHEN is an interval
+EXISTS, a ROW_NUMBER CTE feeding an UPDATE, and a view made writable by an
+INSTEAD OF trigger.
 
-13. **A log of condition changes** (Q964)
+13. **One loan at a time per copy** (Q979)
 
-    Create a table `condition_log (log_id INTEGER PRIMARY KEY, copy_id INTEGER
-    NOT NULL, old_condition TEXT NOT NULL, new_condition TEXT NOT NULL)` and
-    an AFTER UPDATE OF condition trigger on copies that inserts a row into it
-    -- only when the condition actually CHANGED. The question then marks
-    copies 1 and 2 damaged and re-saves copy 3 unchanged.
+    Write a BEFORE INSERT trigger on loans that refuses -- RAISE(ABORT, ...)
+    -- a loan of a copy that is ALREADY OUT: a loan of the same copy with
+    returned_on NULL exists. The question then lends copy 4, which is out, and
+    copy 1, which is on the shelf.
 
-    *Checked: the log's copy_id, old and new, in log order*
+    *Checked: which of the two loans exist*
 
-14. **Holds that can never be met where they stand** (Q965)
+14. **Grace for the five most overdue** (Q980)
 
-    Delete the OPEN holds -- fulfilled_on and cancelled_on both NULL -- placed
-    at a branch that holds no copy of the book at all. Closed holds stay,
-    whatever branch they name. The test on copies is a correlated NOT EXISTS
-    inside the DELETE's WHERE.
+    The five loans that are furthest past due on 2026-06-30 -- still out,
+    earliest due_on first, ties by lower loan_id -- get one more renewal: set
+    renewals to 2 and push due_on fourteen days on. A CTE with ROW_NUMBER
+    picks them, and the UPDATE's WHERE is an IN over the CTE.
 
-    *Checked: how many holds remain, how many of them are open, and how many open holds are still at a branch without the book*
+    *Checked: the renewals and due_on of the five*
 
-15. **A copy for every title, and no more than that** (Q966)
+15. **A view you can write to** (Q981)
 
-    Give every book that has NO copies one copy at Central (branch 1),
-    acquired '2026-07-01', in 'good' condition -- with a single INSERT ...
-    SELECT whose WHERE NOT EXISTS skips the books already stocked, so running
-    it twice adds nothing the second time.
+    Create a view `member_contact (member_id, name, area)` over members, with
+    area being postcode_area -- then make it UPDATABLE: an INSTEAD OF UPDATE
+    OF area trigger on the view that writes NEW.area into
+    members.postcode_area for the row whose member_id is OLD.member_id. The
+    question then runs UPDATE member_contact SET area = 'LS1' WHERE member_id
+    = 3.
 
-    *Checked: how many copies there are, how many books still have none, and how many copies were acquired on 2026-07-01*
+    *Checked: member 3's postcode_area*
 
 # Python
 
-## 1 - Strings (4)
+## 1 - Strings (5)
 
-The + spec against str(), lstrip(chars) against strip(chars), textwrap.shorten()
-against a slice, and !r against a plain f-string.
+split/join/title to tidy a name, split/comprehension/join/upper for initials,
+Counter and most_common after lower(), alignment specs in one f-string, and
+lstrip/float/round where int() would truncate.
 
-1. **f'{n:+}': always show the sign** (P221)
+1. **A name tidied up** (P236)
 
-   Write a function `signed(n)` that returns the number as a string with its
-   sign always shown -- '+5' as well as '-3' -- using the + format spec in an
-   f-string:
-
-   ```
-   signed(5) -> "+5"
-   ```
-
-   *Return: the string.*
-
-2. **lstrip(chars): leading zeros off** (P222)
-
-   Write a function `without_leading_zeros(s)` that returns s with any zeros
-   removed from its LEFT end only -- the zeros inside or at the end stay --
-   using lstrip() with '0':
+   Write a function `tidy_name(s)` that returns the name with extra spaces
+   removed -- one space between words, none at the ends -- and each word
+   capitalised. Tools: split() with no argument to break on any whitespace, "
+   ".join() to put the words back, and title() for the capitals.
 
    ```
-   without_leading_zeros("0042") -> "42"
-   without_leading_zeros("100") -> "100"
+   tidy_name("  aisha   ekwueme ") -> "Aisha Ekwueme"
    ```
 
    *Return: the new string.*
 
-3. **textwrap.shorten(): cut at a word, with a marker** (P223)
+2. **Initials from a full name** (P237)
 
-   Write a function `shortened(text, width)` that returns the text cut to at
-   most width characters at a WORD boundary, ending in ' [...]' when something
-   was cut, using textwrap.shorten(). Text that already fits is returned as it
-   is. Remember the import.
-
-   ```
-   shortened("one two three four", 13) -> "one two [...]"
-   ```
-
-   *Return: the string.*
-
-4. **f'{s!r}': the value as Python would write it** (P224)
-
-   Write a function `quoted(s)` that returns s wrapped in the quotes Python
-   itself would print it with -- repr form -- using !r inside an f-string:
+   Write a function `initials(name)` that returns the first letter of each
+   word, upper case, run together. Tools: split() to get the words, a
+   generator or list comprehension taking w[0] from each, "".join() to combine
+   them, and upper().
 
    ```
-   quoted("Leeds") -> "'Leeds'"
+   initials("aisha ekwueme") -> "AE"
    ```
 
    *Return: the string.*
 
-## 2 - Numbers (4)
+3. **The two commonest words** (P238)
 
-math.isqrt() against ** 0.5, bit_length() against len(bin()), math.dist()
-against the taxi-cab sum, and pow(b, e, m) against a remainder by 10.
-
-5. **math.isqrt(): the whole-number square root** (P225)
-
-   Write a function `whole_root(n)` that returns the largest whole number
-   whose square is at most n, as an int, using math.isqrt(). Remember the
-   import.
+   Write a function `top_two_words(text)` that returns a list of the two most
+   frequent words as (word, count) tuples, commonest first, counting words
+   regardless of case and reporting them in lower case. Tools: lower(),
+   split(), collections.Counter and its most_common(2). Remember the import.
 
    ```
-   whole_root(17) -> 4
+   top_two_words("the cat and the dog and the bird") -> [("the", 3), ("and", 2)]
+   ```
+
+   *Return: the list of tuples.*
+
+4. **A line of a price list** (P239)
+
+   Write a function `price_line(label, pence)` that returns the label padded
+   on the right to 18 characters followed by the amount in pounds, right-
+   aligned in 8 characters with two decimals. Tools: an f-string with the :<18
+   spec for the label and the :>8.2f spec for pence / 100.
+
+   ```
+   price_line("Fine", 220) -> "Fine                  2.20"
+   ```
+
+   *Return: the string.*
+
+5. **Pounds in text to pence** (P240)
+
+   Write a function `pence_from_text(s)` that turns an amount written like
+   '£12.40' into whole pence. Tools: lstrip('£') to drop the sign, float() to
+   read the number, multiply by 100, and round() -- NOT int() -- to get back
+   to a whole number.
+
+   ```
+   pence_from_text("£12.40") -> 1240
    ```
 
    *Return: an integer.*
 
-6. **bit_length(): how many binary digits** (P226)
+## 2 - Numbers and dates (3)
 
-   Write a function `bits_needed(n)` that returns how many binary digits a
-   non-negative integer needs -- 0 for zero, 8 for 255, 9 for 256 -- using the
-   int method bit_length():
+sum/len/round with a decimal count, fromisoformat then strftime, and date
+subtraction with abs.
 
-   ```
-   bits_needed(255) -> 8
-   ```
+6. **An average to one decimal** (P241)
 
-   *Return: an integer.*
-
-7. **math.dist(): distance between two points** (P227)
-
-   Write a function `distance_between(p, q)` that returns the straight-line
-   distance between two points given as (x, y) tuples, using math.dist().
-   Remember the import.
+   Write a function `average(values)` that returns the mean of a non-empty
+   list rounded to one decimal. Tools: sum(), len() and round() with a second
+   argument.
 
    ```
-   distance_between((0, 0), (3, 4)) -> 5.0
+   average([1, 2]) -> 1.5
    ```
 
    *Return: a float.*
 
-8. **pow(b, e, m): a power, reduced as it goes** (P228)
+7. **What day of the week a date falls on** (P242)
 
-   Write a function `last_two_digits(b, e)` that returns the last two digits
-   of b to the power e -- the remainder on division by 100 -- using the three-
-   argument form of pow():
+   Write a function `weekday_name(date_str)` that returns the full English
+   weekday name of a 'YYYY-MM-DD' date. Tools: datetime.date.fromisoformat()
+   to parse it, then strftime('%A') for the name. Remember the import.
 
    ```
-   last_two_digits(2, 10) -> 24
+   weekday_name("2026-06-30") -> "Tuesday"
+   ```
+
+   *Return: the string.*
+
+8. **Days between two dates, either way round** (P243)
+
+   Write a function `days_between(a, b)` that returns the number of days
+   between two 'YYYY-MM-DD' dates as a non-negative integer, whichever is
+   earlier. Tools: date.fromisoformat() on each, subtraction of the two dates
+   giving a timedelta whose .days is the count, and abs(). Remember the
+   import.
+
+   ```
+   days_between("2026-06-30", "2026-06-01") -> 29
    ```
 
    *Return: an integer.*
 
-## 3 - Lists (4)
+## 3 - Lists (5)
 
-accumulate() for running totals, nlargest() against a slice of sorted(),
-itemgetter(1) against sorting the tuples, and Counter() against fromkeys().
+min and max with key=len, strip/int in a set comprehension then sorted, a lambda
+tuple key, dict.fromkeys for an ordered dedupe, and range with a step feeding
+slices.
 
-9. **itertools.accumulate(): running totals** (P229)
+9. **The shortest and the longest** (P244)
 
-   Write a function `running_total(values)` that returns a list where each
-   item is the sum of the values up to and including that position, using
-   list() over itertools.accumulate(). Remember the import.
+   Write a function `shortest_and_longest(words)` that returns a tuple of the
+   shortest word and the longest word in a non-empty list, the first of each
+   when lengths tie. Tools: min() and max(), both with key=len, packed into a
+   tuple.
 
    ```
-   running_total([1, 2, 3]) -> [1, 3, 6]
+   shortest_and_longest(["pen", "paper", "ink"]) -> ("pen", "paper")
    ```
 
-   *Return: the new list.*
+   *Return: the tuple.*
 
-10. **heapq.nlargest(): the top three** (P230)
+10. **Ids typed by hand, cleaned up** (P245)
 
-    Write a function `top_three(values)` that returns the three largest
-    values, largest first -- fewer when the list is shorter -- using
-    heapq.nlargest(). Remember the import.
+    Write a function `clean_ids(strings)` that turns a list of id strings with
+    stray spaces and leading zeros into a sorted list of distinct integers.
+    Tools: strip() and int() on each string inside a SET comprehension, then
+    sorted() over the set.
 
     ```
-    top_three([5, 1, 9, 3, 7]) -> [9, 7, 5]
+    clean_ids([" 12", "7 ", "12", "003"]) -> [3, 7, 12]
     ```
 
     *Return: the list.*
 
-11. **itemgetter(): sort pairs by their second item** (P231)
+11. **Shortest first, then alphabetical** (P246)
 
-    Write a function `by_second(pairs)` that returns the list of (name,
-    number) pairs sorted by the NUMBER, using sorted() with key=itemgetter(1)
-    from the operator module. Remember the import.
+    Write a function `by_length_then_alpha(words)` that returns the words
+    sorted by length, and alphabetically among words of the same length.
+    Tools: sorted() with key=lambda w: (len(w), w) -- a tuple key, compared
+    item by item.
 
     ```
-    by_second([("a", 3), ("b", 1), ("c", 2)]) -> [("b", 1), ("c", 2), ("a", 3)]
+    by_length_then_alpha(["bb", "aa", "c"]) -> ["c", "aa", "bb"]
     ```
 
     *Return: the new list.*
 
-12. **Counter(): how many of each** (P232)
+12. **Duplicates dropped, order kept** (P247)
 
-    Write a function `tally(values)` that returns a dictionary mapping each
-    value to how many times it appears, using collections.Counter(). Remember
-    the import.
-
-    ```
-    tally(["a", "b", "a"]) -> {"a": 2, "b": 1}
-    ```
-
-    *Return: the dictionary.*
-
-## 4 - Dictionaries (3)
-
-sorted(d, key=d.get) against sorted(d), next(iter(d)) against d[0], and
-sum(d.values()) against sum(d).
-
-13. **sorted(d, key=d.get): keys in order of their values** (P233)
-
-    Write a function `keys_by_value(d)` that returns the dictionary's keys as
-    a list ordered by their VALUES, smallest value first, using sorted() over
-    the dict with key=d.get:
+    Write a function `dedupe(values)` that returns the values with repeats
+    removed, keeping the FIRST occurrence of each and the original order.
+    Tools: dict.fromkeys() -- a dict keeps insertion order and cannot repeat a
+    key -- and list() over it.
 
     ```
-    keys_by_value({"a": 3, "b": 1, "c": 2}) -> ["b", "c", "a"]
+    dedupe(["b", "a", "b", "c", "a"]) -> ["b", "a", "c"]
     ```
 
-    *Return: the list of keys.*
+    *Return: the new list.*
 
-14. **next(iter(d)): the first key** (P234)
+13. **A list cut into chunks** (P248)
 
-    Write a function `first_key(d)` that returns the first key of a non-empty
-    dictionary -- the one inserted first -- using next() over iter():
-
-    ```
-    first_key({"a": 1, "b": 2}) -> "a"
-    ```
-
-    *Return: the key.*
-
-15. **sum(d.values()): the total of a tally** (P235)
-
-    Write a function `total_of(d)` that returns the sum of all the
-    dictionary's values, using sum() over values():
+    Write a function `chunks(values, n)` that returns a list of lists, each
+    holding the next n values, the last one shorter if the count does not
+    divide. Tools: range() from 0 to len(values) with a step of n, a slice
+    values[i:i + n] for each start, inside a list comprehension.
 
     ```
-    total_of({"a": 1, "b": 2}) -> 3
+    chunks([1, 2, 3, 4, 5], 2) -> [[1, 2], [3, 4], [5]]
     ```
 
-    *Return: the total.*
+    *Return: the list of lists.*
+
+## 4 - Dictionaries (2)
+
+keys() | keys() with get(k, 0) in a comprehension, and set(values()) with a
+nested comprehension to group keys by value.
+
+14. **Two tallies added together** (P249)
+
+    Write a function `merge_counts(a, b)` that returns a new dict with every
+    key from either tally and the SUM of its counts from both. Tools: a.keys()
+    | b.keys() for the set of all keys, get(k, 0) on each dict, and a dict
+    comprehension over the keys.
+
+    ```
+    merge_counts({"a": 1, "b": 2}, {"b": 3, "c": 4}) -> {"a": 1, "b": 5, "c": 4}
+    ```
+
+    *Return: the new dictionary.*
+
+15. **Grouped by value** (P250)
+
+    Write a function `keys_by_value(d)` that returns a dict mapping each
+    distinct VALUE of d to the sorted list of the keys that have it. Tools:
+    set(d.values()) for the distinct values, a dict comprehension over them,
+    and inside it sorted() of a comprehension picking the keys k where d[k]
+    equals the value.
+
+    ```
+    keys_by_value({"a": 1, "b": 2, "c": 1}) -> {1: ["a", "c"], 2: ["b"]}
+    ```
+
+    *Return: the new dictionary.*
 
 ## The one concept with no question here
 
@@ -476,7 +507,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,171 retired ones.
+1,201 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

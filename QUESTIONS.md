@@ -27,12 +27,13 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the eighth set on the public library (SEED
-861), on five SQL tiers none of the library sets have used: aggregates and
-totals, string tricks, pivots both ways, SQLite's bare columns, and three
-writable statements new to the library -- at the same level, with **three
-writable**. **Fifteen Python**, one-tool functions again, on fifteen tools
-no earlier set used.
+Thirty questions in two tracks, the ninth set on the public library (SEED
+861), and a step UP: every SQL question combines TWO tools the earlier sets
+taught separately -- windows over CTEs, EXISTS inside CASE and SUM,
+recursion joined to interval tests, JSON built from grouped CTEs, string
+functions inside aggregates -- with **three writable** that each take two
+steps. **Fifteen Python** functions of two or three tools, every tool named
+in the prompt.
 
 ### The writable stage
 
@@ -42,57 +43,58 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | a log table plus an `AFTER UPDATE OF` trigger with a WHEN on OLD and NEW | the log's rows |
-| 14 | a correlated `DELETE ... WHERE NOT EXISTS` with an 'open' condition | holds left, open ones, and hopeless ones |
-| 15 | `INSERT ... SELECT ... WHERE NOT EXISTS`, idempotent | copies, books without one, copies added |
+| 13 | a `BEFORE INSERT` trigger whose WHEN is an EXISTS with an open-end test | which of two driven loans exist |
+| 14 | a `WITH ... ROW_NUMBER()` CTE feeding an `UPDATE ... WHERE ... IN` | the five loans' renewals and due dates |
+| 15 | a `VIEW` plus an `INSTEAD OF UPDATE` trigger that makes it writable | one member's postcode after a driven update |
 
-13 carries a `driver_sql`: two updates the question runs after your script.
-A refusal is reported in the status bar, not treated as an error.
+13 and 15 carry a `driver_sql`: statements the question runs after your
+script. A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q952 | A3 WHERE vs HAVING | Big branches with a damage problem | ex 1 | 1 - Aggregates and totals |
-| Q953 | A3 WHERE vs HAVING | Regulars who are never late | ex 2 | 1 - Aggregates and totals |
-| Q954 | A3 WHERE vs HAVING | Long books from a long way back | ex 3 | 1 - Aggregates and totals |
-| Q955 | S1 set operations | Copies per branch, with a total row | ex 4 | 1 - Aggregates and totals |
-| Q956 | A2 COUNT and AVG | Readers of a title, not loans of it | ex 5 | 1 - Aggregates and totals |
-| Q957 | STR string functions | A column of titles, padded to the right | ex 6 | 2 - String tricks |
-| Q958 | STR string functions | Slugs for the poetry titles | ex 7 | 2 - String tricks |
-| Q959 | STR string functions | After 'Poems for a' | ex 8 | 2 - String tricks |
-| Q960 | C7 CASE | Loans per genre, one column a year | ex 9 | 3 - Pivots both ways |
-| Q961 | S1 set operations | Branch 4's holds, one row a status | ex 10 | 3 - Pivots both ways |
-| Q962 | BARE SQLite bare columns | Each Old Town member's latest loan | ex 11 | 4 - SQLite bare columns |
-| Q963 | BARE SQLite bare columns | The longest-serving person at each branch | ex 12 | 4 - SQLite bare columns |
-| Q964 | TRG triggers | A log of condition changes **(script)** | ex 13 | 5 - Changing the data |
-| Q965 | DML update & delete | Holds that can never be met where they stand **(script)** | ex 14 | 5 - Changing the data |
-| Q966 | DML update & delete | A copy for every title, and no more than that **(script)** | ex 15 | 5 - Changing the data |
+| Q967 | W2 window ranking | Each month's rank within its year | ex 1 | 1 - Windows over CTEs |
+| Q968 | W2 window ranking | Borrowers in quartiles | ex 2 | 1 - Windows over CTEs |
+| Q969 | W3 window vs GROUP BY | The biggest jump in a day | ex 3 | 1 - Windows over CTEs |
+| Q970 | E1 EXISTS | Copies that have never gone out | ex 4 | 2 - EXISTS, CASE and HAVING |
+| Q971 | C7 CASE | Debtor, borrower or lapsed | ex 5 | 2 - EXISTS, CASE and HAVING |
+| Q972 | A3 WHERE vs HAVING | Spread out, but not at Central | ex 6 | 2 - EXISTS, CASE and HAVING |
+| Q973 | INT intervals | Loans open at each month's end | ex 7 | 3 - Recursion meets intervals |
+| Q974 | R1 recursive CTE | Old Town's copies out, day by day | ex 8 | 3 - Recursion meets intervals |
+| Q975 | JSN JSON functions | Each genre's stock by condition, as JSON | ex 9 | 4 - JSON in aggregates |
+| Q976 | JSN JSON functions | The three most borrowed titles per genre, as a list | ex 10 | 4 - JSON in aggregates |
+| Q977 | STR string aggregation | The surnames at each branch, once each | ex 11 | 5 - Text with aggregation |
+| Q978 | STR string aggregation | Authors who share a surname | ex 12 | 5 - Text with aggregation |
+| Q979 | TRG triggers | One loan at a time per copy **(script)** | ex 13 | 6 - Changing the data |
+| Q980 | DML update & delete | Grace for the five most overdue **(script)** | ex 14 | 6 - Changing the data |
+| Q981 | VIEW views | A view you can write to **(script)** | ex 15 | 6 - Changing the data |
 
 ### Python
 
-Fifteen functions of one or two lines, each built around one tool named in
-its title: the + format spec, lstrip(chars), textwrap.shorten(), !r,
-math.isqrt(), bit_length(), math.dist(), pow(b, e, m),
-itertools.accumulate(), heapq.nlargest(), operator.itemgetter(),
-collections.Counter(), sorted(d, key=d.get), next(iter(d)) and
-sum(d.values()).
+Fifteen functions of two or three tools each, the tools named in the
+prompt: split/join/title, split/comprehension/join/upper, Counter and
+most_common, alignment format specs, lstrip/float/round, sum/len/round,
+fromisoformat/strftime, date subtraction with abs, min and max with key=len,
+strip/int in a set comprehension with sorted, a lambda tuple key,
+dict.fromkeys with list, range with a step and slices, keys() | keys() with
+get in a comprehension, and set(values()) with nested comprehensions.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P221 | PY3 sign spec | f'{n:+}': always show the sign | py 1 | 1 - Strings |
-| P222 | PY3 lstrip chars | lstrip(chars): leading zeros off | py 2 | 1 - Strings |
-| P223 | PY3 textwrap shorten | textwrap.shorten(): cut at a word, with a marker | py 3 | 1 - Strings |
-| P224 | PY3 repr spec | f'{s!r}': the value as Python would write it | py 4 | 1 - Strings |
-| P225 | PY3 math isqrt | math.isqrt(): the whole-number square root | py 5 | 2 - Numbers |
-| P226 | PY3 bit_length | bit_length(): how many binary digits | py 6 | 2 - Numbers |
-| P227 | PY3 math dist | math.dist(): distance between two points | py 7 | 2 - Numbers |
-| P228 | PY3 pow mod | pow(b, e, m): a power, reduced as it goes | py 8 | 2 - Numbers |
-| P229 | PY3 accumulate | itertools.accumulate(): running totals | py 9 | 3 - Lists |
-| P230 | PY3 heapq nlargest | heapq.nlargest(): the top three | py 10 | 3 - Lists |
-| P231 | PY3 itemgetter | itemgetter(): sort pairs by their second item | py 11 | 3 - Lists |
-| P232 | PY3 Counter | Counter(): how many of each | py 12 | 3 - Lists |
-| P233 | PY3 sorted key get | sorted(d, key=d.get): keys in order of their values | py 13 | 4 - Dictionaries |
-| P234 | PY3 next iter | next(iter(d)): the first key | py 14 | 4 - Dictionaries |
-| P235 | PY3 sum values | sum(d.values()): the total of a tally | py 15 | 4 - Dictionaries |
+| P236 | PY6 split join title | A name tidied up | py 1 | 1 - Strings |
+| P237 | PY6 split comprehension join | Initials from a full name | py 2 | 1 - Strings |
+| P238 | PY6 Counter most_common | The two commonest words | py 3 | 1 - Strings |
+| P239 | PY6 format specs | A line of a price list | py 4 | 1 - Strings |
+| P240 | PY6 lstrip float round | Pounds in text to pence | py 5 | 1 - Strings |
+| P241 | PY6 sum len round | An average to one decimal | py 6 | 2 - Numbers and dates |
+| P242 | PY6 fromisoformat strftime | What day of the week a date falls on | py 7 | 2 - Numbers and dates |
+| P243 | PY6 date subtraction abs | Days between two dates, either way round | py 8 | 2 - Numbers and dates |
+| P244 | PY6 min max key len | The shortest and the longest | py 9 | 3 - Lists |
+| P245 | PY6 strip int set sorted | Ids typed by hand, cleaned up | py 10 | 3 - Lists |
+| P246 | PY6 sorted lambda tuple key | Shortest first, then alphabetical | py 11 | 3 - Lists |
+| P247 | PY6 fromkeys list | Duplicates dropped, order kept | py 12 | 3 - Lists |
+| P248 | PY6 range step slice | A list cut into chunks | py 13 | 3 - Lists |
+| P249 | PY6 keys union get comprehension | Two tallies added together | py 14 | 4 - Dictionaries |
+| P250 | PY6 set values comprehension sorted | Grouped by value | py 15 | 4 - Dictionaries |
 
 ## Retired
 
@@ -401,6 +403,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q952 | A3 WHERE vs HAVING | Big branches with a damage problem | - | retired |
+| Q953 | A3 WHERE vs HAVING | Regulars who are never late | - | retired |
+| Q954 | A3 WHERE vs HAVING | Long books from a long way back | - | retired |
+| Q955 | S1 set operations | Copies per branch, with a total row | - | retired |
+| Q956 | A2 COUNT and AVG | Readers of a title, not loans of it | - | retired |
+| Q957 | STR string functions | A column of titles, padded to the right | - | retired |
+| Q958 | STR string functions | Slugs for the poetry titles | - | retired |
+| Q959 | STR string functions | After 'Poems for a' | - | retired |
+| Q960 | C7 CASE | Loans per genre, one column a year | - | retired |
+| Q961 | S1 set operations | Branch 4's holds, one row a status | - | retired |
+| Q962 | BARE SQLite bare columns | Each Old Town member's latest loan | - | retired |
+| Q963 | BARE SQLite bare columns | The longest-serving person at each branch | - | retired |
+| Q964 | TRG triggers | A log of condition changes **(script)** | - | retired |
+| Q965 | DML update & delete | Holds that can never be met where they stand **(script)** | - | retired |
+| Q966 | DML update & delete | A copy for every title, and no more than that **(script)** | - | retired |
+| P221 | PY3 sign spec | f'{n:+}': always show the sign | - | retired |
+| P222 | PY3 lstrip chars | lstrip(chars): leading zeros off | - | retired |
+| P223 | PY3 textwrap shorten | textwrap.shorten(): cut at a word, with a marker | - | retired |
+| P224 | PY3 repr spec | f'{s!r}': the value as Python would write it | - | retired |
+| P225 | PY3 math isqrt | math.isqrt(): the whole-number square root | - | retired |
+| P226 | PY3 bit_length | bit_length(): how many binary digits | - | retired |
+| P227 | PY3 math dist | math.dist(): distance between two points | - | retired |
+| P228 | PY3 pow mod | pow(b, e, m): a power, reduced as it goes | - | retired |
+| P229 | PY3 accumulate | itertools.accumulate(): running totals | - | retired |
+| P230 | PY3 heapq nlargest | heapq.nlargest(): the top three | - | retired |
+| P231 | PY3 itemgetter | itemgetter(): sort pairs by their second item | - | retired |
+| P232 | PY3 Counter | Counter(): how many of each | - | retired |
+| P233 | PY3 sorted key get | sorted(d, key=d.get): keys in order of their values | - | retired |
+| P234 | PY3 next iter | next(iter(d)): the first key | - | retired |
+| P235 | PY3 sum values | sum(d.values()): the total of a tally | - | retired |
 | Q937 | CTE common table expressions | Above the average for their own branch | - | retired |
 | Q938 | CTE common table expressions | The busiest day of each month | - | retired |
 | Q939 | CTE common table expressions | Each month's share of its year | - | retired |
@@ -1566,7 +1598,7 @@ they still count as asked.
   writable: a BEFORE DELETE trigger, a view on a view, and an UPDATE
   whose WHERE is a LIMIT 1 subquery. Python, fifteen one-tool functions
   on tools no earlier set used.
-- **Q952-Q966 and P221-P235** current set. The library again (SEED 861),
+- **Q952-Q966 and P221-P235** retired set. The library again (SEED 861),
   on five tiers none of the library sets used: aggregates and totals (two
   and three HAVING conditions, a total row by UNION ALL, COUNT(DISTINCT)
   over a concatenated pair), string tricks (printf('%-24s'), a slug by
@@ -1576,3 +1608,15 @@ they still count as asked.
   trigger that logs to a table it creates, a correlated DELETE, and an
   idempotent INSERT ... SELECT ... WHERE NOT EXISTS. Python, fifteen
   one-tool functions on tools no earlier set used.
+- **Q967-Q981 and P236-P250** current set. The library again (SEED 861),
+  a step UP: two tools per SQL question -- DENSE_RANK partitioned by a
+  CTE's year, NTILE over per-member counts then grouped, LAG then LIMIT
+  1, SUM of an EXISTS, a CASE of EXISTS tests in order, two HAVING
+  conditions one a SUM over a comparison, a recursive calendar of months
+  and one of days each joined to an interval test, json_group_array of
+  json_object over a grouped CTE, a ranked CTE packed into JSON,
+  GROUP_CONCAT DISTINCT over a SUBSTR, HAVING over an extracted surname
+  -- and three writable in two steps: a trigger whose WHEN is an interval
+  EXISTS, a ROW_NUMBER CTE feeding an UPDATE, and a view made writable by
+  an INSTEAD OF trigger. Python, fifteen functions of two or three named
+  tools.
