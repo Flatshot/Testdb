@@ -1,22 +1,21 @@
 """Practice exercises: fifteen questions on the library schema.
 
-The ninth set on the library (SEED 861), and a step UP: every question
-combines TWO tools the earlier sets taught separately. Windows over CTEs
--- a rank within the year over monthly counts, quartiles of borrowers by
-NTILE, the biggest day-on-day jump by LAG and a LIMIT. EXISTS, CASE and
-HAVING -- a conditional SUM whose condition is an EXISTS, a CASE whose
-branches are EXISTS tests in the right order, and two HAVING conditions
-one of which is a SUM over a comparison. Recursion meets intervals -- a
-calendar of months and one of days, each joined to an interval test with
-the open end supplied. JSON in aggregates -- json_object inside
-json_group_array over a grouped CTE, and a ranked CTE packed into a JSON
-array. Text with aggregation -- GROUP_CONCAT DISTINCT over a SUBSTR, and
-a HAVING over an extracted surname. And three WRITABLE questions, each
-two steps:
+The tenth set on the library (SEED 861), the second at two tools per
+question, with the tools paired differently. Plans and CASE -- a date
+range that lets idx_loans_due be searched, with a CASE on the rows it
+finds; a covering read of idx_loans_copy with a CASE on the weekday. JSON
+and dates -- json_group_array DISTINCT over strftime years, and json_each
+over a list of dates with a due-date count beside each. Bare columns and
+open ends -- MAX's row among the never-loaned copies, MIN's row among the
+open holds. Set operations and text -- INTERSECT of first words, EXCEPT of
+surnames. Windows and NULLs -- a running total of unpaid pence through a
+CASE, and COALESCE over LAG. Recursion and text -- a comma list split into
+rows by recursion, and quarters labelled by printf. And three WRITABLE
+questions in two steps each:
 
-  * a BEFORE INSERT trigger whose WHEN is an interval test
-  * a CTE with ROW_NUMBER feeding an UPDATE
-  * a view and the INSTEAD OF trigger that makes it updatable
+  * a BEFORE UPDATE trigger that compares OLD.due_on with a date
+  * a table filled by INSERT ... SELECT, then an UPSERT with JSON in it
+  * a DELETE by ROW_NUMBER that keeps one row per member
 
 Each of those runs in a private in-memory copy of the database, so nothing
 you write can reach the real file. The copy persists across Runs of one
@@ -25,442 +24,436 @@ discarded by Reset or by moving to another question, so no question can
 depend on what another one wrote. Check answer always grades a FRESH copy.
 The question's `probe_sql` then reads the result, and that is what is
 compared with the reference. A `driver_sql`, where present, is what the
-question itself runs AFTER your script -- the rows your trigger should
-sort.
+question itself runs AFTER your script.
+
+The two query-plan questions carry `plan_requires` / `plan_forbids`, checked
+against EXPLAIN QUERY PLAN, and a `starter_sql` that opens in the editor:
+correct, slow, and the thing to improve.
 """
 
 import sqlite3
 
 EXERCISES = [
-    # =================================================== 1 Windows over CTEs
+    # ==================================================== 1 Plans and CASE
     dict(
-        id=1, ledger="Q967", concept="W2", tier="1 - Windows over CTEs",
-        title="Each month's rank within its year",
+        id=1, ledger="Q982", concept="X5", tier="1 - Plans and CASE",
+        title="Due in May, found by the index",
         prompt=(
-            "For each month of the data: its loans, and its rank within"
-            " ITS YEAR by loans, 1 for the year's busiest month. A CTE of"
-            " loans per month that also carries the year, then DENSE_RANK"
-            " partitioned by that year.\n\n"
-            "Return: month, loans, rank_in_year"
+            "Every loan due in May 2026, with a status: 'out' if"
+            " returned_on is NULL, else 'returned'. The query in the"
+            " editor is correct but wraps due_on in strftime, which reads"
+            " all 24,000 loans. Rewrite the WHERE as a RANGE on the bare"
+            " column so idx_loans_due can be searched. Your plan must"
+            " mention idx_loans_due with SEARCH, not SCAN.\n\n"
+            "Return: loan_id, status"
         ),
-        solution=("WITH m AS (SELECT strftime('%Y', loaned_on) AS y, strftime('%Y-%m', loaned_on) AS ym, COUNT(*) AS n"
-                  " FROM loans GROUP BY ym)"
-                  " SELECT ym, n, DENSE_RANK() OVER (PARTITION BY y ORDER BY n DESC) FROM m"),
-        trap_sql=("WITH m AS (SELECT strftime('%Y', loaned_on) AS y, strftime('%Y-%m', loaned_on) AS ym, COUNT(*) AS n"
-                  " FROM loans GROUP BY ym)"
-                  " SELECT ym, n, DENSE_RANK() OVER (ORDER BY n DESC) FROM m"),
-        note="The CTE does the grouping and keeps the year as a column;"
-             " the window ranks the grouped rows, and PARTITION BY y is"
-             " what makes the ranking restart each year. Without it the"
-             " eighteen months are ranked together and 2026 has no month"
-             " ranked 1.",
-        claims=[("eighteen months, two ranked first",
-                 lambda rows, c: len(rows) == 18 and sum(r[2] == 1 for r in rows) == 2)],
+        starter_sql=("SELECT loan_id, CASE WHEN returned_on IS NULL THEN 'out' ELSE 'returned' END"
+                     " FROM loans WHERE strftime('%Y-%m', due_on) = '2026-05'"),
+        solution=("SELECT loan_id, CASE WHEN returned_on IS NULL THEN 'out' ELSE 'returned' END"
+                  " FROM loans WHERE due_on >= '2026-05-01' AND due_on < '2026-06-01'"),
+        trap_sql=("SELECT loan_id, CASE WHEN returned_on IS NULL THEN 'out' ELSE 'returned' END"
+                  " FROM loans WHERE due_on LIKE '2026-05%'"),
+        note="An index on a date column is searchable by a RANGE of the"
+             " stored text -- on or after the 1st, before the 1st of the"
+             " next month -- and not by any function of the column."
+             " strftime hides the column; so does LIKE here, which SQLite"
+             " will not turn into a range on a BINARY column. The CASE is"
+             " unaffected by any of this: it runs on whatever rows arrive.",
+        plan_requires=("SEARCH loans USING INDEX idx_loans_due",),
+        plan_forbids=("SCAN",),
+        claims=[("thirteen hundred or so loans, ten of them out",
+                 lambda rows, c: 1300 < len(rows) < 1400 and sum(r[1] == 'out' for r in rows) == 10)],
     ),
     dict(
-        id=2, ledger="Q968", concept="W2", tier="1 - Windows over CTEs",
-        title="Borrowers in quartiles",
+        id=2, ledger="Q983", concept="X5", tier="1 - Plans and CASE",
+        title="Copy 1's loans, weekday or weekend, from the index alone",
         prompt=(
-            "Split the borrowers -- members with at least one loan --"
-            " into four equal groups by loan count, quartile 1 the"
-            " LIGHTEST readers: for each quartile, the loans its members"
-            " made in all, and the smallest and largest loan count in it."
-            " A CTE of loans"
-            " per member, NTILE(4) over it, then a GROUP BY the tile.\n\n"
-            "Return: quartile, loans, min_loans, max_loans"
+            "For copy 1, each loan's loaned_on and whether it was a"
+            " 'weekend' (strftime %w of '0' or '6') or a 'weekday'. The"
+            " index idx_loans_copy holds copy_id and loaned_on, so a"
+            " query that touches only those columns can be answered from"
+            " the index without opening the table: your plan must say"
+            " COVERING INDEX idx_loans_copy with SEARCH. The query in the"
+            " editor is correct and scans.\n\n"
+            "Return: loaned_on, day_type"
         ),
-        solution=("WITH per AS (SELECT member_id, COUNT(*) AS n FROM loans GROUP BY member_id),"
-                  " t AS (SELECT n, NTILE(4) OVER (ORDER BY n) AS q FROM per)"
-                  " SELECT q, SUM(n), MIN(n), MAX(n) FROM t GROUP BY q"),
-        trap_sql=("WITH per AS (SELECT member_id, COUNT(*) AS n FROM loans GROUP BY member_id),"
-                  " t AS (SELECT n, NTILE(4) OVER (ORDER BY n DESC) AS q FROM per)"
-                  " SELECT q, SUM(n), MIN(n), MAX(n) FROM t GROUP BY q"),
-        note="NTILE(4) numbers the rows 1 to 4 in equal-sized bands in"
-             " the window's order, so ORDER BY n ascending puts the"
-             " lightest readers in tile 1; DESC reverses the tiles. The"
-             " third step groups by the tile number, which only exists"
-             " once the window has run -- hence the second CTE. Each tile"
-             " holds 325 members, so the loan totals are what show how"
-             " lopsided reading is.",
-        claims=[("four tiles, the top one holding most of the loans",
-                 lambda rows, c: len(rows) == 4 and sum(r[1] for r in rows) == 23976
-                 and dict((r[0], r[3]) for r in rows)[4] > 200
-                 and dict((r[0], r[2]) for r in rows)[1] < 5)],
+        starter_sql=("SELECT loaned_on, CASE WHEN strftime('%w', loaned_on) IN ('0', '6') THEN 'weekend'"
+                     " ELSE 'weekday' END FROM loans WHERE copy_id + 0 = 1"),
+        solution=("SELECT loaned_on, CASE WHEN strftime('%w', loaned_on) IN ('0', '6') THEN 'weekend'"
+                  " ELSE 'weekday' END FROM loans WHERE copy_id = 1"),
+        trap_sql=("SELECT loaned_on, CASE WHEN strftime('%w', loaned_on) IN ('0', '6') THEN 'weekend'"
+                  " ELSE 'weekday' END FROM loans WHERE copy_id = 1 AND returned_on IS NOT NULL"),
+        note="Two things have to be true for a COVERING read: the WHERE"
+             " must let the index be searched -- copy_id = 1, not copy_id"
+             " + 0 = 1 -- and every column the query mentions must be in"
+             " the index. Mention returned_on, even only in the WHERE,"
+             " and SQLite must visit the table for each row: the plan"
+             " keeps SEARCH but drops the word COVERING. The CASE over"
+             " loaned_on is fine, because loaned_on is in the index.",
+        plan_requires=("SEARCH loans USING COVERING INDEX idx_loans_copy",),
+        claims=[("fourteen loans of copy 1, a few at weekends",
+                 lambda rows, c: len(rows) == 14 and 1 <= sum(r[1] == 'weekend' for r in rows) <= 8)],
     ),
+    # ==================================================== 2 JSON and dates
     dict(
-        id=3, ledger="Q969", concept="W3", tier="1 - Windows over CTEs",
-        title="The biggest jump in a day",
+        id=3, ledger="Q984", concept="JSN", tier="2 - JSON and dates",
+        title="The years each branch withdrew stock, as JSON",
         prompt=(
-            "The 2026 day whose loan count rose most over the previous"
-            " day: the day, its loans and the rise. A CTE of loans per"
-            " day over ALL the data, a second with LAG for the change,"
-            " then the largest change among 2026's days -- ORDER BY and"
-            " LIMIT 1, ties to the earlier day.\n\n"
-            "Return: day, loans, rise"
+            "For each branch that has withdrawn copies, a JSON array of"
+            " the DISTINCT years in which it withdrew them, ascending:"
+            " strftime for the year of withdrawn_on, json_group_array"
+            " with DISTINCT and an ORDER BY inside its parentheses, over"
+            " the withdrawn copies only.\n\n"
+            "Return: branch_id, years"
         ),
-        solution=("WITH d AS (SELECT loaned_on, COUNT(*) AS n FROM loans GROUP BY loaned_on),"
-                  " ch AS (SELECT loaned_on, n, n - LAG(n) OVER (ORDER BY loaned_on) AS c FROM d)"
-                  " SELECT loaned_on, n, c FROM ch WHERE loaned_on >= '2026-01-01' ORDER BY c DESC, loaned_on LIMIT 1"),
-        trap_sql=("WITH d AS (SELECT loaned_on, COUNT(*) AS n FROM loans GROUP BY loaned_on),"
-                  " ch AS (SELECT loaned_on, n, n - LEAD(n) OVER (ORDER BY loaned_on) AS c FROM d)"
-                  " SELECT loaned_on, n, c FROM ch WHERE loaned_on >= '2026-01-01' ORDER BY c DESC, loaned_on LIMIT 1"),
-        note="LAG looks at the day before, which is what 'rose over the"
-             " previous day' means; LEAD looks at the day after and"
-             " finds the biggest FALL instead, labelled as a rise. The"
-             " year filter goes in the final SELECT, not the CTEs: 1"
-             " January needs 31 December to compare with.",
-        claims=[("20 June 2026, up by 25",
-                 lambda rows, c: rows == [('2026-06-20', 59, 25)])],
-    ),
-    # ============================================ 2 EXISTS, CASE and HAVING
-    dict(
-        id=4, ledger="Q970", concept="E1", tier="2 - EXISTS, CASE and HAVING",
-        title="Copies that have never gone out",
-        prompt=(
-            "For each branch: its copies, how many of them have been"
-            " loaned at least once, and how many never. The 'at least"
-            " once' is an EXISTS per copy, summed -- a loan join would"
-            " count loans, not copies.\n\n"
-            "Return: branch_id, copies, loaned_ever, never"
-        ),
-        solution=("SELECT c.branch_id, COUNT(*),"
-                  " SUM(EXISTS (SELECT 1 FROM loans l WHERE l.copy_id = c.copy_id)),"
-                  " SUM(NOT EXISTS (SELECT 1 FROM loans l WHERE l.copy_id = c.copy_id))"
-                  " FROM copies c GROUP BY c.branch_id"),
-        trap_sql=("SELECT c.branch_id, COUNT(DISTINCT c.copy_id), COUNT(l.loan_id),"
-                  " COUNT(DISTINCT c.copy_id) - COUNT(l.loan_id)"
-                  " FROM copies c LEFT JOIN loans l ON l.copy_id = c.copy_id GROUP BY c.branch_id"),
-        note="EXISTS is a boolean, 1 or 0, and SUM of it over the copies"
-             " counts the copies for which it is true -- a conditional"
-             " count whose condition is a subquery. The join version"
-             " counts rows of the join, which is loans, so 'loaned ever'"
-             " comes out in the thousands and 'never' goes negative.",
-        claims=[("six branches, about a hundred never-loaned copies in all",
+        solution=("SELECT branch_id, json_group_array(DISTINCT strftime('%Y', withdrawn_on)"
+                  " ORDER BY strftime('%Y', withdrawn_on)) FROM copies WHERE withdrawn_on IS NOT NULL"
+                  " GROUP BY branch_id"),
+        trap_sql=("SELECT branch_id, json_group_array(strftime('%Y', withdrawn_on)"
+                  " ORDER BY strftime('%Y', withdrawn_on)) FROM copies WHERE withdrawn_on IS NOT NULL"
+                  " GROUP BY branch_id"),
+        note="json_group_array accepts DISTINCT and ORDER BY like"
+             " GROUP_CONCAT does. Without DISTINCT a branch that withdrew"
+             " six copies in 2024 says '2024' six times, which is still"
+             " valid JSON and still wrong. The WHERE keeps the NULLs of"
+             " the copies still on the shelf out of the array; strftime"
+             " of NULL is NULL, and JSON would carry it as null.",
+        claims=[("six arrays, no repeats, not all alike",
                  lambda rows, c: len(rows) == 6
-                 and all(r[2] + r[3] == r[1] for r in rows)
-                 and 100 <= sum(r[3] for r in rows) <= 120)],
+                 and all(len(set(__import__('json').loads(r[1]))) == len(__import__('json').loads(r[1]))
+                         for r in rows)
+                 and len({r[1] for r in rows}) > 1)],
     ),
     dict(
-        id=5, ledger="Q971", concept="C7", tier="2 - EXISTS, CASE and HAVING",
-        title="Debtor, borrower or lapsed",
+        id=4, ledger="Q985", concept="JSN", tier="2 - JSON and dates",
+        title="Three dates to check, from a JSON list",
         prompt=(
-            "Put every member in one class and count each: 'debtor' if"
-            " they have an UNPAID fine; otherwise 'borrower' if they have"
-            " any loan; otherwise 'lapsed'. A CASE whose WHENs are EXISTS"
-            " tests, in that order.\n\n"
-            "Return: class, members"
+            "Given the JSON list '[\"2026-01-15\", \"2026-03-01\","
+            " \"2026-06-30\"]': for each date, how many loans were DUE"
+            " that day, and the day of the week as strftime's %w gives"
+            " it. json_each turns the list into rows with a `value`"
+            " column.\n\n"
+            "Return: day, due, weekday"
         ),
-        solution=("SELECT CASE WHEN EXISTS (SELECT 1 FROM fines f JOIN loans l ON l.loan_id = f.loan_id"
-                  " WHERE l.member_id = m.member_id AND f.paid_on IS NULL) THEN 'debtor'"
-                  " WHEN EXISTS (SELECT 1 FROM loans l WHERE l.member_id = m.member_id) THEN 'borrower'"
-                  " ELSE 'lapsed' END, COUNT(*) FROM members m GROUP BY 1"),
-        trap_sql=("SELECT CASE WHEN EXISTS (SELECT 1 FROM loans l WHERE l.member_id = m.member_id) THEN 'borrower'"
-                  " WHEN EXISTS (SELECT 1 FROM fines f JOIN loans l ON l.loan_id = f.loan_id"
-                  " WHERE l.member_id = m.member_id AND f.paid_on IS NULL) THEN 'debtor'"
-                  " ELSE 'lapsed' END, COUNT(*) FROM members m GROUP BY 1"),
-        note="Every debtor is also a borrower, so the two classes"
-             " overlap and CASE's first-match rule decides who wins:"
-             " the narrower test has to come first. With 'borrower'"
-             " tested first no member is ever a debtor. An EXISTS can"
-             " sit anywhere a boolean can, including inside a WHEN.",
-        claims=[("three classes, seven hundred or so debtors, two hundred lapsed",
-                 lambda rows, c: dict(rows).get('lapsed') == 200
-                 and 700 < dict(rows).get('debtor', 0) < 740
-                 and sum(r[1] for r in rows) == 1500)],
+        solution=("SELECT value, (SELECT COUNT(*) FROM loans l WHERE l.due_on = value), strftime('%w', value)"
+                  " FROM json_each('[\"2026-01-15\", \"2026-03-01\", \"2026-06-30\"]')"),
+        trap_sql=("SELECT value, (SELECT COUNT(*) FROM loans l WHERE l.loaned_on = value), strftime('%w', value)"
+                  " FROM json_each('[\"2026-01-15\", \"2026-03-01\", \"2026-06-30\"]')"),
+        note="json_each hands each element over as `value`, and the"
+             " element is a date string, so strftime and a correlated"
+             " count both work on it directly. The count is of due_on,"
+             " the column the question names; loaned_on gives how many"
+             " loans STARTED that day, and no loan started on 30 June.",
+        claims=[("three days, the last one a Tuesday",
+                 lambda rows, c: len(rows) == 3 and ('2026-06-30', 34, '2') in rows)],
     ),
+    # ========================================== 3 Bare columns and open ends
     dict(
-        id=6, ledger="Q972", concept="A3", tier="2 - EXISTS, CASE and HAVING",
-        title="Spread out, but not at Central",
+        id=5, ledger="Q986", concept="BARE", tier="3 - Bare columns and open ends",
+        title="The newest copy nobody has borrowed, per branch",
         prompt=(
-            "Books with copies at three or more DIFFERENT branches but no"
-            " copy at Central (branch 1): book_id and the number of"
-            " branches. Both conditions are about the book's whole set of"
-            " copies, so both are HAVING -- a WHERE branch_id <> 1 would"
-            " hide Central's copies rather than exclude the book.\n\n"
-            "Return: book_id, branches"
+            "For each branch: among its copies that have NEVER been"
+            " loaned, the most recently acquired one -- copy_id and"
+            " acquired_on. NOT EXISTS against loans picks the never-"
+            "loaned copies; MAX(acquired_on) with copy_id as a bare"
+            " column picks the newest.\n\n"
+            "Return: branch_id, copy_id, acquired_on"
         ),
-        solution=("SELECT book_id, COUNT(DISTINCT branch_id) FROM copies GROUP BY book_id"
-                  " HAVING COUNT(DISTINCT branch_id) >= 3 AND SUM(branch_id = 1) = 0"),
-        trap_sql=("SELECT book_id, COUNT(DISTINCT branch_id) FROM copies WHERE branch_id <> 1"
-                  " GROUP BY book_id HAVING COUNT(DISTINCT branch_id) >= 3"),
-        note="SUM(branch_id = 1) = 0 says 'none of this book's copies is"
-             " at Central', an aggregate fact. Filtering Central's copies"
-             " out first makes every book look as if it has none there,"
-             " and twice as many books qualify. 'Not at X' about a group"
-             " is a HAVING, not a WHERE.",
-        claims=[("a hundred and thirty or so books",
-                 lambda rows, c: 115 < len(rows) < 140 and all(r[1] >= 3 for r in rows))],
-    ),
-    # =========================================== 3 Recursion meets intervals
-    dict(
-        id=7, ledger="Q973", concept="INT", tier="3 - Recursion meets intervals",
-        title="Loans open at each month's end",
-        prompt=(
-            "For each month from 2025-01 to 2026-06, how many loans were"
-            " OUT on the last day of the month: started on or before it,"
-            " and not returned by it -- NULL returned_on means still out."
-            " A recursive CTE of month starts, date(first, '+1 month',"
-            " '-1 day') for the last day, and the interval test with"
-            " COALESCE.\n\n"
-            "Return: month_start, open_at_end"
-        ),
-        solution=("WITH RECURSIVE m(first) AS (SELECT '2025-01-01' UNION ALL SELECT date(first, '+1 month') FROM m"
-                  " WHERE first < '2026-06-01')"
-                  " SELECT first, (SELECT COUNT(*) FROM loans l WHERE l.loaned_on <= date(m.first, '+1 month', '-1 day')"
-                  " AND COALESCE(l.returned_on, '9999') > date(m.first, '+1 month', '-1 day')) FROM m"),
-        trap_sql=("WITH RECURSIVE m(first) AS (SELECT '2025-01-01' UNION ALL SELECT date(first, '+1 month') FROM m"
-                  " WHERE first < '2026-06-01')"
-                  " SELECT first, (SELECT COUNT(*) FROM loans l WHERE l.loaned_on <= date(m.first, '+1 month', '-1 day')"
-                  " AND l.returned_on > date(m.first, '+1 month', '-1 day')) FROM m"),
-        note="Two modifiers chain: '+1 month' then '-1 day' is the last"
-             " day of the month however long it is. The interval test is"
-             " the same as every 'on a day' question, and the COALESCE"
-             " is what makes June 2026 right -- the 685 loans still out"
-             " at the end of the data have a NULL end, and NULL > a date"
-             " is never true.",
-        claims=[("eighteen months, June 2026 with the 685 still out",
-                 lambda rows, c: len(rows) == 18 and ('2026-06-01', 685) in rows
-                 and all(500 < r[1] < 900 for r in rows))],
-    ),
-    dict(
-        id=8, ledger="Q974", concept="R1", tier="3 - Recursion meets intervals",
-        title="Old Town's copies out, day by day",
-        prompt=(
-            "For every day of June 2026, how many of branch 6's copies"
-            " were out on loan that day -- loaned on or before the day"
-            " and not back before it. A recursive CTE of days, and per"
-            " day a count over loans joined to copies, with the open end"
-            " supplied.\n\n"
-            "Return: day, copies_out"
-        ),
-        solution=("WITH RECURSIVE d(day) AS (SELECT '2026-06-01' UNION ALL SELECT date(day, '+1 day') FROM d"
-                  " WHERE day < '2026-06-30')"
-                  " SELECT day, (SELECT COUNT(*) FROM loans l JOIN copies c ON c.copy_id = l.copy_id"
-                  " WHERE c.branch_id = 6 AND l.loaned_on <= d.day AND COALESCE(l.returned_on, '9999') > d.day) FROM d"),
-        trap_sql=("WITH RECURSIVE d(day) AS (SELECT '2026-06-01' UNION ALL SELECT date(day, '+1 day') FROM d"
-                  " WHERE day < '2026-06-30')"
-                  " SELECT day, (SELECT COUNT(*) FROM loans l JOIN copies c ON c.copy_id = l.copy_id"
-                  " WHERE c.branch_id = 6 AND l.loaned_on = d.day) FROM d"),
-        note="A loan is out on a day if the day falls inside its"
-             " interval, which is two comparisons; counting the loans"
-             " that STARTED that day is one comparison and a different"
-             " question -- about five a day instead of a hundred and"
-             " twenty. The calendar supplies the days; the subquery"
-             " answers for each.",
-        claims=[("thirty days, a hundred or so copies out on each",
-                 lambda rows, c: len(rows) == 30 and all(90 < r[1] < 150 for r in rows))],
-    ),
-    # ================================================== 4 JSON in aggregates
-    dict(
-        id=9, ledger="Q975", concept="JSN", tier="4 - JSON in aggregates",
-        title="Each genre's stock by condition, as JSON",
-        prompt=(
-            "For each genre, ONE JSON array of objects, one object per"
-            " condition in alphabetical order, each with keys condition"
-            " and copies: a CTE counting copies per genre and condition,"
-            " then json_group_array of a json_object, with ORDER BY"
-            " condition inside the json_group_array.\n\n"
-            "Return: genre, stock"
-        ),
-        solution=("WITH t AS (SELECT b.genre, c.condition, COUNT(*) AS n FROM copies c"
-                  " JOIN books b ON b.book_id = c.book_id GROUP BY b.genre, c.condition)"
-                  " SELECT genre, json_group_array(json_object('condition', condition, 'copies', n) ORDER BY condition)"
-                  " FROM t GROUP BY genre"),
-        trap_sql=("WITH t AS (SELECT b.genre, c.condition, COUNT(*) AS n FROM copies c"
-                  " JOIN books b ON b.book_id = c.book_id GROUP BY b.genre, c.condition)"
-                  " SELECT genre, json_group_array(json_object('condition', condition, 'copies', n) ORDER BY n)"
-                  " FROM t GROUP BY genre"),
-        note="Two levels of grouping: the CTE groups to (genre,"
-             " condition) and counts; the outer query groups to genre and"
-             " packs each group's rows into JSON. json_object builds one"
-             " element, json_group_array collects them, and its ORDER BY"
-             " decides the array order -- by condition name, as asked,"
-             " not by count.",
-        claims=[("eight genres, three objects each in alphabetical order",
-                 lambda rows, c: len(rows) == 8
-                 and all([o['condition'] for o in __import__('json').loads(r[1])]
-                         == ['damaged', 'good', 'worn'] for r in rows))],
-    ),
-    dict(
-        id=10, ledger="Q976", concept="JSN", tier="4 - JSON in aggregates",
-        title="The three most borrowed titles per genre, as a list",
-        prompt=(
-            "For each genre, a JSON array of its three most borrowed"
-            " titles, most borrowed first -- ties by lower book_id. A"
-            " CTE that counts loans per book and numbers the books within"
-            " their genre by ROW_NUMBER, then json_group_array of the"
-            " titles numbered 3 or less, ordered by that number.\n\n"
-            "Return: genre, top3"
-        ),
-        solution=("WITH r AS (SELECT b.genre, b.title, COUNT(*) AS n,"
-                  " ROW_NUMBER() OVER (PARTITION BY b.genre ORDER BY COUNT(*) DESC, b.book_id) AS rn"
-                  " FROM loans l JOIN copies c ON c.copy_id = l.copy_id JOIN books b ON b.book_id = c.book_id"
-                  " GROUP BY b.book_id)"
-                  " SELECT genre, json_group_array(title ORDER BY rn) FROM r WHERE rn <= 3 GROUP BY genre"),
-        trap_sql=("WITH r AS (SELECT b.genre, b.title, COUNT(*) AS n,"
-                  " ROW_NUMBER() OVER (PARTITION BY b.genre ORDER BY COUNT(*) DESC, b.book_id) AS rn"
-                  " FROM loans l JOIN copies c ON c.copy_id = l.copy_id JOIN books b ON b.book_id = c.book_id"
-                  " GROUP BY b.book_id)"
-                  " SELECT genre, json_group_array(title ORDER BY rn) FROM r GROUP BY genre"),
-        note="The window numbers every book; the WHERE rn <= 3 in the"
-             " outer query is what keeps three -- without it every title"
-             " in the genre goes into the array. A ranked CTE followed by"
-             " a filter on the rank is the top-N pattern; here its result"
-             " is packed into JSON rather than returned as rows.",
-        claims=[("eight genres, three titles each",
-                 lambda rows, c: len(rows) == 8
-                 and all(len(__import__('json').loads(r[1])) == 3 for r in rows))],
-    ),
-    # ============================================== 5 Text with aggregation
-    dict(
-        id=11, ledger="Q977", concept="STR", tier="5 - Text with aggregation",
-        title="The surnames at each branch, once each",
-        prompt=(
-            "For each branch, the DISTINCT surnames of its staff --"
-            " the part of name after the space -- joined into one"
-            " comma-separated string in alphabetical order."
-            " GROUP_CONCAT(DISTINCT ... ORDER BY ...) over a SUBSTR;"
-            " two colleagues who share a surname contribute it once.\n\n"
-            "Return: branch_id, surnames"
-        ),
-        solution=("SELECT branch_id, GROUP_CONCAT(DISTINCT SUBSTR(name, INSTR(name, ' ') + 1)"
-                  " ORDER BY SUBSTR(name, INSTR(name, ' ') + 1)) FROM staff GROUP BY branch_id"),
-        trap_sql=("SELECT branch_id, GROUP_CONCAT(SUBSTR(name, INSTR(name, ' ') + 1)"
-                  " ORDER BY SUBSTR(name, INSTR(name, ' ') + 1)) FROM staff GROUP BY branch_id"),
-        note="GROUP_CONCAT accepts DISTINCT like COUNT does, and in"
-             " SQLite 3.44 and later an ORDER BY as well -- but not a"
-             " custom separator together with DISTINCT, so the default"
-             " comma it is. The expression being concatenated is the"
-             " SUBSTR, and the ORDER BY repeats it. Central has two"
-             " Ekwuemes; without DISTINCT the name appears twice.",
-        claims=[("six branches, no surname repeated in any",
+        solution=("SELECT branch_id, copy_id, MAX(acquired_on) FROM copies c"
+                  " WHERE NOT EXISTS (SELECT 1 FROM loans l WHERE l.copy_id = c.copy_id) GROUP BY branch_id"),
+        trap_sql="SELECT branch_id, copy_id, MAX(acquired_on) FROM copies GROUP BY branch_id",
+        note="The WHERE narrows the copies BEFORE the grouping, so the"
+             " MAX is taken over the never-loaned ones only, and SQLite's"
+             " bare-column rule brings that copy's id along. Without the"
+             " NOT EXISTS the answer is each branch's newest copy of all,"
+             " most of which have been out several times.",
+        claims=[("six branches, every copy named never loaned",
                  lambda rows, c: len(rows) == 6
-                 and all(len(r[1].split(',')) == len(set(r[1].split(','))) for r in rows))],
+                 and all(c.execute("SELECT COUNT(*) FROM loans WHERE copy_id = ?", (r[1],)).fetchone()[0] == 0
+                         for r in rows))],
     ),
     dict(
-        id=12, ledger="Q978", concept="STR", tier="5 - Text with aggregation",
-        title="Authors who share a surname",
+        id=6, ledger="Q987", concept="BARE", tier="3 - Bare columns and open ends",
+        title="Each member's oldest open hold at Northgate",
         prompt=(
-            "Surnames held by MORE THAN ONE author: the surname, how"
-            " many authors have it, and their full names joined with"
-            " ', ' in alphabetical order. The surname is a SUBSTR from"
-            " INSTR; group by that expression and filter the groups in"
-            " HAVING.\n\n"
-            "Return: surname, authors, names"
+            "For each member with an OPEN hold at branch 2 -- fulfilled_on"
+            " and cancelled_on both NULL -- their earliest such hold:"
+            " member_id, the book, and when it was placed. MIN(placed_at)"
+            " with book_id as a bare column, over the open holds only.\n\n"
+            "Return: member_id, book_id, placed_at"
         ),
-        solution=("SELECT SUBSTR(name, INSTR(name, ' ') + 1) AS surname, COUNT(*), GROUP_CONCAT(name, ', ' ORDER BY name)"
-                  " FROM authors GROUP BY surname HAVING COUNT(*) > 1"),
-        trap_sql=("SELECT SUBSTR(name, INSTR(name, ' ') + 1) AS surname, COUNT(*), GROUP_CONCAT(name, ', ' ORDER BY name)"
-                  " FROM authors GROUP BY name HAVING COUNT(*) > 1"),
-        note="GROUP BY can take an expression, or the alias of one, and"
-             " that is what groups the authors by surname. Grouping by"
-             " the full name instead groups the two Priya Achebes together"
-             " and nobody else -- the question of who shares a SURNAME"
-             " needs the surname to be the group. Twenty-four surnames"
-             " are shared.",
-        claims=[("twenty-four surnames, each held by two or more",
-                 lambda rows, c: len(rows) == 24 and all(r[1] >= 2 for r in rows)
-                 and all(r[2].count(', ') == r[1] - 1 for r in rows))],
+        solution=("SELECT member_id, book_id, MIN(placed_at) FROM holds"
+                  " WHERE branch_id = 2 AND fulfilled_on IS NULL AND cancelled_on IS NULL GROUP BY member_id"),
+        trap_sql=("SELECT member_id, book_id, MIN(placed_at) FROM holds"
+                  " WHERE branch_id = 2 GROUP BY member_id"),
+        note="'Open' is the two-NULL test, and it belongs in the WHERE"
+             " so that closed holds are not candidates for the MIN. Leave"
+             " it out and the query returns every member who ever held"
+             " at Northgate, with their first hold ever -- four times as"
+             " many rows, most of them long since fulfilled.",
+        claims=[("fifty-six members, every hold still open",
+                 lambda rows, c: len(rows) == 56
+                 and all(c.execute("SELECT COUNT(*) FROM holds WHERE member_id = ? AND book_id = ? AND placed_at = ?"
+                                   " AND fulfilled_on IS NULL AND cancelled_on IS NULL", r).fetchone()[0] == 1
+                         for r in rows))],
     ),
-    # ================================================= 6 Changing the data
+    # ============================================ 4 Set operations and text
     dict(
-        id=13, ledger="Q979", concept="TRG", tier="6 - Changing the data",
+        id=7, ledger="Q988", concept="S1", tier="4 - Set operations and text",
+        title="First words that fiction and poetry share",
+        prompt=(
+            "The first words of titles that occur in BOTH fiction and"
+            " poetry: SUBSTR up to the space in each genre's titles, and"
+            " INTERSECT between the two.\n\n"
+            "Return: first_word"
+        ),
+        solution=("SELECT SUBSTR(title, 1, INSTR(title, ' ') - 1) FROM books WHERE genre = 'fiction'"
+                  " INTERSECT SELECT SUBSTR(title, 1, INSTR(title, ' ') - 1) FROM books WHERE genre = 'poetry'"),
+        trap_sql=("SELECT SUBSTR(title, 1, INSTR(title, ' ') - 1) FROM books WHERE genre = 'fiction'"
+                  " UNION SELECT SUBSTR(title, 1, INSTR(title, ' ') - 1) FROM books WHERE genre = 'poetry'"),
+        note="A set operation works on whatever its two SELECTs produce,"
+             " including computed text, so the SUBSTR is written on both"
+             " sides. INTERSECT keeps the words both genres use; UNION"
+             " keeps the words either uses, which here is more than twice"
+             " as many.",
+        claims=[("fourteen shared first words, 'The' among them",
+                 lambda rows, c: len(rows) == 14 and ('The',) in rows)],
+    ),
+    dict(
+        id=8, ledger="Q989", concept="S1", tier="4 - Set operations and text",
+        title="Member surnames no staff member has",
+        prompt=(
+            "Surnames -- the part of name after the space -- that some"
+            " MEMBER has and no member of STAFF has, each once: EXCEPT"
+            " between the two tables' extracted surnames.\n\n"
+            "Return: surname"
+        ),
+        solution=("SELECT SUBSTR(name, INSTR(name, ' ') + 1) FROM members"
+                  " EXCEPT SELECT SUBSTR(name, INSTR(name, ' ') + 1) FROM staff"),
+        trap_sql=("SELECT SUBSTR(name, INSTR(name, ' ') + 1) FROM staff"
+                  " EXCEPT SELECT SUBSTR(name, INSTR(name, ' ') + 1) FROM members"),
+        note="EXCEPT removes duplicates as it goes, so a surname shared"
+             " by thirty members comes out once. The order of the two"
+             " SELECTs is the question: members minus staff gives eight"
+             " surnames, staff minus members gives none, because every"
+             " staff surname also belongs to some member.",
+        claims=[("eight surnames",
+                 lambda rows, c: len(rows) == 8)],
+    ),
+    # ================================================== 5 Windows and NULLs
+    dict(
+        id=9, ledger="Q990", concept="W1", tier="5 - Windows and NULLs",
+        title="Unpaid fines mounting up, month by month",
+        prompt=(
+            "For each month fines were issued: how many of that month's"
+            " fines are still unpaid, and the running total in pence of"
+            " unpaid fines issued up to and including that month. The"
+            " unpaid amount is a conditional SUM -- a CASE with no ELSE,"
+            " which SUM skips as NULL -- and the running total is a"
+            " window SUM over it.\n\n"
+            "Return: month, unpaid, running_unpaid_pence"
+        ),
+        solution=("SELECT strftime('%Y-%m', issued_on) AS m, SUM(paid_on IS NULL),"
+                  " SUM(SUM(CASE WHEN paid_on IS NULL THEN amount_pence END))"
+                  " OVER (ORDER BY strftime('%Y-%m', issued_on)) FROM fines GROUP BY m"),
+        trap_sql=("SELECT strftime('%Y-%m', issued_on) AS m, COUNT(paid_on),"
+                  " SUM(SUM(CASE WHEN paid_on IS NULL THEN amount_pence END))"
+                  " OVER (ORDER BY strftime('%Y-%m', issued_on)) FROM fines GROUP BY m"),
+        note="COUNT(paid_on) counts the fines WITH a payment date -- the"
+             " paid ones -- which is the opposite of what was asked; the"
+             " unpaid count is SUM(paid_on IS NULL). The CASE with no"
+             " ELSE yields NULL for paid fines, SUM ignores the NULLs,"
+             " and the outer window SUM accumulates the monthly results"
+             " in date order.",
+        claims=[("eighteen months, the last running total equal to all unpaid pence",
+                 lambda rows, c: len(rows) == 18 and max(rows)[2] == 414960
+                 and sum(r[1] for r in rows) == 1380)],
+    ),
+    dict(
+        id=10, ledger="Q991", concept="W3", tier="5 - Windows and NULLs",
+        title="The gaps between one member's loans",
+        prompt=(
+            "Member 834's loans in date order: loan_id, loaned_on, and"
+            " the whole number of days since their PREVIOUS loan -- 0,"
+            " not NULL, for the first. LAG gives the previous date,"
+            " julianday the difference, and COALESCE turns the first"
+            " row's NULL into 0.\n\n"
+            "Return: loan_id, loaned_on, gap_days"
+        ),
+        solution=("SELECT loan_id, loaned_on, COALESCE(CAST(julianday(loaned_on)"
+                  " - julianday(LAG(loaned_on) OVER (ORDER BY loaned_on)) AS INTEGER), 0)"
+                  " FROM loans WHERE member_id = 834"),
+        trap_sql=("SELECT loan_id, loaned_on, CAST(julianday(loaned_on)"
+                  " - julianday(LAG(loaned_on) OVER (ORDER BY loaned_on)) AS INTEGER)"
+                  " FROM loans WHERE member_id = 834"),
+        note="LAG has nothing to look back to on the first row and"
+             " returns NULL, which julianday and the subtraction pass"
+             " along. COALESCE(..., 0) is the fix when the question wants"
+             " a number there; LAG's third argument, a default, is the"
+             " other way: LAG(loaned_on, 1, loaned_on) gives a gap of 0"
+             " as well.",
+        claims=[("fifteen loans, the first with a gap of 0 and none NULL",
+                 lambda rows, c: len(rows) == 15 and all(r[2] is not None for r in rows)
+                 and min(rows, key=lambda r: r[1])[2] == 0)],
+    ),
+    # ================================================ 6 Recursion and text
+    dict(
+        id=11, ledger="Q992", concept="R1", tier="6 - Recursion and text",
+        title="A comma list turned into rows",
+        prompt=(
+            "Split the text 'fiction,poetry,travel' into one row per"
+            " genre with a recursive CTE -- each step takes the part"
+            " before the first comma and carries the rest forward -- and"
+            " count the books in each. Append a trailing comma to the"
+            " text first so the last item ends like the others.\n\n"
+            "Return: genre, books"
+        ),
+        solution=("WITH RECURSIVE s(item, rest) AS (SELECT '', 'fiction,poetry,travel,'"
+                  " UNION ALL SELECT SUBSTR(rest, 1, INSTR(rest, ',') - 1), SUBSTR(rest, INSTR(rest, ',') + 1)"
+                  " FROM s WHERE rest <> '')"
+                  " SELECT item, (SELECT COUNT(*) FROM books b WHERE b.genre = s.item) FROM s WHERE item <> ''"),
+        trap_sql=("WITH RECURSIVE s(item, rest) AS (SELECT '', 'fiction,poetry,travel'"
+                  " UNION ALL SELECT SUBSTR(rest, 1, INSTR(rest, ',') - 1), SUBSTR(rest, INSTR(rest, ',') + 1)"
+                  " FROM s WHERE INSTR(rest, ',') > 0)"
+                  " SELECT item, (SELECT COUNT(*) FROM books b WHERE b.genre = s.item) FROM s WHERE item <> ''"),
+        note="The classic recursive string split: the anchor holds the"
+             " whole text as `rest`, and each step peels one item off the"
+             " front with SUBSTR and INSTR. Stopping when no comma is left"
+             " loses the final item, because it never had a comma after"
+             " it -- hence the trailing comma, so every item ends the same"
+             " way and the loop runs until rest is empty.",
+        claims=[("three genres, fiction the largest",
+                 lambda rows, c: len(rows) == 3 and ('fiction', 153) in rows and ('travel', 71) in rows)],
+    ),
+    dict(
+        id=12, ledger="Q993", concept="R1", tier="6 - Recursion and text",
+        title="Six quarters, labelled",
+        prompt=(
+            "Loans per quarter from 2025Q1 to 2026Q2, labelled like"
+            " '2025Q1': a recursive CTE of quarter starts stepping"
+            " '+3 months', printf to build the label from strftime's"
+            " year and (month + 2) / 3, and a count of the loans from"
+            " each start up to but not including the next.\n\n"
+            "Return: quarter, loans"
+        ),
+        solution=("WITH RECURSIVE qs(start) AS (SELECT '2025-01-01' UNION ALL SELECT date(start, '+3 months')"
+                  " FROM qs WHERE start < '2026-04-01')"
+                  " SELECT printf('%sQ%d', strftime('%Y', start), (CAST(strftime('%m', start) AS INTEGER) + 2) / 3),"
+                  " (SELECT COUNT(*) FROM loans l WHERE l.loaned_on >= qs.start AND l.loaned_on < date(qs.start, '+3 months'))"
+                  " FROM qs"),
+        trap_sql=("WITH RECURSIVE qs(start) AS (SELECT '2025-01-01' UNION ALL SELECT date(start, '+3 months')"
+                  " FROM qs WHERE start < '2026-04-01')"
+                  " SELECT printf('%sQ%d', strftime('%Y', start), (CAST(strftime('%m', start) AS INTEGER) + 2) / 3),"
+                  " (SELECT COUNT(*) FROM loans l WHERE l.loaned_on >= qs.start AND l.loaned_on <= date(qs.start, '+3 months'))"
+                  " FROM qs"),
+        note="printf's %s takes the year text and %d the quarter number,"
+             " so the label is built in one call. The counting window is"
+             " half-open, start inclusive and next start exclusive;"
+             " with <= the first day of each following quarter is counted"
+             " twice and every total is a day too big.",
+        claims=[("six quarters of about four thousand",
+                 lambda rows, c: len(rows) == 6 and sum(r[1] for r in rows) == 23976
+                 and {r[0] for r in rows} == {'2025Q1', '2025Q2', '2025Q3', '2025Q4', '2026Q1', '2026Q2'})],
+    ),
+    # ================================================= 7 Changing the data
+    dict(
+        id=13, ledger="Q994", concept="TRG", tier="7 - Changing the data",
         kind="script",
-        title="One loan at a time per copy",
+        title="No renewal once a loan is overdue",
         prompt=(
-            "Write a BEFORE INSERT trigger on loans that refuses --"
-            " RAISE(ABORT, ...) -- a loan of a copy that is ALREADY OUT:"
-            " a loan of the same copy with returned_on NULL exists. The"
-            " question then lends copy 4, which is out, and copy 1,"
-            " which is on the shelf.\n\n"
-            "Checked: which of the two loans exist"
+            "Write a BEFORE UPDATE OF renewals trigger on loans that"
+            " refuses -- RAISE(ABORT, ...) -- to raise renewals on a loan"
+            " whose due_on BEFORE the update, OLD.due_on, is earlier than"
+            " '2026-06-30'. The question then renews loan 4107, due 20"
+            " June, and loan 156, due 17 July, each by one renewal and"
+            " fourteen days.\n\n"
+            "Checked: the renewals and due_on of both loans"
         ),
-        solution=("CREATE TRIGGER one_loan_per_copy BEFORE INSERT ON loans\n"
-                  "WHEN EXISTS (SELECT 1 FROM loans l WHERE l.copy_id = NEW.copy_id AND l.returned_on IS NULL)\n"
+        solution=("CREATE TRIGGER no_late_renewal BEFORE UPDATE OF renewals ON loans\n"
+                  "WHEN NEW.renewals > OLD.renewals AND OLD.due_on < '2026-06-30'\n"
                   "BEGIN\n"
-                  "  SELECT RAISE(ABORT, 'copy is already out');\n"
+                  "  SELECT RAISE(ABORT, 'loan is overdue and cannot be renewed');\n"
                   "END;"),
-        trap_sql=("CREATE TRIGGER one_loan_per_copy BEFORE INSERT ON loans\n"
-                  "WHEN EXISTS (SELECT 1 FROM loans l WHERE l.copy_id = NEW.copy_id)\n"
+        trap_sql=("CREATE TRIGGER no_late_renewal BEFORE UPDATE OF renewals ON loans\n"
+                  "WHEN NEW.renewals > OLD.renewals AND NEW.due_on < '2026-06-30'\n"
                   "BEGIN\n"
-                  "  SELECT RAISE(ABORT, 'copy is already out');\n"
+                  "  SELECT RAISE(ABORT, 'loan is overdue and cannot be renewed');\n"
                   "END;"),
-        driver_sql=("INSERT INTO loans (copy_id, member_id, loaned_on, due_on) VALUES (4, 5, '2026-07-01', '2026-07-22');\n"
-                    "INSERT INTO loans (copy_id, member_id, loaned_on, due_on) VALUES (1, 5, '2026-07-01', '2026-07-22');"),
-        probe_sql="SELECT copy_id FROM loans WHERE loan_id > 23976 ORDER BY loan_id",
-        note="The WHEN is an EXISTS over the table being inserted into,"
-             " correlated on NEW.copy_id, and the interval condition is"
-             " the open end: returned_on IS NULL. Without it any copy"
-             " that has EVER been lent is refused, which is almost all of"
-             " them -- copy 1 has fourteen loans in its history and is"
-             " nevertheless on the shelf.",
-        claims=[("copy 4 refused, copy 1 lent",
-                 lambda rows, c: rows == [(1,)])],
+        driver_sql=("UPDATE loans SET renewals = renewals + 1, due_on = date(due_on, '+14 days') WHERE loan_id = 4107;\n"
+                    "UPDATE loans SET renewals = renewals + 1, due_on = date(due_on, '+14 days') WHERE loan_id = 156;"),
+        probe_sql="SELECT loan_id, renewals, due_on FROM loans WHERE loan_id IN (4107, 156) ORDER BY loan_id",
+        note="In a BEFORE UPDATE trigger OLD is the row as it stands and"
+             " NEW is the row as it would become. The rule is about the"
+             " loan's CURRENT due date, so the test is on OLD.due_on;"
+             " the same renewal pushes NEW.due_on fourteen days on, past"
+             " 30 June for loan 4107, so a test on NEW lets the overdue"
+             " loan through.",
+        claims=[("4107 refused, 156 renewed",
+                 lambda rows, c: rows == [(156, 1, '2026-07-31'), (4107, 0, '2026-06-20')])],
     ),
     dict(
-        id=14, ledger="Q980", concept="DML", tier="6 - Changing the data",
+        id=14, ledger="Q995", concept="DML", tier="7 - Changing the data",
         kind="script",
-        title="Grace for the five most overdue",
+        title="Opening hours, with one branch different",
         prompt=(
-            "The five loans that are furthest past due on 2026-06-30 --"
-            " still out, earliest due_on first, ties by lower loan_id --"
-            " get one more renewal: set renewals to 2 and push due_on"
-            " fourteen days on. A CTE with ROW_NUMBER picks them, and the"
-            " UPDATE's WHERE is an IN over the CTE.\n\n"
-            "Checked: the renewals and due_on of the five"
+            "Create `branch_hours (branch_id INTEGER PRIMARY KEY, hours"
+            " TEXT NOT NULL)` and fill it for EVERY branch from branches"
+            " with the JSON '{\"sat\": \"09:00-13:00\"}' -- INSERT ..."
+            " SELECT. Then record that Old Town (branch 6) opens"
+            " '10:00-16:00' on Saturdays with an INSERT ... ON CONFLICT"
+            " (branch_id) DO UPDATE, so the same statement would work"
+            " whether or not the row existed.\n\n"
+            "Checked: each branch's Saturday hours, read with json_extract"
         ),
-        solution=("WITH ranked AS (SELECT loan_id, ROW_NUMBER() OVER (ORDER BY due_on, loan_id) AS rn\n"
-                  "                FROM loans WHERE returned_on IS NULL AND due_on < '2026-06-30')\n"
-                  "UPDATE loans SET renewals = 2, due_on = date(due_on, '+14 days')\n"
-                  "WHERE loan_id IN (SELECT loan_id FROM ranked WHERE rn <= 5);"),
-        trap_sql=("WITH ranked AS (SELECT loan_id, ROW_NUMBER() OVER (ORDER BY due_on DESC, loan_id) AS rn\n"
-                  "                FROM loans WHERE returned_on IS NULL AND due_on < '2026-06-30')\n"
-                  "UPDATE loans SET renewals = 2, due_on = date(due_on, '+14 days')\n"
-                  "WHERE loan_id IN (SELECT loan_id FROM ranked WHERE rn <= 5);"),
-        probe_sql=("SELECT loan_id, renewals, due_on FROM loans"
-                   " WHERE loan_id IN (21461, 7469, 3607, 20653, 5719) ORDER BY loan_id"),
-        note="A WITH clause can precede an UPDATE, and the CTE is where"
-             " the window function lives -- an UPDATE cannot hold one"
-             " directly. 'Furthest past due' is the EARLIEST due date,"
-             " so the numbering is ascending; DESC picks the five that"
-             " only just fell due. date(due_on, '+14 days') moves the"
-             " date; renewals = 2 is the cap the table's CHECK allows.",
-        claims=[("all five renewed twice and due a fortnight later",
-                 lambda rows, c: len(rows) == 5 and all(r[1] == 2 for r in rows)
-                 and (21461, 2, '2026-05-07') in rows)],
+        solution=("CREATE TABLE branch_hours (branch_id INTEGER PRIMARY KEY, hours TEXT NOT NULL);\n"
+                  "INSERT INTO branch_hours SELECT branch_id, '{\"sat\": \"09:00-13:00\"}' FROM branches;\n"
+                  "INSERT INTO branch_hours (branch_id, hours) VALUES (6, '{\"sat\": \"10:00-16:00\"}')\n"
+                  "  ON CONFLICT (branch_id) DO UPDATE SET hours = excluded.hours;"),
+        trap_sql=("CREATE TABLE branch_hours (branch_id INTEGER PRIMARY KEY, hours TEXT NOT NULL);\n"
+                  "INSERT INTO branch_hours SELECT branch_id, '{\"sat\": \"09:00-13:00\"}' FROM branches;\n"
+                  "INSERT INTO branch_hours (branch_id, hours) VALUES (6, '{\"sat\": \"10:00-16:00\"}');"),
+        probe_sql="SELECT branch_id, json_extract(hours, '$.sat') FROM branch_hours ORDER BY branch_id",
+        note="Two steps: a bulk INSERT ... SELECT that seeds every branch,"
+             " then an UPSERT for the exception. The plain INSERT for"
+             " branch 6 collides with the row the first step created and"
+             " fails, leaving Old Town on the default hours; ON CONFLICT"
+             " DO UPDATE turns the collision into the update that was"
+             " meant. json_extract reads the value back out of the text.",
+        claims=[("six branches, Old Town open longer",
+                 lambda rows, c: len(rows) == 6 and (6, '10:00-16:00') in rows
+                 and sum(r[1] == '09:00-13:00' for r in rows) == 5)],
     ),
     dict(
-        id=15, ledger="Q981", concept="VIEW", tier="6 - Changing the data",
+        id=15, ledger="Q996", concept="DML", tier="7 - Changing the data",
         kind="script",
-        title="A view you can write to",
+        title="One closed hold per member, the latest kept",
         prompt=(
-            "Create a view `member_contact (member_id, name, area)` over"
-            " members, with area being postcode_area -- then make it"
-            " UPDATABLE: an INSTEAD OF UPDATE OF area trigger on the view"
-            " that writes NEW.area into members.postcode_area for the row"
-            " whose member_id is OLD.member_id. The question then runs"
-            " UPDATE member_contact SET area = 'LS1' WHERE member_id ="
-            " 3.\n\n"
-            "Checked: member 3's postcode_area"
+            "Thin the history: for each member, keep only their most"
+            " recent CLOSED hold -- fulfilled or cancelled -- by placed_at,"
+            " and delete their other closed holds. Open holds are not"
+            " touched. ROW_NUMBER partitioned by member over the closed"
+            " holds, newest first, in a subquery that picks the hold_ids"
+            " to delete.\n\n"
+            "Checked: holds remaining, open holds remaining, and how many"
+            " members still have more than one closed hold"
         ),
-        solution=("CREATE VIEW member_contact AS\n"
-                  "  SELECT member_id, name, postcode_area AS area FROM members;\n"
-                  "CREATE TRIGGER contact_area INSTEAD OF UPDATE OF area ON member_contact\n"
-                  "BEGIN\n"
-                  "  UPDATE members SET postcode_area = NEW.area WHERE member_id = OLD.member_id;\n"
-                  "END;"),
-        trap_sql=("CREATE VIEW member_contact AS\n"
-                  "  SELECT member_id, name, postcode_area AS area FROM members;"),
-        driver_sql="UPDATE member_contact SET area = 'LS1' WHERE member_id = 3;",
-        probe_sql="SELECT postcode_area FROM members WHERE member_id = 3",
-        note="A view is read-only unless an INSTEAD OF trigger says what"
-             " an UPDATE, INSERT or DELETE on it should do; SQLite then"
-             " runs the trigger body in place of the statement. OLD and"
-             " NEW are the view's rows, so OLD.member_id identifies the"
-             " member and NEW.area is the value to write. Without the"
-             " trigger the question's UPDATE is simply refused.",
-        claims=[("member 3 moved to LS1",
-                 lambda rows, c: rows == [('LS1',)])],
+        solution=("DELETE FROM holds WHERE hold_id IN ("
+                  "SELECT hold_id FROM (SELECT hold_id, ROW_NUMBER() OVER (PARTITION BY member_id ORDER BY placed_at DESC) AS rn"
+                  " FROM holds WHERE fulfilled_on IS NOT NULL OR cancelled_on IS NOT NULL) WHERE rn > 1);"),
+        trap_sql=("DELETE FROM holds WHERE hold_id IN ("
+                  "SELECT hold_id FROM (SELECT hold_id, ROW_NUMBER() OVER (PARTITION BY member_id ORDER BY placed_at DESC) AS rn"
+                  " FROM holds) WHERE rn > 1);"),
+        probe_sql=("SELECT COUNT(*), SUM(fulfilled_on IS NULL AND cancelled_on IS NULL),"
+                   " (SELECT COUNT(*) FROM (SELECT member_id FROM holds WHERE fulfilled_on IS NOT NULL OR cancelled_on IS NOT NULL"
+                   " GROUP BY member_id HAVING COUNT(*) > 1)) FROM holds"),
+        note="The WHERE inside the numbering subquery is what keeps the"
+             " open holds out of it: number only the closed holds, and"
+             " only closed holds can be deleted. Number every hold and an"
+             " open hold can be the one kept, with the member's closed"
+             " ones all deleted -- or an open hold deleted because a"
+             " closed one is newer.",
+        claims=[("1098 holds left, all 337 open ones among them, no member with two closed",
+                 lambda rows, c: rows == [(1500 - 402, 337, 0)])],
     ),
 ]
 
