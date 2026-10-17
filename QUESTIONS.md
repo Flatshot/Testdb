@@ -27,13 +27,13 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the ninth set on the public library (SEED
-861), and a step UP: every SQL question combines TWO tools the earlier sets
-taught separately -- windows over CTEs, EXISTS inside CASE and SUM,
-recursion joined to interval tests, JSON built from grouped CTEs, string
-functions inside aggregates -- with **three writable** that each take two
-steps. **Fifteen Python** functions of two or three tools, every tool named
-in the prompt.
+Thirty questions in two tracks, the tenth set on the public library (SEED
+861) and the second at TWO tools per SQL question, paired differently:
+plans with CASE, JSON with dates, bare columns with open-end tests, set
+operations with text, windows with NULLs, recursion with text -- with
+**three writable** in two steps each. **Fifteen Python**, one-tool functions
+on tools no earlier set used, with the import line given wherever one is
+needed.
 
 ### The writable stage
 
@@ -43,58 +43,63 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | a `BEFORE INSERT` trigger whose WHEN is an EXISTS with an open-end test | which of two driven loans exist |
-| 14 | a `WITH ... ROW_NUMBER()` CTE feeding an `UPDATE ... WHERE ... IN` | the five loans' renewals and due dates |
-| 15 | a `VIEW` plus an `INSTEAD OF UPDATE` trigger that makes it writable | one member's postcode after a driven update |
+| 13 | a `BEFORE UPDATE OF` trigger comparing OLD.due_on with a date | two driven renewals' renewals and due dates |
+| 14 | `CREATE TABLE`, `INSERT ... SELECT`, then `INSERT ... ON CONFLICT DO UPDATE` with JSON | each branch's Saturday hours via json_extract |
+| 15 | a `DELETE` by `ROW_NUMBER` over the closed holds only | holds left, open holds left, members with two closed |
 
-13 and 15 carry a `driver_sql`: statements the question runs after your
-script. A refusal is reported in the status bar, not treated as an error.
+13 carries a `driver_sql`: two updates the question runs after your script.
+A refusal is reported in the status bar, not treated as an error.
+
+### The query-plan stage
+
+Questions 1 and 2 open with a correct but slow query in the editor and are
+graded on EXPLAIN QUERY PLAN as well as on their rows: 1 must SEARCH
+`idx_loans_due`, 2 must read `idx_loans_copy` as a COVERING INDEX.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q967 | W2 window ranking | Each month's rank within its year | ex 1 | 1 - Windows over CTEs |
-| Q968 | W2 window ranking | Borrowers in quartiles | ex 2 | 1 - Windows over CTEs |
-| Q969 | W3 window vs GROUP BY | The biggest jump in a day | ex 3 | 1 - Windows over CTEs |
-| Q970 | E1 EXISTS | Copies that have never gone out | ex 4 | 2 - EXISTS, CASE and HAVING |
-| Q971 | C7 CASE | Debtor, borrower or lapsed | ex 5 | 2 - EXISTS, CASE and HAVING |
-| Q972 | A3 WHERE vs HAVING | Spread out, but not at Central | ex 6 | 2 - EXISTS, CASE and HAVING |
-| Q973 | INT intervals | Loans open at each month's end | ex 7 | 3 - Recursion meets intervals |
-| Q974 | R1 recursive CTE | Old Town's copies out, day by day | ex 8 | 3 - Recursion meets intervals |
-| Q975 | JSN JSON functions | Each genre's stock by condition, as JSON | ex 9 | 4 - JSON in aggregates |
-| Q976 | JSN JSON functions | The three most borrowed titles per genre, as a list | ex 10 | 4 - JSON in aggregates |
-| Q977 | STR string aggregation | The surnames at each branch, once each | ex 11 | 5 - Text with aggregation |
-| Q978 | STR string aggregation | Authors who share a surname | ex 12 | 5 - Text with aggregation |
-| Q979 | TRG triggers | One loan at a time per copy **(script)** | ex 13 | 6 - Changing the data |
-| Q980 | DML update & delete | Grace for the five most overdue **(script)** | ex 14 | 6 - Changing the data |
-| Q981 | VIEW views | A view you can write to **(script)** | ex 15 | 6 - Changing the data |
+| Q982 | X5 query plans | Due in May, found by the index | ex 1 | 1 - Plans and CASE |
+| Q983 | X5 query plans | Copy 1's loans, weekday or weekend, from the index alone | ex 2 | 1 - Plans and CASE |
+| Q984 | JSN JSON functions | The years each branch withdrew stock, as JSON | ex 3 | 2 - JSON and dates |
+| Q985 | JSN JSON functions | Three dates to check, from a JSON list | ex 4 | 2 - JSON and dates |
+| Q986 | BARE SQLite bare columns | The newest copy nobody has borrowed, per branch | ex 5 | 3 - Bare columns and open ends |
+| Q987 | BARE SQLite bare columns | Each member's oldest open hold at Northgate | ex 6 | 3 - Bare columns and open ends |
+| Q988 | S1 set operations | First words that fiction and poetry share | ex 7 | 4 - Set operations and text |
+| Q989 | S1 set operations | Member surnames no staff member has | ex 8 | 4 - Set operations and text |
+| Q990 | W1 window frames | Unpaid fines mounting up, month by month | ex 9 | 5 - Windows and NULLs |
+| Q991 | W3 window vs GROUP BY | The gaps between one member's loans | ex 10 | 5 - Windows and NULLs |
+| Q992 | R1 recursive CTE | A comma list turned into rows | ex 11 | 6 - Recursion and text |
+| Q993 | R1 recursive CTE | Six quarters, labelled | ex 12 | 6 - Recursion and text |
+| Q994 | TRG triggers | No renewal once a loan is overdue **(script)** | ex 13 | 7 - Changing the data |
+| Q995 | DML update & delete | Opening hours, with one branch different **(script)** | ex 14 | 7 - Changing the data |
+| Q996 | DML update & delete | One closed hold per member, the latest kept **(script)** | ex 15 | 7 - Changing the data |
 
 ### Python
 
-Fifteen functions of two or three tools each, the tools named in the
-prompt: split/join/title, split/comprehension/join/upper, Counter and
-most_common, alignment format specs, lstrip/float/round, sum/len/round,
-fromisoformat/strftime, date subtraction with abs, min and max with key=len,
-strip/int in a set comprehension with sorted, a lambda tuple key,
-dict.fromkeys with list, range with a step and slices, keys() | keys() with
-get in a comprehension, and set(values()) with nested comprehensions.
+Fifteen functions of one or two lines, each built around one tool named in
+its title, with the import line stated where one is needed: startswith()
+with a tuple, islower(), chr(), find() with a start, math.factorial(),
+math.lcm(), statistics.fmean(), math.trunc(), oct(), itertools.pairwise(),
+heapq.nsmallest(), max(default=), itertools.chain(), dict.popitem() and >=
+on sets.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P236 | PY6 split join title | A name tidied up | py 1 | 1 - Strings |
-| P237 | PY6 split comprehension join | Initials from a full name | py 2 | 1 - Strings |
-| P238 | PY6 Counter most_common | The two commonest words | py 3 | 1 - Strings |
-| P239 | PY6 format specs | A line of a price list | py 4 | 1 - Strings |
-| P240 | PY6 lstrip float round | Pounds in text to pence | py 5 | 1 - Strings |
-| P241 | PY6 sum len round | An average to one decimal | py 6 | 2 - Numbers and dates |
-| P242 | PY6 fromisoformat strftime | What day of the week a date falls on | py 7 | 2 - Numbers and dates |
-| P243 | PY6 date subtraction abs | Days between two dates, either way round | py 8 | 2 - Numbers and dates |
-| P244 | PY6 min max key len | The shortest and the longest | py 9 | 3 - Lists |
-| P245 | PY6 strip int set sorted | Ids typed by hand, cleaned up | py 10 | 3 - Lists |
-| P246 | PY6 sorted lambda tuple key | Shortest first, then alphabetical | py 11 | 3 - Lists |
-| P247 | PY6 fromkeys list | Duplicates dropped, order kept | py 12 | 3 - Lists |
-| P248 | PY6 range step slice | A list cut into chunks | py 13 | 3 - Lists |
-| P249 | PY6 keys union get comprehension | Two tallies added together | py 14 | 4 - Dictionaries |
-| P250 | PY6 set values comprehension sorted | Grouped by value | py 15 | 4 - Dictionaries |
+| P251 | PY3 startswith tuple | startswith(tuple): a Leeds or Bradford postcode? | py 1 | 1 - Strings |
+| P252 | PY3 islower | islower(): no capitals anywhere | py 2 | 1 - Strings |
+| P253 | PY3 chr | chr(): the character with a given code | py 3 | 1 - Strings |
+| P254 | PY3 find start | find(sub, start): the second space | py 4 | 1 - Strings |
+| P255 | PY3 math factorial | math.factorial(): n times everything below it | py 5 | 2 - Numbers |
+| P256 | PY3 math lcm | math.lcm(): the smallest shared multiple | py 6 | 2 - Numbers |
+| P257 | PY3 statistics fmean | statistics.fmean(): the mean, always a float | py 7 | 2 - Numbers |
+| P258 | PY3 math trunc | math.trunc(): drop the fraction, towards zero | py 8 | 2 - Numbers |
+| P259 | PY3 oct | oct(): a number in base eight | py 9 | 2 - Numbers |
+| P260 | PY3 pairwise | itertools.pairwise(): each item with the next | py 10 | 3 - Lists |
+| P261 | PY3 heapq nsmallest | heapq.nsmallest(): the three lowest | py 11 | 3 - Lists |
+| P262 | PY3 max default | max(default=): the largest, or None | py 12 | 3 - Lists |
+| P263 | PY3 itertools chain | itertools.chain(): several lists as one | py 13 | 3 - Lists |
+| P264 | PY3 dict popitem | popitem(): the last pair, taken out | py 14 | 4 - Sets and dictionaries |
+| P265 | PY3 set superset | >= on sets: does the stock cover the order? | py 15 | 4 - Sets and dictionaries |
 
 ## Retired
 
@@ -403,6 +408,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q967 | W2 window ranking | Each month's rank within its year | - | retired |
+| Q968 | W2 window ranking | Borrowers in quartiles | - | retired |
+| Q969 | W3 window vs GROUP BY | The biggest jump in a day | - | retired |
+| Q970 | E1 EXISTS | Copies that have never gone out | - | retired |
+| Q971 | C7 CASE | Debtor, borrower or lapsed | - | retired |
+| Q972 | A3 WHERE vs HAVING | Spread out, but not at Central | - | retired |
+| Q973 | INT intervals | Loans open at each month's end | - | retired |
+| Q974 | R1 recursive CTE | Old Town's copies out, day by day | - | retired |
+| Q975 | JSN JSON functions | Each genre's stock by condition, as JSON | - | retired |
+| Q976 | JSN JSON functions | The three most borrowed titles per genre, as a list | - | retired |
+| Q977 | STR string aggregation | The surnames at each branch, once each | - | retired |
+| Q978 | STR string aggregation | Authors who share a surname | - | retired |
+| Q979 | TRG triggers | One loan at a time per copy **(script)** | - | retired |
+| Q980 | DML update & delete | Grace for the five most overdue **(script)** | - | retired |
+| Q981 | VIEW views | A view you can write to **(script)** | - | retired |
+| P236 | PY6 split join title | A name tidied up | - | retired |
+| P237 | PY6 split comprehension join | Initials from a full name | - | retired |
+| P238 | PY6 Counter most_common | The two commonest words | - | retired |
+| P239 | PY6 format specs | A line of a price list | - | retired |
+| P240 | PY6 lstrip float round | Pounds in text to pence | - | retired |
+| P241 | PY6 sum len round | An average to one decimal | - | retired |
+| P242 | PY6 fromisoformat strftime | What day of the week a date falls on | - | retired |
+| P243 | PY6 date subtraction abs | Days between two dates, either way round | - | retired |
+| P244 | PY6 min max key len | The shortest and the longest | - | retired |
+| P245 | PY6 strip int set sorted | Ids typed by hand, cleaned up | - | retired |
+| P246 | PY6 sorted lambda tuple key | Shortest first, then alphabetical | - | retired |
+| P247 | PY6 fromkeys list | Duplicates dropped, order kept | - | retired |
+| P248 | PY6 range step slice | A list cut into chunks | - | retired |
+| P249 | PY6 keys union get comprehension | Two tallies added together | - | retired |
+| P250 | PY6 set values comprehension sorted | Grouped by value | - | retired |
 | Q952 | A3 WHERE vs HAVING | Big branches with a damage problem | - | retired |
 | Q953 | A3 WHERE vs HAVING | Regulars who are never late | - | retired |
 | Q954 | A3 WHERE vs HAVING | Long books from a long way back | - | retired |
@@ -1608,7 +1643,7 @@ they still count as asked.
   trigger that logs to a table it creates, a correlated DELETE, and an
   idempotent INSERT ... SELECT ... WHERE NOT EXISTS. Python, fifteen
   one-tool functions on tools no earlier set used.
-- **Q967-Q981 and P236-P250** current set. The library again (SEED 861),
+- **Q967-Q981 and P236-P250** retired set. The library again (SEED 861),
   a step UP: two tools per SQL question -- DENSE_RANK partitioned by a
   CTE's year, NTILE over per-member counts then grouped, LAG then LIMIT
   1, SUM of an EXISTS, a CASE of EXISTS tests in order, two HAVING
@@ -1620,3 +1655,15 @@ they still count as asked.
   EXISTS, a ROW_NUMBER CTE feeding an UPDATE, and a view made writable by
   an INSTEAD OF trigger. Python, fifteen functions of two or three named
   tools.
+- **Q982-Q996 and P251-P265** current set. The library again (SEED 861),
+  two tools per SQL question in new pairings: a date range that lets
+  idx_loans_due be searched under a CASE, a covering read of
+  idx_loans_copy under a CASE, json_group_array DISTINCT over strftime
+  years, json_each over dates with a due count, MAX's row among the
+  never-loaned copies, MIN's row among the open holds, INTERSECT of first
+  words, EXCEPT of surnames, a running total of unpaid pence through a
+  CASE, COALESCE over LAG, a comma list split by recursion, quarters
+  labelled by printf -- and three writable in two steps: a BEFORE UPDATE
+  trigger on OLD.due_on, INSERT ... SELECT then an UPSERT with JSON, and
+  a DELETE by ROW_NUMBER over closed holds only. Python, fifteen one-tool
+  functions with the import line stated where needed.
