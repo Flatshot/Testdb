@@ -1,28 +1,27 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the public library, the
-tenth set on this schema and the second at two tools per question, paired
-differently, with three writable questions that each take two steps.
-**Fifteen Python**: tiny functions of one or two lines, each about ONE tool
-named in the question's title, with the import line stated wherever one is
-needed.
+eleventh set on this schema and the third at two tools per question, with
+three writable questions that each take two steps. **Fifteen Python**
+functions each built around one simple for or while loop over plain
+numbers or strings, with no imports.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Plans and CASE | 1-2 |
-| 2 - JSON and dates | 3-4 |
-| 3 - Bare columns and open ends | 5-6 |
-| 4 - Set operations and text | 7-8 |
-| 5 - Windows and NULLs | 9-10 |
-| 6 - Recursion and text | 11-12 |
+| 1 - Dates and windows | 1-2 |
+| 2 - Grain and JSON | 3-4 |
+| 3 - EXISTS and text | 5-6 |
+| 4 - Recursion and plans | 7-8 |
+| 5 - Aggregates and NULLs | 9-10 |
+| 6 - Set operations and dates | 11-12 |
 | 7 - Changing the data | 13-15 |
 
 | Stage | Python questions |
 |---|---|
-| 1 - Strings | 1-4 |
-| 2 - Numbers | 5-9 |
-| 3 - Lists | 10-13 |
-| 4 - Sets and dictionaries | 14-15 |
+| 1 - Counting | 1-4 |
+| 2 - Searching | 5-8 |
+| 3 - Building | 9-12 |
+| 4 - Reducing | 13-15 |
 
 ## The schema
 
@@ -63,45 +62,44 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Question 13 runs two updates of its own *after* your
-script -- a renewal of an overdue loan and of one not yet due. Questions 14
-and 15 are graded on what your script leaves behind.
+**Driver statements.** Question 13 runs two inserts of its own *after* your
+script -- the holds your trigger should log. Questions 14 and 15 are graded
+on what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 13 | `BEFORE UPDATE OF renewals ON loans WHEN NEW.renewals > OLD.renewals AND OLD.due_on < '2026-06-30'` |
-| 14 | `CREATE TABLE branch_hours ...; INSERT ... SELECT ... FROM branches; INSERT ... ON CONFLICT (branch_id) DO UPDATE SET hours = excluded.hours` |
-| 15 | `DELETE FROM holds WHERE hold_id IN (SELECT hold_id FROM (... ROW_NUMBER() OVER (PARTITION BY member_id ORDER BY placed_at DESC) ... WHERE closed) WHERE rn > 1)` |
+| 13 | `CREATE TABLE hold_log ...; CREATE TRIGGER ... AFTER INSERT ON holds BEGIN INSERT INTO hold_log (payload) VALUES (json_object(...NEW...)); END` |
+| 14 | `UPDATE loans SET due_on = date(due_on, CASE renewals WHEN 0 THEN '+7 days' ... END) WHERE returned_on IS NULL` |
+| 15 | `CREATE VIEW member_rank AS SELECT member_id, COUNT(*), DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) FROM loans GROUP BY member_id` |
 
 ## The query-plan stage
 
-Questions 1 and 2 cannot be graded on their rows alone, because the slow
-query and the fast one return exactly the same rows. Each opens with the
-slow query already in the editor -- correct, and the thing to improve --
-and **Check answer** also runs `EXPLAIN QUERY PLAN` on yours: 1 must say
-SEARCH with `idx_loans_due`, 2 must say COVERING INDEX `idx_loans_copy`.
-**Explain plan** (the button, or F6) shows you the plan of whatever is in the
-editor.
+Question 7 cannot be graded on its rows alone, because the slow query and
+the fast one return exactly the same rows. It opens with the slow query
+already in the editor -- correct, and the thing to improve -- and **Check
+answer** also runs `EXPLAIN QUERY PLAN` on yours: it must say USING INTEGER
+PRIMARY KEY and must not build an AUTOMATIC index. **Explain plan** (the
+button, or F6) shows you the plan of whatever is in the editor.
 
 ## Things the data does on purpose
 
-- **1,349 loans fall due in May 2026**, found by a range on due_on in a
-  few steps or by strftime in 24,000; **copy 1 has 14 loans**, all of
-  which the covering index knows about without opening the table.
-- **108 copies have never been loaned**, the pool question 5's MAX
-  picks from once NOT EXISTS has narrowed it.
-- **56 members have an open hold at Northgate, out of 225 who
-  ever held there** -- question 6's WHERE against no WHERE.
-- **14 first words are shared by fiction and poetry**, and
-  **8 member surnames belong to no staff member** -- while every
-  staff surname belongs to some member, so question 8 reversed is empty.
-- **1,380 fines are unpaid**, the total question 9's running sum reaches
-  in its last row.
-- **Loan 4107 is out and was due 20 June; loan 156 is due 17 July** -- the
-  two renewals question 13's trigger must tell apart, and a test on
-  NEW.due_on lets the first one through.
-- **300 members have more than one closed hold**, the duplicates
-  question 15 thins while leaving the 337 open holds alone.
+- **100 authors have three or more books**, question 3's rows, where
+  the join to copies repeats each title once per copy.
+- **88 'The' titles have no copy at Central, but 155
+  have a copy somewhere else** -- the two are not complements, which is
+  question 5.
+- **266 members share a surname with staff at their own branch,
+  1,015 with staff anywhere** -- question 6's second condition.
+- **804 fines sit exactly on a hundred-pence edge**, each counted twice
+  if question 8's bands close with <=.
+- **49 members have two or more fines and have paid none**, which
+  COUNT(paid_on) = 0 finds and SUM(paid_on IS NULL) >= 2 does not.
+- **337 holds are still waiting**, and AVG forgets every one of them
+  unless question 10's COALESCE gives them an end.
+- **4 Sundays saw loans but no holds**, question 11's EXCEPT,
+  which finds every Sunday if placed_at keeps its time.
+- **4 members occupy the top three places by loans**, because two of
+  them tie -- DENSE_RANK in question 15 keeps them all.
 
 ## How the Python questions are graded
 
@@ -112,8 +110,9 @@ result with the reference function's. Values are compared, not their printed
 form, so a dictionary in a different order is the same dictionary -- but the
 type counts: a tuple is not a list, a set is not a list, and 0 is not False.
 A function that prints its answer instead of returning it returns None, and
-None matches nothing. Each question here is one or two lines about one tool,
-named in its title, and says which import line to write when one is needed.
+None matches nothing. Each question here is one simple loop -- a for or a
+while -- with an if, a counter or a list built up inside it, and nothing to
+import.
 
 Your code runs in a separate interpreter with a five-second limit, so a loop
 that never ends is stopped and reported, not fatal. It cannot see the
@@ -122,389 +121,386 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Plans and CASE (2)
+## 1 - Dates and windows (2)
 
-Two questions graded on EXPLAIN QUERY PLAN with a slow query already in the
-editor: a date RANGE on the bare column so the index is searched, and a query
-that mentions only indexed columns so the index covers it. A CASE rides on top
-of each.
+strftime groups under a window SUM with no PARTITION for a share, and a quarter
+label built from two strftimes under LAG.
 
-1. **Due in May, found by the index** (Q982)
+1. **Each weekday's share of the loans** (Q997)
 
-   Every loan due in May 2026, with a status: 'out' if returned_on is NULL,
-   else 'returned'. The query in the editor is correct but wraps due_on in
-   strftime, which reads all 24,000 loans. Rewrite the WHERE as a RANGE on the
-   bare column so idx_loans_due can be searched. Your plan must mention
-   idx_loans_due with SEARCH, not SCAN.
+   For each day of the week -- strftime's %w, '0' for Sunday -- how many loans
+   started on it and what percentage of ALL loans that is, to one decimal. The
+   total is a window SUM over the grouped counts, with no PARTITION.
 
-   *Return: loan_id, status*
+   *Return: weekday, loans, pct*
 
-2. **Copy 1's loans, weekday or weekend, from the index alone** (Q983)
+2. **Quarter on quarter** (Q998)
 
-   For copy 1, each loan's loaned_on and whether it was a 'weekend' (strftime
-   %w of '0' or '6') or a 'weekday'. The index idx_loans_copy holds copy_id
-   and loaned_on, so a query that touches only those columns can be answered
-   from the index without opening the table: your plan must say COVERING INDEX
-   idx_loans_copy with SEARCH. The query in the editor is correct and scans.
+   Loans per quarter, labelled '2025Q1' and so on, with the change from the
+   previous quarter -- NULL for the first. The label is strftime's year, 'Q',
+   and (month + 2) / 3 joined with ||; the change is LAG over the grouped
+   counts in label order.
 
-   *Return: loaned_on, day_type*
+   *Return: quarter, loans, change*
 
-## 2 - JSON and dates (2)
+## 2 - Grain and JSON (2)
 
-json_group_array with DISTINCT and ORDER BY over strftime years, and json_each
-over a list of dates with a correlated count beside each.
+DISTINCT inside json_group_array because the join to copies multiplies the
+titles, and json_group_object over a CTE grouped one level finer.
 
-3. **The years each branch withdrew stock, as JSON** (Q984)
+3. **Prolific authors: their titles and their copies** (Q999)
 
-   For each branch that has withdrawn copies, a JSON array of the DISTINCT
-   years in which it withdrew them, ascending: strftime for the year of
-   withdrawn_on, json_group_array with DISTINCT and an ORDER BY inside its
-   parentheses, over the withdrawn copies only.
+   For each author with three or more books: how many copies of their books
+   exist in all, and their titles as one JSON array in alphabetical order.
+   Joining copies multiplies the title rows, so the array needs DISTINCT --
+   json_group_array(DISTINCT title ORDER BY title) -- and the HAVING needs
+   COUNT(DISTINCT book_id).
 
-   *Return: branch_id, years*
+   *Return: author_id, copies, titles*
 
-4. **Three dates to check, from a JSON list** (Q985)
+4. **Each branch's stock as a JSON object** (Q1000)
 
-   Given the JSON list '["2026-01-15", "2026-03-01", "2026-06-30"]': for each
-   date, how many loans were DUE that day, and the day of the week as
-   strftime's %w gives it. json_each turns the list into rows with a `value`
-   column.
+   For each branch, ONE JSON object whose keys are the conditions and whose
+   values are the copy counts -- {"damaged": 32, "good": 220, "worn": 129}. A
+   CTE grouped by branch and condition, then json_group_object(condition, n)
+   grouped by branch; grouping the CTE by branch_id, condition puts the keys
+   in alphabetical order.
 
-   *Return: day, due, weekday*
+   *Return: branch_id, stock*
 
-## 3 - Bare columns and open ends (2)
+## 3 - EXISTS and text (2)
 
-SQLite's bare-column rule beside a single MAX or MIN, with the WHERE -- NOT
-EXISTS, or the two-NULL test -- narrowing the rows BEFORE the aggregate picks
-one.
+LIKE beside a NOT EXISTS that has to be written as a negative, and a surname
+extracted on both sides of a correlated EXISTS that also matches the branch.
 
-5. **The newest copy nobody has borrowed, per branch** (Q986)
+5. **'The' titles that Central does not hold** (Q1001)
 
-   For each branch: among its copies that have NEVER been loaned, the most
-   recently acquired one -- copy_id and acquired_on. NOT EXISTS against loans
-   picks the never-loaned copies; MAX(acquired_on) with copy_id as a bare
-   column picks the newest.
+   Books whose title begins 'The ' and of which Central (branch 1) holds NO
+   copy: book_id and title. LIKE for the prefix, NOT EXISTS over copies for
+   the branch.
 
-   *Return: branch_id, copy_id, acquired_on*
+   *Return: book_id, title*
 
-6. **Each member's oldest open hold at Northgate** (Q987)
+6. **Members who share a surname with their branch's staff** (Q1002)
 
-   For each member with an OPEN hold at branch 2 -- fulfilled_on and
-   cancelled_on both NULL -- their earliest such hold: member_id, the book,
-   and when it was placed. MIN(placed_at) with book_id as a bare column, over
-   the open holds only.
+   Members whose surname -- the part of name after the space -- is also the
+   surname of a member of staff at the member's OWN home branch: member_id and
+   name. A correlated EXISTS over staff that extracts the surname on both
+   sides and matches the branch.
 
-   *Return: member_id, book_id, placed_at*
+   *Return: member_id, name*
 
-## 4 - Set operations and text (2)
+## 4 - Recursion and plans (2)
 
-INTERSECT and EXCEPT over computed SUBSTRs, where the order of the two SELECTs
-is the question.
+A recursive list of numbers joined to the rowid and graded on EXPLAIN QUERY
+PLAN, and recursive band edges joined to a half-open range.
 
-7. **First words that fiction and poetry share** (Q988)
+7. **The first hundred loans, by their primary key** (Q1003)
 
-   The first words of titles that occur in BOTH fiction and poetry: SUBSTR up
-   to the space in each genre's titles, and INTERSECT between the two.
+   The members who hold loans 1 to 100: the loan number and member_id. A
+   recursive CTE counts 1 to 100, and a join to loans looks each one up. The
+   query in the editor is correct and makes SQLite scan loans for every
+   number; write the join condition on the bare loan_id so each lookup is a
+   rowid search. Your plan must say USING INTEGER PRIMARY KEY.
 
-   *Return: first_word*
+   *Return: n, member_id*
 
-8. **Member surnames no staff member has** (Q989)
+8. **Fines in bands of a hundred pence** (Q1004)
 
-   Surnames -- the part of name after the space -- that some MEMBER has and no
-   member of STAFF has, each once: EXCEPT between the two tables' extracted
-   surnames.
+   How many fines fall in each band of 100 pence -- 0 to 99, 100 to 199, ...
+   900 to 999, and 1000 on its own at the cap -- the band's lower edge and the
+   count, every band present. A recursive CTE of lower edges 0, 100, ... 1000,
+   and a count of fines at or above the edge and BELOW the next.
 
-   *Return: surname*
+   *Return: band_from, fines*
 
-## 5 - Windows and NULLs (2)
+## 5 - Aggregates and NULLs (2)
 
-A conditional SUM through a CASE with no ELSE under a running window SUM, and
-COALESCE over LAG for the first row.
+COUNT(column) = 0 in HAVING as 'none paid', and COALESCE inside AVG so the
+waiting holds count.
 
-9. **Unpaid fines mounting up, month by month** (Q990)
+9. **Members who have never paid a fine** (Q1005)
 
-   For each month fines were issued: how many of that month's fines are still
-   unpaid, and the running total in pence of unpaid fines issued up to and
-   including that month. The unpaid amount is a conditional SUM -- a CASE with
-   no ELSE, which SUM skips as NULL -- and the running total is a window SUM
-   over it.
+   Members with at least two fines, NONE of them paid: member_id and the
+   number of fines. COUNT(paid_on) counts the paid ones -- the non-NULL rule
+   -- so 'none paid' is COUNT(paid_on) = 0 in the HAVING, beside the count of
+   all.
 
-   *Return: month, unpaid, running_unpaid_pence*
+   *Return: member_id, fines*
 
-10. **The gaps between one member's loans** (Q991)
+10. **How long a hold takes, counting the ones still waiting** (Q1006)
 
-    Member 834's loans in date order: loan_id, loaned_on, and the whole number
-    of days since their PREVIOUS loan -- 0, not NULL, for the first. LAG gives
-    the previous date, julianday the difference, and COALESCE turns the first
-    row's NULL into 0.
+    For each branch, the average days from placing a hold to its fulfilment,
+    to one decimal, over the holds that were NOT cancelled -- with a hold
+    still waiting counted as waiting until 2026-06-30. COALESCE(fulfilled_on,
+    '2026-06-30') inside the julianday, inside the AVG.
 
-    *Return: loan_id, loaned_on, gap_days*
+    *Return: branch_id, avg_days*
 
-## 6 - Recursion and text (2)
+## 6 - Set operations and dates (2)
 
-A comma list split into rows by SUBSTR and INSTR in a recursive CTE, and quarter
-starts stepped by '+3 months' and labelled by printf.
+EXCEPT where date() has to cut the time off one side, and INTERSECT where the
+NULLs fall away on their own.
 
-11. **A comma list turned into rows** (Q992)
+11. **Sundays with loans but no holds** (Q1007)
 
-    Split the text 'fiction,poetry,travel' into one row per genre with a
-    recursive CTE -- each step takes the part before the first comma and
-    carries the rest forward -- and count the books in each. Append a trailing
-    comma to the text first so the last item ends like the others.
+    The Sundays -- strftime('%w') = '0' -- on which loans started but no hold
+    was placed: the dates. EXCEPT between the Sunday loan dates and the hold
+    dates, with date() cut from placed_at on the holds side.
 
-    *Return: genre, books*
+    *Return: day*
 
-12. **Six quarters, labelled** (Q993)
+12. **Days with both a fine and a fulfilment** (Q1008)
 
-    Loans per quarter from 2025Q1 to 2026Q2, labelled like '2025Q1': a
-    recursive CTE of quarter starts stepping '+3 months', printf to build the
-    label from strftime's year and (month + 2) / 3, and a count of the loans
-    from each start up to but not including the next.
+    The days on which at least one fine was issued AND at least one hold was
+    fulfilled: INTERSECT between the two date columns.
 
-    *Return: quarter, loans*
+    *Return: day*
 
 ## 7 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A BEFORE UPDATE trigger that reads OLD,
-a seeded table then an UPSERT, and a DELETE numbered over the closed holds only.
+question's probe query reads the result. A trigger that logs
+json_object(NEW...), an UPDATE with a CASE choosing the date modifier, and a
+view holding DENSE_RANK.
 
-13. **No renewal once a loan is overdue** (Q994)
+13. **Every new hold, logged as JSON** (Q1009)
 
-    Write a BEFORE UPDATE OF renewals trigger on loans that refuses --
-    RAISE(ABORT, ...) -- to raise renewals on a loan whose due_on BEFORE the
-    update, OLD.due_on, is earlier than '2026-06-30'. The question then renews
-    loan 4107, due 20 June, and loan 156, due 17 July, each by one renewal and
-    fourteen days.
+    Create `hold_log (log_id INTEGER PRIMARY KEY, payload TEXT NOT NULL)` and
+    an AFTER INSERT trigger on holds that writes one row per new hold whose
+    payload is a JSON object with keys hold_id, member_id and book_id taken
+    from NEW. The question then inserts two holds.
 
-    *Checked: the renewals and due_on of both loans*
+    *Checked: the member_id and book_id read back from each payload with json_extract*
 
-14. **Opening hours, with one branch different** (Q995)
+14. **Grace by how often a loan was renewed** (Q1010)
 
-    Create `branch_hours (branch_id INTEGER PRIMARY KEY, hours TEXT NOT NULL)`
-    and fill it for EVERY branch from branches with the JSON '{"sat":
-    "09:00-13:00"}' -- INSERT ... SELECT. Then record that Old Town (branch 6)
-    opens '10:00-16:00' on Saturdays with an INSERT ... ON CONFLICT
-    (branch_id) DO UPDATE, so the same statement would work whether or not the
-    row existed.
+    Extend the due_on of every loan that is still OUT: by 7 days if it has
+    never been renewed, by 3 days if renewed once, and not at all if renewed
+    twice. One UPDATE whose SET uses date() with a CASE on renewals choosing
+    the modifier -- '+7 days', '+3 days', '+0 days'.
 
-    *Checked: each branch's Saturday hours, read with json_extract*
+    *Checked: the total loan length of the open loans at each renewal count, and of the returned loans*
 
-15. **One closed hold per member, the latest kept** (Q996)
+15. **A leaderboard as a view** (Q1011)
 
-    Thin the history: for each member, keep only their most recent CLOSED hold
-    -- fulfilled or cancelled -- by placed_at, and delete their other closed
-    holds. Open holds are not touched. ROW_NUMBER partitioned by member over
-    the closed holds, newest first, in a subquery that picks the hold_ids to
-    delete.
+    Create a view `member_rank (member_id, loans, place)` over the members who
+    have borrowed: each member's loan count and their place by that count, 1
+    for the most, with ties sharing a place and no numbers skipped --
+    DENSE_RANK over a GROUP BY.
 
-    *Checked: holds remaining, open holds remaining, and how many members still have more than one closed hold*
+    *Checked: how many members are in the top three places, and the fewest loans among them*
 
 # Python
 
-## 1 - Strings (4)
+## 1 - Counting (4)
 
-startswith() with a tuple against 'or', islower() against == lower(), chr()
-against str(), and find() with a start position.
+A counter under an if, a total over range(1, n + 1), neighbours from index 1,
+and a seen set that finds repeats anywhere.
 
-1. **startswith(tuple): a Leeds or Bradford postcode?** (P251)
+1. **Count the vowels** (P266)
 
-   Write a function `is_local(area)` that returns True when the postcode area
-   begins with 'LS' or 'BD', using startswith() with a TUPLE of prefixes. No
-   import is needed.
+   Write a function `count_vowels(s)` that returns how many characters of s
+   are vowels, upper or lower case. A for loop over the characters, an if that
+   tests the lower-cased character against 'aeiou', and a counter.
 
    ```
-   is_local("BD3") -> True
-   is_local("WF1") -> False
+   count_vowels("library") -> 2
+   ```
+
+   *Return: an integer.*
+
+2. **The sum of the squares up to n** (P267)
+
+   Write a function `sum_of_squares(n)` that returns 1*1 + 2*2 + ... + n*n,
+   using a for loop over range(1, n + 1) and a running total. For n = 0 the
+   answer is 0.
+
+   ```
+   sum_of_squares(3) -> 14
+   ```
+
+   *Return: an integer.*
+
+3. **Neighbours that match** (P268)
+
+   Write a function `count_repeats(values)` that returns how many positions
+   hold the same value as the position before them. A for loop over range(1,
+   len(values)), comparing values[i] with values[i - 1].
+
+   ```
+   count_repeats([1, 1, 2, 2, 2, 3]) -> 3
+   ```
+
+   *Return: an integer.*
+
+4. **Is anything repeated?** (P269)
+
+   Write a function `has_repeat(values)` that returns True when any value
+   appears more than once, anywhere in the list. A for loop that keeps the
+   values seen so far in a set, and returns True the moment the current value
+   is already in it.
+
+   ```
+   has_repeat([1, 2, 3, 1]) -> True
    ```
 
    *Return: True or False.*
 
-2. **islower(): no capitals anywhere** (P252)
+## 2 - Searching (4)
 
-   Write a function `all_lower(s)` that returns True when every letter in s is
-   lower case and there is at least one letter, using islower(). No import is
-   needed.
+A return inside the loop for the first match, an index tracked instead of a
+value, break against skip, and a running maximum that starts from None.
 
-   ```
-   all_lower("ls15") -> True
-   all_lower("123") -> False
-   ```
+5. **The first value over the limit** (P270)
 
-   *Return: True or False.*
-
-3. **chr(): the character with a given code** (P253)
-
-   Write a function `letter_from_code(n)` that returns the single character
-   whose Unicode code is n, using chr(). No import is needed.
+   Write a function `first_over(values, limit)` that returns the first value
+   STRICTLY greater than limit, or None when there is none. A for loop with an
+   if and a return inside it, and a return of None after the loop.
 
    ```
-   letter_from_code(65) -> "A"
+   first_over([3, 8, 12, 5], 7) -> 8
    ```
 
-   *Return: a one-character string.*
+   *Return: the value, or None.*
 
-4. **find(sub, start): the second space** (P254)
+6. **Where the smallest value is** (P271)
 
-   Write a function `second_space(s)` that returns the position of the SECOND
-   space in s, or -1 when there is no second space, using find() twice -- the
-   second call with a start position just after the first space. No import is
-   needed.
+   Write a function `index_of_min(values)` that returns the POSITION of the
+   smallest value in a non-empty list, the first such position if it appears
+   more than once. A for loop over range(len(values)) that remembers the best
+   position so far.
 
    ```
-   second_space("a b c") -> 3
+   index_of_min([5, 3, 9, 3]) -> 1
    ```
 
    *Return: an integer.*
 
-## 2 - Numbers (5)
+7. **Add up until the first negative** (P272)
 
-math.factorial(), math.lcm() against a * b, statistics.fmean() against median(),
-math.trunc() against floor(), and oct() against hex() -- each import line given
-in the prompt.
-
-5. **math.factorial(): n times everything below it** (P255)
-
-   Write a function `factorial(n)` that returns n! -- the product of the whole
-   numbers from 1 to n, and 1 for n = 0 -- using math.factorial(). Write
-   `import math` as the first line.
+   Write a function `total_until_negative(values)` that returns the sum of the
+   values BEFORE the first negative one -- all of them if none is negative. A
+   for loop with a running total and a break when a negative value is met.
 
    ```
-   factorial(5) -> 120
+   total_until_negative([4, 5, -1, 10]) -> 9
    ```
 
-   *Return: an integer.*
+   *Return: the total.*
 
-6. **math.lcm(): the smallest shared multiple** (P256)
+8. **The highest so far, at every step** (P273)
 
-   Write a function `shared_multiple(a, b)` that returns the smallest positive
-   number both a and b divide into, using math.lcm(). Write `import math` as
-   the first line.
-
-   ```
-   shared_multiple(4, 6) -> 12
-   ```
-
-   *Return: an integer.*
-
-7. **statistics.fmean(): the mean, always a float** (P257)
-
-   Write a function `mean_of(values)` that returns the arithmetic mean of a
-   non-empty list as a float, using statistics.fmean(). Write `import
-   statistics` as the first line.
+   Write a function `running_max(values)` that returns a list where each
+   position holds the largest value seen up to and including that position. A
+   for loop with a 'best so far' variable that starts as None, and a result
+   list to append to.
 
    ```
-   mean_of([1, 2, 3, 4]) -> 2.5
+   running_max([3, 1, 4, 1, 5]) -> [3, 3, 4, 4, 5]
    ```
 
-   *Return: a float.*
+   *Return: the new list.*
 
-8. **math.trunc(): drop the fraction, towards zero** (P258)
+## 3 - Building (4)
 
-   Write a function `whole_part(x)` that returns the integer part of x with
-   the fraction simply cut off, so -2.7 becomes -2, using math.trunc(). Write
-   `import math` as the first line.
+A while countdown whose condition decides the last value, range(1, n + 1) for a
+staircase, if / elif with the most specific test first, and insert(0) to
+reverse.
 
-   ```
-   whole_part(-2.7) -> -2
-   ```
+9. **Counting down to one** (P274)
 
-   *Return: an integer.*
-
-9. **oct(): a number in base eight** (P259)
-
-   Write a function `as_octal(n)` that returns the octal form of a non-
-   negative integer as a string WITH the 0o prefix, using oct(). No import is
-   needed.
+   Write a function `countdown(n)` that returns the list n, n - 1, ..., 1 --
+   empty for n of 0 or less. A while loop that appends n and then reduces it,
+   running while n is above zero.
 
    ```
-   as_octal(8) -> "0o10"
+   countdown(5) -> [5, 4, 3, 2, 1]
    ```
 
-   *Return: the string.*
+   *Return: the list.*
 
-## 3 - Lists (4)
+10. **A staircase of stars** (P275)
 
-itertools.pairwise() against zip(v, v), heapq.nsmallest() against sorted()[-3:],
-max(default=), and itertools.chain(*lists).
-
-10. **itertools.pairwise(): each item with the next** (P260)
-
-    Write a function `neighbours(values)` that returns a list of tuples
-    pairing each item with the one after it, using list() over
-    itertools.pairwise(). Write `import itertools` as the first line.
+    Write a function `staircase(n)` that returns a list of n strings, the
+    first one star, the second two stars, and so on. A for loop over range(1,
+    n + 1) appending '*' * i each time.
 
     ```
-    neighbours([1, 2, 3, 4]) -> [(1, 2), (2, 3), (3, 4)]
+    staircase(3) -> ["*", "**", "***"]
     ```
 
-    *Return: the list of tuples.*
+    *Return: the list of strings.*
 
-11. **heapq.nsmallest(): the three lowest** (P261)
+11. **Fizz and buzz, as a list** (P276)
 
-    Write a function `bottom_three(values)` that returns the three smallest
-    values, smallest first -- fewer when the list is shorter -- using
-    heapq.nsmallest(). Write `import heapq` as the first line.
+    Write a function `fizzbuzz(n)` that returns a list for 1 to n where
+    multiples of 15 become 'FizzBuzz', other multiples of 3 'Fizz', other
+    multiples of 5 'Buzz', and everything else stays a number. A for loop with
+    an if / elif / elif / else, testing 15 FIRST.
 
     ```
-    bottom_three([5, 1, 9, 3, 7]) -> [1, 3, 5]
+    fizzbuzz(5) -> [1, 2, "Fizz", 4, "Buzz"]
     ```
 
     *Return: the list.*
 
-12. **max(default=): the largest, or None** (P262)
+12. **The words in reverse order** (P277)
 
-    Write a function `highest(values)` that returns the largest value in the
-    list, or None when the list is empty, using max() with its default=
-    argument. No import is needed.
-
-    ```
-    highest([4, 2, 9]) -> 9
-    highest([]) -> None
-    ```
-
-    *Return: the largest value, or None.*
-
-13. **itertools.chain(): several lists as one** (P263)
-
-    Write a function `flattened(lists)` that returns one list holding the
-    items of every inner list in order, using list() over
-    itertools.chain(*lists) -- the star unpacks the outer list into chain's
-    arguments. Write `import itertools` as the first line.
+    Write a function `reverse_words(s)` that returns the words of s in the
+    opposite order, joined by single spaces. A for loop over s.split() that
+    builds a list by inserting each word at the FRONT -- insert(0, word) --
+    then ' '.join() of the list.
 
     ```
-    flattened([[1, 2], [3], [4, 5]]) -> [1, 2, 3, 4, 5]
+    reverse_words("the glass path") -> "path glass the"
     ```
 
-    *Return: the new list.*
+    *Return: the string.*
 
-## 4 - Sets and dictionaries (2)
+## 4 - Reducing (3)
 
-popitem() takes the last pair, and >= on sets the right way round.
+Digits peeled with % and //, an average guarded against an empty list, and a
+while loop that runs until n reaches 1.
 
-14. **popitem(): the last pair, taken out** (P264)
+13. **The digits of a number, added up** (P278)
 
-    Write a function `last_added(d)` that removes and returns the most
-    recently inserted (key, value) pair of a non-empty dictionary as a tuple,
-    using popitem(). No import is needed.
-
-    ```
-    last_added({"a": 1, "b": 2, "c": 3}) -> ("c", 3)
-    ```
-
-    *Return: the tuple.*
-
-15. **>= on sets: does the stock cover the order?** (P265)
-
-    Write a function `covers(stock, wanted)` that returns True when every
-    wanted item is in stock, using set() on each and the >= operator --
-    superset. No import is needed.
+    Write a function `digit_sum(n)` that returns the sum of the decimal digits
+    of a non-negative integer, using a while loop that adds n % 10 to a total
+    and then replaces n with n // 10, running while n is above zero.
 
     ```
-    covers(["ink", "pen", "paper"], ["pen", "ink"]) -> True
+    digit_sum(1234) -> 10
     ```
 
-    *Return: True or False.*
+    *Return: an integer.*
+
+14. **An average that copes with nothing** (P279)
+
+    Write a function `average_or_zero(values)` that returns the mean of the
+    values, or 0 for an empty list. A for loop that keeps a total and a count,
+    then an if that returns 0 when the count is zero and the division
+    otherwise.
+
+    ```
+    average_or_zero([2, 4, 6]) -> 4.0
+    average_or_zero([]) -> 0
+    ```
+
+    *Return: the mean, or 0.*
+
+15. **Steps to reach one** (P280)
+
+    Write a function `collatz_steps(n)` that counts how many steps it takes to
+    reach 1 from a positive integer when each step halves an even number and
+    turns an odd number into 3n + 1. A while loop running while n is not 1,
+    with an if / else for the two cases and a step counter that starts at 0.
+
+    ```
+    collatz_steps(6) -> 8
+    ```
+
+    *Return: an integer.*
 
 ## The one concept with no question here
 
@@ -515,7 +511,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,231 retired ones.
+1,261 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

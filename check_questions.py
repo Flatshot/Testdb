@@ -45,7 +45,7 @@ import exercises as ex
 import pyexercises as px
 
 LEDGER = Path(__file__).resolve().parent / "QUESTIONS.md"
-ROW = re.compile(r"^\|\s*([QP]\d{3})\s*\|(.*?)\|(.*?)\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$")
+ROW = re.compile(r"^\|\s*([QP]\d{3,4})\s*\|(.*?)\|(.*?)\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$")
 TRAILING_LIMIT = re.compile(r"\bLIMIT\s+(\d+)\s*$", re.IGNORECASE)
 ORDER_BY = re.compile(r"\bORDER\s+BY\b(.*?)\s+LIMIT\b", re.IGNORECASE | re.DOTALL)
 

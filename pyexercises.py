@@ -1,13 +1,11 @@
-"""Python practice exercises: fifteen tiny functions, one tool each.
+"""Python practice exercises: fifteen functions, one simple loop each.
 
-The seventeenth Python set, back to one-tool functions after the two-tool
-set: every question asks for a function of one or two lines that returns
-a value, built around one named tool no earlier set used -- startswith()
-with a tuple, islower(), chr(), find() with a start position,
-math.factorial(), math.lcm(), statistics.fmean(), math.trunc(), oct(),
-itertools.pairwise(), heapq.nsmallest(), max() with a default,
-itertools.chain(), dict.popitem() and >= on sets. Where a tool needs an
-import, the prompt gives the exact line to write.
+The eighteenth Python set, and a change of shape: every question asks for
+a function built around ONE for or while loop over plain numbers or
+strings -- counting, summing, finding, building a list -- with no import
+and no row-shaped data. The loop body is an if, an accumulator, or both.
+The title names the task; the prompt says which kind of loop and what it
+keeps track of.
 
 Two kinds of question, told apart by `kind`:
 
@@ -30,332 +28,490 @@ The code runs in a separate interpreter with a time limit (see pyrun.py).
 import pyrun
 
 EXERCISES = [
-    # ============================================================== 1 Strings
+    # ======================================================== 1 Counting
     dict(
-        id=1, ledger="P251", concept="PY3 startswith tuple", tier="1 - Strings",
-        title="startswith(tuple): a Leeds or Bradford postcode?", kind="function",
-        func="is_local",
-        cases=[("LS15",), ("BD3",), ("WF1",), ("",)],
+        id=1, ledger="P266", concept="PY4 for count if", tier="1 - Counting",
+        title="Count the vowels", kind="function",
+        func="count_vowels",
+        cases=[("library",), ("AEIOU",), ("rhythm",), ("",)],
         prompt=(
-            "Write a function `is_local(area)` that returns True when the"
-            " postcode area begins with 'LS' or 'BD', using startswith()"
-            " with a TUPLE of prefixes. No import is needed.\n\n"
-            "  is_local(\"BD3\") -> True\n"
-            "  is_local(\"WF1\") -> False\n\n"
+            "Write a function `count_vowels(s)` that returns how many"
+            " characters of s are vowels, upper or lower case. A for"
+            " loop over the characters, an if that tests the lower-cased"
+            " character against 'aeiou', and a counter.\n\n"
+            "  count_vowels(\"library\") -> 2\n\n"
+            "Return: an integer."
+        ),
+        solution=("def count_vowels(s):\n"
+                  "    n = 0\n"
+                  "    for ch in s:\n"
+                  "        if ch.lower() in \"aeiou\":\n"
+                  "            n += 1\n"
+                  "    return n\n"),
+        trap=("def count_vowels(s):\n"
+              "    n = 0\n"
+              "    for ch in s:\n"
+              "        if ch in \"aeiou\":\n"
+              "            n += 1\n"
+              "    return n\n"),
+        note="The loop visits each character; the if decides whether to"
+             " count it. Testing the character as typed misses capitals,"
+             " so 'AEIOU' counts zero -- lower() it first, or test against"
+             " both cases.",
+    ),
+    dict(
+        id=2, ledger="P267", concept="PY4 for range sum", tier="1 - Counting",
+        title="The sum of the squares up to n", kind="function",
+        func="sum_of_squares",
+        cases=[(3,), (1,), (0,), (10,)],
+        prompt=(
+            "Write a function `sum_of_squares(n)` that returns 1*1 + 2*2"
+            " + ... + n*n, using a for loop over range(1, n + 1) and a"
+            " running total. For n = 0 the answer is 0.\n\n"
+            "  sum_of_squares(3) -> 14\n\n"
+            "Return: an integer."
+        ),
+        solution=("def sum_of_squares(n):\n"
+                  "    total = 0\n"
+                  "    for i in range(1, n + 1):\n"
+                  "        total += i * i\n"
+                  "    return total\n"),
+        trap=("def sum_of_squares(n):\n"
+              "    total = 0\n"
+              "    for i in range(n):\n"
+              "        total += i * i\n"
+              "    return total\n"),
+        note="range(n) runs from 0 to n - 1, so it adds 0 squared and"
+             " never adds n squared -- one short at the top, and"
+             " 0 + 1 + 4 = 5 instead of 14. range(1, n + 1) is 1 to n"
+             " inclusive.",
+    ),
+    dict(
+        id=3, ledger="P268", concept="PY4 for pairs count", tier="1 - Counting",
+        title="Neighbours that match", kind="function",
+        func="count_repeats",
+        cases=[([1, 1, 2, 2, 2, 3],), ([],), ([7],), (["a", "b", "a"],)],
+        prompt=(
+            "Write a function `count_repeats(values)` that returns how"
+            " many positions hold the same value as the position before"
+            " them. A for loop over range(1, len(values)), comparing"
+            " values[i] with values[i - 1].\n\n"
+            "  count_repeats([1, 1, 2, 2, 2, 3]) -> 3\n\n"
+            "Return: an integer."
+        ),
+        solution=("def count_repeats(values):\n"
+                  "    n = 0\n"
+                  "    for i in range(1, len(values)):\n"
+                  "        if values[i] == values[i - 1]:\n"
+                  "            n += 1\n"
+                  "    return n\n"),
+        trap=("def count_repeats(values):\n"
+              "    n = 0\n"
+              "    for i in range(len(values)):\n"
+              "        if values[i] == values[i - 1]:\n"
+              "            n += 1\n"
+              "    return n\n"),
+        note="Starting the loop at 1 is what makes values[i - 1] a real"
+             " neighbour. From 0, the first comparison is values[0]"
+             " against values[-1] -- the LAST item, because negative"
+             " indexes wrap -- which is a repeat that is not there.",
+    ),
+    dict(
+        id=4, ledger="P269", concept="PY4 for seen set", tier="1 - Counting",
+        title="Is anything repeated?", kind="function",
+        func="has_repeat",
+        cases=[([1, 2, 3, 1],), ([1, 2, 3],), ([],), (["a", "b", "a", "c"],)],
+        prompt=(
+            "Write a function `has_repeat(values)` that returns True when"
+            " any value appears more than once, anywhere in the list. A"
+            " for loop that keeps the values seen so far in a set, and"
+            " returns True the moment the current value is already in it.\n\n"
+            "  has_repeat([1, 2, 3, 1]) -> True\n\n"
             "Return: True or False."
         ),
-        solution="def is_local(area):\n    return area.startswith((\"LS\", \"BD\"))\n",
-        trap="def is_local(area):\n    return area.startswith(\"LS\" or \"BD\")\n",
-        note="startswith() takes a tuple and is true if ANY prefix"
-             " matches, like endswith() in an earlier set. 'LS' or 'BD'"
-             " is evaluated first and is just 'LS', because a non-empty"
-             " string is truthy, so Bradford is refused.",
+        solution=("def has_repeat(values):\n"
+                  "    seen = set()\n"
+                  "    for v in values:\n"
+                  "        if v in seen:\n"
+                  "            return True\n"
+                  "        seen.add(v)\n"
+                  "    return False\n"),
+        trap=("def has_repeat(values):\n"
+              "    for i in range(1, len(values)):\n"
+              "        if values[i] == values[i - 1]:\n"
+              "            return True\n"
+              "    return False\n"),
+        note="Comparing neighbours only finds repeats that sit side by"
+             " side; 1 at both ends of [1, 2, 3, 1] is missed. A set of"
+             " what has been seen remembers everything, and 'in' on a set"
+             " is fast. The return inside the loop stops at the first"
+             " repeat; the return after it runs only if there was none.",
     ),
+    # ========================================================= 2 Searching
     dict(
-        id=2, ledger="P252", concept="PY3 islower", tier="1 - Strings",
-        title="islower(): no capitals anywhere", kind="function",
-        func="all_lower",
-        cases=[("leeds",), ("Leeds",), ("ls15",), ("123",), ("",)],
+        id=5, ledger="P270", concept="PY4 for first match", tier="2 - Searching",
+        title="The first value over the limit", kind="function",
+        func="first_over",
+        cases=[([3, 8, 12, 5], 7), ([1, 2], 7), ([], 7), ([7, 8], 7)],
         prompt=(
-            "Write a function `all_lower(s)` that returns True when every"
-            " letter in s is lower case and there is at least one letter,"
-            " using islower(). No import is needed.\n\n"
-            "  all_lower(\"ls15\") -> True\n"
-            "  all_lower(\"123\") -> False\n\n"
-            "Return: True or False."
+            "Write a function `first_over(values, limit)` that returns"
+            " the first value STRICTLY greater than limit, or None when"
+            " there is none. A for loop with an if and a return inside"
+            " it, and a return of None after the loop.\n\n"
+            "  first_over([3, 8, 12, 5], 7) -> 8\n\n"
+            "Return: the value, or None."
         ),
-        solution="def all_lower(s):\n    return s.islower()\n",
-        trap="def all_lower(s):\n    return s == s.lower()\n",
-        note="islower() needs at least one cased character and no"
-             " upper-case ones; digits are ignored. Comparing with"
-             " lower() says yes to '123' and to '', which have no letters"
-             " at all -- the mirror of isupper() from an earlier set.",
+        solution=("def first_over(values, limit):\n"
+                  "    for v in values:\n"
+                  "        if v > limit:\n"
+                  "            return v\n"
+                  "    return None\n"),
+        trap=("def first_over(values, limit):\n"
+              "    for v in values:\n"
+              "        if v >= limit:\n"
+              "            return v\n"
+              "    return None\n"),
+        note="'Over' is strictly greater, so a value equal to the limit"
+             " does not count: [7, 8] with limit 7 gives 8, not 7. A"
+             " return inside a loop ends the function at the first"
+             " match, and the line after the loop is the no-match case.",
     ),
     dict(
-        id=3, ledger="P253", concept="PY3 chr", tier="1 - Strings",
-        title="chr(): the character with a given code", kind="function",
-        func="letter_from_code",
-        cases=[(65,), (97,), (55,), (32,)],
+        id=6, ledger="P271", concept="PY4 for track index", tier="2 - Searching",
+        title="Where the smallest value is", kind="function",
+        func="index_of_min",
+        cases=[([5, 3, 9, 3],), ([1],), ([4, 2, 0, 7],), ([-1, -5, -5],)],
         prompt=(
-            "Write a function `letter_from_code(n)` that returns the"
-            " single character whose Unicode code is n, using chr(). No"
-            " import is needed.\n\n"
-            "  letter_from_code(65) -> \"A\"\n\n"
-            "Return: a one-character string."
-        ),
-        solution="def letter_from_code(n):\n    return chr(n)\n",
-        trap="def letter_from_code(n):\n    return str(n)\n",
-        note="chr() is the inverse of ord(): 65 becomes 'A', 97 'a', 55"
-             " the digit '7' and 32 a space. str(65) is the two-character"
-             " string '65' -- the number written out, not the character"
-             " it codes for.",
-    ),
-    dict(
-        id=4, ledger="P254", concept="PY3 find start", tier="1 - Strings",
-        title="find(sub, start): the second space", kind="function",
-        func="second_space",
-        cases=[("Notes from the Salt Map",), ("Two words",), ("One",), ("a b c",)],
-        prompt=(
-            "Write a function `second_space(s)` that returns the position"
-            " of the SECOND space in s, or -1 when there is no second"
-            " space, using find() twice -- the second call with a start"
-            " position just after the first space. No import is"
-            " needed.\n\n"
-            "  second_space(\"a b c\") -> 3\n\n"
+            "Write a function `index_of_min(values)` that returns the"
+            " POSITION of the smallest value in a non-empty list, the"
+            " first such position if it appears more than once. A for"
+            " loop over range(len(values)) that remembers the best"
+            " position so far.\n\n"
+            "  index_of_min([5, 3, 9, 3]) -> 1\n\n"
             "Return: an integer."
         ),
-        solution="def second_space(s):\n    return s.find(\" \", s.find(\" \") + 1)\n",
-        trap="def second_space(s):\n    return s.find(\" \")\n",
-        note="find() takes an optional start, and searching from one"
-             " past the first match finds the next one. With no first"
-             " space find() gives -1, the start becomes 0, and the second"
-             " search also finds nothing -- so 'One' comes out -1 without"
-             " a special case.",
+        solution=("def index_of_min(values):\n"
+                  "    best = 0\n"
+                  "    for i in range(1, len(values)):\n"
+                  "        if values[i] < values[best]:\n"
+                  "            best = i\n"
+                  "    return best\n"),
+        trap=("def index_of_min(values):\n"
+              "    best = values[0]\n"
+              "    for v in values:\n"
+              "        if v < best:\n"
+              "            best = v\n"
+              "    return best\n"),
+        note="The question asks for the position, so the loop has to"
+             " track an index, not a value -- the trap returns the"
+             " smallest value itself. The strict < keeps the FIRST"
+             " position among equals, because a later equal value does"
+             " not replace it.",
     ),
-    # ============================================================== 2 Numbers
     dict(
-        id=5, ledger="P255", concept="PY3 math factorial", tier="2 - Numbers",
-        title="math.factorial(): n times everything below it", kind="function",
-        func="factorial",
-        cases=[(5,), (0,), (1,), (10,)],
+        id=7, ledger="P272", concept="PY4 for break sum", tier="2 - Searching",
+        title="Add up until the first negative", kind="function",
+        func="total_until_negative",
+        cases=[([4, 5, -1, 10],), ([1, 2, 3],), ([-3, 1],), ([],)],
         prompt=(
-            "Write a function `factorial(n)` that returns n! -- the"
-            " product of the whole numbers from 1 to n, and 1 for n = 0"
-            " -- using math.factorial(). Write `import math` as the"
-            " first line.\n\n"
-            "  factorial(5) -> 120\n\n"
-            "Return: an integer."
+            "Write a function `total_until_negative(values)` that returns"
+            " the sum of the values BEFORE the first negative one -- all"
+            " of them if none is negative. A for loop with a running"
+            " total and a break when a negative value is met.\n\n"
+            "  total_until_negative([4, 5, -1, 10]) -> 9\n\n"
+            "Return: the total."
         ),
-        solution=("import math\n\n"
-                  "def factorial(n):\n"
-                  "    return math.factorial(n)\n"),
-        trap="def factorial(n):\n    return n * (n - 1)\n",
-        note="n * (n - 1) is only the first step of a factorial, and"
-             " gives 0 for n = 1 and 0 for n = 0 where the answer is 1."
-             " math.factorial() is exact for any size of n, because"
-             " Python integers do not overflow.",
+        solution=("def total_until_negative(values):\n"
+                  "    total = 0\n"
+                  "    for v in values:\n"
+                  "        if v < 0:\n"
+                  "            break\n"
+                  "        total += v\n"
+                  "    return total\n"),
+        trap=("def total_until_negative(values):\n"
+              "    total = 0\n"
+              "    for v in values:\n"
+              "        if v >= 0:\n"
+              "            total += v\n"
+              "    return total\n"),
+        note="break leaves the loop for good; an if that merely skips"
+             " the negative value carries on and adds the 10 after it."
+             " The test comes before the addition, so the negative value"
+             " itself is never added.",
     ),
     dict(
-        id=6, ledger="P256", concept="PY3 math lcm", tier="2 - Numbers",
-        title="math.lcm(): the smallest shared multiple", kind="function",
-        func="shared_multiple",
-        cases=[(4, 6), (7, 3), (5, 10), (1, 1)],
+        id=8, ledger="P273", concept="PY4 for running max", tier="2 - Searching",
+        title="The highest so far, at every step", kind="function",
+        func="running_max",
+        cases=[([3, 1, 4, 1, 5],), ([],), ([2, 2, 1],), ([-3, -1, -2],)],
         prompt=(
-            "Write a function `shared_multiple(a, b)` that returns the"
-            " smallest positive number both a and b divide into, using"
-            " math.lcm(). Write `import math` as the first line.\n\n"
-            "  shared_multiple(4, 6) -> 12\n\n"
-            "Return: an integer."
-        ),
-        solution=("import math\n\n"
-                  "def shared_multiple(a, b):\n"
-                  "    return math.lcm(a, b)\n"),
-        trap="def shared_multiple(a, b):\n    return a * b\n",
-        note="The product is always a shared multiple but rarely the"
-             " smallest: 4 and 6 share 12, not 24. math.lcm() is the"
-             " partner of math.gcd() from an earlier set -- the two"
-             " multiply to a * b.",
-    ),
-    dict(
-        id=7, ledger="P257", concept="PY3 statistics fmean", tier="2 - Numbers",
-        title="statistics.fmean(): the mean, always a float", kind="function",
-        func="mean_of",
-        cases=[([1, 2, 3, 4],), ([10],), ([2, 4],), ([1.5, 2.5],)],
-        prompt=(
-            "Write a function `mean_of(values)` that returns the"
-            " arithmetic mean of a non-empty list as a float, using"
-            " statistics.fmean(). Write `import statistics` as the first"
-            " line.\n\n"
-            "  mean_of([1, 2, 3, 4]) -> 2.5\n\n"
-            "Return: a float."
-        ),
-        solution=("import statistics\n\n"
-                  "def mean_of(values):\n"
-                  "    return statistics.fmean(values)\n"),
-        trap=("import statistics\n\n"
-              "def mean_of(values):\n"
-              "    return statistics.median(values)\n"),
-        note="fmean() is mean() done in floating point: faster, and"
-             " always a float even for whole-number data, where mean()"
-             " can return a Fraction or an int. median() is the middle"
-             " value, a different average -- for [1, 2, 3, 4] they agree,"
-             " and for [1, 2, 10] they do not.",
-    ),
-    dict(
-        id=8, ledger="P258", concept="PY3 math trunc", tier="2 - Numbers",
-        title="math.trunc(): drop the fraction, towards zero", kind="function",
-        func="whole_part",
-        cases=[(2.7,), (-2.7,), (4.0,), (-0.5,)],
-        prompt=(
-            "Write a function `whole_part(x)` that returns the integer"
-            " part of x with the fraction simply cut off, so -2.7 becomes"
-            " -2, using math.trunc(). Write `import math` as the first"
-            " line.\n\n"
-            "  whole_part(-2.7) -> -2\n\n"
-            "Return: an integer."
-        ),
-        solution=("import math\n\n"
-                  "def whole_part(x):\n"
-                  "    return math.trunc(x)\n"),
-        trap=("import math\n\n"
-              "def whole_part(x):\n"
-              "    return math.floor(x)\n"),
-        note="trunc() cuts towards zero, floor() rounds down the number"
-             " line; they agree for positive numbers and differ for"
-             " negative ones, where floor(-2.7) is -3. int(x) does the"
-             " same as trunc() for a float; trunc() says which rule it"
-             " follows.",
-    ),
-    dict(
-        id=9, ledger="P259", concept="PY3 oct", tier="2 - Numbers",
-        title="oct(): a number in base eight", kind="function",
-        func="as_octal",
-        cases=[(8,), (0,), (64,), (255,)],
-        prompt=(
-            "Write a function `as_octal(n)` that returns the octal form"
-            " of a non-negative integer as a string WITH the 0o prefix,"
-            " using oct(). No import is needed.\n\n"
-            "  as_octal(8) -> \"0o10\"\n\n"
-            "Return: the string."
-        ),
-        solution="def as_octal(n):\n    return oct(n)\n",
-        trap="def as_octal(n):\n    return hex(n)\n",
-        note="oct(), hex() and bin() are a family: each writes the number"
-             " in its base with the prefix a Python literal would carry"
-             " -- 0o, 0x, 0b. Eight is '0o10' in octal and '0x8' in hex."
-             " format(n, 'o') gives the digits without the prefix.",
-    ),
-    # ================================================================ 3 Lists
-    dict(
-        id=10, ledger="P260", concept="PY3 pairwise", tier="3 - Lists",
-        title="itertools.pairwise(): each item with the next", kind="function",
-        func="neighbours",
-        cases=[([1, 2, 3, 4],), ([],), (["a"],), (["x", "y"],)],
-        prompt=(
-            "Write a function `neighbours(values)` that returns a list of"
-            " tuples pairing each item with the one after it, using"
-            " list() over itertools.pairwise(). Write `import itertools`"
-            " as the first line.\n\n"
-            "  neighbours([1, 2, 3, 4]) -> [(1, 2), (2, 3), (3, 4)]\n\n"
-            "Return: the list of tuples."
-        ),
-        solution=("import itertools\n\n"
-                  "def neighbours(values):\n"
-                  "    return list(itertools.pairwise(values))\n"),
-        trap="def neighbours(values):\n    return list(zip(values, values))\n",
-        note="pairwise() yields overlapping pairs, one fewer than the"
-             " items, and nothing at all for a list of one. zip(values,"
-             " values) pairs each item with ITSELF. The same result"
-             " without the import is zip(values, values[1:]).",
-    ),
-    dict(
-        id=11, ledger="P261", concept="PY3 heapq nsmallest", tier="3 - Lists",
-        title="heapq.nsmallest(): the three lowest", kind="function",
-        func="bottom_three",
-        cases=[([5, 1, 9, 3, 7],), ([2, 1],), ([],), ([4, 4, 4, 4],)],
-        prompt=(
-            "Write a function `bottom_three(values)` that returns the"
-            " three smallest values, smallest first -- fewer when the"
-            " list is shorter -- using heapq.nsmallest(). Write `import"
-            " heapq` as the first line.\n\n"
-            "  bottom_three([5, 1, 9, 3, 7]) -> [1, 3, 5]\n\n"
-            "Return: the list."
-        ),
-        solution=("import heapq\n\n"
-                  "def bottom_three(values):\n"
-                  "    return heapq.nsmallest(3, values)\n"),
-        trap="def bottom_three(values):\n    return sorted(values)[-3:]\n",
-        note="sorted()[-3:] is the three LARGEST; the smallest are the"
-             " first three of a sorted list, sorted(values)[:3]."
-             " nsmallest(n, values) returns them in ascending order and"
-             " handles a short list without complaint. nlargest() from"
-             " an earlier set is its twin.",
-    ),
-    dict(
-        id=12, ledger="P262", concept="PY3 max default", tier="3 - Lists",
-        title="max(default=): the largest, or None", kind="function",
-        func="highest",
-        cases=[([4, 2, 9],), ([],), ([7],), ([-1, -5],)],
-        prompt=(
-            "Write a function `highest(values)` that returns the largest"
-            " value in the list, or None when the list is empty, using"
-            " max() with its default= argument. No import is needed.\n\n"
-            "  highest([4, 2, 9]) -> 9\n"
-            "  highest([]) -> None\n\n"
-            "Return: the largest value, or None."
-        ),
-        solution="def highest(values):\n    return max(values, default=None)\n",
-        trap="def highest(values):\n    return max(values)\n",
-        note="max() of an empty list raises ValueError; default= names"
-             " what to return instead, and only then. The same keyword"
-             " works for min(), as an earlier set used.",
-    ),
-    dict(
-        id=13, ledger="P263", concept="PY3 itertools chain", tier="3 - Lists",
-        title="itertools.chain(): several lists as one", kind="function",
-        func="flattened",
-        cases=[([[1, 2], [3], [4, 5]],), ([],), ([[], ["a"]],), ([[1], [2], [3], [4]],)],
-        prompt=(
-            "Write a function `flattened(lists)` that returns one list"
-            " holding the items of every inner list in order, using"
-            " list() over itertools.chain(*lists) -- the star unpacks the"
-            " outer list into chain's arguments. Write `import"
-            " itertools` as the first line.\n\n"
-            "  flattened([[1, 2], [3], [4, 5]]) -> [1, 2, 3, 4, 5]\n\n"
+            "Write a function `running_max(values)` that returns a list"
+            " where each position holds the largest value seen up to and"
+            " including that position. A for loop with a 'best so far'"
+            " variable that starts as None, and a result list to append"
+            " to.\n\n"
+            "  running_max([3, 1, 4, 1, 5]) -> [3, 3, 4, 4, 5]\n\n"
             "Return: the new list."
         ),
-        solution=("import itertools\n\n"
-                  "def flattened(lists):\n"
-                  "    return list(itertools.chain(*lists))\n"),
-        trap="def flattened(lists):\n    return lists[0] + lists[1]\n",
-        note="chain() walks through each iterable in turn as if they were"
-             " one, and *lists hands it every inner list however many"
-             " there are. Adding lists[0] and lists[1] only works for"
-             " exactly two, and fails on an empty outer list."
-             " chain.from_iterable(lists) says the same without the star.",
+        solution=("def running_max(values):\n"
+                  "    out = []\n"
+                  "    best = None\n"
+                  "    for v in values:\n"
+                  "        if best is None or v > best:\n"
+                  "            best = v\n"
+                  "        out.append(best)\n"
+                  "    return out\n"),
+        trap=("def running_max(values):\n"
+              "    out = []\n"
+              "    best = 0\n"
+              "    for v in values:\n"
+              "        if v > best:\n"
+              "            best = v\n"
+              "        out.append(best)\n"
+              "    return out\n"),
+        note="Starting the best at 0 silently assumes the values are"
+             " positive, and [-3, -1, -2] comes out as [0, 0, 0]. None as"
+             " the starting value, with 'best is None or' in the test,"
+             " takes the first value whatever it is. The append happens"
+             " every time round, not only when the best changes.",
     ),
-    # ========================================================= 4 Sets and dicts
+    # ========================================================== 3 Building
     dict(
-        id=14, ledger="P264", concept="PY3 dict popitem", tier="4 - Sets and dictionaries",
-        title="popitem(): the last pair, taken out", kind="function",
-        func="last_added",
-        cases=[({"a": 1, "b": 2, "c": 3},), ({"only": 0},), ({"x": None, "y": 5},)],
+        id=9, ledger="P274", concept="PY4 while countdown", tier="3 - Building",
+        title="Counting down to one", kind="function",
+        func="countdown",
+        cases=[(5,), (1,), (0,), (3,)],
         prompt=(
-            "Write a function `last_added(d)` that removes and returns"
-            " the most recently inserted (key, value) pair of a non-empty"
-            " dictionary as a tuple, using popitem(). No import is"
-            " needed.\n\n"
-            "  last_added({\"a\": 1, \"b\": 2, \"c\": 3}) -> (\"c\", 3)\n\n"
-            "Return: the tuple."
+            "Write a function `countdown(n)` that returns the list n,"
+            " n - 1, ..., 1 -- empty for n of 0 or less. A while loop"
+            " that appends n and then reduces it, running while n is"
+            " above zero.\n\n"
+            "  countdown(5) -> [5, 4, 3, 2, 1]\n\n"
+            "Return: the list."
         ),
-        solution="def last_added(d):\n    return d.popitem()\n",
-        trap="def last_added(d):\n    return list(d.items())[0]\n",
-        note="popitem() takes the LAST pair in insertion order, returns"
-             " it as a tuple and removes it -- a dict used as a stack."
-             " items()[0] is the first pair, and leaves the dict as it"
-             " was. On an empty dict popitem() raises KeyError.",
+        solution=("def countdown(n):\n"
+                  "    out = []\n"
+                  "    while n > 0:\n"
+                  "        out.append(n)\n"
+                  "        n -= 1\n"
+                  "    return out\n"),
+        trap=("def countdown(n):\n"
+              "    out = []\n"
+              "    while n > 1:\n"
+              "        out.append(n)\n"
+              "        n -= 1\n"
+              "    return out\n"),
+        note="The loop condition decides the last value appended: while"
+             " n > 0 runs once more than while n > 1 and so includes the"
+             " 1. The decrement is what makes the loop end -- forget it"
+             " and the loop never stops.",
     ),
     dict(
-        id=15, ledger="P265", concept="PY3 set superset", tier="4 - Sets and dictionaries",
-        title=">= on sets: does the stock cover the order?", kind="function",
-        func="covers",
-        cases=[(["ink", "pen", "paper"], ["pen", "ink"]), (["ink", "pen"], ["pen", "glue"]),
-               (["ink"], []), ([], ["ink"])],
+        id=10, ledger="P275", concept="PY4 for build strings", tier="3 - Building",
+        title="A staircase of stars", kind="function",
+        func="staircase",
+        cases=[(3,), (1,), (0,), (5,)],
         prompt=(
-            "Write a function `covers(stock, wanted)` that returns True"
-            " when every wanted item is in stock, using set() on each and"
-            " the >= operator -- superset. No import is needed.\n\n"
-            "  covers([\"ink\", \"pen\", \"paper\"], [\"pen\", \"ink\"]) ->"
-            " True\n\n"
-            "Return: True or False."
+            "Write a function `staircase(n)` that returns a list of n"
+            " strings, the first one star, the second two stars, and so"
+            " on. A for loop over range(1, n + 1) appending '*' * i each"
+            " time.\n\n"
+            "  staircase(3) -> [\"*\", \"**\", \"***\"]\n\n"
+            "Return: the list of strings."
         ),
-        solution="def covers(stock, wanted):\n    return set(stock) >= set(wanted)\n",
-        trap="def covers(stock, wanted):\n    return set(stock) <= set(wanted)\n",
-        note="a >= b on sets asks whether a contains everything in b --"
-             " a is a superset. <= asks the opposite, whether the stock"
-             " is contained in the order. The empty order is covered by"
-             " any stock, and an empty stock covers only an empty order."
-             " issuperset() is the same test spelled out.",
+        solution=("def staircase(n):\n"
+                  "    out = []\n"
+                  "    for i in range(1, n + 1):\n"
+                  "        out.append(\"*\" * i)\n"
+                  "    return out\n"),
+        trap=("def staircase(n):\n"
+              "    out = []\n"
+              "    for i in range(n):\n"
+              "        out.append(\"*\" * i)\n"
+              "    return out\n"),
+        note="range(n) starts at 0, so the first step is '' -- zero stars"
+             " -- and the last has n - 1. The staircase wants 1 to n,"
+             " which is range(1, n + 1). String multiplication repeats"
+             " the star i times.",
+    ),
+    dict(
+        id=11, ledger="P276", concept="PY4 for if elif", tier="3 - Building",
+        title="Fizz and buzz, as a list", kind="function",
+        func="fizzbuzz",
+        cases=[(15,), (5,), (1,), (0,)],
+        prompt=(
+            "Write a function `fizzbuzz(n)` that returns a list for 1 to"
+            " n where multiples of 15 become 'FizzBuzz', other multiples"
+            " of 3 'Fizz', other multiples of 5 'Buzz', and everything"
+            " else stays a number. A for loop with an if / elif / elif /"
+            " else, testing 15 FIRST.\n\n"
+            "  fizzbuzz(5) -> [1, 2, \"Fizz\", 4, \"Buzz\"]\n\n"
+            "Return: the list."
+        ),
+        solution=("def fizzbuzz(n):\n"
+                  "    out = []\n"
+                  "    for i in range(1, n + 1):\n"
+                  "        if i % 15 == 0:\n"
+                  "            out.append(\"FizzBuzz\")\n"
+                  "        elif i % 3 == 0:\n"
+                  "            out.append(\"Fizz\")\n"
+                  "        elif i % 5 == 0:\n"
+                  "            out.append(\"Buzz\")\n"
+                  "        else:\n"
+                  "            out.append(i)\n"
+                  "    return out\n"),
+        trap=("def fizzbuzz(n):\n"
+              "    out = []\n"
+              "    for i in range(1, n + 1):\n"
+              "        if i % 3 == 0:\n"
+              "            out.append(\"Fizz\")\n"
+              "        elif i % 5 == 0:\n"
+              "            out.append(\"Buzz\")\n"
+              "        elif i % 15 == 0:\n"
+              "            out.append(\"FizzBuzz\")\n"
+              "        else:\n"
+              "            out.append(i)\n"
+              "    return out\n"),
+        note="An if / elif chain stops at the first true branch, so the"
+             " most specific test -- divisible by 15 -- has to come"
+             " first. With it last, 15 is caught by the 'divisible by 3'"
+             " branch and 'FizzBuzz' never appears. The same rule as a"
+             " SQL CASE.",
+    ),
+    dict(
+        id=12, ledger="P277", concept="PY4 for reverse build", tier="3 - Building",
+        title="The words in reverse order", kind="function",
+        func="reverse_words",
+        cases=[("the glass path",), ("one",), ("",), ("a b c d",)],
+        prompt=(
+            "Write a function `reverse_words(s)` that returns the words"
+            " of s in the opposite order, joined by single spaces. A for"
+            " loop over s.split() that builds a list by inserting each"
+            " word at the FRONT -- insert(0, word) -- then ' '.join()"
+            " of the list.\n\n"
+            "  reverse_words(\"the glass path\") -> \"path glass the\"\n\n"
+            "Return: the string."
+        ),
+        solution=("def reverse_words(s):\n"
+                  "    out = []\n"
+                  "    for w in s.split():\n"
+                  "        out.insert(0, w)\n"
+                  "    return \" \".join(out)\n"),
+        trap=("def reverse_words(s):\n"
+              "    out = []\n"
+              "    for w in s.split():\n"
+              "        out.append(w)\n"
+              "    return \" \".join(out)\n"),
+        note="insert(0, w) puts each new word before the ones already"
+             " there, so the last word ends up first; append keeps the"
+             " original order. The empty string splits to no words and"
+             " joins back to ''. (s.split()[::-1] would do it without a"
+             " loop -- this one is about the loop.)",
+    ),
+    # ======================================================== 4 Reducing
+    dict(
+        id=13, ledger="P278", concept="PY4 while digits", tier="4 - Reducing",
+        title="The digits of a number, added up", kind="function",
+        func="digit_sum",
+        cases=[(1234,), (0,), (9,), (100100,)],
+        prompt=(
+            "Write a function `digit_sum(n)` that returns the sum of the"
+            " decimal digits of a non-negative integer, using a while"
+            " loop that adds n % 10 to a total and then replaces n with"
+            " n // 10, running while n is above zero.\n\n"
+            "  digit_sum(1234) -> 10\n\n"
+            "Return: an integer."
+        ),
+        solution=("def digit_sum(n):\n"
+                  "    total = 0\n"
+                  "    while n > 0:\n"
+                  "        total += n % 10\n"
+                  "        n //= 10\n"
+                  "    return total\n"),
+        trap=("def digit_sum(n):\n"
+              "    total = 0\n"
+              "    for ch in str(n):\n"
+              "        total += ch\n"
+              "    return total\n"),
+        note="n % 10 is the last digit and n // 10 drops it, so the loop"
+             " eats the number from the right until nothing is left."
+             " Looping over str(n) is a fair alternative, but the"
+             " characters have to be converted with int() -- adding a"
+             " string to a number is a TypeError.",
+    ),
+    dict(
+        id=14, ledger="P279", concept="PY4 for sum count guard", tier="4 - Reducing",
+        title="An average that copes with nothing", kind="function",
+        func="average_or_zero",
+        cases=[([2, 4, 6],), ([],), ([5],), ([1, 2],)],
+        prompt=(
+            "Write a function `average_or_zero(values)` that returns the"
+            " mean of the values, or 0 for an empty list. A for loop"
+            " that keeps a total and a count, then an if that returns 0"
+            " when the count is zero and the division otherwise.\n\n"
+            "  average_or_zero([2, 4, 6]) -> 4.0\n"
+            "  average_or_zero([]) -> 0\n\n"
+            "Return: the mean, or 0."
+        ),
+        solution=("def average_or_zero(values):\n"
+                  "    total = 0\n"
+                  "    count = 0\n"
+                  "    for v in values:\n"
+                  "        total += v\n"
+                  "        count += 1\n"
+                  "    if count == 0:\n"
+                  "        return 0\n"
+                  "    return total / count\n"),
+        trap=("def average_or_zero(values):\n"
+              "    total = 0\n"
+              "    count = 0\n"
+              "    for v in values:\n"
+              "        total += v\n"
+              "        count += 1\n"
+              "    return total / count\n"),
+        note="Dividing by a count of zero raises ZeroDivisionError, which"
+             " is why the question asks for the guard. The loop is the"
+             " long form of sum() and len(); the if afterwards is the"
+             " part neither of those gives you.",
+    ),
+    dict(
+        id=15, ledger="P280", concept="PY4 while steps", tier="4 - Reducing",
+        title="Steps to reach one", kind="function",
+        func="collatz_steps",
+        cases=[(6,), (1,), (27,), (8,)],
+        prompt=(
+            "Write a function `collatz_steps(n)` that counts how many"
+            " steps it takes to reach 1 from a positive integer when each"
+            " step halves an even number and turns an odd number into 3n"
+            " + 1. A while loop running while n is not 1, with an if /"
+            " else for the two cases and a step counter that starts at"
+            " 0.\n\n"
+            "  collatz_steps(6) -> 8\n\n"
+            "Return: an integer."
+        ),
+        solution=("def collatz_steps(n):\n"
+                  "    steps = 0\n"
+                  "    while n != 1:\n"
+                  "        if n % 2 == 0:\n"
+                  "            n = n // 2\n"
+                  "        else:\n"
+                  "            n = 3 * n + 1\n"
+                  "        steps += 1\n"
+                  "    return steps\n"),
+        trap=("def collatz_steps(n):\n"
+              "    steps = 1\n"
+              "    while n != 1:\n"
+              "        if n % 2 == 0:\n"
+              "            n = n // 2\n"
+              "        else:\n"
+              "            n = 3 * n + 1\n"
+              "        steps += 1\n"
+              "    return steps\n"),
+        note="A while loop whose condition is 'not there yet' is the"
+             " shape for 'keep going until': the body changes n, the"
+             " counter goes up once per pass. Starting the counter at 1"
+             " counts a step that was never taken, and says 1 needs a"
+             " step to reach 1. Use // for the halving so n stays an int.",
     ),
 ]
 
