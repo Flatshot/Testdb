@@ -27,12 +27,12 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the eleventh set on the public library
-(SEED 861), the third at TWO tools per SQL question and the first past
-Q1000: dates with windows, grain with JSON, EXISTS with text, recursion with
-plans and ranges, aggregates with NULLs, set operations with dates -- with
-**three writable** in two steps each. **Fifteen Python** functions each
-built around one simple for or while loop over plain values, no imports.
+Thirty questions in two tracks, the twelfth set on the public library (SEED
+861) and the fourth at TWO tools per SQL question: CASE with intervals, bare
+columns with dates, windows with JSON, text with plans and ranks, HAVING
+with subqueries, set operations with windows -- with **three writable** in
+two steps each. **Fifteen Python** functions each built around one simple
+for or while loop over plain values, no imports.
 
 ### The writable stage
 
@@ -42,62 +42,63 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | a log table and an `AFTER INSERT` trigger writing `json_object(...)` of NEW | two driven holds' payloads via json_extract |
-| 14 | an `UPDATE` whose SET is `date(due_on, CASE renewals ... END)` | loan lengths of the open loans per renewal count, and of the returned |
-| 15 | a `VIEW` holding `DENSE_RANK()` over a grouped query | members in the top three places |
+| 13 | a `BEFORE INSERT` trigger whose WHEN is `INSTR(NEW.name, ' ') = 0` | the names of any members added |
+| 14 | `ALTER TABLE ADD COLUMN`, then `WITH ... NTILE(4) ... UPDATE` through a CASE | members per tier, NULL included |
+| 15 | a `DELETE` whose WHERE reads a JSON list with `json_each` | the two books' remaining holds, and how many are open |
 
 13 carries a `driver_sql`: two inserts the question runs after your script.
 
 ### The query-plan stage
 
 Question 7 opens with a correct but slow query in the editor and is graded
-on EXPLAIN QUERY PLAN as well as on its rows: it must look loans up by
-INTEGER PRIMARY KEY, with no automatic index.
+on EXPLAIN QUERY PLAN as well as on its rows: it must SEARCH
+`idx_books_title`, which a LIKE with no leading wildcard allows.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q997 | W3 window vs GROUP BY | Each weekday's share of the loans | ex 1 | 1 - Dates and windows |
-| Q998 | D1 dates & times | Quarter on quarter | ex 2 | 1 - Dates and windows |
-| Q999 | C2 grain | Prolific authors: their titles and their copies | ex 3 | 2 - Grain and JSON |
-| Q1000 | JSN JSON functions | Each branch's stock as a JSON object | ex 4 | 2 - Grain and JSON |
-| Q1001 | E1 EXISTS | 'The' titles that Central does not hold | ex 5 | 3 - EXISTS and text |
-| Q1002 | STR string functions | Members who share a surname with their branch's staff | ex 6 | 3 - EXISTS and text |
-| Q1003 | X5 query plans | The first hundred loans, by their primary key | ex 7 | 4 - Recursion and plans |
-| Q1004 | R1 recursive CTE | Fines in bands of a hundred pence | ex 8 | 4 - Recursion and plans |
-| Q1005 | N1 NULLs | Members who have never paid a fine | ex 9 | 5 - Aggregates and NULLs |
-| Q1006 | N1 NULLs | How long a hold takes, counting the ones still waiting | ex 10 | 5 - Aggregates and NULLs |
-| Q1007 | S1 set operations | Sundays with loans but no holds | ex 11 | 6 - Set operations and dates |
-| Q1008 | S1 set operations | Days with both a fine and a fulfilment | ex 12 | 6 - Set operations and dates |
-| Q1009 | TRG triggers | Every new hold, logged as JSON **(script)** | ex 13 | 7 - Changing the data |
-| Q1010 | DML update & delete | Grace by how often a loan was renewed **(script)** | ex 14 | 7 - Changing the data |
-| Q1011 | VIEW views | A leaderboard as a view **(script)** | ex 15 | 7 - Changing the data |
+| Q1012 | INT intervals | Open loans: overdue or not yet due, per branch | ex 1 | 1 - CASE and intervals |
+| Q1013 | C7 CASE | How long loans last | ex 2 | 1 - CASE and intervals |
+| Q1014 | BARE SQLite bare columns | Each branch's newest copy, and the month it came | ex 3 | 2 - Bare columns and dates |
+| Q1015 | BARE SQLite bare columns | The last copy each branch withdrew, and the weekday | ex 4 | 2 - Bare columns and dates |
+| Q1016 | W1 window frames | Each year's running total, as a JSON array | ex 5 | 3 - Windows and JSON |
+| Q1017 | W3 window vs GROUP BY | Two members' loan timelines, as JSON | ex 6 | 3 - Windows and JSON |
+| Q1018 | X5 query plans | Titles beginning 'The', through the index | ex 7 | 4 - Text, plans and ranks |
+| Q1019 | W2 window ranking | Badges for the ten keenest readers | ex 8 | 4 - Text, plans and ranks |
+| Q1020 | A3 WHERE vs HAVING | How many members clear each threshold | ex 9 | 5 - HAVING and subqueries |
+| Q1021 | A3 WHERE vs HAVING | Branches later than the service as a whole | ex 10 | 5 - HAVING and subqueries |
+| Q1022 | S1 set operations | The top decile with a clean slate | ex 11 | 6 - Set operations and windows |
+| Q1023 | W2 window ranking | The three most and the three least borrowed | ex 12 | 6 - Set operations and windows |
+| Q1024 | TRG triggers | Members need a surname **(script)** | ex 13 | 7 - Changing the data |
+| Q1025 | DDL tables & columns | Reader tiers **(script)** | ex 14 | 7 - Changing the data |
+| Q1026 | DML update & delete | Cancel the queues for two withdrawn titles **(script)** | ex 15 | 7 - Changing the data |
 
 ### Python
 
 Fifteen functions each built around ONE for or while loop over numbers or
-strings: counting with an if, summing over a range, comparing neighbours, a
-seen set, a return inside a loop, tracking an index, break, a running
-maximum, a while countdown, building strings, if / elif order, insert(0),
-peeling digits with % and //, a guarded average, and a while loop that
-runs until a condition is met. No imports anywhere.
+strings: a strict comparison under an if, neighbours that differ, divisors,
+values above a precomputed mean, a mirrored index, a seen set that returns
+the value, a return at the first match, a running total against a target,
+a while over multiples, strings built with *, a transforming loop, a
+balance recorded after each step, a filtering loop over characters, a run
+length with a reset, and n * 10 + d. No imports anywhere.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P266 | PY4 for count if | Count the vowels | py 1 | 1 - Counting |
-| P267 | PY4 for range sum | The sum of the squares up to n | py 2 | 1 - Counting |
-| P268 | PY4 for pairs count | Neighbours that match | py 3 | 1 - Counting |
-| P269 | PY4 for seen set | Is anything repeated? | py 4 | 1 - Counting |
-| P270 | PY4 for first match | The first value over the limit | py 5 | 2 - Searching |
-| P271 | PY4 for track index | Where the smallest value is | py 6 | 2 - Searching |
-| P272 | PY4 for break sum | Add up until the first negative | py 7 | 2 - Searching |
-| P273 | PY4 for running max | The highest so far, at every step | py 8 | 2 - Searching |
-| P274 | PY4 while countdown | Counting down to one | py 9 | 3 - Building |
-| P275 | PY4 for build strings | A staircase of stars | py 10 | 3 - Building |
-| P276 | PY4 for if elif | Fizz and buzz, as a list | py 11 | 3 - Building |
-| P277 | PY4 for reverse build | The words in reverse order | py 12 | 3 - Building |
-| P278 | PY4 while digits | The digits of a number, added up | py 13 | 4 - Reducing |
-| P279 | PY4 for sum count guard | An average that copes with nothing | py 14 | 4 - Reducing |
-| P280 | PY4 while steps | Steps to reach one | py 15 | 4 - Reducing |
+| P281 | PY4 for count if | Words longer than a limit | py 1 | 1 - Counting |
+| P282 | PY4 for neighbours differ | How often the value changes | py 2 | 1 - Counting |
+| P283 | PY4 for divisors | How many numbers divide n | py 3 | 1 - Counting |
+| P284 | PY4 for above mean | Values above the average | py 4 | 1 - Counting |
+| P285 | PY4 for mirror compare | Is it a palindrome? By loop | py 5 | 2 - Searching |
+| P286 | PY4 for first repeat | The first value that repeats | py 6 | 2 - Searching |
+| P287 | PY4 for find index | Where a value first appears | py 7 | 2 - Searching |
+| P288 | PY4 for running target | How many items until the total reaches a target | py 8 | 2 - Searching |
+| P289 | PY4 while multiples | The multiples below a limit | py 9 | 3 - Building |
+| P290 | PY4 for build lines | A bar chart in stars | py 10 | 3 - Building |
+| P291 | PY4 for transform | Each word with a capital | py 11 | 3 - Building |
+| P292 | PY4 for running total list | A balance after each change | py 12 | 3 - Building |
+| P293 | PY4 for filter chars | A word without its vowels | py 13 | 3 - Building |
+| P294 | PY4 for longest run | The longest run of equal values | py 14 | 4 - Tracking |
+| P295 | PY4 for digits to number | Digits back into a number | py 15 | 4 - Tracking |
 
 ## Retired
 
@@ -406,6 +407,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q997 | W3 window vs GROUP BY | Each weekday's share of the loans | - | retired |
+| Q998 | D1 dates & times | Quarter on quarter | - | retired |
+| Q999 | C2 grain | Prolific authors: their titles and their copies | - | retired |
+| Q1000 | JSN JSON functions | Each branch's stock as a JSON object | - | retired |
+| Q1001 | E1 EXISTS | 'The' titles that Central does not hold | - | retired |
+| Q1002 | STR string functions | Members who share a surname with their branch's staff | - | retired |
+| Q1003 | X5 query plans | The first hundred loans, by their primary key | - | retired |
+| Q1004 | R1 recursive CTE | Fines in bands of a hundred pence | - | retired |
+| Q1005 | N1 NULLs | Members who have never paid a fine | - | retired |
+| Q1006 | N1 NULLs | How long a hold takes, counting the ones still waiting | - | retired |
+| Q1007 | S1 set operations | Sundays with loans but no holds | - | retired |
+| Q1008 | S1 set operations | Days with both a fine and a fulfilment | - | retired |
+| Q1009 | TRG triggers | Every new hold, logged as JSON **(script)** | - | retired |
+| Q1010 | DML update & delete | Grace by how often a loan was renewed **(script)** | - | retired |
+| Q1011 | VIEW views | A leaderboard as a view **(script)** | - | retired |
+| P266 | PY4 for count if | Count the vowels | - | retired |
+| P267 | PY4 for range sum | The sum of the squares up to n | - | retired |
+| P268 | PY4 for pairs count | Neighbours that match | - | retired |
+| P269 | PY4 for seen set | Is anything repeated? | - | retired |
+| P270 | PY4 for first match | The first value over the limit | - | retired |
+| P271 | PY4 for track index | Where the smallest value is | - | retired |
+| P272 | PY4 for break sum | Add up until the first negative | - | retired |
+| P273 | PY4 for running max | The highest so far, at every step | - | retired |
+| P274 | PY4 while countdown | Counting down to one | - | retired |
+| P275 | PY4 for build strings | A staircase of stars | - | retired |
+| P276 | PY4 for if elif | Fizz and buzz, as a list | - | retired |
+| P277 | PY4 for reverse build | The words in reverse order | - | retired |
+| P278 | PY4 while digits | The digits of a number, added up | - | retired |
+| P279 | PY4 for sum count guard | An average that copes with nothing | - | retired |
+| P280 | PY4 while steps | Steps to reach one | - | retired |
 | Q982 | X5 query plans | Due in May, found by the index | - | retired |
 | Q983 | X5 query plans | Copy 1's loans, weekday or weekend, from the index alone | - | retired |
 | Q984 | JSN JSON functions | The years each branch withdrew stock, as JSON | - | retired |
@@ -1695,7 +1726,7 @@ they still count as asked.
   trigger on OLD.due_on, INSERT ... SELECT then an UPSERT with JSON, and
   a DELETE by ROW_NUMBER over closed holds only. Python, fifteen one-tool
   functions with the import line stated where needed.
-- **Q997-Q1011 and P266-P280** current set. The library again (SEED 861),
+- **Q997-Q1011 and P266-P280** retired set. The library again (SEED 861),
   two tools per SQL question in a third set of pairings: a weekday share
   by a window SUM over grouped counts, quarters by date arithmetic under
   LAG, DISTINCT titles in JSON beside a copy count, json_group_object
@@ -1707,3 +1738,14 @@ they still count as asked.
   logs JSON, an UPDATE whose SET has a CASE inside a date modifier, and a
   view holding DENSE_RANK. Python, fifteen functions of one simple loop
   each over plain values.
+- **Q1012-Q1026 and P281-P295** current set. The library again (SEED
+  861), two tools per SQL question in a fourth set of pairings: open loans
+  split by a CASE on due_on, loan lengths banded by CASE, MAX's row with
+  strftime beside it twice, a running total packed into JSON per year,
+  LAG inside json_object inside json_group_array, a LIKE the NOCASE index
+  can search graded on the plan, printf over ROW_NUMBER, recursive
+  thresholds against a HAVING, HAVING against a scalar subquery, a top
+  decile by NTILE minus the debtors, two ranked lists by UNION ALL -- and
+  three writable: a trigger whose WHEN is INSTR, ALTER TABLE then an
+  UPDATE from an NTILE CTE, and a DELETE reading json_each. Python,
+  fifteen functions of one simple loop each over plain values.
