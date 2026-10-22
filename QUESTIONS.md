@@ -27,12 +27,12 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the thirteenth set on the public library
-(SEED 861), two tools per SQL question, with the tiers named by TASK: queues,
-money owed, stock on the shelf, who reads what -- the concepts mixed inside
-each -- with **three writable** in two steps each. **Fifteen Python**:
-fourteen functions each built around one simple loop over plain values, and
-the classic FizzBuzz as a printed program.
+Thirty questions in two tracks, the fourteenth set on the public library
+(SEED 861), two tools per SQL question, with the tiers named by task: late
+returns, the branches compared, authors and titles, members over time --
+the concepts mixed inside each -- with **three writable** in two steps
+each. **Fifteen Python** functions each built around one simple loop over
+plain values, no imports.
 
 ### The writable stage
 
@@ -42,58 +42,59 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | an `AFTER UPDATE OF returned_on` trigger whose body is an UPDATE with an `ORDER BY ... LIMIT 1` subquery | the book's open holds, and the oldest hold's fulfilled_on |
-| 14 | an `UPDATE` with `MIN(amount_pence, 500)` scoped by `IN (SELECT ... JOIN ...)` | unpaid count and total, and the paid total |
-| 15 | `INSERT ... SELECT` from a grouped subquery with HAVING, filtered by NOT EXISTS | copies bought, and hopeless queues left |
+| 13 | a `BEFORE INSERT` trigger whose WHEN is an EXISTS over loans on NEW.loan_id | the loan_ids of any fines added |
+| 14 | `WITH ... ROW_NUMBER() ... UPDATE holds SET cancelled_on ... WHERE hold_id IN (...)` | open holds left, and the longest queue |
+| 15 | a `VIEW` plus an `INSTEAD OF INSERT` trigger supplying the defaults | the member added through the view |
 
-13 carries a `driver_sql`: one return the question records after your
-script.
+13 and 15 carry a `driver_sql`: statements the question runs after your
+script. A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1027 | W2 window ranking | The queue for book 587, with the wait so far | ex 1 | 1 - Queues |
-| Q1028 | E1 EXISTS | Long queues, and whether a copy is free | ex 2 | 1 - Queues |
-| Q1029 | D1 dates & times | How long holds took, by the month they were placed | ex 3 | 1 - Queues |
-| Q1030 | W1 window frames | The five biggest debtors and their share of the debt | ex 4 | 2 - Money owed |
-| Q1031 | C7 CASE | How quickly fines get paid | ex 5 | 2 - Money owed |
-| Q1032 | A3 WHERE vs HAVING | Members who owe more than they have ever paid | ex 6 | 2 - Money owed |
-| Q1033 | INT intervals | Children's books available at each branch | ex 7 | 3 - Stock on the shelf |
-| Q1034 | BARE SQLite bare columns | Books held at one branch only | ex 8 | 3 - Stock on the shelf |
-| Q1035 | JSN JSON functions | Each branch's condition mix, as JSON percentages | ex 9 | 3 - Stock on the shelf |
-| Q1036 | W2 window ranking | Each Old Town regular's favourite genre | ex 10 | 4 - Who reads what |
-| Q1037 | A3 WHERE vs HAVING | Readers of every genre | ex 11 | 4 - Who reads what |
-| Q1038 | J2 outer joins | Loans per member, by age band | ex 12 | 4 - Who reads what |
-| Q1039 | TRG triggers | A returned copy goes to the front of the queue **(script)** | ex 13 | 5 - Changing the data |
-| Q1040 | DML update & delete | A cap on old members' unpaid fines **(script)** | ex 14 | 5 - Changing the data |
-| Q1041 | DML update & delete | Order a copy for every hopeless queue **(script)** | ex 15 | 5 - Changing the data |
+| Q1042 | W3 window vs GROUP BY | The late rate, month by month | ex 1 | 1 - Late returns |
+| Q1043 | W2 window ranking | The ten worst offenders | ex 2 | 1 - Late returns |
+| Q1044 | C7 CASE | What a late return costs, by how late | ex 3 | 1 - Late returns |
+| Q1045 | C2 grain | Loans per copy, and who works their stock hardest | ex 4 | 2 - The branches compared |
+| Q1046 | E1 EXISTS | Readers two branches share | ex 5 | 2 - The branches compared |
+| Q1047 | C7 CASE | Each branch's staff, wage bill and manager | ex 6 | 2 - The branches compared |
+| Q1048 | A2 COUNT and AVG | The longest writing careers | ex 7 | 3 - Authors and titles |
+| Q1049 | R1 recursive CTE | The commonest words in the titles | ex 8 | 3 - Authors and titles |
+| Q1050 | STR string functions | An author who starts titles the same way | ex 9 | 3 - Authors and titles |
+| Q1051 | W1 window frames | Each year's cohort, and how many of them borrow | ex 10 | 4 - Members over time |
+| Q1052 | J2 outer joins | Northgate's members: active, cooling or dormant | ex 11 | 4 - Members over time |
+| Q1053 | W1 window frames | Membership growth, branch by branch | ex 12 | 4 - Members over time |
+| Q1054 | TRG triggers | No fine on a loan that is still out **(script)** | ex 13 | 5 - Changing the data |
+| Q1055 | DML update & delete | No queue longer than three **(script)** | ex 14 | 5 - Changing the data |
+| Q1056 | VIEW views | A quick way to sign someone up **(script)** | ex 15 | 5 - Changing the data |
 
 ### Python
 
-Fourteen functions each built around ONE for or while loop over numbers or
-strings -- a strict < under an if, % 2 under an if, break at a stop value,
-startswith() under an if, a best-so-far from values[0], a loop that proves
-'all' by failing to find a counter-example, a return at the first long
-word, a recorded last index, building loops with and without an if, a
-running product from 1, a while that halves, enumerate for alternating
-signs -- and one program: FizzBuzz, 1 to 30, printed.
+Fifteen functions each built around ONE for or while loop over numbers or
+strings: a counter that increments rather than sets, a sum under an if with
+no else, a chained comparison, endswith() against in, a best length from 0,
+an index from enumerate, 'sorted' proved by failing to find a smaller
+neighbour, a smallest by hand, ch + out to reverse, parity of the index, a
+running total as triangle numbers, a filtering loop with not, a seen set
+that counts only new values, a check before the add, and a product from 1.
+No imports anywhere.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P296 | PY4 for count if | How many are negative | py 1 | 1 - Counting |
-| P297 | PY4 for sum if | The sum of the even numbers | py 2 | 1 - Counting |
-| P298 | PY4 for count until | How many come before the stop value | py 3 | 1 - Counting |
-| P299 | PY4 for startswith count | Words that start with a letter | py 4 | 1 - Counting |
-| P300 | PY4 for max no builtin | The largest value, by hand | py 5 | 2 - Searching |
-| P301 | PY4 for all check | Are they all positive? | py 6 | 2 - Searching |
-| P302 | PY4 for first match len | The first long word | py 7 | 2 - Searching |
-| P303 | PY4 for last index | Where a value LAST appears | py 8 | 2 - Searching |
-| P304 | PY4 for build doubled | Every value doubled | py 9 | 3 - Building |
-| P305 | PY4 for build lengths | The length of each word | py 10 | 3 - Building |
-| P306 | PY4 for running product | A running product | py 11 | 3 - Building |
-| P307 | PY4 for build if | The squares of the odd values | py 12 | 3 - Building |
-| P308 | PY4 while halving | How many times it halves | py 13 | 4 - Reducing |
-| P309 | PY4 for alternating sum | Add, subtract, add, subtract | py 14 | 4 - Reducing |
-| P310 | PY4 fizzbuzz program | FizzBuzz, 1 to 30 | py 15 | 5 - The classic |
+| P311 | PY4 for count char | How many spaces | py 1 | 1 - Counting |
+| P312 | PY4 for sum if positive | The sum of the positive values | py 2 | 1 - Counting |
+| P313 | PY4 for count range | Values inside a range | py 3 | 1 - Counting |
+| P314 | PY4 for endswith count | Words that end a certain way | py 4 | 1 - Counting |
+| P315 | PY4 for max len | The length of the longest word | py 5 | 2 - Searching |
+| P316 | PY4 for first index over | Where the first value over the limit is | py 6 | 2 - Searching |
+| P317 | PY4 for sorted check | Is the list in order? | py 7 | 2 - Searching |
+| P318 | PY4 for min by hand | The smallest value, by hand | py 8 | 2 - Searching |
+| P319 | PY4 for reverse string | A string reversed, by loop | py 9 | 3 - Building |
+| P320 | PY4 for even positions | The items at even positions | py 10 | 3 - Building |
+| P321 | PY4 for triangle numbers | The first n triangle numbers | py 11 | 3 - Building |
+| P322 | PY4 for strip digits | A string without its digits | py 12 | 3 - Building |
+| P323 | PY4 for distinct count | How many different values, by loop | py 13 | 4 - Reducing |
+| P324 | PY4 for sum within limit | Add up while it still fits | py 14 | 4 - Reducing |
+| P325 | PY4 for power by loop | A power, by repeated multiplication | py 15 | 4 - Reducing |
 
 ## Retired
 
@@ -402,6 +403,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1027 | W2 window ranking | The queue for book 587, with the wait so far | - | retired |
+| Q1028 | E1 EXISTS | Long queues, and whether a copy is free | - | retired |
+| Q1029 | D1 dates & times | How long holds took, by the month they were placed | - | retired |
+| Q1030 | W1 window frames | The five biggest debtors and their share of the debt | - | retired |
+| Q1031 | C7 CASE | How quickly fines get paid | - | retired |
+| Q1032 | A3 WHERE vs HAVING | Members who owe more than they have ever paid | - | retired |
+| Q1033 | INT intervals | Children's books available at each branch | - | retired |
+| Q1034 | BARE SQLite bare columns | Books held at one branch only | - | retired |
+| Q1035 | JSN JSON functions | Each branch's condition mix, as JSON percentages | - | retired |
+| Q1036 | W2 window ranking | Each Old Town regular's favourite genre | - | retired |
+| Q1037 | A3 WHERE vs HAVING | Readers of every genre | - | retired |
+| Q1038 | J2 outer joins | Loans per member, by age band | - | retired |
+| Q1039 | TRG triggers | A returned copy goes to the front of the queue **(script)** | - | retired |
+| Q1040 | DML update & delete | A cap on old members' unpaid fines **(script)** | - | retired |
+| Q1041 | DML update & delete | Order a copy for every hopeless queue **(script)** | - | retired |
+| P296 | PY4 for count if | How many are negative | - | retired |
+| P297 | PY4 for sum if | The sum of the even numbers | - | retired |
+| P298 | PY4 for count until | How many come before the stop value | - | retired |
+| P299 | PY4 for startswith count | Words that start with a letter | - | retired |
+| P300 | PY4 for max no builtin | The largest value, by hand | - | retired |
+| P301 | PY4 for all check | Are they all positive? | - | retired |
+| P302 | PY4 for first match len | The first long word | - | retired |
+| P303 | PY4 for last index | Where a value LAST appears | - | retired |
+| P304 | PY4 for build doubled | Every value doubled | - | retired |
+| P305 | PY4 for build lengths | The length of each word | - | retired |
+| P306 | PY4 for running product | A running product | - | retired |
+| P307 | PY4 for build if | The squares of the odd values | - | retired |
+| P308 | PY4 while halving | How many times it halves | - | retired |
+| P309 | PY4 for alternating sum | Add, subtract, add, subtract | - | retired |
+| P310 | PY4 fizzbuzz program | FizzBuzz, 1 to 30 | - | retired |
 | Q1012 | INT intervals | Open loans: overdue or not yet due, per branch | - | retired |
 | Q1013 | C7 CASE | How long loans last | - | retired |
 | Q1014 | BARE SQLite bare columns | Each branch's newest copy, and the month it came | - | retired |
@@ -1774,7 +1805,7 @@ they still count as asked.
   three writable: a trigger whose WHEN is INSTR, ALTER TABLE then an
   UPDATE from an NTILE CTE, and a DELETE reading json_each. Python,
   fifteen functions of one simple loop each over plain values.
-- **Q1027-Q1041 and P296-P310** current set. The library again (SEED
+- **Q1027-Q1041 and P296-P310** retired set. The library again (SEED
   861), two tools per SQL question with the tiers named by task: queues
   (a position by ROW_NUMBER with a wait by julianday, queue lengths
   beside an availability EXISTS, fulfilment by month of placement),
@@ -1789,3 +1820,16 @@ they still count as asked.
   scoped through a subquery join, and an INSERT ... SELECT driven by
   HAVING and NOT EXISTS. Python, fourteen single-loop functions and
   FizzBuzz printed.
+- **Q1042-Q1056 and P311-P325** current set. The library again (SEED
+  861), two tools per SQL question with the tiers named by task: late
+  returns (a late rate by month under LAG, the worst offenders by a
+  clamped SUM with a ranking, fines by band of days late), the branches
+  compared (loans per copy ranked, branch pairs by self-join with two
+  EXISTS, a manager's name by conditional MAX), authors and titles (the
+  widest span of years, the commonest title words by a recursive split,
+  first words shared within an author), members over time (cohorts with
+  a running total and an EXISTS share, recency by CASE over a LEFT JOIN
+  MAX, growth per branch by a partitioned window) -- and three writable:
+  a trigger refusing a fine on a loan still out, a ROW_NUMBER CTE feeding
+  an UPDATE that trims the queues, and a view made insertable by an
+  INSTEAD OF trigger. Python, fifteen single-loop functions.
