@@ -1,6 +1,6 @@
 """Python practice exercises: fifteen functions, one simple loop each.
 
-The twenty-first Python set, the fourth of single loops: every question
+The twenty-second Python set, the fifth of single loops: every question
 asks for a function built around ONE for or while loop over plain numbers
 or strings -- counting, searching, building, reducing -- with no import
 and no row-shaped data. The loop body is an if, an accumulator, or both.
@@ -30,469 +30,453 @@ import pyrun
 EXERCISES = [
     # ======================================================== 1 Counting
     dict(
-        id=1, ledger="P311", concept="PY4 for count char", tier="1 - Counting",
-        title="How many spaces", kind="function",
-        func="count_spaces",
-        cases=[("the glass path",), ("one",), ("",), ("  two  ",)],
+        id=1, ledger="P326", concept="PY4 for count isupper", tier="1 - Counting",
+        title="How many capital letters", kind="function",
+        func="count_upper",
+        cases=[("The Glass Path",), ("leeds",), ("LS15",), ("",)],
         prompt=(
-            "Write a function `count_spaces(s)` that returns how many"
-            " space characters s contains. A for loop over the characters,"
-            " an if on ch == \" \", and a counter.\n\n"
-            "  count_spaces(\"the glass path\") -> 2\n\n"
+            "Write a function `count_upper(s)` that returns how many"
+            " characters of s are upper-case letters. A for loop over the"
+            " characters, an if on ch.isupper(), and a counter.\n\n"
+            "  count_upper(\"The Glass Path\") -> 3\n\n"
             "Return: an integer."
         ),
-        solution=("def count_spaces(s):\n"
+        solution=("def count_upper(s):\n"
                   "    n = 0\n"
                   "    for ch in s:\n"
-                  "        if ch == \" \":\n"
+                  "        if ch.isupper():\n"
                   "            n += 1\n"
                   "    return n\n"),
-        trap=("def count_spaces(s):\n"
+        trap=("def count_upper(s):\n"
               "    n = 0\n"
               "    for ch in s:\n"
-              "        if ch == \" \":\n"
-              "            n = 1\n"
-              "    return n\n"),
-        note="n = 1 sets the counter rather than adding to it, so the"
-             " answer is 1 whenever there is any space at all. n += 1 is"
-             " the increment. Leading and trailing spaces count like any"
-             " other, so '  two  ' has four.",
-    ),
-    dict(
-        id=2, ledger="P312", concept="PY4 for sum if positive", tier="1 - Counting",
-        title="The sum of the positive values", kind="function",
-        func="sum_positive",
-        cases=[([3, -1, 4, -1, 5],), ([],), ([-2, -3],), ([0, 7],)],
-        prompt=(
-            "Write a function `sum_positive(values)` that returns the"
-            " total of the values above zero only. A for loop with an if"
-            " on v > 0 and a running total.\n\n"
-            "  sum_positive([3, -1, 4, -1, 5]) -> 12\n\n"
-            "Return: the total."
-        ),
-        solution=("def sum_positive(values):\n"
-                  "    total = 0\n"
-                  "    for v in values:\n"
-                  "        if v > 0:\n"
-                  "            total += v\n"
-                  "    return total\n"),
-        trap=("def sum_positive(values):\n"
-              "    total = 0\n"
-              "    for v in values:\n"
-              "        if v > 0:\n"
-              "            total += v\n"
-              "        else:\n"
-              "            total -= v\n"
-              "    return total\n"),
-        note="The if decides which values join the total; there is no"
-             " else, because the others are simply skipped. Subtracting"
-             " the negatives adds their size instead and turns the"
-             " function into a sum of absolute values -- 14 rather than"
-             " 12.",
-    ),
-    dict(
-        id=3, ledger="P313", concept="PY4 for count range", tier="1 - Counting",
-        title="Values inside a range", kind="function",
-        func="count_between",
-        cases=[([1, 5, 10, 15, 20], 5, 15), ([], 0, 1), ([3, 3, 3], 3, 3), ([1, 2], 5, 9)],
-        prompt=(
-            "Write a function `count_between(values, lo, hi)` that"
-            " returns how many values lie between lo and hi INCLUSIVE. A"
-            " for loop with a chained comparison lo <= v <= hi under an"
-            " if, and a counter.\n\n"
-            "  count_between([1, 5, 10, 15, 20], 5, 15) -> 3\n\n"
-            "Return: an integer."
-        ),
-        solution=("def count_between(values, lo, hi):\n"
-                  "    n = 0\n"
-                  "    for v in values:\n"
-                  "        if lo <= v <= hi:\n"
-                  "            n += 1\n"
-                  "    return n\n"),
-        trap=("def count_between(values, lo, hi):\n"
-              "    n = 0\n"
-              "    for v in values:\n"
-              "        if lo < v < hi:\n"
+              "        if ch == ch.upper():\n"
               "            n += 1\n"
               "    return n\n"),
-        note="Python lets a comparison chain, so lo <= v <= hi reads as"
-             " the mathematics does. Inclusive means both ends count, and"
-             " the strict version drops 5 and 15 -- and says [3, 3, 3]"
-             " has nothing between 3 and 3.",
+        note="isupper() is True only for a cased character that is upper"
+             " case; ch == ch.upper() is also True for digits and spaces,"
+             " which are unchanged by upper(), so 'LS15' counts 4 and the"
+             " spaces in a title are counted too.",
     ),
     dict(
-        id=4, ledger="P314", concept="PY4 for endswith count", tier="1 - Counting",
-        title="Words that end a certain way", kind="function",
-        func="count_ending",
-        cases=[(["Cookbook", "Notebook", "Map", "book"], "book"), ([], "s"), (["bookshelf", "Books"], "book"), (["a", "ba"], "a")],
+        id=2, ledger="P327", concept="PY4 for range odd sum", tier="1 - Counting",
+        title="The sum of the odd numbers below n", kind="function",
+        func="sum_odds_below",
+        cases=[(10,), (1,), (0,), (7,)],
         prompt=(
-            "Write a function `count_ending(words, suffix)` that returns"
-            " how many words end with the suffix, case-sensitively. A for"
-            " loop with an if on w.endswith(suffix) and a counter.\n\n"
-            "  count_ending([\"Cookbook\", \"Notebook\", \"Map\", \"book\"],"
-            " \"book\") -> 3\n\n"
+            "Write a function `sum_odds_below(n)` that returns the sum of"
+            " the odd whole numbers that are less than n. A for loop over"
+            " range(n) with an if on i % 2 == 1 and a running total.\n\n"
+            "  sum_odds_below(10) -> 25\n\n"
             "Return: an integer."
         ),
-        solution=("def count_ending(words, suffix):\n"
+        solution=("def sum_odds_below(n):\n"
+                  "    total = 0\n"
+                  "    for i in range(n):\n"
+                  "        if i % 2 == 1:\n"
+                  "            total += i\n"
+                  "    return total\n"),
+        trap=("def sum_odds_below(n):\n"
+              "    total = 0\n"
+              "    for i in range(n + 1):\n"
+              "        if i % 2 == 1:\n"
+              "            total += i\n"
+              "    return total\n"),
+        note="'Below n' means n itself is excluded, and range(n) stops"
+             " before n -- exactly right for once. range(n + 1) reaches n,"
+             " so for an odd n the answer is too big: 16 instead of 9 for"
+             " n = 7.",
+    ),
+    dict(
+        id=3, ledger="P328", concept="PY4 for count true", tier="1 - Counting",
+        title="How many are True", kind="function",
+        func="count_true",
+        cases=[([True, False, True],), ([],), ([False],), ([True, True, True],)],
+        prompt=(
+            "Write a function `count_true(flags)` that returns how many"
+            " items in a list of booleans are True. A for loop with an if"
+            " on the flag itself -- if flag: -- and a counter.\n\n"
+            "  count_true([True, False, True]) -> 2\n\n"
+            "Return: an integer."
+        ),
+        solution=("def count_true(flags):\n"
+                  "    n = 0\n"
+                  "    for f in flags:\n"
+                  "        if f:\n"
+                  "            n += 1\n"
+                  "    return n\n"),
+        trap=("def count_true(flags):\n"
+              "    n = 0\n"
+              "    for f in flags:\n"
+              "        if f == \"True\":\n"
+              "            n += 1\n"
+              "    return n\n"),
+        note="A boolean is its own condition: 'if f:' is the whole test."
+             " Comparing with the STRING 'True' is never true for a real"
+             " boolean, so the trap counts nothing. sum(flags) would do"
+             " the same in one call, because True adds as 1.",
+    ),
+    dict(
+        id=4, ledger="P329", concept="PY4 for contains count", tier="1 - Counting",
+        title="Words that contain a letter", kind="function",
+        func="count_containing",
+        cases=[(["pen", "paper", "ink"], "p"), ([], "a"), (["Paper"], "p"), (["aa", "b"], "a")],
+        prompt=(
+            "Write a function `count_containing(words, letter)` that"
+            " returns how many words contain the letter at least once,"
+            " case-sensitively. A for loop with an if on letter in w and"
+            " a counter.\n\n"
+            "  count_containing([\"pen\", \"paper\", \"ink\"], \"p\") -> 2\n\n"
+            "Return: an integer."
+        ),
+        solution=("def count_containing(words, letter):\n"
                   "    n = 0\n"
                   "    for w in words:\n"
-                  "        if w.endswith(suffix):\n"
+                  "        if letter in w:\n"
                   "            n += 1\n"
                   "    return n\n"),
-        trap=("def count_ending(words, suffix):\n"
+        trap=("def count_containing(words, letter):\n"
               "    n = 0\n"
               "    for w in words:\n"
-              "        if suffix in w:\n"
-              "            n += 1\n"
+              "        n += w.count(letter)\n"
               "    return n\n"),
-        note="endswith() looks at the tail only; 'in' finds the suffix"
-             " anywhere, so 'bookshelf' counts for 'book' under 'in' and"
-             " not under endswith(). Case-sensitive means 'Books' does"
-             " not end with 'book' -- the B is upper case and the s is"
-             " extra.",
+        note="'in' asks whether the letter is there at all, once per"
+             " word; count() adds up every occurrence, so 'paper' adds 2"
+             " and 'aa' adds 2 where the question wants 1. Case-sensitive"
+             " means 'Paper' does not contain 'p' -- it contains 'P'.",
     ),
     # ========================================================= 2 Searching
     dict(
-        id=5, ledger="P315", concept="PY4 for max len", tier="2 - Searching",
-        title="The length of the longest word", kind="function",
-        func="longest_length",
-        cases=[(["pen", "paper", "ink"],), ([],), ([""],), (["notebook"],)],
+        id=5, ledger="P330", concept="PY4 for index of max", tier="2 - Searching",
+        title="Where the largest value is", kind="function",
+        func="index_of_max",
+        cases=[([3, 9, 2, 9],), ([1],), ([-4, -2, -8],), ([5, 5],)],
         prompt=(
-            "Write a function `longest_length(words)` that returns the"
-            " length of the longest word, 0 for an empty list. A for loop"
-            " with a best so far that starts at 0 and is replaced when"
-            " len(w) is bigger. Do not use max() for this one.\n\n"
-            "  longest_length([\"pen\", \"paper\", \"ink\"]) -> 5\n\n"
+            "Write a function `index_of_max(values)` that returns the"
+            " POSITION of the largest value in a non-empty list, the"
+            " first such position if it appears more than once. A for"
+            " loop over range(1, len(values)) that remembers the best"
+            " position so far, starting at 0.\n\n"
+            "  index_of_max([3, 9, 2, 9]) -> 1\n\n"
             "Return: an integer."
         ),
-        solution=("def longest_length(words):\n"
+        solution=("def index_of_max(values):\n"
                   "    best = 0\n"
-                  "    for w in words:\n"
-                  "        if len(w) > best:\n"
-                  "            best = len(w)\n"
+                  "    for i in range(1, len(values)):\n"
+                  "        if values[i] > values[best]:\n"
+                  "            best = i\n"
                   "    return best\n"),
-        trap=("def longest_length(words):\n"
+        trap=("def index_of_max(values):\n"
               "    best = 0\n"
-              "    for w in words:\n"
-              "        if len(w) > best:\n"
-              "            best = w\n"
+              "    for i in range(1, len(values)):\n"
+              "        if values[i] >= values[best]:\n"
+              "            best = i\n"
               "    return best\n"),
-        note="Here a start of 0 is right, because lengths cannot be"
-             " negative and 0 is the answer for an empty list. The best"
-             " has to hold the LENGTH, len(w), not the word -- storing"
-             " the word returns 'paper' instead of 5, and then compares"
-             " a number with a string next time round.",
+        note="The strict > keeps the FIRST of equal maxima; with >= a"
+             " later equal value takes over, and [3, 9, 2, 9] answers 3"
+             " instead of 1. Tracking an index means comparing values[i]"
+             " with values[best], not with best itself.",
     ),
     dict(
-        id=6, ledger="P316", concept="PY4 for first index over", tier="2 - Searching",
-        title="Where the first value over the limit is", kind="function",
-        func="first_index_over",
-        cases=[([3, 8, 12, 5], 7), ([1, 2], 7), ([], 7), ([9], 7)],
+        id=6, ledger="P331", concept="PY4 for any check", tier="2 - Searching",
+        title="Is any of them negative?", kind="function",
+        func="any_negative",
+        cases=[([1, -2, 3],), ([1, 2],), ([],), ([-1],)],
         prompt=(
-            "Write a function `first_index_over(values, limit)` that"
-            " returns the POSITION of the first value strictly greater"
-            " than limit, or -1 if there is none. A for loop over"
-            " enumerate(values) that returns the index at the first"
-            " match.\n\n"
-            "  first_index_over([3, 8, 12, 5], 7) -> 1\n\n"
-            "Return: an integer."
-        ),
-        solution=("def first_index_over(values, limit):\n"
-                  "    for i, v in enumerate(values):\n"
-                  "        if v > limit:\n"
-                  "            return i\n"
-                  "    return -1\n"),
-        trap=("def first_index_over(values, limit):\n"
-              "    for i, v in enumerate(values):\n"
-              "        if v > limit:\n"
-              "            return v\n"
-              "    return -1\n"),
-        note="enumerate() hands over both the index and the value, and"
-             " the question wants the index: return i. Returning v gives"
-             " the value 8 where position 1 was asked. The -1 after the"
-             " loop is the no-match answer.",
-    ),
-    dict(
-        id=7, ledger="P317", concept="PY4 for sorted check", tier="2 - Searching",
-        title="Is the list in order?", kind="function",
-        func="is_sorted",
-        cases=[([1, 2, 2, 5],), ([3, 1, 2],), ([],), ([7],), ([2, 1],)],
-        prompt=(
-            "Write a function `is_sorted(values)` that returns True when"
-            " each value is at least as big as the one before it -- and"
-            " True for an empty or one-item list. A for loop over"
-            " range(1, len(values)) that returns False at the first"
-            " value smaller than its predecessor, then True after the"
-            " loop.\n\n"
-            "  is_sorted([3, 1, 2]) -> False\n\n"
+            "Write a function `any_negative(values)` that returns True"
+            " when at least one value is below zero, and False otherwise"
+            " -- including for an empty list. A for loop that returns"
+            " True at the first negative value, then False after the"
+            " loop. Do not use any() for this one.\n\n"
+            "  any_negative([1, -2, 3]) -> True\n\n"
             "Return: True or False."
         ),
-        solution=("def is_sorted(values):\n"
-                  "    for i in range(1, len(values)):\n"
-                  "        if values[i] < values[i - 1]:\n"
-                  "            return False\n"
-                  "    return True\n"),
-        trap=("def is_sorted(values):\n"
-              "    for i in range(1, len(values)):\n"
-              "        if values[i] <= values[i - 1]:\n"
-              "            return False\n"
-              "    return True\n"),
-        note="'At least as big' allows equal neighbours, so the"
-             " counter-example is a value strictly SMALLER than the one"
-             " before: <, not <=. The strict version says [1, 2, 2, 5]"
-             " is out of order. True is only reached once no"
-             " counter-example was found.",
+        solution=("def any_negative(values):\n"
+                  "    for v in values:\n"
+                  "        if v < 0:\n"
+                  "            return True\n"
+                  "    return False\n"),
+        trap=("def any_negative(values):\n"
+              "    for v in values:\n"
+              "        if v < 0:\n"
+              "            return True\n"
+              "        else:\n"
+              "            return False\n"),
+        note="'Any' is proved by finding one example, so the loop returns"
+             " True as soon as it sees one and False only after looking"
+             " at them all. An else that returns False inside the loop"
+             " gives up after the FIRST value, so [1, -2, 3] is answered"
+             " False.",
     ),
     dict(
-        id=8, ledger="P318", concept="PY4 for min by hand", tier="2 - Searching",
-        title="The smallest value, by hand", kind="function",
-        func="smallest",
-        cases=[([3, 9, 2],), ([5, 1, 7],), ([4],), ([-1, -9, 0],)],
+        id=7, ledger="P332", concept="PY4 for last match", tier="2 - Searching",
+        title="The last word longer than n", kind="function",
+        func="last_long_word",
+        cases=[(["pen", "paper", "ink", "notebook", "map"], 3), (["a", "b"], 1), ([], 3), (["four"], 3)],
         prompt=(
-            "Write a function `smallest(values)` that returns the smallest"
-            " value in a non-empty list WITHOUT using min(). Start a best"
-            " at values[0], then a for loop that replaces it whenever a"
-            " value is smaller.\n\n"
-            "  smallest([5, 1, 7]) -> 1\n\n"
+            "Write a function `last_long_word(words, n)` that returns the"
+            " LAST word with more than n characters, or None if there is"
+            " none. A for loop that records each match in a variable and"
+            " returns it after the loop.\n\n"
+            "  last_long_word([\"pen\", \"paper\", \"ink\", \"notebook\","
+            " \"map\"], 3) -> \"notebook\"\n\n"
+            "Return: the word, or None."
+        ),
+        solution=("def last_long_word(words, n):\n"
+                  "    found = None\n"
+                  "    for w in words:\n"
+                  "        if len(w) > n:\n"
+                  "            found = w\n"
+                  "    return found\n"),
+        trap=("def last_long_word(words, n):\n"
+              "    for w in words:\n"
+              "        if len(w) > n:\n"
+              "            return w\n"
+              "    return None\n"),
+        note="To find the LAST match the loop has to keep going past the"
+             " first one, overwriting a variable each time and returning"
+             " it at the end. A return inside the loop gives the FIRST"
+             " match, 'paper'. Starting the variable at None covers the"
+             " no-match case without a flag.",
+    ),
+    dict(
+        id=8, ledger="P333", concept="PY4 for closest", tier="2 - Searching",
+        title="The value nearest a target", kind="function",
+        func="nearest_to",
+        cases=[([3, 9, 14], 10), ([1, 5], 3), ([7], 0), ([10, 20], 15)],
+        prompt=(
+            "Write a function `nearest_to(values, target)` that returns"
+            " the value in a non-empty list closest to target -- the"
+            " FIRST such value when two are equally close. A for loop"
+            " with a best so far that starts at values[0] and is replaced"
+            " when abs(v - target) is strictly smaller than abs(best -"
+            " target).\n\n"
+            "  nearest_to([3, 9, 14], 10) -> 9\n\n"
             "Return: the value."
         ),
-        solution=("def smallest(values):\n"
+        solution=("def nearest_to(values, target):\n"
                   "    best = values[0]\n"
                   "    for v in values:\n"
-                  "        if v < best:\n"
+                  "        if abs(v - target) < abs(best - target):\n"
                   "            best = v\n"
                   "    return best\n"),
-        trap=("def smallest(values):\n"
+        trap=("def nearest_to(values, target):\n"
               "    best = values[0]\n"
               "    for v in values:\n"
-              "        if v > best:\n"
+              "        if v - target < best - target:\n"
               "            best = v\n"
               "    return best\n"),
-        note="The mirror of 'largest by hand': the same shape with the"
-             " comparison turned round. With > the function tracks the"
-             " biggest value instead. Starting from values[0] rather than"
-             " 0 is what makes [-1, -9, 0] come out as -9.",
+        note="Distance is the ABSOLUTE difference: without abs() the"
+             " comparison prefers the most negative difference, which is"
+             " the smallest value, not the nearest. The strict < keeps"
+             " the first of two equally close values, 10 rather than 20"
+             " for a target of 15.",
     ),
     # ========================================================== 3 Building
     dict(
-        id=9, ledger="P319", concept="PY4 for reverse string", tier="3 - Building",
-        title="A string reversed, by loop", kind="function",
-        func="reversed_text",
-        cases=[("leeds",), ("",), ("a",), ("ab cd",)],
-        prompt=(
-            "Write a function `reversed_text(s)` that returns s backwards,"
-            " using a for loop over the characters that builds the result"
-            " by putting each character in FRONT of what has been built so"
-            " far: out = ch + out. Do not use s[::-1] for this one.\n\n"
-            "  reversed_text(\"leeds\") -> \"sdeel\"\n\n"
-            "Return: the new string."
-        ),
-        solution=("def reversed_text(s):\n"
-                  "    out = \"\"\n"
-                  "    for ch in s:\n"
-                  "        out = ch + out\n"
-                  "    return out\n"),
-        trap=("def reversed_text(s):\n"
-              "    out = \"\"\n"
-              "    for ch in s:\n"
-              "        out = out + ch\n"
-              "    return out\n"),
-        note="ch + out puts the newest character first, so the last"
-             " character of s ends up at the front; out + ch rebuilds s"
-             " in the same order. The same trick as insert(0) for a list"
-             " in an earlier set.",
-    ),
-    dict(
-        id=10, ledger="P320", concept="PY4 for even positions", tier="3 - Building",
-        title="The items at even positions", kind="function",
-        func="even_positions",
-        cases=[(["a", "b", "c", "d", "e"],), ([],), ([1],), ([1, 2],)],
-        prompt=(
-            "Write a function `even_positions(values)` that returns a"
-            " list of the items at positions 0, 2, 4, ... A for loop over"
-            " enumerate(values) with an if on i % 2 == 0 and an append."
-            " Do not use a slice for this one.\n\n"
-            "  even_positions([\"a\", \"b\", \"c\", \"d\", \"e\"]) -> [\"a\","
-            " \"c\", \"e\"]\n\n"
-            "Return: the new list."
-        ),
-        solution=("def even_positions(values):\n"
-                  "    out = []\n"
-                  "    for i, v in enumerate(values):\n"
-                  "        if i % 2 == 0:\n"
-                  "            out.append(v)\n"
-                  "    return out\n"),
-        trap=("def even_positions(values):\n"
-              "    out = []\n"
-              "    for i, v in enumerate(values):\n"
-              "        if v % 2 == 0:\n"
-              "            out.append(v)\n"
-              "    return out\n"),
-        note="The parity test is on the INDEX i, not the value v: the"
-             " question is about positions. Testing v % 2 picks even"
-             " values instead, and fails outright on a list of strings."
-             " values[::2] is the slice form of the same thing.",
-    ),
-    dict(
-        id=11, ledger="P321", concept="PY4 for triangle numbers", tier="3 - Building",
-        title="The first n triangle numbers", kind="function",
-        func="triangle_numbers",
+        id=9, ledger="P334", concept="PY4 for squares list", tier="3 - Building",
+        title="The first n squares", kind="function",
+        func="squares",
         cases=[(5,), (1,), (0,), (3,)],
         prompt=(
-            "Write a function `triangle_numbers(n)` that returns the"
-            " first n triangle numbers 1, 3, 6, 10, ... -- each the sum of"
-            " the whole numbers up to its position. A for loop over"
-            " range(1, n + 1) with a running total that is appended each"
-            " time.\n\n"
-            "  triangle_numbers(5) -> [1, 3, 6, 10, 15]\n\n"
+            "Write a function `squares(n)` that returns the list of the"
+            " squares of 1 to n. A for loop over range(1, n + 1) that"
+            " appends i * i.\n\n"
+            "  squares(5) -> [1, 4, 9, 16, 25]\n\n"
             "Return: the list."
         ),
-        solution=("def triangle_numbers(n):\n"
+        solution=("def squares(n):\n"
                   "    out = []\n"
-                  "    total = 0\n"
                   "    for i in range(1, n + 1):\n"
-                  "        total += i\n"
-                  "        out.append(total)\n"
+                  "        out.append(i * i)\n"
                   "    return out\n"),
-        trap=("def triangle_numbers(n):\n"
+        trap=("def squares(n):\n"
               "    out = []\n"
-              "    total = 0\n"
-              "    for i in range(n):\n"
-              "        total += i\n"
-              "        out.append(total)\n"
+              "    for i in range(1, n + 1):\n"
+              "        out.append(i * 2)\n"
               "    return out\n"),
-        note="A running total over 1 to n gives the triangle numbers"
-             " directly. range(n) starts the loop at 0, so the first"
-             " triangle number comes out as 0 and every one after is one"
-             " step behind: [0, 1, 3, 6, 10] for 5.",
+        note="i * i is the square; i * 2 is the double, and the two agree"
+             " only at i = 2. range(1, n + 1) gives 1 to n inclusive, and"
+             " for n = 0 an empty list.",
     ),
     dict(
-        id=12, ledger="P322", concept="PY4 for strip digits", tier="3 - Building",
-        title="A string without its digits", kind="function",
-        func="without_digits",
-        cases=[("LS15",), ("2026-06-30",), ("Leeds",), ("",)],
+        id=10, ledger="P335", concept="PY4 for build initials", tier="3 - Building",
+        title="Initials, built up by loop", kind="function",
+        func="initials",
+        cases=[(["Aisha", "Ekwueme"],), ([],), (["x"],), (["Old", "Town", "Branch"],)],
         prompt=(
-            "Write a function `without_digits(s)` that returns s with"
-            " every digit removed. A for loop over the characters that"
-            " adds each NON-digit to a result string, using ch.isdigit()"
-            " under a 'not'.\n\n"
-            "  without_digits(\"LS15\") -> \"LS\"\n\n"
-            "Return: the new string."
+            "Write a function `initials(words)` that returns a string of"
+            " the first character of each word, in order. A for loop that"
+            " adds w[0] to a result string that starts empty. Every word"
+            " has at least one character.\n\n"
+            "  initials([\"Aisha\", \"Ekwueme\"]) -> \"AE\"\n\n"
+            "Return: the string."
         ),
-        solution=("def without_digits(s):\n"
+        solution=("def initials(words):\n"
                   "    out = \"\"\n"
-                  "    for ch in s:\n"
-                  "        if not ch.isdigit():\n"
-                  "            out += ch\n"
+                  "    for w in words:\n"
+                  "        out += w[0]\n"
                   "    return out\n"),
-        trap=("def without_digits(s):\n"
+        trap=("def initials(words):\n"
               "    out = \"\"\n"
-              "    for ch in s:\n"
-              "        if ch.isdigit():\n"
-              "            out += ch\n"
+              "    for w in words:\n"
+              "        out += w[1]\n"
               "    return out\n"),
-        note="A filtering loop keeps what passes the if; 'not"
-             " ch.isdigit()' keeps the letters and punctuation, and"
-             " without the 'not' it keeps the digits and throws away"
-             " everything else -- '15' for 'LS15'.",
+        note="Positions start at 0, so the first character is w[0]; w[1]"
+             " is the second, and fails outright on a one-letter word."
+             " A string grows with += just as a list grows with append.",
+    ),
+    dict(
+        id=11, ledger="P336", concept="PY4 for repeat each", tier="3 - Building",
+        title="Each item twice", kind="function",
+        func="repeat_each",
+        cases=[([1, 2, 3],), ([],), (["a"],), ([0, 0],)],
+        prompt=(
+            "Write a function `repeat_each(values)` that returns a new"
+            " list with every item appearing twice in a row. A for loop"
+            " that appends each item two times.\n\n"
+            "  repeat_each([1, 2, 3]) -> [1, 1, 2, 2, 3, 3]\n\n"
+            "Return: the new list."
+        ),
+        solution=("def repeat_each(values):\n"
+                  "    out = []\n"
+                  "    for v in values:\n"
+                  "        out.append(v)\n"
+                  "        out.append(v)\n"
+                  "    return out\n"),
+        trap=("def repeat_each(values):\n"
+              "    out = []\n"
+              "    for v in values:\n"
+              "        out.append(v)\n"
+              "    return out + out\n"),
+        note="Two appends inside the loop put the copies NEXT to each"
+             " other; building the list once and adding it to itself"
+             " gives [1, 2, 3, 1, 2, 3], the same items in a different"
+             " order. Order is part of the answer.",
+    ),
+    dict(
+        id=12, ledger="P337", concept="PY4 while step down", tier="3 - Building",
+        title="Counting down in steps", kind="function",
+        func="countdown_by",
+        cases=[(10, 3), (5, 5), (4, 10), (9, 4)],
+        prompt=(
+            "Write a function `countdown_by(n, step)` that returns the"
+            " list n, n - step, n - 2 * step, ... for as long as the value"
+            " stays above zero. A while loop on n > 0 that appends n and"
+            " then subtracts step.\n\n"
+            "  countdown_by(10, 3) -> [10, 7, 4, 1]\n\n"
+            "Return: the list."
+        ),
+        solution=("def countdown_by(n, step):\n"
+                  "    out = []\n"
+                  "    while n > 0:\n"
+                  "        out.append(n)\n"
+                  "        n -= step\n"
+                  "    return out\n"),
+        trap=("def countdown_by(n, step):\n"
+              "    out = []\n"
+              "    while n > 0:\n"
+              "        n -= step\n"
+              "        out.append(n)\n"
+              "    return out\n"),
+        note="The order of the two lines inside the loop decides which"
+             " values are recorded: append first and n itself is the"
+             " first item; subtract first and the list starts at n - step"
+             " and ends with a value at or below zero.",
     ),
     # ========================================================== 4 Reducing
     dict(
-        id=13, ledger="P323", concept="PY4 for distinct count", tier="4 - Reducing",
-        title="How many different values, by loop", kind="function",
-        func="distinct_count",
-        cases=[(["LS1", "LS1", "BD3"],), ([],), ([1, 1, 1],), (["a", "b", "a", "c"],)],
+        id=13, ledger="P338", concept="PY4 for max gap", tier="4 - Reducing",
+        title="The biggest jump between neighbours", kind="function",
+        func="max_gap",
+        cases=[([1, 4, 9, 11],), ([5],), ([],), ([10, 2, 7],)],
         prompt=(
-            "Write a function `distinct_count(values)` that returns how"
-            " many different values the list holds, WITHOUT using set()"
-            " on the whole list at once: a for loop that keeps a set of"
-            " values seen so far and adds one to a counter only when the"
-            " value is new.\n\n"
-            "  distinct_count([\"LS1\", \"LS1\", \"BD3\"]) -> 2\n\n"
-            "Return: an integer."
+            "Write a function `max_gap(values)` that returns the largest"
+            " absolute difference between two neighbouring values, 0 for"
+            " a list of fewer than two. A for loop over range(1,"
+            " len(values)) comparing abs(values[i] - values[i - 1]) with"
+            " a best so far that starts at 0.\n\n"
+            "  max_gap([1, 4, 9, 11]) -> 5\n\n"
+            "Return: the gap."
         ),
-        solution=("def distinct_count(values):\n"
-                  "    seen = set()\n"
-                  "    n = 0\n"
-                  "    for v in values:\n"
-                  "        if v not in seen:\n"
-                  "            seen.add(v)\n"
-                  "            n += 1\n"
-                  "    return n\n"),
-        trap=("def distinct_count(values):\n"
-              "    seen = set()\n"
-              "    n = 0\n"
-              "    for v in values:\n"
-              "        seen.add(v)\n"
-              "        n += 1\n"
-              "    return n\n"),
-        note="The counter must move only on a NEW value, which is what"
-             " the 'not in seen' test decides; counting every value gives"
-             " len(values). The seen set does the remembering, as in the"
-             " repeat-finding questions. len(set(values)) is the one-line"
-             " form.",
+        solution=("def max_gap(values):\n"
+                  "    best = 0\n"
+                  "    for i in range(1, len(values)):\n"
+                  "        gap = abs(values[i] - values[i - 1])\n"
+                  "        if gap > best:\n"
+                  "            best = gap\n"
+                  "    return best\n"),
+        trap=("def max_gap(values):\n"
+              "    best = 0\n"
+              "    for i in range(1, len(values)):\n"
+              "        gap = values[i] - values[i - 1]\n"
+              "        if gap > best:\n"
+              "            best = gap\n"
+              "    return best\n"),
+        note="A downward step is still a gap, so the difference needs"
+             " abs(): without it [10, 2, 7] reports 5 for the rise and"
+             " ignores the fall of 8. Starting best at 0 handles the"
+             " short lists, where the loop never runs.",
     ),
     dict(
-        id=14, ledger="P324", concept="PY4 for sum within limit", tier="4 - Reducing",
-        title="Add up while it still fits", kind="function",
-        func="sum_within",
-        cases=[([4, 5, 3, 9], 10), ([1, 1, 1], 10), ([20], 10), ([], 5)],
+        id=14, ledger="P339", concept="PY4 for digits in text", tier="4 - Reducing",
+        title="The digits in a string, added up", kind="function",
+        func="sum_digits_in",
+        cases=[("LS15",), ("2026-06-30",), ("Leeds",), ("",)],
         prompt=(
-            "Write a function `sum_within(values, limit)` that adds up"
-            " values from the front for as long as the running total"
-            " stays at or below limit, and returns the total at the point"
-            " it would have gone over. A for loop with a running total"
-            " and a break when total + v would exceed limit.\n\n"
-            "  sum_within([4, 5, 3, 9], 10) -> 9\n\n"
-            "Return: the total."
+            "Write a function `sum_digits_in(s)` that returns the sum of"
+            " the digit characters in s, 0 if there are none. A for loop"
+            " over the characters with an if on ch.isdigit() that adds"
+            " int(ch) to a total.\n\n"
+            "  sum_digits_in(\"LS15\") -> 6\n\n"
+            "Return: an integer."
         ),
-        solution=("def sum_within(values, limit):\n"
+        solution=("def sum_digits_in(s):\n"
                   "    total = 0\n"
-                  "    for v in values:\n"
-                  "        if total + v > limit:\n"
-                  "            break\n"
-                  "        total += v\n"
+                  "    for ch in s:\n"
+                  "        if ch.isdigit():\n"
+                  "            total += int(ch)\n"
                   "    return total\n"),
-        trap=("def sum_within(values, limit):\n"
+        trap=("def sum_digits_in(s):\n"
               "    total = 0\n"
-              "    for v in values:\n"
-              "        total += v\n"
-              "        if total > limit:\n"
-              "            break\n"
+              "    for ch in s:\n"
+              "        if ch.isdigit():\n"
+              "            total += 1\n"
               "    return total\n"),
-        note="The test has to happen BEFORE the value is added: check"
-             " whether total + v would overshoot, and stop if so. Adding"
-             " first and checking afterwards leaves the total already over"
-             " the limit when the loop stops -- 12 instead of 9.",
+        note="int(ch) turns the digit character into its value; adding 1"
+             " instead counts the digits, 2 for 'LS15' rather than 6."
+             " The isdigit() guard is what lets int() be called safely.",
     ),
     dict(
-        id=15, ledger="P325", concept="PY4 for power by loop", tier="4 - Reducing",
-        title="A power, by repeated multiplication", kind="function",
-        func="power",
-        cases=[(2, 10), (5, 0), (3, 3), (10, 1)],
+        id=15, ledger="P340", concept="PY4 for running check", tier="4 - Reducing",
+        title="Does the balance ever go below zero?", kind="function",
+        func="stays_positive",
+        cases=[([10, -3, -5, 2],), ([10, -20, 15],), ([],), ([-1],)],
         prompt=(
-            "Write a function `power(base, exp)` that returns base to the"
-            " power exp for a non-negative whole exp, WITHOUT using **: a"
-            " result that starts at 1 and a for loop over range(exp) that"
-            " multiplies it by base each time.\n\n"
-            "  power(2, 10) -> 1024\n\n"
-            "Return: an integer."
+            "Write a function `stays_positive(changes)` that returns True"
+            " when a balance starting at zero never drops below zero as"
+            " the changes are applied in order, and False as soon as it"
+            " does. A for loop with a running total and a return of False"
+            " inside it, then True after the loop.\n\n"
+            "  stays_positive([10, -20, 15]) -> False\n\n"
+            "Return: True or False."
         ),
-        solution=("def power(base, exp):\n"
-                  "    result = 1\n"
-                  "    for _ in range(exp):\n"
-                  "        result *= base\n"
-                  "    return result\n"),
-        trap=("def power(base, exp):\n"
-              "    result = 0\n"
-              "    for _ in range(exp):\n"
-              "        result *= base\n"
-              "    return result\n"),
-        note="A product starts at 1 for the same reason a sum starts at"
-             " 0: it is the value that leaves the operation unchanged."
-             " Starting at 0 keeps the result at 0 forever, and even the"
-             " empty loop for exp = 0 should give 1, which is anything to"
-             " the power zero.",
+        solution=("def stays_positive(changes):\n"
+                  "    total = 0\n"
+                  "    for c in changes:\n"
+                  "        total += c\n"
+                  "        if total < 0:\n"
+                  "            return False\n"
+                  "    return True\n"),
+        trap=("def stays_positive(changes):\n"
+              "    total = 0\n"
+              "    for c in changes:\n"
+              "        total += c\n"
+              "    return total >= 0\n"),
+        note="The question is about every point along the way, not the"
+             " end: [10, -20, 15] finishes at 5 but dipped to -10 in the"
+             " middle. Checking inside the loop catches the dip; checking"
+             " only the final total misses it.",
     ),
 ]
 

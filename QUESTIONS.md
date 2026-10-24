@@ -27,12 +27,12 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the fourteenth set on the public library
-(SEED 861), two tools per SQL question, with the tiers named by task: late
-returns, the branches compared, authors and titles, members over time --
-the concepts mixed inside each -- with **three writable** in two steps
-each. **Fifteen Python** functions each built around one simple loop over
-plain values, no imports.
+Thirty questions in two tracks, the fifteenth set on the public library
+(SEED 861), two tools per SQL question, with the tiers named by task:
+renewals, the catalogue, staff and salaries, a day in the life -- the
+concepts mixed inside each -- with **three writable** in two steps each.
+**Fifteen Python** functions each built around one simple loop over plain
+values, no imports.
 
 ### The writable stage
 
@@ -42,59 +42,58 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | a `BEFORE INSERT` trigger whose WHEN is an EXISTS over loans on NEW.loan_id | the loan_ids of any fines added |
-| 14 | `WITH ... ROW_NUMBER() ... UPDATE holds SET cancelled_on ... WHERE hold_id IN (...)` | open holds left, and the longest queue |
-| 15 | a `VIEW` plus an `INSTEAD OF INSERT` trigger supplying the defaults | the member added through the view |
+| 13 | a `BEFORE UPDATE OF renewals` trigger comparing NEW.due_on with `date(OLD.due_on, '+14 days')` | three driven renewals' renewals and due dates |
+| 14 | an `UPDATE` with the same correlated AVG in SET and WHERE | total salary per role |
+| 15 | `CREATE TABLE ... AS SELECT` then `CREATE INDEX` on it | the table's size, its largest days_late, and whether the index exists |
 
-13 and 15 carry a `driver_sql`: statements the question runs after your
+13 carries a `driver_sql`: three updates the question runs after your
 script. A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1042 | W3 window vs GROUP BY | The late rate, month by month | ex 1 | 1 - Late returns |
-| Q1043 | W2 window ranking | The ten worst offenders | ex 2 | 1 - Late returns |
-| Q1044 | C7 CASE | What a late return costs, by how late | ex 3 | 1 - Late returns |
-| Q1045 | C2 grain | Loans per copy, and who works their stock hardest | ex 4 | 2 - The branches compared |
-| Q1046 | E1 EXISTS | Readers two branches share | ex 5 | 2 - The branches compared |
-| Q1047 | C7 CASE | Each branch's staff, wage bill and manager | ex 6 | 2 - The branches compared |
-| Q1048 | A2 COUNT and AVG | The longest writing careers | ex 7 | 3 - Authors and titles |
-| Q1049 | R1 recursive CTE | The commonest words in the titles | ex 8 | 3 - Authors and titles |
-| Q1050 | STR string functions | An author who starts titles the same way | ex 9 | 3 - Authors and titles |
-| Q1051 | W1 window frames | Each year's cohort, and how many of them borrow | ex 10 | 4 - Members over time |
-| Q1052 | J2 outer joins | Northgate's members: active, cooling or dormant | ex 11 | 4 - Members over time |
-| Q1053 | W1 window frames | Membership growth, branch by branch | ex 12 | 4 - Members over time |
-| Q1054 | TRG triggers | No fine on a loan that is still out **(script)** | ex 13 | 5 - Changing the data |
-| Q1055 | DML update & delete | No queue longer than three **(script)** | ex 14 | 5 - Changing the data |
-| Q1056 | VIEW views | A quick way to sign someone up **(script)** | ex 15 | 5 - Changing the data |
+| Q1057 | W2 window ranking | Which genres get renewed | ex 1 | 1 - Renewals |
+| Q1058 | N1 NULLs | Does renewing help? | ex 2 | 1 - Renewals |
+| Q1059 | A3 WHERE vs HAVING | The keenest renewers | ex 3 | 1 - Renewals |
+| Q1060 | BARE SQLite bare columns | The longest book in each genre | ex 4 | 2 - The catalogue |
+| Q1061 | W1 window frames | The catalogue by decade of publication | ex 5 | 2 - The catalogue |
+| Q1062 | JSN JSON functions | Authors with more than one cookbook | ex 6 | 2 - The catalogue |
+| Q1063 | W2 window ranking | Where each person stands in their role | ex 7 | 3 - Staff and salaries |
+| Q1064 | C7 CASE | Pay by length of service | ex 8 | 3 - Staff and salaries |
+| Q1065 | C2 grain | Wage bill per copy, where it runs high | ex 9 | 3 - Staff and salaries |
+| Q1066 | S1 set operations | Monday 2 March 2026, in four numbers | ex 10 | 4 - A day in the life |
+| Q1067 | D1 dates & times | When members place holds | ex 11 | 4 - A day in the life |
+| Q1068 | J2 outer joins | Monday's returns, and what they cost | ex 12 | 4 - A day in the life |
+| Q1069 | TRG triggers | A renewal moves the due date by exactly a fortnight **(script)** | ex 13 | 5 - Changing the data |
+| Q1070 | DML update & delete | Bring the underpaid librarians up to their branch's average **(script)** | ex 14 | 5 - Changing the data |
+| Q1071 | DDL tables & columns | A table of late returns, indexed **(script)** | ex 15 | 5 - Changing the data |
 
 ### Python
 
 Fifteen functions each built around ONE for or while loop over numbers or
-strings: a counter that increments rather than sets, a sum under an if with
-no else, a chained comparison, endswith() against in, a best length from 0,
-an index from enumerate, 'sorted' proved by failing to find a smaller
-neighbour, a smallest by hand, ch + out to reverse, parity of the index, a
-running total as triangle numbers, a filtering loop with not, a seen set
-that counts only new values, a check before the add, and a product from 1.
-No imports anywhere.
+strings: isupper() under an if, range(n) for 'below n', a boolean as its
+own condition, in against count(), a tracked index with a strict >, 'any'
+proved by one example, a last match recorded, abs() for nearness, squares
+and initials built up, two appends per item, append-then-subtract in a
+while, abs() for a gap, int(ch) under isdigit(), and a check at every step
+of a running total. No imports anywhere.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P311 | PY4 for count char | How many spaces | py 1 | 1 - Counting |
-| P312 | PY4 for sum if positive | The sum of the positive values | py 2 | 1 - Counting |
-| P313 | PY4 for count range | Values inside a range | py 3 | 1 - Counting |
-| P314 | PY4 for endswith count | Words that end a certain way | py 4 | 1 - Counting |
-| P315 | PY4 for max len | The length of the longest word | py 5 | 2 - Searching |
-| P316 | PY4 for first index over | Where the first value over the limit is | py 6 | 2 - Searching |
-| P317 | PY4 for sorted check | Is the list in order? | py 7 | 2 - Searching |
-| P318 | PY4 for min by hand | The smallest value, by hand | py 8 | 2 - Searching |
-| P319 | PY4 for reverse string | A string reversed, by loop | py 9 | 3 - Building |
-| P320 | PY4 for even positions | The items at even positions | py 10 | 3 - Building |
-| P321 | PY4 for triangle numbers | The first n triangle numbers | py 11 | 3 - Building |
-| P322 | PY4 for strip digits | A string without its digits | py 12 | 3 - Building |
-| P323 | PY4 for distinct count | How many different values, by loop | py 13 | 4 - Reducing |
-| P324 | PY4 for sum within limit | Add up while it still fits | py 14 | 4 - Reducing |
-| P325 | PY4 for power by loop | A power, by repeated multiplication | py 15 | 4 - Reducing |
+| P326 | PY4 for count isupper | How many capital letters | py 1 | 1 - Counting |
+| P327 | PY4 for range odd sum | The sum of the odd numbers below n | py 2 | 1 - Counting |
+| P328 | PY4 for count true | How many are True | py 3 | 1 - Counting |
+| P329 | PY4 for contains count | Words that contain a letter | py 4 | 1 - Counting |
+| P330 | PY4 for index of max | Where the largest value is | py 5 | 2 - Searching |
+| P331 | PY4 for any check | Is any of them negative? | py 6 | 2 - Searching |
+| P332 | PY4 for last match | The last word longer than n | py 7 | 2 - Searching |
+| P333 | PY4 for closest | The value nearest a target | py 8 | 2 - Searching |
+| P334 | PY4 for squares list | The first n squares | py 9 | 3 - Building |
+| P335 | PY4 for build initials | Initials, built up by loop | py 10 | 3 - Building |
+| P336 | PY4 for repeat each | Each item twice | py 11 | 3 - Building |
+| P337 | PY4 while step down | Counting down in steps | py 12 | 3 - Building |
+| P338 | PY4 for max gap | The biggest jump between neighbours | py 13 | 4 - Reducing |
+| P339 | PY4 for digits in text | The digits in a string, added up | py 14 | 4 - Reducing |
+| P340 | PY4 for running check | Does the balance ever go below zero? | py 15 | 4 - Reducing |
 
 ## Retired
 
@@ -403,6 +402,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1042 | W3 window vs GROUP BY | The late rate, month by month | - | retired |
+| Q1043 | W2 window ranking | The ten worst offenders | - | retired |
+| Q1044 | C7 CASE | What a late return costs, by how late | - | retired |
+| Q1045 | C2 grain | Loans per copy, and who works their stock hardest | - | retired |
+| Q1046 | E1 EXISTS | Readers two branches share | - | retired |
+| Q1047 | C7 CASE | Each branch's staff, wage bill and manager | - | retired |
+| Q1048 | A2 COUNT and AVG | The longest writing careers | - | retired |
+| Q1049 | R1 recursive CTE | The commonest words in the titles | - | retired |
+| Q1050 | STR string functions | An author who starts titles the same way | - | retired |
+| Q1051 | W1 window frames | Each year's cohort, and how many of them borrow | - | retired |
+| Q1052 | J2 outer joins | Northgate's members: active, cooling or dormant | - | retired |
+| Q1053 | W1 window frames | Membership growth, branch by branch | - | retired |
+| Q1054 | TRG triggers | No fine on a loan that is still out **(script)** | - | retired |
+| Q1055 | DML update & delete | No queue longer than three **(script)** | - | retired |
+| Q1056 | VIEW views | A quick way to sign someone up **(script)** | - | retired |
+| P311 | PY4 for count char | How many spaces | - | retired |
+| P312 | PY4 for sum if positive | The sum of the positive values | - | retired |
+| P313 | PY4 for count range | Values inside a range | - | retired |
+| P314 | PY4 for endswith count | Words that end a certain way | - | retired |
+| P315 | PY4 for max len | The length of the longest word | - | retired |
+| P316 | PY4 for first index over | Where the first value over the limit is | - | retired |
+| P317 | PY4 for sorted check | Is the list in order? | - | retired |
+| P318 | PY4 for min by hand | The smallest value, by hand | - | retired |
+| P319 | PY4 for reverse string | A string reversed, by loop | - | retired |
+| P320 | PY4 for even positions | The items at even positions | - | retired |
+| P321 | PY4 for triangle numbers | The first n triangle numbers | - | retired |
+| P322 | PY4 for strip digits | A string without its digits | - | retired |
+| P323 | PY4 for distinct count | How many different values, by loop | - | retired |
+| P324 | PY4 for sum within limit | Add up while it still fits | - | retired |
+| P325 | PY4 for power by loop | A power, by repeated multiplication | - | retired |
 | Q1027 | W2 window ranking | The queue for book 587, with the wait so far | - | retired |
 | Q1028 | E1 EXISTS | Long queues, and whether a copy is free | - | retired |
 | Q1029 | D1 dates & times | How long holds took, by the month they were placed | - | retired |
@@ -1820,7 +1849,7 @@ they still count as asked.
   scoped through a subquery join, and an INSERT ... SELECT driven by
   HAVING and NOT EXISTS. Python, fourteen single-loop functions and
   FizzBuzz printed.
-- **Q1042-Q1056 and P311-P325** current set. The library again (SEED
+- **Q1042-Q1056 and P311-P325** retired set. The library again (SEED
   861), two tools per SQL question with the tiers named by task: late
   returns (a late rate by month under LAG, the worst offenders by a
   clamped SUM with a ranking, fines by band of days late), the branches
@@ -1833,3 +1862,17 @@ they still count as asked.
   a trigger refusing a fine on a loan still out, a ROW_NUMBER CTE feeding
   an UPDATE that trims the queues, and a view made insertable by an
   INSTEAD OF trigger. Python, fifteen single-loop functions.
+- **Q1057-Q1071 and P326-P340** current set. The library again (SEED
+  861), two tools per SQL question with the tiers named by task: renewals
+  (a renewal rate ranked, lateness by renewal count with a conditional
+  AVG, the keenest renewers by HAVING with a floating ratio), the
+  catalogue (the longest book per genre through a bare column,
+  publication decades with a cumulative share, cookbooks as JSON behind a
+  LIKE), staff and salaries (a rank within the role beside a gap to the
+  top, service bands by CASE over julianday, wage bill per copy by two
+  scalar subqueries against an average), a day in the life (four counts
+  by UNION ALL, the busiest hour by strftime under ROW_NUMBER, a day's
+  returns with their fines by LEFT JOIN) -- and three writable: a trigger
+  checking a renewal's date arithmetic, an UPDATE with a correlated
+  average in SET and WHERE, and CREATE TABLE AS SELECT with an index.
+  Python, fifteen single-loop functions.
