@@ -137,6 +137,23 @@ def format_sql(sql, indent="    "):
     return "\n".join(out)
 
 
+def missing_tables(db_path=None):
+    """The tables seed.py creates that the database at db_path lacks.
+
+    Empty when the database matches the current schema. Checked at startup
+    so a database left over from an earlier schema is re-seeded rather than
+    silently failing every question.
+    """
+    import seed as seeder
+    conn = sqlite3.connect(f"file:{db_path or db.DB_PATH}?mode=ro", uri=True)
+    try:
+        have = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")}
+    finally:
+        conn.close()
+    return [t for t in seeder.TABLES if t not in have]
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -151,6 +168,23 @@ class App(tk.Tk):
             )
             self.destroy()
             return
+
+        # A new schema lands with a new set of questions, and a database
+        # seeded for the OLD schema would make every reference solution fail
+        # with "no such table". Offer to re-seed rather than let that happen.
+        missing = missing_tables()
+        if missing:
+            if messagebox.askyesno(
+                "Database out of date",
+                f"{db.DB_PATH} lacks the tables this set of questions uses"
+                f" ({', '.join(missing)}).\n\nRe-seed it now? This is what"
+                " `python seed.py` does: the old data is replaced.",
+            ):
+                import seed as seeder
+                seeder.seed()
+            else:
+                self.destroy()
+                return
 
         self.conn = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
         self.conn.row_factory = sqlite3.Row

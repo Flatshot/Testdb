@@ -1,9 +1,10 @@
 """Python practice exercises: fifteen functions, one simple loop each.
 
-The twenty-second Python set, the fifth of single loops: every question
+The twenty-third Python set, the sixth of single loops: every question
 asks for a function built around ONE for or while loop over plain numbers
 or strings -- counting, searching, building, reducing -- with no import
-and no row-shaped data. The loop body is an if, an accumulator, or both.
+and no row-shaped data. The examples lean on the bike scheme on the SQL
+tab: ride lengths in minutes, fares in cents, lists of station names.
 The title names the task; the prompt says which kind of loop and what it
 keeps track of.
 
@@ -30,453 +31,483 @@ import pyrun
 EXERCISES = [
     # ======================================================== 1 Counting
     dict(
-        id=1, ledger="P326", concept="PY4 for count isupper", tier="1 - Counting",
-        title="How many capital letters", kind="function",
-        func="count_upper",
-        cases=[("The Glass Path",), ("leeds",), ("LS15",), ("",)],
+        id=1, ledger="P341", concept="PY4 for count over", tier="1 - Counting",
+        title="Rides longer than the free half hour", kind="function",
+        func="count_over",
+        cases=[([12, 31, 45, 30], 30), ([], 30), ([5, 6], 30), ([31], 30)],
         prompt=(
-            "Write a function `count_upper(s)` that returns how many"
-            " characters of s are upper-case letters. A for loop over the"
-            " characters, an if on ch.isupper(), and a counter.\n\n"
-            "  count_upper(\"The Glass Path\") -> 3\n\n"
+            "Write a function `count_over(minutes, limit)` that returns"
+            " how many ride lengths are STRICTLY longer than limit. A for"
+            " loop with an if on m > limit and a counter; a ride of"
+            " exactly the limit is not over it.\n\n"
+            "  count_over([12, 31, 45, 30], 30) -> 2\n\n"
             "Return: an integer."
         ),
-        solution=("def count_upper(s):\n"
+        solution=("def count_over(minutes, limit):\n"
                   "    n = 0\n"
-                  "    for ch in s:\n"
-                  "        if ch.isupper():\n"
+                  "    for m in minutes:\n"
+                  "        if m > limit:\n"
                   "            n += 1\n"
                   "    return n\n"),
-        trap=("def count_upper(s):\n"
+        trap=("def count_over(minutes, limit):\n"
               "    n = 0\n"
-              "    for ch in s:\n"
-              "        if ch == ch.upper():\n"
+              "    for m in minutes:\n"
+              "        if m >= limit:\n"
               "            n += 1\n"
               "    return n\n"),
-        note="isupper() is True only for a cased character that is upper"
-             " case; ch == ch.upper() is also True for digits and spaces,"
-             " which are unchanged by upper(), so 'LS15' counts 4 and the"
-             " spaces in a title are counted too.",
+        note="The scheme's free period is thirty minutes INCLUSIVE, so a"
+             " thirty-minute ride is not over it: the test is a strict >."
+             " With >= the thirty-minute ride is counted and the answer"
+             " for the example is 3.",
     ),
     dict(
-        id=2, ledger="P327", concept="PY4 for range odd sum", tier="1 - Counting",
-        title="The sum of the odd numbers below n", kind="function",
-        func="sum_odds_below",
-        cases=[(10,), (1,), (0,), (7,)],
+        id=2, ledger="P342", concept="PY4 for sum", tier="1 - Counting",
+        title="The fares added up", kind="function",
+        func="total_fares",
+        cases=[([200, 0, 350, 0],), ([],), ([0, 0],), ([999],)],
         prompt=(
-            "Write a function `sum_odds_below(n)` that returns the sum of"
-            " the odd whole numbers that are less than n. A for loop over"
-            " range(n) with an if on i % 2 == 1 and a running total.\n\n"
-            "  sum_odds_below(10) -> 25\n\n"
+            "Write a function `total_fares(fares)` that returns the sum"
+            " of a list of fares in cents, 0 for an empty list, using a"
+            " for loop and a running total rather than sum().\n\n"
+            "  total_fares([200, 0, 350, 0]) -> 550\n\n"
             "Return: an integer."
         ),
-        solution=("def sum_odds_below(n):\n"
+        solution=("def total_fares(fares):\n"
                   "    total = 0\n"
-                  "    for i in range(n):\n"
-                  "        if i % 2 == 1:\n"
-                  "            total += i\n"
+                  "    for f in fares:\n"
+                  "        total += f\n"
                   "    return total\n"),
-        trap=("def sum_odds_below(n):\n"
+        trap=("def total_fares(fares):\n"
               "    total = 0\n"
-              "    for i in range(n + 1):\n"
-              "        if i % 2 == 1:\n"
-              "            total += i\n"
+              "    for f in fares:\n"
+              "        total = f\n"
               "    return total\n"),
-        note="'Below n' means n itself is excluded, and range(n) stops"
-             " before n -- exactly right for once. range(n + 1) reaches n,"
-             " so for an odd n the answer is too big: 16 instead of 9 for"
-             " n = 7.",
+        note="total = f replaces the total with each fare instead of"
+             " adding to it, so the function returns the LAST fare -- 0"
+             " for the example. The accumulator pattern is total += f,"
+             " starting from 0.",
     ),
     dict(
-        id=3, ledger="P328", concept="PY4 for count true", tier="1 - Counting",
-        title="How many are True", kind="function",
-        func="count_true",
-        cases=[([True, False, True],), ([],), ([False],), ([True, True, True],)],
+        id=3, ledger="P343", concept="PY4 for seen count", tier="1 - Counting",
+        title="How many different stations were visited", kind="function",
+        func="stations_visited",
+        cases=[(["Harbour", "Cathedral", "Harbour", "Stadium"],), ([],), (["Hilltop"],), (["A", "A", "A"],)],
         prompt=(
-            "Write a function `count_true(flags)` that returns how many"
-            " items in a list of booleans are True. A for loop with an if"
-            " on the flag itself -- if flag: -- and a counter.\n\n"
-            "  count_true([True, False, True]) -> 2\n\n"
+            "Write a function `stations_visited(stops)` that returns how"
+            " many DIFFERENT station names appear in a list of stops. A"
+            " for loop with a set of names seen so far and a counter"
+            " that moves only when the name is new.\n\n"
+            "  stations_visited([\"Harbour\", \"Cathedral\", \"Harbour\","
+            " \"Stadium\"]) -> 3\n\n"
             "Return: an integer."
         ),
-        solution=("def count_true(flags):\n"
+        solution=("def stations_visited(stops):\n"
+                  "    seen = set()\n"
                   "    n = 0\n"
-                  "    for f in flags:\n"
-                  "        if f:\n"
+                  "    for s in stops:\n"
+                  "        if s not in seen:\n"
+                  "            seen.add(s)\n"
                   "            n += 1\n"
                   "    return n\n"),
-        trap=("def count_true(flags):\n"
+        trap=("def stations_visited(stops):\n"
+              "    seen = set()\n"
               "    n = 0\n"
-              "    for f in flags:\n"
-              "        if f == \"True\":\n"
+              "    for s in stops:\n"
+              "        if s in seen:\n"
+              "            n += 1\n"
+              "        seen.add(s)\n"
+              "    return n\n"),
+        note="The counter moves for a NEW name, which is 'not in seen';"
+             " counting the names already seen gives the number of"
+             " repeat visits instead, 1 for the example. The set does the"
+             " remembering either way.",
+    ),
+    dict(
+        id=4, ledger="P344", concept="PY4 for neighbours same", tier="1 - Counting",
+        title="Rides that ended where the last one did", kind="function",
+        func="count_same_as_previous",
+        cases=[(["Harbour", "Harbour", "Stadium", "Stadium", "Stadium"],), ([],), (["A"],), (["A", "B", "A"],)],
+        prompt=(
+            "Write a function `count_same_as_previous(ends)` that returns"
+            " how many end stations in the list are the same as the one"
+            " before them. A for loop over range(1, len(ends)) comparing"
+            " ends[i] with ends[i - 1].\n\n"
+            "  count_same_as_previous([\"Harbour\", \"Harbour\", \"Stadium\","
+            " \"Stadium\", \"Stadium\"]) -> 3\n\n"
+            "Return: an integer."
+        ),
+        solution=("def count_same_as_previous(ends):\n"
+                  "    n = 0\n"
+                  "    for i in range(1, len(ends)):\n"
+                  "        if ends[i] == ends[i - 1]:\n"
+                  "            n += 1\n"
+                  "    return n\n"),
+        trap=("def count_same_as_previous(ends):\n"
+              "    n = 0\n"
+              "    for i in range(1, len(ends)):\n"
+              "        if ends[i] == ends[0]:\n"
               "            n += 1\n"
               "    return n\n"),
-        note="A boolean is its own condition: 'if f:' is the whole test."
-             " Comparing with the STRING 'True' is never true for a real"
-             " boolean, so the trap counts nothing. sum(flags) would do"
-             " the same in one call, because True adds as 1.",
-    ),
-    dict(
-        id=4, ledger="P329", concept="PY4 for contains count", tier="1 - Counting",
-        title="Words that contain a letter", kind="function",
-        func="count_containing",
-        cases=[(["pen", "paper", "ink"], "p"), ([], "a"), (["Paper"], "p"), (["aa", "b"], "a")],
-        prompt=(
-            "Write a function `count_containing(words, letter)` that"
-            " returns how many words contain the letter at least once,"
-            " case-sensitively. A for loop with an if on letter in w and"
-            " a counter.\n\n"
-            "  count_containing([\"pen\", \"paper\", \"ink\"], \"p\") -> 2\n\n"
-            "Return: an integer."
-        ),
-        solution=("def count_containing(words, letter):\n"
-                  "    n = 0\n"
-                  "    for w in words:\n"
-                  "        if letter in w:\n"
-                  "            n += 1\n"
-                  "    return n\n"),
-        trap=("def count_containing(words, letter):\n"
-              "    n = 0\n"
-              "    for w in words:\n"
-              "        n += w.count(letter)\n"
-              "    return n\n"),
-        note="'in' asks whether the letter is there at all, once per"
-             " word; count() adds up every occurrence, so 'paper' adds 2"
-             " and 'aa' adds 2 where the question wants 1. Case-sensitive"
-             " means 'Paper' does not contain 'p' -- it contains 'P'.",
+        note="The previous item is ends[i - 1], one step back from"
+             " wherever the loop is; ends[0] is always the FIRST item,"
+             " which turns the question into 'how many match the first"
+             " stop'. Starting the loop at 1 keeps i - 1 inside the list.",
     ),
     # ========================================================= 2 Searching
     dict(
-        id=5, ledger="P330", concept="PY4 for index of max", tier="2 - Searching",
-        title="Where the largest value is", kind="function",
-        func="index_of_max",
-        cases=[([3, 9, 2, 9],), ([1],), ([-4, -2, -8],), ([5, 5],)],
+        id=5, ledger="P345", concept="PY4 for first index", tier="2 - Searching",
+        title="The first free ride", kind="function",
+        func="first_free",
+        cases=[([200, 350, 0, 0], ), ([200, 150],), ([],), ([0],)],
         prompt=(
-            "Write a function `index_of_max(values)` that returns the"
-            " POSITION of the largest value in a non-empty list, the"
-            " first such position if it appears more than once. A for"
-            " loop over range(1, len(values)) that remembers the best"
-            " position so far, starting at 0.\n\n"
-            "  index_of_max([3, 9, 2, 9]) -> 1\n\n"
+            "Write a function `first_free(fares)` that returns the"
+            " POSITION of the first fare that is 0, or -1 if every fare"
+            " was charged. A for loop over enumerate(fares) with a return"
+            " inside it.\n\n"
+            "  first_free([200, 350, 0, 0]) -> 2\n\n"
             "Return: an integer."
         ),
-        solution=("def index_of_max(values):\n"
-                  "    best = 0\n"
-                  "    for i in range(1, len(values)):\n"
-                  "        if values[i] > values[best]:\n"
-                  "            best = i\n"
-                  "    return best\n"),
-        trap=("def index_of_max(values):\n"
-              "    best = 0\n"
-              "    for i in range(1, len(values)):\n"
-              "        if values[i] >= values[best]:\n"
-              "            best = i\n"
-              "    return best\n"),
-        note="The strict > keeps the FIRST of equal maxima; with >= a"
-             " later equal value takes over, and [3, 9, 2, 9] answers 3"
-             " instead of 1. Tracking an index means comparing values[i]"
-             " with values[best], not with best itself.",
+        solution=("def first_free(fares):\n"
+                  "    for i, f in enumerate(fares):\n"
+                  "        if f == 0:\n"
+                  "            return i\n"
+                  "    return -1\n"),
+        trap=("def first_free(fares):\n"
+              "    for i, f in enumerate(fares):\n"
+              "        if f == 0:\n"
+              "            return i\n"
+              "    return 0\n"),
+        note="The value after the loop is the no-match answer, and the"
+             " question says -1. Returning 0 there says 'the first ride"
+             " was free' for a list where nothing was -- 0 is a real"
+             " position, which is why -1 is the usual sentinel.",
     ),
     dict(
-        id=6, ledger="P331", concept="PY4 for any check", tier="2 - Searching",
-        title="Is any of them negative?", kind="function",
-        func="any_negative",
-        cases=[([1, -2, 3],), ([1, 2],), ([],), ([-1],)],
+        id=6, ledger="P346", concept="PY4 for max by hand", tier="2 - Searching",
+        title="The longest ride, by hand", kind="function",
+        func="longest_ride",
+        cases=[([12, 31, 8, 45, 20],), ([3],), ([7, 7],), ([240, 1],)],
         prompt=(
-            "Write a function `any_negative(values)` that returns True"
-            " when at least one value is below zero, and False otherwise"
-            " -- including for an empty list. A for loop that returns"
-            " True at the first negative value, then False after the"
-            " loop. Do not use any() for this one.\n\n"
-            "  any_negative([1, -2, 3]) -> True\n\n"
-            "Return: True or False."
-        ),
-        solution=("def any_negative(values):\n"
-                  "    for v in values:\n"
-                  "        if v < 0:\n"
-                  "            return True\n"
-                  "    return False\n"),
-        trap=("def any_negative(values):\n"
-              "    for v in values:\n"
-              "        if v < 0:\n"
-              "            return True\n"
-              "        else:\n"
-              "            return False\n"),
-        note="'Any' is proved by finding one example, so the loop returns"
-             " True as soon as it sees one and False only after looking"
-             " at them all. An else that returns False inside the loop"
-             " gives up after the FIRST value, so [1, -2, 3] is answered"
-             " False.",
-    ),
-    dict(
-        id=7, ledger="P332", concept="PY4 for last match", tier="2 - Searching",
-        title="The last word longer than n", kind="function",
-        func="last_long_word",
-        cases=[(["pen", "paper", "ink", "notebook", "map"], 3), (["a", "b"], 1), ([], 3), (["four"], 3)],
-        prompt=(
-            "Write a function `last_long_word(words, n)` that returns the"
-            " LAST word with more than n characters, or None if there is"
-            " none. A for loop that records each match in a variable and"
-            " returns it after the loop.\n\n"
-            "  last_long_word([\"pen\", \"paper\", \"ink\", \"notebook\","
-            " \"map\"], 3) -> \"notebook\"\n\n"
-            "Return: the word, or None."
-        ),
-        solution=("def last_long_word(words, n):\n"
-                  "    found = None\n"
-                  "    for w in words:\n"
-                  "        if len(w) > n:\n"
-                  "            found = w\n"
-                  "    return found\n"),
-        trap=("def last_long_word(words, n):\n"
-              "    for w in words:\n"
-              "        if len(w) > n:\n"
-              "            return w\n"
-              "    return None\n"),
-        note="To find the LAST match the loop has to keep going past the"
-             " first one, overwriting a variable each time and returning"
-             " it at the end. A return inside the loop gives the FIRST"
-             " match, 'paper'. Starting the variable at None covers the"
-             " no-match case without a flag.",
-    ),
-    dict(
-        id=8, ledger="P333", concept="PY4 for closest", tier="2 - Searching",
-        title="The value nearest a target", kind="function",
-        func="nearest_to",
-        cases=[([3, 9, 14], 10), ([1, 5], 3), ([7], 0), ([10, 20], 15)],
-        prompt=(
-            "Write a function `nearest_to(values, target)` that returns"
-            " the value in a non-empty list closest to target -- the"
-            " FIRST such value when two are equally close. A for loop"
-            " with a best so far that starts at values[0] and is replaced"
-            " when abs(v - target) is strictly smaller than abs(best -"
-            " target).\n\n"
-            "  nearest_to([3, 9, 14], 10) -> 9\n\n"
+            "Write a function `longest_ride(minutes)` that returns the"
+            " largest value in a non-empty list WITHOUT max(): a best so"
+            " far that starts at minutes[0] and a for loop that replaces"
+            " it when a value is bigger.\n\n"
+            "  longest_ride([12, 31, 8, 45, 20]) -> 45\n\n"
             "Return: the value."
         ),
-        solution=("def nearest_to(values, target):\n"
-                  "    best = values[0]\n"
-                  "    for v in values:\n"
-                  "        if abs(v - target) < abs(best - target):\n"
-                  "            best = v\n"
+        solution=("def longest_ride(minutes):\n"
+                  "    best = minutes[0]\n"
+                  "    for m in minutes:\n"
+                  "        if m > best:\n"
+                  "            best = m\n"
                   "    return best\n"),
-        trap=("def nearest_to(values, target):\n"
-              "    best = values[0]\n"
-              "    for v in values:\n"
-              "        if v - target < best - target:\n"
-              "            best = v\n"
-              "    return best\n"),
-        note="Distance is the ABSOLUTE difference: without abs() the"
-             " comparison prefers the most negative difference, which is"
-             " the smallest value, not the nearest. The strict < keeps"
-             " the first of two equally close values, 10 rather than 20"
-             " for a target of 15.",
+        trap=("def longest_ride(minutes):\n"
+              "    best = minutes[0]\n"
+              "    for m in minutes:\n"
+              "        if m > best:\n"
+              "            best = m\n"
+              "        return best\n"),
+        note="The return is indented inside the loop in the trap, so the"
+             " function answers after looking at the first value only --"
+             " 12 for the example. The return belongs after the loop, at"
+             " the level of the for.",
+    ),
+    dict(
+        id=7, ledger="P347", concept="PY4 for any match", tier="2 - Searching",
+        title="Did any ride end where it started?", kind="function",
+        func="any_round_trip",
+        cases=[([("A", "B"), ("C", "C")],), ([("A", "B")],), ([],), ([("X", "X")],)],
+        prompt=(
+            "Write a function `any_round_trip(rides)` that returns True"
+            " when any (start, end) pair in the list has the same station"
+            " at both ends, and False otherwise. A for loop that unpacks"
+            " each pair -- for start, end in rides -- with a return True"
+            " at the first match, then False after the loop.\n\n"
+            "  any_round_trip([(\"A\", \"B\"), (\"C\", \"C\")]) -> True\n\n"
+            "Return: True or False."
+        ),
+        solution=("def any_round_trip(rides):\n"
+                  "    for start, end in rides:\n"
+                  "        if start == end:\n"
+                  "            return True\n"
+                  "    return False\n"),
+        trap=("def any_round_trip(rides):\n"
+              "    for start, end in rides:\n"
+              "        if start == end:\n"
+              "            return True\n"
+              "        return False\n"),
+        note="A for loop can unpack each tuple into two names as it goes."
+             " The False has to wait until the loop is over; inside the"
+             " loop it fires on the first pair that does NOT match, and"
+             " the example comes out False.",
+    ),
+    dict(
+        id=8, ledger="P348", concept="PY4 for last match", tier="2 - Searching",
+        title="The last station a bike reached", kind="function",
+        func="last_visit",
+        cases=[(["Harbour", "Stadium", "Harbour", "Cathedral"], "Harbour"), (["A", "B"], "C"), ([], "A"), (["A"], "A")],
+        prompt=(
+            "Write a function `last_visit(stops, station)` that returns"
+            " the POSITION of the last stop equal to station, or -1 if it"
+            " never appears. A for loop over range(len(stops)) that"
+            " records every match and returns the record after the"
+            " loop.\n\n"
+            "  last_visit([\"Harbour\", \"Stadium\", \"Harbour\", \"Cathedral\"],"
+            " \"Harbour\") -> 2\n\n"
+            "Return: an integer."
+        ),
+        solution=("def last_visit(stops, station):\n"
+                  "    found = -1\n"
+                  "    for i in range(len(stops)):\n"
+                  "        if stops[i] == station:\n"
+                  "            found = i\n"
+                  "    return found\n"),
+        trap=("def last_visit(stops, station):\n"
+              "    for i in range(len(stops)):\n"
+              "        if stops[i] == station:\n"
+              "            return i\n"
+              "    return -1\n"),
+        note="Returning at the first match gives the FIRST position, 0"
+             " for the example; the last match needs the loop to run on,"
+             " overwriting a variable, and return after it. Starting that"
+             " variable at -1 handles the no-match case.",
     ),
     # ========================================================== 3 Building
     dict(
-        id=9, ledger="P334", concept="PY4 for squares list", tier="3 - Building",
-        title="The first n squares", kind="function",
-        func="squares",
-        cases=[(5,), (1,), (0,), (3,)],
+        id=9, ledger="P349", concept="PY4 for cap values", tier="3 - Building",
+        title="Fares capped at a maximum", kind="function",
+        func="capped",
+        cases=[([200, 650, 300], 500), ([], 500), ([500], 500), ([700, 800], 500)],
         prompt=(
-            "Write a function `squares(n)` that returns the list of the"
-            " squares of 1 to n. A for loop over range(1, n + 1) that"
-            " appends i * i.\n\n"
-            "  squares(5) -> [1, 4, 9, 16, 25]\n\n"
-            "Return: the list."
-        ),
-        solution=("def squares(n):\n"
-                  "    out = []\n"
-                  "    for i in range(1, n + 1):\n"
-                  "        out.append(i * i)\n"
-                  "    return out\n"),
-        trap=("def squares(n):\n"
-              "    out = []\n"
-              "    for i in range(1, n + 1):\n"
-              "        out.append(i * 2)\n"
-              "    return out\n"),
-        note="i * i is the square; i * 2 is the double, and the two agree"
-             " only at i = 2. range(1, n + 1) gives 1 to n inclusive, and"
-             " for n = 0 an empty list.",
-    ),
-    dict(
-        id=10, ledger="P335", concept="PY4 for build initials", tier="3 - Building",
-        title="Initials, built up by loop", kind="function",
-        func="initials",
-        cases=[(["Aisha", "Ekwueme"],), ([],), (["x"],), (["Old", "Town", "Branch"],)],
-        prompt=(
-            "Write a function `initials(words)` that returns a string of"
-            " the first character of each word, in order. A for loop that"
-            " adds w[0] to a result string that starts empty. Every word"
-            " has at least one character.\n\n"
-            "  initials([\"Aisha\", \"Ekwueme\"]) -> \"AE\"\n\n"
-            "Return: the string."
-        ),
-        solution=("def initials(words):\n"
-                  "    out = \"\"\n"
-                  "    for w in words:\n"
-                  "        out += w[0]\n"
-                  "    return out\n"),
-        trap=("def initials(words):\n"
-              "    out = \"\"\n"
-              "    for w in words:\n"
-              "        out += w[1]\n"
-              "    return out\n"),
-        note="Positions start at 0, so the first character is w[0]; w[1]"
-             " is the second, and fails outright on a one-letter word."
-             " A string grows with += just as a list grows with append.",
-    ),
-    dict(
-        id=11, ledger="P336", concept="PY4 for repeat each", tier="3 - Building",
-        title="Each item twice", kind="function",
-        func="repeat_each",
-        cases=[([1, 2, 3],), ([],), (["a"],), ([0, 0],)],
-        prompt=(
-            "Write a function `repeat_each(values)` that returns a new"
-            " list with every item appearing twice in a row. A for loop"
-            " that appends each item two times.\n\n"
-            "  repeat_each([1, 2, 3]) -> [1, 1, 2, 2, 3, 3]\n\n"
+            "Write a function `capped(fares, cap)` that returns a new"
+            " list where every fare above cap is replaced by cap and the"
+            " rest are unchanged, in order. A for loop with an if / else"
+            " and an append.\n\n"
+            "  capped([200, 650, 300], 500) -> [200, 500, 300]\n\n"
             "Return: the new list."
         ),
-        solution=("def repeat_each(values):\n"
+        solution=("def capped(fares, cap):\n"
                   "    out = []\n"
-                  "    for v in values:\n"
-                  "        out.append(v)\n"
-                  "        out.append(v)\n"
+                  "    for f in fares:\n"
+                  "        if f > cap:\n"
+                  "            out.append(cap)\n"
+                  "        else:\n"
+                  "            out.append(f)\n"
                   "    return out\n"),
-        trap=("def repeat_each(values):\n"
+        trap=("def capped(fares, cap):\n"
               "    out = []\n"
-              "    for v in values:\n"
-              "        out.append(v)\n"
-              "    return out + out\n"),
-        note="Two appends inside the loop put the copies NEXT to each"
-             " other; building the list once and adding it to itself"
-             " gives [1, 2, 3, 1, 2, 3], the same items in a different"
-             " order. Order is part of the answer.",
+              "    for f in fares:\n"
+              "        if f > cap:\n"
+              "            out.append(cap)\n"
+              "    return out\n"),
+        note="A transforming loop appends SOMETHING for every item: the"
+             " cap when the fare is over it, the fare itself otherwise."
+             " Without the else the fares under the cap are dropped and"
+             " the list shrinks to the capped ones. min(f, cap) is the"
+             " one-expression form of the if / else.",
     ),
     dict(
-        id=12, ledger="P337", concept="PY4 while step down", tier="3 - Building",
-        title="Counting down in steps", kind="function",
-        func="countdown_by",
-        cases=[(10, 3), (5, 5), (4, 10), (9, 4)],
+        id=10, ledger="P350", concept="PY4 for format strings", tier="3 - Building",
+        title="Ride lengths as labels", kind="function",
+        func="labels",
+        cases=[([12, 31],), ([],), ([1],), ([0, 240],)],
         prompt=(
-            "Write a function `countdown_by(n, step)` that returns the"
-            " list n, n - step, n - 2 * step, ... for as long as the value"
-            " stays above zero. A while loop on n > 0 that appends n and"
-            " then subtracts step.\n\n"
-            "  countdown_by(10, 3) -> [10, 7, 4, 1]\n\n"
-            "Return: the list."
+            "Write a function `labels(minutes)` that returns a list of"
+            " strings like '12 min' for each ride length, in order. A for"
+            " loop that appends an f-string f\"{m} min\".\n\n"
+            "  labels([12, 31]) -> [\"12 min\", \"31 min\"]\n\n"
+            "Return: the list of strings."
         ),
-        solution=("def countdown_by(n, step):\n"
+        solution=("def labels(minutes):\n"
                   "    out = []\n"
-                  "    while n > 0:\n"
-                  "        out.append(n)\n"
-                  "        n -= step\n"
+                  "    for m in minutes:\n"
+                  "        out.append(f\"{m} min\")\n"
                   "    return out\n"),
-        trap=("def countdown_by(n, step):\n"
+        trap=("def labels(minutes):\n"
               "    out = []\n"
-              "    while n > 0:\n"
-              "        n -= step\n"
-              "        out.append(n)\n"
+              "    for m in minutes:\n"
+              "        out.append(m + \" min\")\n"
               "    return out\n"),
-        note="The order of the two lines inside the loop decides which"
-             " values are recorded: append first and n itself is the"
-             " first item; subtract first and the list starts at n - step"
-             " and ends with a value at or below zero.",
+        note="An f-string converts the number to text as it builds the"
+             " label; m + ' min' tries to add an int to a str and raises"
+             " TypeError. str(m) + ' min' would also work -- the point is"
+             " that the conversion has to happen somewhere.",
+    ),
+    dict(
+        id=11, ledger="P351", concept="PY4 for if else build", tier="3 - Building",
+        title="Short or long, ride by ride", kind="function",
+        func="classify",
+        cases=[([12, 31, 30],), ([],), ([45],), ([1, 2, 3],)],
+        prompt=(
+            "Write a function `classify(minutes)` that returns a list"
+            " with 'long' for each ride over 30 minutes and 'short' for"
+            " the rest, in order. A for loop with an if / else deciding"
+            " which word to append.\n\n"
+            "  classify([12, 31, 30]) -> [\"short\", \"long\", \"short\"]\n\n"
+            "Return: the list of strings."
+        ),
+        solution=("def classify(minutes):\n"
+                  "    out = []\n"
+                  "    for m in minutes:\n"
+                  "        if m > 30:\n"
+                  "            out.append(\"long\")\n"
+                  "        else:\n"
+                  "            out.append(\"short\")\n"
+                  "    return out\n"),
+        trap=("def classify(minutes):\n"
+              "    out = []\n"
+              "    for m in minutes:\n"
+              "        if m > 30:\n"
+              "            out.append(\"long\")\n"
+              "        if m < 30:\n"
+              "            out.append(\"short\")\n"
+              "    return out\n"),
+        note="Two separate ifs leave a gap: a ride of exactly 30 minutes"
+             " is neither over nor under, so nothing is appended and the"
+             " list comes back one short. if / else covers every value"
+             " exactly once, which is what a classification needs.",
+    ),
+    dict(
+        id=12, ledger="P352", concept="PY4 for digits only", tier="3 - Building",
+        title="Just the digits of a station code", kind="function",
+        func="digits_only",
+        cases=[("ST-042",), ("Dock 7B",), ("abc",), ("",)],
+        prompt=(
+            "Write a function `digits_only(s)` that returns a string of"
+            " the digit characters of s, in order, with everything else"
+            " left out. A for loop over the characters with an if on"
+            " ch.isdigit() and a result string built with +=.\n\n"
+            "  digits_only(\"ST-042\") -> \"042\"\n\n"
+            "Return: the string."
+        ),
+        solution=("def digits_only(s):\n"
+                  "    out = \"\"\n"
+                  "    for ch in s:\n"
+                  "        if ch.isdigit():\n"
+                  "            out += ch\n"
+                  "    return out\n"),
+        trap=("def digits_only(s):\n"
+              "    out = 0\n"
+              "    for ch in s:\n"
+              "        if ch.isdigit():\n"
+              "            out += int(ch)\n"
+              "    return out\n"),
+        note="The result is a STRING of digits, so the accumulator starts"
+             " as '' and the characters are added as characters. Starting"
+             " at 0 and adding int(ch) sums the digits instead -- 6 for"
+             " 'ST-042' -- and loses the leading zero for good.",
     ),
     # ========================================================== 4 Reducing
     dict(
-        id=13, ledger="P338", concept="PY4 for max gap", tier="4 - Reducing",
-        title="The biggest jump between neighbours", kind="function",
-        func="max_gap",
-        cases=[([1, 4, 9, 11],), ([5],), ([],), ([10, 2, 7],)],
+        id=13, ledger="P353", concept="PY4 for longest run", tier="4 - Reducing",
+        title="The longest run of free rides", kind="function",
+        func="longest_free_run",
+        cases=[([0, 0, 200, 0, 0, 0, 150],), ([],), ([200, 300],), ([0],)],
         prompt=(
-            "Write a function `max_gap(values)` that returns the largest"
-            " absolute difference between two neighbouring values, 0 for"
-            " a list of fewer than two. A for loop over range(1,"
-            " len(values)) comparing abs(values[i] - values[i - 1]) with"
-            " a best so far that starts at 0.\n\n"
-            "  max_gap([1, 4, 9, 11]) -> 5\n\n"
-            "Return: the gap."
-        ),
-        solution=("def max_gap(values):\n"
-                  "    best = 0\n"
-                  "    for i in range(1, len(values)):\n"
-                  "        gap = abs(values[i] - values[i - 1])\n"
-                  "        if gap > best:\n"
-                  "            best = gap\n"
-                  "    return best\n"),
-        trap=("def max_gap(values):\n"
-              "    best = 0\n"
-              "    for i in range(1, len(values)):\n"
-              "        gap = values[i] - values[i - 1]\n"
-              "        if gap > best:\n"
-              "            best = gap\n"
-              "    return best\n"),
-        note="A downward step is still a gap, so the difference needs"
-             " abs(): without it [10, 2, 7] reports 5 for the rise and"
-             " ignores the fall of 8. Starting best at 0 handles the"
-             " short lists, where the loop never runs.",
-    ),
-    dict(
-        id=14, ledger="P339", concept="PY4 for digits in text", tier="4 - Reducing",
-        title="The digits in a string, added up", kind="function",
-        func="sum_digits_in",
-        cases=[("LS15",), ("2026-06-30",), ("Leeds",), ("",)],
-        prompt=(
-            "Write a function `sum_digits_in(s)` that returns the sum of"
-            " the digit characters in s, 0 if there are none. A for loop"
-            " over the characters with an if on ch.isdigit() that adds"
-            " int(ch) to a total.\n\n"
-            "  sum_digits_in(\"LS15\") -> 6\n\n"
+            "Write a function `longest_free_run(fares)` that returns the"
+            " length of the longest stretch of consecutive fares that are"
+            " 0. A for loop with a current run that grows on a 0 and"
+            " resets to 0 on anything else, and a best so far.\n\n"
+            "  longest_free_run([0, 0, 200, 0, 0, 0, 150]) -> 3\n\n"
             "Return: an integer."
         ),
-        solution=("def sum_digits_in(s):\n"
-                  "    total = 0\n"
-                  "    for ch in s:\n"
-                  "        if ch.isdigit():\n"
-                  "            total += int(ch)\n"
-                  "    return total\n"),
-        trap=("def sum_digits_in(s):\n"
-              "    total = 0\n"
-              "    for ch in s:\n"
-              "        if ch.isdigit():\n"
-              "            total += 1\n"
-              "    return total\n"),
-        note="int(ch) turns the digit character into its value; adding 1"
-             " instead counts the digits, 2 for 'LS15' rather than 6."
-             " The isdigit() guard is what lets int() be called safely.",
+        solution=("def longest_free_run(fares):\n"
+                  "    best = 0\n"
+                  "    run = 0\n"
+                  "    for f in fares:\n"
+                  "        if f == 0:\n"
+                  "            run += 1\n"
+                  "        else:\n"
+                  "            run = 0\n"
+                  "        if run > best:\n"
+                  "            best = run\n"
+                  "    return best\n"),
+        trap=("def longest_free_run(fares):\n"
+              "    best = 0\n"
+              "    run = 0\n"
+              "    for f in fares:\n"
+              "        if f == 0:\n"
+              "            run += 1\n"
+              "        if run > best:\n"
+              "            best = run\n"
+              "    return best\n"),
+        note="The reset is the line that is easy to forget: without it"
+             " the run keeps counting across the paid rides and the"
+             " example gives 5 instead of 3. Two trackers, the current"
+             " run and the best, and the best is updated every pass.",
     ),
     dict(
-        id=15, ledger="P340", concept="PY4 for running check", tier="4 - Reducing",
-        title="Does the balance ever go below zero?", kind="function",
-        func="stays_positive",
-        cases=[([10, -3, -5, 2],), ([10, -20, 15],), ([],), ([-1],)],
+        id=14, ledger="P354", concept="PY4 for min gap", tier="4 - Reducing",
+        title="The shortest wait between rides", kind="function",
+        func="min_gap",
+        cases=[([10, 25, 27, 60],), ([5],), ([],), ([3, 3, 9],)],
         prompt=(
-            "Write a function `stays_positive(changes)` that returns True"
-            " when a balance starting at zero never drops below zero as"
-            " the changes are applied in order, and False as soon as it"
-            " does. A for loop with a running total and a return of False"
-            " inside it, then True after the loop.\n\n"
-            "  stays_positive([10, -20, 15]) -> False\n\n"
-            "Return: True or False."
+            "Write a function `min_gap(starts)` that returns the smallest"
+            " difference between neighbouring start times in a list"
+            " already in order, or None for fewer than two. A for loop"
+            " over range(1, len(starts)) with a best that starts as None"
+            " and is replaced when the gap is smaller or the best is"
+            " still None.\n\n"
+            "  min_gap([10, 25, 27, 60]) -> 2\n\n"
+            "Return: the gap, or None."
         ),
-        solution=("def stays_positive(changes):\n"
-                  "    total = 0\n"
-                  "    for c in changes:\n"
-                  "        total += c\n"
-                  "        if total < 0:\n"
-                  "            return False\n"
-                  "    return True\n"),
-        trap=("def stays_positive(changes):\n"
-              "    total = 0\n"
-              "    for c in changes:\n"
-              "        total += c\n"
-              "    return total >= 0\n"),
-        note="The question is about every point along the way, not the"
-             " end: [10, -20, 15] finishes at 5 but dipped to -10 in the"
-             " middle. Checking inside the loop catches the dip; checking"
-             " only the final total misses it.",
+        solution=("def min_gap(starts):\n"
+                  "    best = None\n"
+                  "    for i in range(1, len(starts)):\n"
+                  "        gap = starts[i] - starts[i - 1]\n"
+                  "        if best is None or gap < best:\n"
+                  "            best = gap\n"
+                  "    return best\n"),
+        trap=("def min_gap(starts):\n"
+              "    best = 0\n"
+              "    for i in range(1, len(starts)):\n"
+              "        gap = starts[i] - starts[i - 1]\n"
+              "        if gap < best:\n"
+              "            best = gap\n"
+              "    return best\n"),
+        note="A minimum cannot start at 0 -- no positive gap is ever"
+             " smaller than that, so the trap returns 0 for every list."
+             " Starting at None with 'best is None or' in the test takes"
+             " the first gap whatever it is, and gives None when there"
+             " are no gaps at all.",
+    ),
+    dict(
+        id=15, ledger="P355", concept="PY4 for budget break", tier="4 - Reducing",
+        title="How many rides a balance pays for", kind="function",
+        func="rides_affordable",
+        cases=[(1000, [200, 350, 300, 400]), (500, [200, 300]), (100, [100]), (0, [])],
+        prompt=(
+            "Write a function `rides_affordable(balance, fares)` that"
+            " returns how many of the fares, taken in order, the balance"
+            " can pay before it runs short -- a fare EQUAL to what is left"
+            " can still be paid. A for loop that breaks as soon as a fare"
+            " is more than the balance, otherwise subtracts it and counts"
+            " the ride.\n\n"
+            "  rides_affordable(1000, [200, 350, 300, 400]) -> 3\n\n"
+            "Return: an integer."
+        ),
+        solution=("def rides_affordable(balance, fares):\n"
+                  "    n = 0\n"
+                  "    for f in fares:\n"
+                  "        if f > balance:\n"
+                  "            break\n"
+                  "        balance -= f\n"
+                  "        n += 1\n"
+                  "    return n\n"),
+        trap=("def rides_affordable(balance, fares):\n"
+              "    n = 0\n"
+              "    for f in fares:\n"
+              "        if f >= balance:\n"
+              "            break\n"
+              "        balance -= f\n"
+              "        n += 1\n"
+              "    return n\n"),
+        note="The break condition is the whole question: a fare greater"
+             " than the balance cannot be paid, a fare equal to it can."
+             " With >= the ride that uses up the last cent is refused, so"
+             " 500 pays for one of [200, 300] instead of both. The"
+             " subtraction and the count come after the test, so a"
+             " refused fare is neither paid nor counted.",
     ),
 ]
 

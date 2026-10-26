@@ -27,12 +27,17 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the fifteenth set on the public library
-(SEED 861), two tools per SQL question, with the tiers named by task:
-renewals, the catalogue, staff and salaries, a day in the life -- the
-concepts mixed inside each -- with **three writable** in two steps each.
-**Fifteen Python** functions each built around one simple loop over plain
-values, no imports.
+Thirty questions in two tracks, on a NEW schema: a city bike-hire scheme (6
+tables, SEED 1206), replacing the library. It keeps the library's shapes --
+intervals with open ends (rides, maintenance), money (fares and
+subscriptions), three foreign keys to one table (a ride's start and end
+station, a member's home station), a NULL that is a category (a casual
+rider has no member_id) -- and adds a GRAPH: every ride is an edge between
+two stations. **Fifteen SQL** at two tools per question, with the tiers
+named by task -- riding the network, riders and fares, the fleet, money --
+and **three writable** in two steps each. **Fifteen Python** functions each
+built around one simple loop over plain values, with the examples drawn
+from the scheme.
 
 ### The writable stage
 
@@ -42,58 +47,59 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | a `BEFORE UPDATE OF renewals` trigger comparing NEW.due_on with `date(OLD.due_on, '+14 days')` | three driven renewals' renewals and due dates |
-| 14 | an `UPDATE` with the same correlated AVG in SET and WHERE | total salary per role |
-| 15 | `CREATE TABLE ... AS SELECT` then `CREATE INDEX` on it | the table's size, its largest days_late, and whether the index exists |
+| 13 | a `BEFORE INSERT` trigger whose WHEN is an EXISTS over open rides of the same bike | the bike_ids of any rides added |
+| 14 | an `UPDATE` that copies one column into another and sets a fare by CASE | rides still out, the fares charged, rides ending where they began |
+| 15 | a `VIEW` of minutes per ride and a `VIEW` on it of minutes per member | the second view's size and one member's row |
 
-13 carries a `driver_sql`: three updates the question runs after your
-script. A refusal is reported in the status bar, not treated as an error.
+13 carries a `driver_sql`: two inserts the question runs after your script.
+A refusal is reported in the status bar, not treated as an error.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1057 | W2 window ranking | Which genres get renewed | ex 1 | 1 - Renewals |
-| Q1058 | N1 NULLs | Does renewing help? | ex 2 | 1 - Renewals |
-| Q1059 | A3 WHERE vs HAVING | The keenest renewers | ex 3 | 1 - Renewals |
-| Q1060 | BARE SQLite bare columns | The longest book in each genre | ex 4 | 2 - The catalogue |
-| Q1061 | W1 window frames | The catalogue by decade of publication | ex 5 | 2 - The catalogue |
-| Q1062 | JSN JSON functions | Authors with more than one cookbook | ex 6 | 2 - The catalogue |
-| Q1063 | W2 window ranking | Where each person stands in their role | ex 7 | 3 - Staff and salaries |
-| Q1064 | C7 CASE | Pay by length of service | ex 8 | 3 - Staff and salaries |
-| Q1065 | C2 grain | Wage bill per copy, where it runs high | ex 9 | 3 - Staff and salaries |
-| Q1066 | S1 set operations | Monday 2 March 2026, in four numbers | ex 10 | 4 - A day in the life |
-| Q1067 | D1 dates & times | When members place holds | ex 11 | 4 - A day in the life |
-| Q1068 | J2 outer joins | Monday's returns, and what they cost | ex 12 | 4 - A day in the life |
-| Q1069 | TRG triggers | A renewal moves the due date by exactly a fortnight **(script)** | ex 13 | 5 - Changing the data |
-| Q1070 | DML update & delete | Bring the underpaid librarians up to their branch's average **(script)** | ex 14 | 5 - Changing the data |
-| Q1071 | DDL tables & columns | A table of late returns, indexed **(script)** | ex 15 | 5 - Changing the data |
+| Q1072 | W2 window ranking | The ten busiest routes | ex 1 | 1 - Riding the network |
+| Q1073 | C2 grain | Where the bikes pile up | ex 2 | 1 - Riding the network |
+| Q1074 | JSN JSON functions | Zone to zone, as JSON | ex 3 | 1 - Riding the network |
+| Q1075 | N1 NULLs | How much of each month is casual | ex 4 | 2 - Riders and fares |
+| Q1076 | C7 CASE | What a casual ride costs, by length | ex 5 | 2 - Riders and fares |
+| Q1077 | A3 WHERE vs HAVING | The members who ride for free | ex 6 | 2 - Riders and fares |
+| Q1078 | J2 outer joins | Rides per bike, by model | ex 7 | 3 - The fleet |
+| Q1079 | E1 EXISTS | Jobs still open, and bikes that went out anyway | ex 8 | 3 - The fleet |
+| Q1080 | C2 grain | Maintenance cost per thousand rides | ex 9 | 3 - The fleet |
+| Q1081 | R1 recursive CTE | Monthly members who have missed a payment | ex 10 | 4 - Money |
+| Q1082 | W1 window frames | Revenue by month, fares against subscriptions | ex 11 | 4 - Money |
+| Q1083 | J2 outer joins | Who pays by app | ex 12 | 4 - Money |
+| Q1084 | TRG triggers | One rider per bike **(script)** | ex 13 | 5 - Changing the data |
+| Q1085 | DML update & delete | Close the rides still out at the end of the data **(script)** | ex 14 | 5 - Changing the data |
+| Q1086 | VIEW views | Minutes per ride, then minutes per member **(script)** | ex 15 | 5 - Changing the data |
 
 ### Python
 
 Fifteen functions each built around ONE for or while loop over numbers or
-strings: isupper() under an if, range(n) for 'below n', a boolean as its
-own condition, in against count(), a tracked index with a strict >, 'any'
-proved by one example, a last match recorded, abs() for nearness, squares
-and initials built up, two appends per item, append-then-subtract in a
-while, abs() for a gap, int(ch) under isdigit(), and a check at every step
-of a running total. No imports anywhere.
+strings, with the examples drawn from the bike scheme: a strict > under an
+if, an accumulator, a seen set counting new names, neighbours from index 1,
+a sentinel of -1, a best so far from the first value, tuple unpacking in a
+for, a last match recorded, if / else that appends every time, an f-string
+per item, a classification with no gap, a string of digits, a run with a
+reset, a minimum from None, and a test before a subtraction. No imports
+anywhere.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| P326 | PY4 for count isupper | How many capital letters | py 1 | 1 - Counting |
-| P327 | PY4 for range odd sum | The sum of the odd numbers below n | py 2 | 1 - Counting |
-| P328 | PY4 for count true | How many are True | py 3 | 1 - Counting |
-| P329 | PY4 for contains count | Words that contain a letter | py 4 | 1 - Counting |
-| P330 | PY4 for index of max | Where the largest value is | py 5 | 2 - Searching |
-| P331 | PY4 for any check | Is any of them negative? | py 6 | 2 - Searching |
-| P332 | PY4 for last match | The last word longer than n | py 7 | 2 - Searching |
-| P333 | PY4 for closest | The value nearest a target | py 8 | 2 - Searching |
-| P334 | PY4 for squares list | The first n squares | py 9 | 3 - Building |
-| P335 | PY4 for build initials | Initials, built up by loop | py 10 | 3 - Building |
-| P336 | PY4 for repeat each | Each item twice | py 11 | 3 - Building |
-| P337 | PY4 while step down | Counting down in steps | py 12 | 3 - Building |
-| P338 | PY4 for max gap | The biggest jump between neighbours | py 13 | 4 - Reducing |
-| P339 | PY4 for digits in text | The digits in a string, added up | py 14 | 4 - Reducing |
-| P340 | PY4 for running check | Does the balance ever go below zero? | py 15 | 4 - Reducing |
+| P341 | PY4 for count over | Rides longer than the free half hour | py 1 | 1 - Counting |
+| P342 | PY4 for sum | The fares added up | py 2 | 1 - Counting |
+| P343 | PY4 for seen count | How many different stations were visited | py 3 | 1 - Counting |
+| P344 | PY4 for neighbours same | Rides that ended where the last one did | py 4 | 1 - Counting |
+| P345 | PY4 for first index | The first free ride | py 5 | 2 - Searching |
+| P346 | PY4 for max by hand | The longest ride, by hand | py 6 | 2 - Searching |
+| P347 | PY4 for any match | Did any ride end where it started? | py 7 | 2 - Searching |
+| P348 | PY4 for last match | The last station a bike reached | py 8 | 2 - Searching |
+| P349 | PY4 for cap values | Fares capped at a maximum | py 9 | 3 - Building |
+| P350 | PY4 for format strings | Ride lengths as labels | py 10 | 3 - Building |
+| P351 | PY4 for if else build | Short or long, ride by ride | py 11 | 3 - Building |
+| P352 | PY4 for digits only | Just the digits of a station code | py 12 | 3 - Building |
+| P353 | PY4 for longest run | The longest run of free rides | py 13 | 4 - Reducing |
+| P354 | PY4 for min gap | The shortest wait between rides | py 14 | 4 - Reducing |
+| P355 | PY4 for budget break | How many rides a balance pays for | py 15 | 4 - Reducing |
 
 ## Retired
 
@@ -402,6 +408,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1057 | W2 window ranking | Which genres get renewed | - | retired |
+| Q1058 | N1 NULLs | Does renewing help? | - | retired |
+| Q1059 | A3 WHERE vs HAVING | The keenest renewers | - | retired |
+| Q1060 | BARE SQLite bare columns | The longest book in each genre | - | retired |
+| Q1061 | W1 window frames | The catalogue by decade of publication | - | retired |
+| Q1062 | JSN JSON functions | Authors with more than one cookbook | - | retired |
+| Q1063 | W2 window ranking | Where each person stands in their role | - | retired |
+| Q1064 | C7 CASE | Pay by length of service | - | retired |
+| Q1065 | C2 grain | Wage bill per copy, where it runs high | - | retired |
+| Q1066 | S1 set operations | Monday 2 March 2026, in four numbers | - | retired |
+| Q1067 | D1 dates & times | When members place holds | - | retired |
+| Q1068 | J2 outer joins | Monday's returns, and what they cost | - | retired |
+| Q1069 | TRG triggers | A renewal moves the due date by exactly a fortnight **(script)** | - | retired |
+| Q1070 | DML update & delete | Bring the underpaid librarians up to their branch's average **(script)** | - | retired |
+| Q1071 | DDL tables & columns | A table of late returns, indexed **(script)** | - | retired |
+| P326 | PY4 for count isupper | How many capital letters | - | retired |
+| P327 | PY4 for range odd sum | The sum of the odd numbers below n | - | retired |
+| P328 | PY4 for count true | How many are True | - | retired |
+| P329 | PY4 for contains count | Words that contain a letter | - | retired |
+| P330 | PY4 for index of max | Where the largest value is | - | retired |
+| P331 | PY4 for any check | Is any of them negative? | - | retired |
+| P332 | PY4 for last match | The last word longer than n | - | retired |
+| P333 | PY4 for closest | The value nearest a target | - | retired |
+| P334 | PY4 for squares list | The first n squares | - | retired |
+| P335 | PY4 for build initials | Initials, built up by loop | - | retired |
+| P336 | PY4 for repeat each | Each item twice | - | retired |
+| P337 | PY4 while step down | Counting down in steps | - | retired |
+| P338 | PY4 for max gap | The biggest jump between neighbours | - | retired |
+| P339 | PY4 for digits in text | The digits in a string, added up | - | retired |
+| P340 | PY4 for running check | Does the balance ever go below zero? | - | retired |
 | Q1042 | W3 window vs GROUP BY | The late rate, month by month | - | retired |
 | Q1043 | W2 window ranking | The ten worst offenders | - | retired |
 | Q1044 | C7 CASE | What a late return costs, by how late | - | retired |
@@ -1862,7 +1898,7 @@ they still count as asked.
   a trigger refusing a fine on a loan still out, a ROW_NUMBER CTE feeding
   an UPDATE that trims the queues, and a view made insertable by an
   INSTEAD OF trigger. Python, fifteen single-loop functions.
-- **Q1057-Q1071 and P326-P340** current set. The library again (SEED
+- **Q1057-Q1071 and P326-P340** retired set. The library again (SEED
   861), two tools per SQL question with the tiers named by task: renewals
   (a renewal rate ranked, lateness by renewal count with a conditional
   AVG, the keenest renewers by HAVING with a floating ratio), the
@@ -1876,3 +1912,20 @@ they still count as asked.
   checking a renewal's date arithmetic, an UPDATE with a correlated
   average in SET and WHERE, and CREATE TABLE AS SELECT with an index.
   Python, fifteen single-loop functions.
+- **Q1072-Q1086 and P341-P355** current set, on a NEW schema: a city
+  bike-hire scheme (6 tables, SEED 1206) replacing the library. Stations,
+  bikes, members, rides, maintenance and payments: rides give intervals
+  with open ends and a graph between stations, fares and subscriptions
+  give money, a casual rider's NULL member_id gives a NULL that is a
+  category. SQL, two tools per question in task-named tiers: the busiest
+  routes by ROW_NUMBER over a two-column group, inflow against outflow by
+  scalar subqueries, a zone-to-zone JSON matrix through two aliases, the
+  casual share by AVG(member_id IS NULL), casual fares banded by minutes
+  from julianday, free-ride shares by HAVING and AVG, rides per bike with
+  never-ridden kept, open jobs with an EXISTS since the report,
+  maintenance cost per thousand rides, missed subscriptions by a
+  recursive calendar per member, revenue split with a running total,
+  payment method by plan through two LEFT JOINs -- and three writable: a
+  trigger refusing a ride on a bike already out, an UPDATE closing the
+  rides still out with a CASE fare, and a view on a view. Python, fifteen
+  single-loop functions.
