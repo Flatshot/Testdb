@@ -1,18 +1,18 @@
 # SQL and Python practice exercises
 
-Thirty questions in two tabs. **Fifteen SQL** on the public library, the
-fifteenth set on this schema, two tools per question, with the tiers named
-by task -- renewals, the catalogue, staff and salaries, a day in the life --
-and three writable questions that each take two steps. **Fifteen Python**
-functions each built around one simple loop over plain numbers or strings,
-with no imports.
+Thirty questions in two tabs. **Fifteen SQL** on a NEW schema -- a city
+bike-hire scheme, replacing the library -- at two tools per question, with
+the tiers named by task and three writable questions that each take two
+steps. **Fifteen Python** functions each built around one simple for or
+while loop over plain numbers or strings, with no imports and the examples
+drawn from the scheme.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Renewals | 1-3 |
-| 2 - The catalogue | 4-6 |
-| 3 - Staff and salaries | 7-9 |
-| 4 - A day in the life | 10-12 |
+| 1 - Riding the network | 1-3 |
+| 2 - Riders and fares | 4-6 |
+| 3 - The fleet | 7-9 |
+| 4 - Money | 10-12 |
 | 5 - Changing the data | 13-15 |
 
 | Stage | Python questions |
@@ -24,25 +24,28 @@ with no imports.
 
 ## The schema
 
-Nine tables. `books` are titles; `copies` are the physical things, each at a
-`branch`, in some condition, perhaps withdrawn. `loans` is the centre: a copy,
-a member, `loaned_on`, a `due_on` that already includes any renewals, and a
-`returned_on` that is NULL while the book is still out. `holds` is a queue --
-members waiting for a book, ordered by `placed_at`, each ending in a
-fulfilment, a cancellation, or neither yet. `fines` hang off loans: a late
-return costs 20p a day, capped, paid or not. `members` have a home branch and
-`copies` have a branch, two foreign keys to the same table. `staff` work at a
-branch; `authors` wrote the books. Double-click a table in the left pane to
-see its columns.
+Six tables. `stations` are the docks, each in a `zone` with so many docks,
+opened on a date and perhaps closed. `bikes` are the fleet: a `model`, an
+acquisition date, perhaps retired. `members` have a `plan` -- annual,
+monthly or pay-as-you-go -- and a home station. `rides` is the centre: a
+bike, a member OR NULL for a casual rider, a start station, an end station
+that is NULL while the ride is out, `started_at` and `ended_at`
+timestamps, metres ridden, and a `fare_cents` that is 0 for a member's
+ride inside the free half hour. `maintenance` jobs take a bike off the
+road from `reported_at` until `fixed_at`, which is NULL while the job is
+open. `payments` are money in: a fare names its ride, a subscription names
+its member, never both. Double-click a table in the left pane to see its
+columns.
 
-**Dates are text**, 'YYYY-MM-DD', and `holds.placed_at` is a datetime,
-'YYYY-MM-DD HH:MM'. They compare correctly as text; `julianday()` turns
-either into a number of days you can subtract, and `date()` cuts a datetime
-to its day.
+**Dates and times are text**: 'YYYY-MM-DD' for dates, 'YYYY-MM-DD HH:MM'
+for timestamps. They compare correctly as text; `julianday()` turns either
+into a number of days you can subtract -- multiply by 1440 for minutes --
+and `date()` cuts a timestamp to its day.
 
-**The data ends at 2026-06-30.** Anything that would have ended after that is
-open instead -- 685 loans have no return date, 118 of them already
-past due; 337 holds are still waiting; 1,380 fines are unpaid.
+**The data ends at 2026-06-30 23:59.** Anything that would have ended after
+that is open instead -- 35 rides have no end, 11 of them by
+casual riders; 114 maintenance jobs are unfixed -- and every
+question that measures an open interval says which end to supply.
 
 ## The writable stage
 
@@ -61,36 +64,37 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Question 13 runs three updates of its own *after*
-your script -- a proper renewal, one that leaves the due date alone, and
-one that adds only a week. Questions 14 and 15 are graded on what your
-script leaves behind.
+**Driver statements.** Question 13 runs two inserts of its own *after* your
+script -- a ride on a bike that is out and one on a bike that is docked.
+Questions 14 and 15 are graded on what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 13 | `BEFORE UPDATE OF renewals ON loans WHEN NEW.renewals > OLD.renewals AND NEW.due_on <> date(OLD.due_on, '+14 days') BEGIN SELECT RAISE(ABORT, ...); END` |
-| 14 | `UPDATE staff SET salary = (SELECT ROUND(AVG(...)) ... WHERE ... branch_id = staff.branch_id) WHERE role = 'librarian' AND salary < (the same average)` |
-| 15 | `CREATE TABLE late_returns AS SELECT ... FROM loans WHERE returned_on > due_on; CREATE INDEX idx_late_member ON late_returns (member_id);` |
+| 13 | `BEFORE INSERT ON rides WHEN EXISTS (SELECT 1 FROM rides r WHERE r.bike_id = NEW.bike_id AND r.ended_at IS NULL) BEGIN SELECT RAISE(ABORT, ...); END` |
+| 14 | `UPDATE rides SET ended_at = ..., end_station_id = start_station_id, distance_m = 0, fare_cents = CASE WHEN member_id IS NULL THEN 200 ELSE 0 END WHERE ended_at IS NULL` |
+| 15 | `CREATE VIEW ride_minutes AS ...; CREATE VIEW member_minutes AS SELECT ... FROM ride_minutes WHERE member_id IS NOT NULL GROUP BY member_id` |
 
 ## Things the data does on purpose
 
-- **49.6 per cent of loans were renewed at least once**, and the
-  genres barely differ -- question 1's ranking turns on decimals.
-- **Loans never renewed come back late 26.5 per cent of the time, loans
-  renewed twice 4.6 per cent** -- but the late ones are about as late
-  either way, which question 2's two averages show side by side.
-- **11 authors have written two or more cookbooks**, and
-  96 of the 600 titles were published since 2020, a sixth of the
-  catalogue in question 5's last decade.
-- **The service spends 395 pounds of salary per copy held**; three
-  branches are above that, Central furthest.
-- **49 loans came back on Monday 2 March 2026, 9 of
-  them late** -- the nine fines of the day, and the rows an inner join
-  keeps in question 12.
-- **6 librarians earn less than their own branch's librarian
-  average**, the rows question 14 raises.
-- **4,085 loans came back late**, the rows of question 15's table;
-  returned IS NOT NULL would make it 23,291.
+- **100 of the 900 members have never ridden**, and 86 have no
+  district recorded -- the rows a LEFT JOIN keeps and an inner join loses.
+- **7 of the 320 bikes have never been ridden and 18 are
+  retired**; question 7's average per bike counts the first group as 0.
+- **30 per cent of rides are by casual riders**, whose member_id is
+  NULL -- a category, not a gap, and the test for it is IS NULL.
+- **16 per cent of completed rides end where they began**, which is
+  why question 1 excludes them from the routes.
+- **59 per cent of members' rides cost nothing**, inside the free half
+  hour; pay-as-you-go members pay for every ride, so question 6's list
+  never names one.
+- **220 monthly members have missed at least one payment** --
+  found only by generating each member's due dates, which question 10 does
+  by recursion.
+- **96 of the 114 open maintenance jobs are on bikes that
+  have been ridden since the report**, which question 8's EXISTS has to
+  compare timestamps to see.
+- **The busiest route carries 417 rides**, Market Square to Station
+  Approach; bikes pile up at Station Approach and drain from Market Square.
 
 ## How the Python questions are graded
 
@@ -112,376 +116,385 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Renewals (3)
+## 1 - Riding the network (3)
 
-AVG of renewals > 0 under a DENSE_RANK, a conditional AVG that leaves the on-
-time loans out beside a rate that counts them, and HAVING with a ratio that has
-to be floating-point.
+The graph: a two-column GROUP BY under ROW_NUMBER for the busiest routes, two
+scalar subqueries for a station's inflow and outflow where a double join would
+multiply, and stations joined twice under two aliases packed into JSON.
 
-1. **Which genres get renewed** (Q1057)
+1. **The ten busiest routes** (Q1072)
 
-   For each genre, the percentage of its loans that were renewed at least
-   once, to one decimal, and the genre's place by that rate, 1 for the
-   highest. AVG of the comparison renewals > 0 through the two joins, and
-   DENSE_RANK over the grouped rate.
+   The ten most ridden station-to-station routes, counting completed rides
+   whose start and end stations differ: start station, end station, rides --
+   ties by the lower start id, then end id. GROUP BY both stations, ROW_NUMBER
+   over the counts, keep ten.
 
-   *Return: genre, pct_renewed, place*
+   *Return: start_station_id, end_station_id, rides*
 
-2. **Does renewing help?** (Q1058)
+2. **Where the bikes pile up** (Q1073)
 
-   For each renewal count 0, 1 and 2, over the RETURNED loans: the percentage
-   returned late, and the average days late AMONG the late ones, both to one
-   decimal. A CASE with no ELSE inside the second AVG, so on-time loans are
-   NULL and skipped rather than counted as 0.
+   For each station: rides that started there, rides that ended there, and the
+   difference, ends minus starts -- a positive number means bikes accumulate.
+   Rides reference stations twice, so count each direction with its own scalar
+   subquery rather than joining rides to stations.
 
-   *Return: renewals, pct_late, avg_days_late*
+   *Return: station_id, starts, ends, net*
 
-3. **The keenest renewers** (Q1059)
+3. **Zone to zone, as JSON** (Q1074)
 
-   The ten members with the most renewals per loan among members with at least
-   10 loans, ties by lower member_id: member_id, loans, and renewals per loan
-   to two decimals. GROUP BY with HAVING on the count, a floating-point ratio
-   of SUM over COUNT, ORDER BY and LIMIT.
+   For each zone a ride can start in, a JSON object whose keys are the zones
+   rides END in and whose values are the counts -- completed rides only. Join
+   stations TWICE, under two aliases, for the start zone and the end zone;
+   count per pair in a CTE; json_group_object grouped by the start zone.
 
-   *Return: member_id, loans, renewals_per_loan*
+   *Return: start_zone, by_end_zone*
 
-## 2 - The catalogue (3)
+## 2 - Riders and fares (3)
 
-MAX(pages) with the title as a bare column, a running window SUM over decades
-against the catalogue's size, and LIKE narrowing the rows before a HAVING and a
-json_group_array.
+The NULL that is a category: AVG(member_id IS NULL) for the casual share,
+minutes from julianday banded by CASE for casual fares, and HAVING with AVG of a
+comparison for the members who ride free.
 
-4. **The longest book in each genre** (Q1060)
+4. **How much of each month is casual** (Q1075)
 
-   For each genre: the title and page count of its longest book. MAX(pages)
-   with title as a bare column -- SQLite brings the title from the row the MAX
-   came from. Each genre's maximum is held by one book.
+   For each month rides started: how many rides, and the percentage by CASUAL
+   riders -- member_id NULL -- to one decimal. strftime for the month, AVG of
+   member_id IS NULL for the share.
 
-   *Return: genre, title, pages*
+   *Return: month, rides, pct_casual*
 
-5. **The catalogue by decade of publication** (Q1061)
+5. **What a casual ride costs, by length** (Q1076)
 
-   Books per decade of publication -- published_year / 10 * 10 -- with the
-   cumulative percentage of the catalogue published by the end of that decade,
-   to one decimal. A running window SUM over the grouped counts, divided by
-   the catalogue's 600.
+   Completed CASUAL rides banded by length in minutes -- 'under 10', '10 to
+   30' (10 up to and including 30), 'over 30' -- with the count and the
+   average fare in whole cents. Minutes are (julianday(ended_at) -
+   julianday(started_at)) * 1440; the band is a CASE with the shortest band
+   first.
 
-   *Return: decade, books, cum_pct*
+   *Return: band, rides, avg_fare*
 
-6. **Authors with more than one cookbook** (Q1062)
+6. **The members who ride for free** (Q1077)
 
-   Authors with two or more titles ending in 'Cookbook': author_id, the total
-   pages of those cookbooks, and the titles as a JSON array in alphabetical
-   order. A LIKE in the WHERE, GROUP BY author, HAVING on the count,
-   SUM(pages) and json_group_array with ORDER BY.
+   The ten members with the highest share of free rides -- fare 0 -- among
+   members with at least 10 completed rides, ties by lower member_id:
+   member_id, rides, and the free share as a percentage to one decimal. HAVING
+   on the count, AVG of the comparison, ORDER BY and LIMIT.
 
-   *Return: author_id, cookbook_pages, titles*
+   *Return: member_id, rides, pct_free*
 
-## 3 - Staff and salaries (3)
+## 3 - The fleet (3)
 
-DENSE_RANK and MAX OVER the same partition, a CASE over a julianday difference
-in years, and two scalar subqueries per branch against a scalar average where a
-join would multiply.
+A LEFT JOIN that keeps the bikes never ridden, an EXISTS that compares
+timestamps for 'ridden since', and two children of a bike totalled by scalar
+subqueries.
 
-7. **Where each person stands in their role** (Q1063)
+7. **Rides per bike, by model** (Q1078)
 
-   Every member of staff with their place by salary within their ROLE, 1 for
-   the best paid, and how far below the role's top salary they are. DENSE_RANK
-   partitioned by role, and MAX(salary) OVER the same partition minus the
-   salary.
+   For each model: how many bikes, and the average rides per bike to one
+   decimal, counting a bike that has never been ridden as 0. A LEFT JOIN from
+   bikes to rides, COUNT of the ride id over COUNT(DISTINCT bike_id).
 
-   *Return: staff_id, role, place, gap*
+   *Return: model, bikes, avg_rides*
 
-8. **Pay by length of service** (Q1064)
+8. **Jobs still open, and bikes that went out anyway** (Q1079)
 
-   Staff in three bands by years of service on 2026-06-30 -- 'under 5', '5 to
-   14', '15 and over' -- with how many are in each and their average salary in
-   whole pounds. Years of service are the julianday difference over 365.25;
-   the band is a CASE with the smallest band tested first.
+   Every maintenance job still OPEN -- fixed_at NULL: job_id, bike_id, whole
+   days since it was reported as of 2026-06-30 23:59, and 1 or 0 for whether
+   the bike has started a ride SINCE the report. julianday for the days, an
+   EXISTS over rides for the flag.
 
-   *Return: band, staff, avg_salary*
+   *Return: job_id, bike_id, days_open, ridden_since*
 
-9. **Wage bill per copy, where it runs high** (Q1065)
+9. **Maintenance cost per thousand rides** (Q1080)
 
-   Branches whose total staff salary per copy held is above the service-wide
-   figure -- all salaries over all copies. Staff and copies are two children
-   of a branch, so each total is its own scalar subquery; the comparison is
-   against a scalar subquery too. Whole pounds per copy.
+   For each model: the total maintenance cost of its bikes in cents, its total
+   rides, and the cost per THOUSAND rides as a whole number. Jobs and rides
+   are two children of a bike, so total each with its own scalar subquery over
+   the model.
 
-   *Return: branch_id, salary_per_copy*
+   *Return: model, cost_cents, rides, cost_per_1000*
 
-## 4 - A day in the life (3)
+## 4 - Money (3)
 
-Four counts stacked by UNION ALL with date() on the datetime, strftime('%H')
-under ROW_NUMBER, and a LEFT JOIN with COALESCE so the on-time returns keep
-their rows.
+A recursive calendar that carries a member id along, two conditional SUMs under
+a running window SUM, and two LEFT JOINs with two COALESCEs to name a payer.
 
-10. **Monday 2 March 2026, in four numbers** (Q1066)
+10. **Monthly members who have missed a payment** (Q1081)
 
-    For 2026-03-02, four rows labelled 'loans', 'returns', 'holds' and 'fines'
-    with how many of each happened that day: loans started, loans returned,
-    holds placed -- date() of placed_at -- and fines issued. Four one-row
-    queries stacked by UNION ALL.
+    A monthly member owes 1,200 cents every 30 days from the day they joined.
+    For each monthly member who has MISSED at least one payment due between
+    2025-01-01 and 2026-06-30: member_id and how many due dates have no
+    payment on that day. A recursive CTE generates each member's due dates,
+    stepping date(d, '+30 days') from joined_on; a NOT EXISTS over payments
+    with date(paid_at) = the due date finds the misses.
 
-    *Return: event, count*
+    *Return: member_id, missed*
 
-11. **When members place holds** (Q1067)
+11. **Revenue by month, fares against subscriptions** (Q1082)
 
-    The three hours of the day in which the most holds have been placed, ties
-    by the earlier hour: the hour as strftime's %H, and the count. GROUP BY
-    the hour, ROW_NUMBER over the counts, keep the first three.
+    For each month payments were made: the fare revenue -- payments with a
+    ride_id -- the subscription revenue -- payments with a member_id -- and
+    the running total of ALL revenue so far, all in cents. Two conditional
+    SUMs and a window SUM over their total, ordered by month.
 
-    *Return: hour, holds*
+    *Return: month, fares, subscriptions, running_total*
 
-12. **Monday's returns, and what they cost** (Q1068)
+12. **Who pays by app** (Q1083)
 
-    Every loan returned on 2026-03-02: loan_id, 1 or 0 for whether it was
-    late, and the fine in pence -- 0 when there is none. A LEFT JOIN to fines
-    so on-time returns keep their row, and COALESCE for the missing amount.
+    For each kind of payer -- 'annual', 'monthly', 'pay-as-you-go', or
+    'casual' for a fare paid by a rider with no membership: how many payments,
+    and the percentage made by app to one decimal. A fare payment reaches its
+    member through its ride, so LEFT JOIN rides, then LEFT JOIN members on
+    COALESCE(payments.member_id, rides.member_id), and COALESCE(plan,
+    'casual') for the label.
 
-    *Return: loan_id, late, fine_pence*
+    *Return: payer, payments, pct_app*
 
 ## 5 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A trigger comparing NEW with date
-arithmetic on OLD, an UPDATE with a correlated AVG in SET and WHERE, and CREATE
-TABLE AS SELECT followed by CREATE INDEX.
+question's probe query reads the result. A trigger whose WHEN looks for an open
+ride of the same bike, an UPDATE that copies a column and chooses a fare by
+CASE, and a view of minutes per ride under a view of minutes per member.
 
-13. **A renewal moves the due date by exactly a fortnight** (Q1069)
+13. **One rider per bike** (Q1084)
 
-    Write a BEFORE UPDATE OF renewals trigger on loans that refuses --
-    RAISE(ABORT, ...) -- any update that raises renewals unless the new due_on
-    is exactly OLD.due_on plus 14 days. The question then renews loan 156
-    properly, loan 180 without moving its due date, and loan 4107 with only
-    seven days added.
+    Write a BEFORE INSERT trigger on rides that refuses -- RAISE(ABORT, ...)
+    -- a ride on a bike that is already OUT: a ride of the same bike with
+    ended_at NULL exists. The question then starts a ride on bike 8, which is
+    out, and on bike 1, which is docked.
 
-    *Checked: the renewals and due_on of the three loans*
+    *Checked: the bike_ids of any rides added*
 
-14. **Bring the underpaid librarians up to their branch's average** (Q1070)
+14. **Close the rides still out at the end of the data** (Q1085)
 
-    Every librarian paid LESS than the average librarian salary at their own
-    branch is raised to that average, rounded to whole pounds. One UPDATE
-    whose SET and WHERE both use a correlated subquery over staff for the same
-    branch and role. Nobody else changes.
+    Every ride with ended_at NULL is closed at '2026-06-30 23:59', returned to
+    its own start station, with distance_m 0 and a fare of 200 cents for a
+    CASUAL rider (member_id NULL) or 0 for a member. One UPDATE whose SET uses
+    the row's own start_station_id and a CASE on member_id.
 
-    *Checked: the total salary of each role*
+    *Checked: how many rides are still out, the fares the closed rides were charged, and how many of them end where they began*
 
-15. **A table of late returns, indexed** (Q1071)
+15. **Minutes per ride, then minutes per member** (Q1086)
 
-    Create a table `late_returns` with CREATE TABLE ... AS SELECT holding, for
-    every loan returned AFTER its due date, the loan_id, member_id, and
-    days_late as a whole number -- then CREATE INDEX idx_late_member ON
-    late_returns (member_id). On-time and open loans are not in it.
+    Create a view `ride_minutes (ride_id, member_id, minutes)` of the
+    COMPLETED rides with the ride's length in minutes -- (julianday(ended_at)
+    - julianday(started_at)) * 1440 -- then a second view `member_minutes
+    (member_id, rides, total_minutes)` that reads ride_minutes, keeps the rows
+    with a member, and sums per member with the total rounded to a whole
+    number.
 
-    *Checked: how many rows the table holds, the largest days_late, and whether the index exists*
+    *Checked: how many members the second view holds, and member 608's rides and minutes*
 
 # Python
 
 ## 1 - Counting (4)
 
-isupper() against == upper(), range(n) for 'below n', if f: against a string
-comparison, and in against count().
+A strict > for 'over', += against =, a seen set that counts only new names, and
+ends[i - 1] against ends[0].
 
-1. **How many capital letters** (P326)
+1. **Rides longer than the free half hour** (P341)
 
-   Write a function `count_upper(s)` that returns how many characters of s are
-   upper-case letters. A for loop over the characters, an if on ch.isupper(),
-   and a counter.
-
-   ```
-   count_upper("The Glass Path") -> 3
-   ```
-
-   *Return: an integer.*
-
-2. **The sum of the odd numbers below n** (P327)
-
-   Write a function `sum_odds_below(n)` that returns the sum of the odd whole
-   numbers that are less than n. A for loop over range(n) with an if on i % 2
-   == 1 and a running total.
+   Write a function `count_over(minutes, limit)` that returns how many ride
+   lengths are STRICTLY longer than limit. A for loop with an if on m > limit
+   and a counter; a ride of exactly the limit is not over it.
 
    ```
-   sum_odds_below(10) -> 25
+   count_over([12, 31, 45, 30], 30) -> 2
    ```
 
    *Return: an integer.*
 
-3. **How many are True** (P328)
+2. **The fares added up** (P342)
 
-   Write a function `count_true(flags)` that returns how many items in a list
-   of booleans are True. A for loop with an if on the flag itself -- if flag:
-   -- and a counter.
+   Write a function `total_fares(fares)` that returns the sum of a list of
+   fares in cents, 0 for an empty list, using a for loop and a running total
+   rather than sum().
 
    ```
-   count_true([True, False, True]) -> 2
+   total_fares([200, 0, 350, 0]) -> 550
    ```
 
    *Return: an integer.*
 
-4. **Words that contain a letter** (P329)
+3. **How many different stations were visited** (P343)
 
-   Write a function `count_containing(words, letter)` that returns how many
-   words contain the letter at least once, case-sensitively. A for loop with
-   an if on letter in w and a counter.
+   Write a function `stations_visited(stops)` that returns how many DIFFERENT
+   station names appear in a list of stops. A for loop with a set of names
+   seen so far and a counter that moves only when the name is new.
 
    ```
-   count_containing(["pen", "paper", "ink"], "p") -> 2
+   stations_visited(["Harbour", "Cathedral", "Harbour", "Stadium"]) -> 3
+   ```
+
+   *Return: an integer.*
+
+4. **Rides that ended where the last one did** (P344)
+
+   Write a function `count_same_as_previous(ends)` that returns how many end
+   stations in the list are the same as the one before them. A for loop over
+   range(1, len(ends)) comparing ends[i] with ends[i - 1].
+
+   ```
+   count_same_as_previous(["Harbour", "Harbour", "Stadium", "Stadium", "Stadium"]) -> 3
    ```
 
    *Return: an integer.*
 
 ## 2 - Searching (4)
 
-A tracked index with a strict >, 'any' proved by one example without an else, a
-last match recorded, and abs() for nearness.
+-1 after the loop as the sentinel, a best from the first value returned after
+the loop, tuple unpacking in a for with False after the loop, and a last match
+recorded.
 
-5. **Where the largest value is** (P330)
+5. **The first free ride** (P345)
 
-   Write a function `index_of_max(values)` that returns the POSITION of the
-   largest value in a non-empty list, the first such position if it appears
-   more than once. A for loop over range(1, len(values)) that remembers the
-   best position so far, starting at 0.
+   Write a function `first_free(fares)` that returns the POSITION of the first
+   fare that is 0, or -1 if every fare was charged. A for loop over
+   enumerate(fares) with a return inside it.
 
    ```
-   index_of_max([3, 9, 2, 9]) -> 1
+   first_free([200, 350, 0, 0]) -> 2
    ```
 
    *Return: an integer.*
 
-6. **Is any of them negative?** (P331)
+6. **The longest ride, by hand** (P346)
 
-   Write a function `any_negative(values)` that returns True when at least one
-   value is below zero, and False otherwise -- including for an empty list. A
-   for loop that returns True at the first negative value, then False after
-   the loop. Do not use any() for this one.
-
-   ```
-   any_negative([1, -2, 3]) -> True
-   ```
-
-   *Return: True or False.*
-
-7. **The last word longer than n** (P332)
-
-   Write a function `last_long_word(words, n)` that returns the LAST word with
-   more than n characters, or None if there is none. A for loop that records
-   each match in a variable and returns it after the loop.
+   Write a function `longest_ride(minutes)` that returns the largest value in
+   a non-empty list WITHOUT max(): a best so far that starts at minutes[0] and
+   a for loop that replaces it when a value is bigger.
 
    ```
-   last_long_word(["pen", "paper", "ink", "notebook", "map"], 3) -> "notebook"
-   ```
-
-   *Return: the word, or None.*
-
-8. **The value nearest a target** (P333)
-
-   Write a function `nearest_to(values, target)` that returns the value in a
-   non-empty list closest to target -- the FIRST such value when two are
-   equally close. A for loop with a best so far that starts at values[0] and
-   is replaced when abs(v - target) is strictly smaller than abs(best -
-   target).
-
-   ```
-   nearest_to([3, 9, 14], 10) -> 9
+   longest_ride([12, 31, 8, 45, 20]) -> 45
    ```
 
    *Return: the value.*
 
+7. **Did any ride end where it started?** (P347)
+
+   Write a function `any_round_trip(rides)` that returns True when any (start,
+   end) pair in the list has the same station at both ends, and False
+   otherwise. A for loop that unpacks each pair -- for start, end in rides --
+   with a return True at the first match, then False after the loop.
+
+   ```
+   any_round_trip([("A", "B"), ("C", "C")]) -> True
+   ```
+
+   *Return: True or False.*
+
+8. **The last station a bike reached** (P348)
+
+   Write a function `last_visit(stops, station)` that returns the POSITION of
+   the last stop equal to station, or -1 if it never appears. A for loop over
+   range(len(stops)) that records every match and returns the record after the
+   loop.
+
+   ```
+   last_visit(["Harbour", "Stadium", "Harbour", "Cathedral"], "Harbour") -> 2
+   ```
+
+   *Return: an integer.*
+
 ## 3 - Building (4)
 
-i * i, w[0] added to a string, two appends per item, and append before subtract
-in a while.
+An if / else that appends every time, an f-string per item, a classification
+with no gap at the boundary, and a string of digits that starts as ''.
 
-9. **The first n squares** (P334)
+9. **Fares capped at a maximum** (P349)
 
-   Write a function `squares(n)` that returns the list of the squares of 1 to
-   n. A for loop over range(1, n + 1) that appends i * i.
+   Write a function `capped(fares, cap)` that returns a new list where every
+   fare above cap is replaced by cap and the rest are unchanged, in order. A
+   for loop with an if / else and an append.
 
    ```
-   squares(5) -> [1, 4, 9, 16, 25]
+   capped([200, 650, 300], 500) -> [200, 500, 300]
    ```
 
-   *Return: the list.*
+   *Return: the new list.*
 
-10. **Initials, built up by loop** (P335)
+10. **Ride lengths as labels** (P350)
 
-    Write a function `initials(words)` that returns a string of the first
-    character of each word, in order. A for loop that adds w[0] to a result
-    string that starts empty. Every word has at least one character.
+    Write a function `labels(minutes)` that returns a list of strings like '12
+    min' for each ride length, in order. A for loop that appends an f-string
+    f"{m} min".
 
     ```
-    initials(["Aisha", "Ekwueme"]) -> "AE"
+    labels([12, 31]) -> ["12 min", "31 min"]
+    ```
+
+    *Return: the list of strings.*
+
+11. **Short or long, ride by ride** (P351)
+
+    Write a function `classify(minutes)` that returns a list with 'long' for
+    each ride over 30 minutes and 'short' for the rest, in order. A for loop
+    with an if / else deciding which word to append.
+
+    ```
+    classify([12, 31, 30]) -> ["short", "long", "short"]
+    ```
+
+    *Return: the list of strings.*
+
+12. **Just the digits of a station code** (P352)
+
+    Write a function `digits_only(s)` that returns a string of the digit
+    characters of s, in order, with everything else left out. A for loop over
+    the characters with an if on ch.isdigit() and a result string built with
+    +=.
+
+    ```
+    digits_only("ST-042") -> "042"
     ```
 
     *Return: the string.*
 
-11. **Each item twice** (P336)
-
-    Write a function `repeat_each(values)` that returns a new list with every
-    item appearing twice in a row. A for loop that appends each item two
-    times.
-
-    ```
-    repeat_each([1, 2, 3]) -> [1, 1, 2, 2, 3, 3]
-    ```
-
-    *Return: the new list.*
-
-12. **Counting down in steps** (P337)
-
-    Write a function `countdown_by(n, step)` that returns the list n, n -
-    step, n - 2 * step, ... for as long as the value stays above zero. A while
-    loop on n > 0 that appends n and then subtracts step.
-
-    ```
-    countdown_by(10, 3) -> [10, 7, 4, 1]
-    ```
-
-    *Return: the list.*
-
 ## 4 - Reducing (3)
 
-abs() for a gap either way, int(ch) under isdigit(), and a check at every step
-rather than at the end.
+A run that resets, a minimum that starts as None, and a test before the
+subtraction.
 
-13. **The biggest jump between neighbours** (P338)
+13. **The longest run of free rides** (P353)
 
-    Write a function `max_gap(values)` that returns the largest absolute
-    difference between two neighbouring values, 0 for a list of fewer than
-    two. A for loop over range(1, len(values)) comparing abs(values[i] -
-    values[i - 1]) with a best so far that starts at 0.
-
-    ```
-    max_gap([1, 4, 9, 11]) -> 5
-    ```
-
-    *Return: the gap.*
-
-14. **The digits in a string, added up** (P339)
-
-    Write a function `sum_digits_in(s)` that returns the sum of the digit
-    characters in s, 0 if there are none. A for loop over the characters with
-    an if on ch.isdigit() that adds int(ch) to a total.
+    Write a function `longest_free_run(fares)` that returns the length of the
+    longest stretch of consecutive fares that are 0. A for loop with a current
+    run that grows on a 0 and resets to 0 on anything else, and a best so far.
 
     ```
-    sum_digits_in("LS15") -> 6
+    longest_free_run([0, 0, 200, 0, 0, 0, 150]) -> 3
     ```
 
     *Return: an integer.*
 
-15. **Does the balance ever go below zero?** (P340)
+14. **The shortest wait between rides** (P354)
 
-    Write a function `stays_positive(changes)` that returns True when a
-    balance starting at zero never drops below zero as the changes are applied
-    in order, and False as soon as it does. A for loop with a running total
-    and a return of False inside it, then True after the loop.
+    Write a function `min_gap(starts)` that returns the smallest difference
+    between neighbouring start times in a list already in order, or None for
+    fewer than two. A for loop over range(1, len(starts)) with a best that
+    starts as None and is replaced when the gap is smaller or the best is
+    still None.
 
     ```
-    stays_positive([10, -20, 15]) -> False
+    min_gap([10, 25, 27, 60]) -> 2
     ```
 
-    *Return: True or False.*
+    *Return: the gap, or None.*
+
+15. **How many rides a balance pays for** (P355)
+
+    Write a function `rides_affordable(balance, fares)` that returns how many
+    of the fares, taken in order, the balance can pay before it runs short --
+    a fare EQUAL to what is left can still be paid. A for loop that breaks as
+    soon as a fare is more than the balance, otherwise subtracts it and counts
+    the ride.
+
+    ```
+    rides_affordable(1000, [200, 350, 300, 400]) -> 3
+    ```
+
+    *Return: an integer.*
 
 ## The one concept with no question here
 
@@ -492,7 +505,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,381 retired ones.
+1,411 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

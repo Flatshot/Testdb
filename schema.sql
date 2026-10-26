@@ -1,139 +1,111 @@
--- Schema for testdb: a public library service.
+-- Schema for testdb: a city bike-hire scheme.
 -- Applied by db.init_db(); every statement is safe to re-run.
 --
--- The fifth schema in this repo, after a college, a field-service workshop,
--- a railway and a district hospital. A library keeps the shapes the hospital
--- taught -- INTERVALS, open ends, a hierarchy of sorts -- and adds two of its
--- own: QUEUES and MONEY OWED.
+-- The sixth schema in this repo, after a college, a field-service workshop,
+-- a railway, a district hospital and a public library. A bike-hire scheme
+-- keeps the shapes the library taught -- INTERVALS with open ends, MONEY,
+-- two foreign keys to one table -- and adds a GRAPH: every ride is an edge
+-- from one station to another.
 --
---   loans                 loaned_on .. returned_on, with a due_on in between.
---                         NULL returned_on means the book is still out; a
---                         return after due_on is LATE, and a late return
---                         raises a fine
---   holds                 a QUEUE: members waiting for a book, ordered by
---                         placed_at, each hold ending in a fulfilment, a
---                         cancellation, or neither yet
---   fines                 money in whole pence, issued when a loan came back
---                         late, paid or not yet paid
---   copies                a book is a title; a copy is a physical thing at
---                         one branch, in some condition, perhaps withdrawn
+--   rides                 started_at .. ended_at, each at a station: a ride
+--                         still out has NULL ended_at and NULL end_station_id;
+--                         the fare depends on who rode and for how long
+--   maintenance           reported_at .. fixed_at, a bike off the road while
+--                         the job is open
+--   payments              money in whole cents: a per-ride fare paid by a
+--                         casual rider or a pay-as-you-go member, or a
+--                         subscription paid by a member -- one of ride_id and
+--                         member_id is NULL on every row
+--   bikes                 a model with a natural order ('classic' < 'electric'
+--                         < 'cargo'), acquired on a date, perhaps retired
 --
 -- Carried over on purpose, so familiar questions have a home:
 --
---   books.author_id       one-to-many, with authors who have written nothing
---                         in this catalogue
---   members.home_branch_id, copies.branch_id
---                         two different foreign keys to the same table, so a
---                         loan can be AWAY from the member's home branch
---   staff.role            a category with a natural order ('manager' <
---                         'librarian' < 'assistant')
---   dates are 'YYYY-MM-DD' text; holds.placed_at is 'YYYY-MM-DD HH:MM'.
---                         julianday() turns either into a number.
+--   rides.start_station_id, rides.end_station_id, members.home_station_id
+--                         three different foreign keys to stations
+--   rides.member_id       NULL for a casual rider: the NULL that is a
+--                         category, not a gap
+--   dates and times are text: 'YYYY-MM-DD' for dates, 'YYYY-MM-DD HH:MM' for
+--                         timestamps. julianday() turns either into a number.
 --
--- Deliberate gaps: members who have never borrowed, books with no copies,
--- copies never loaned, copies withdrawn, authors with no books, loans not
--- yet returned, holds neither fulfilled nor cancelled, fines unpaid, a
--- branch with no manager, and members with no recorded postcode.
+-- Deliberate gaps: members who have never ridden, bikes never ridden, bikes
+-- retired, a station closed, rides still out, maintenance still open, rides
+-- by casual riders with no member, members with no recorded district.
 
-CREATE TABLE IF NOT EXISTS branches (
-    branch_id INTEGER PRIMARY KEY,
-    name      TEXT    NOT NULL UNIQUE,
-    town      TEXT    NOT NULL,
-    opened_on TEXT    NOT NULL
+CREATE TABLE IF NOT EXISTS stations (
+    station_id INTEGER PRIMARY KEY,
+    name       TEXT    NOT NULL UNIQUE,
+    zone       TEXT    NOT NULL CHECK (zone IN ('centre', 'north', 'south', 'east', 'west')),
+    docks      INTEGER NOT NULL CHECK (docks > 0),
+    opened_on  TEXT    NOT NULL,
+    -- NULL while the station is in service
+    closed_on  TEXT
 );
 
-CREATE TABLE IF NOT EXISTS staff (
-    staff_id  INTEGER PRIMARY KEY,
-    name      TEXT    NOT NULL,
-    branch_id INTEGER NOT NULL REFERENCES branches(branch_id),
-    role      TEXT    NOT NULL CHECK (role IN ('manager', 'librarian', 'assistant')),
-    hired_on  TEXT    NOT NULL,
-    -- annual salary in whole pounds
-    salary    INTEGER NOT NULL CHECK (salary > 0)
-);
-
-CREATE TABLE IF NOT EXISTS authors (
-    author_id INTEGER PRIMARY KEY,
-    name      TEXT    NOT NULL,
-    born_year INTEGER NOT NULL,
-    country   TEXT    NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS books (
-    book_id        INTEGER PRIMARY KEY,
-    title          TEXT    NOT NULL,
-    author_id      INTEGER NOT NULL REFERENCES authors(author_id),
-    published_year INTEGER NOT NULL,
-    genre          TEXT    NOT NULL CHECK (genre IN ('fiction', 'history', 'science',
-                                                    'children', 'poetry', 'biography',
-                                                    'travel', 'cookery')),
-    pages          INTEGER NOT NULL CHECK (pages > 0)
-);
-
-CREATE TABLE IF NOT EXISTS copies (
-    copy_id      INTEGER PRIMARY KEY,
-    book_id      INTEGER NOT NULL REFERENCES books(book_id),
-    branch_id    INTEGER NOT NULL REFERENCES branches(branch_id),
-    acquired_on  TEXT    NOT NULL,
-    condition    TEXT    NOT NULL CHECK (condition IN ('good', 'worn', 'damaged')),
-    -- NULL while the copy is still on the shelves
-    withdrawn_on TEXT
+CREATE TABLE IF NOT EXISTS bikes (
+    bike_id     INTEGER PRIMARY KEY,
+    model       TEXT    NOT NULL CHECK (model IN ('classic', 'electric', 'cargo')),
+    acquired_on TEXT    NOT NULL,
+    -- NULL while the bike is in the fleet
+    retired_on  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS members (
-    member_id      INTEGER PRIMARY KEY,
-    name           TEXT    NOT NULL,
-    born_on        TEXT    NOT NULL,
-    joined_on      TEXT    NOT NULL,
-    home_branch_id INTEGER NOT NULL REFERENCES branches(branch_id),
+    member_id       INTEGER PRIMARY KEY,
+    name            TEXT    NOT NULL,
+    born_on         TEXT    NOT NULL,
+    joined_on       TEXT    NOT NULL,
+    plan            TEXT    NOT NULL CHECK (plan IN ('annual', 'monthly', 'pay-as-you-go')),
+    home_station_id INTEGER NOT NULL REFERENCES stations(station_id),
     -- NULL where never recorded
-    postcode_area  TEXT
+    district        TEXT
 );
 
-CREATE TABLE IF NOT EXISTS loans (
-    loan_id     INTEGER PRIMARY KEY,
-    copy_id     INTEGER NOT NULL REFERENCES copies(copy_id),
-    member_id   INTEGER NOT NULL REFERENCES members(member_id),
-    loaned_on   TEXT    NOT NULL,
-    -- three weeks from the loan, plus two per renewal
-    due_on      TEXT    NOT NULL,
-    -- NULL while the book is still out
-    returned_on TEXT,
-    renewals    INTEGER NOT NULL DEFAULT 0 CHECK (renewals BETWEEN 0 AND 2)
+CREATE TABLE IF NOT EXISTS rides (
+    ride_id          INTEGER PRIMARY KEY,
+    bike_id          INTEGER NOT NULL REFERENCES bikes(bike_id),
+    -- NULL for a casual rider who paid at the dock
+    member_id        INTEGER REFERENCES members(member_id),
+    start_station_id INTEGER NOT NULL REFERENCES stations(station_id),
+    -- NULL while the ride is still out
+    end_station_id   INTEGER REFERENCES stations(station_id),
+    started_at       TEXT    NOT NULL,
+    ended_at         TEXT,
+    -- metres ridden, NULL while the ride is still out
+    distance_m       INTEGER,
+    -- whole cents; 0 for a member's ride inside their free half hour
+    fare_cents       INTEGER NOT NULL DEFAULT 0 CHECK (fare_cents >= 0),
+    CHECK ((ended_at IS NULL) = (end_station_id IS NULL))
 );
 
-CREATE TABLE IF NOT EXISTS holds (
-    hold_id      INTEGER PRIMARY KEY,
-    book_id      INTEGER NOT NULL REFERENCES books(book_id),
-    member_id    INTEGER NOT NULL REFERENCES members(member_id),
-    placed_at    TEXT    NOT NULL,
-    -- the branch the member wants to collect from
-    branch_id    INTEGER NOT NULL REFERENCES branches(branch_id),
-    -- at most one of these is set; both NULL while the member is waiting
-    fulfilled_on TEXT,
-    cancelled_on TEXT,
-    CHECK (fulfilled_on IS NULL OR cancelled_on IS NULL)
+CREATE TABLE IF NOT EXISTS maintenance (
+    job_id      INTEGER PRIMARY KEY,
+    bike_id     INTEGER NOT NULL REFERENCES bikes(bike_id),
+    station_id  INTEGER NOT NULL REFERENCES stations(station_id),
+    reported_at TEXT    NOT NULL,
+    -- NULL while the job is open
+    fixed_at    TEXT,
+    kind        TEXT    NOT NULL CHECK (kind IN ('puncture', 'brakes', 'battery', 'chain', 'other')),
+    cost_cents  INTEGER NOT NULL CHECK (cost_cents >= 0)
 );
 
-CREATE TABLE IF NOT EXISTS fines (
-    fine_id      INTEGER PRIMARY KEY,
-    loan_id      INTEGER NOT NULL REFERENCES loans(loan_id),
-    -- whole pence: 20 a day late, capped
-    amount_pence INTEGER NOT NULL CHECK (amount_pence > 0),
-    issued_on    TEXT    NOT NULL,
-    -- NULL while unpaid
-    paid_on      TEXT
+CREATE TABLE IF NOT EXISTS payments (
+    payment_id   INTEGER PRIMARY KEY,
+    -- a subscription payment names the member; a fare names the ride
+    member_id    INTEGER REFERENCES members(member_id),
+    ride_id      INTEGER REFERENCES rides(ride_id),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    paid_at      TEXT    NOT NULL,
+    method       TEXT    NOT NULL CHECK (method IN ('card', 'app')),
+    CHECK (member_id IS NOT NULL OR ride_id IS NOT NULL)
 );
 
-CREATE INDEX IF NOT EXISTS idx_staff_branch     ON staff(branch_id);
-CREATE INDEX IF NOT EXISTS idx_books_author     ON books(author_id);
-CREATE INDEX IF NOT EXISTS idx_books_title      ON books(title COLLATE NOCASE);
-CREATE INDEX IF NOT EXISTS idx_copies_book      ON copies(book_id);
-CREATE INDEX IF NOT EXISTS idx_copies_branch    ON copies(branch_id);
-CREATE INDEX IF NOT EXISTS idx_members_branch   ON members(home_branch_id);
-CREATE INDEX IF NOT EXISTS idx_loans_copy       ON loans(copy_id, loaned_on);
-CREATE INDEX IF NOT EXISTS idx_loans_member     ON loans(member_id);
-CREATE INDEX IF NOT EXISTS idx_loans_due        ON loans(due_on);
-CREATE INDEX IF NOT EXISTS idx_holds_book       ON holds(book_id, placed_at);
-CREATE INDEX IF NOT EXISTS idx_holds_member     ON holds(member_id);
-CREATE INDEX IF NOT EXISTS idx_fines_loan       ON fines(loan_id);
+CREATE INDEX IF NOT EXISTS idx_members_station   ON members(home_station_id);
+CREATE INDEX IF NOT EXISTS idx_rides_bike        ON rides(bike_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_rides_member      ON rides(member_id);
+CREATE INDEX IF NOT EXISTS idx_rides_start       ON rides(start_station_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_rides_end         ON rides(end_station_id);
+CREATE INDEX IF NOT EXISTS idx_maint_bike        ON maintenance(bike_id);
+CREATE INDEX IF NOT EXISTS idx_payments_member   ON payments(member_id);
+CREATE INDEX IF NOT EXISTS idx_payments_ride     ON payments(ride_id);
+CREATE INDEX IF NOT EXISTS idx_stations_name     ON stations(name COLLATE NOCASE);
