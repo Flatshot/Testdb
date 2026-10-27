@@ -1,12 +1,12 @@
-"""Python practice exercises: fifteen functions, one simple loop each.
+"""Python practice exercises: fifteen functions in three shapes.
 
-The twenty-third Python set, the sixth of single loops: every question
-asks for a function built around ONE for or while loop over plain numbers
-or strings -- counting, searching, building, reducing -- with no import
-and no row-shaped data. The examples lean on the bike scheme on the SQL
-tab: ride lengths in minutes, fares in cents, lists of station names.
-The title names the task; the prompt says which kind of loop and what it
-keeps track of.
+The twenty-fourth Python set, and a MIXED one: five one-tool functions on
+tools no earlier set used (itertools.combinations, zip(*rows), bisect_left,
+sum() with a start, list.sort(reverse=True)), five functions with one
+simple loop, and five functions over BIKE-SCHEME ROWS -- lists of dicts
+shaped like rides, with a member that is None for a casual rider: counting
+the casual rides, a total per member, the longest ride's id, the members
+who rode free, the members' average length.
 
 Two kinds of question, told apart by `kind`:
 
@@ -28,486 +28,466 @@ The code runs in a separate interpreter with a time limit (see pyrun.py).
 
 import pyrun
 
+RIDES = [{"ride_id": 1, "member": 7, "minutes": 12, "fare": 0},
+         {"ride_id": 2, "member": None, "minutes": 25, "fare": 350},
+         {"ride_id": 3, "member": 9, "minutes": 45, "fare": 100},
+         {"ride_id": 4, "member": 7, "minutes": 60, "fare": 200},
+         {"ride_id": 5, "member": None, "minutes": 8, "fare": 250},
+         {"ride_id": 6, "member": 2, "minutes": 20, "fare": 0}]
+
 EXERCISES = [
-    # ======================================================== 1 Counting
+    # ============================================================= 1 One tool
     dict(
-        id=1, ledger="P341", concept="PY4 for count over", tier="1 - Counting",
-        title="Rides longer than the free half hour", kind="function",
-        func="count_over",
-        cases=[([12, 31, 45, 30], 30), ([], 30), ([5, 6], 30), ([31], 30)],
+        id=1, ledger="P356", concept="PY3 combinations", tier="1 - One tool",
+        title="itertools.combinations(): every pair of stations", kind="function",
+        func="station_pairs",
+        cases=[(["Harbour", "Stadium", "Hilltop"],), ([],), (["Solo"],), (["A", "B"],)],
         prompt=(
-            "Write a function `count_over(minutes, limit)` that returns"
-            " how many ride lengths are STRICTLY longer than limit. A for"
-            " loop with an if on m > limit and a counter; a ride of"
-            " exactly the limit is not over it.\n\n"
-            "  count_over([12, 31, 45, 30], 30) -> 2\n\n"
+            "Write a function `station_pairs(stations)` that returns a"
+            " list of every pair of stations as tuples, each pair once"
+            " and in the order the stations were given, using list() over"
+            " itertools.combinations(stations, 2). Write `import"
+            " itertools` as the first line.\n\n"
+            "  station_pairs([\"Harbour\", \"Stadium\", \"Hilltop\"]) ->"
+            " [(\"Harbour\", \"Stadium\"), (\"Harbour\", \"Hilltop\"),"
+            " (\"Stadium\", \"Hilltop\")]\n\n"
+            "Return: the list of tuples."
+        ),
+        solution=("import itertools\n\n"
+                  "def station_pairs(stations):\n"
+                  "    return list(itertools.combinations(stations, 2))\n"),
+        trap=("import itertools\n\n"
+              "def station_pairs(stations):\n"
+              "    return list(itertools.permutations(stations, 2))\n"),
+        note="combinations() gives each pair once, in the order met;"
+             " permutations() gives each pair both ways round, twice as"
+             " many. The SQL side's self-join with < is the same idea."
+             " Fewer than two stations means no pairs at all.",
+    ),
+    dict(
+        id=2, ledger="P357", concept="PY3 zip star", tier="1 - One tool",
+        title="zip(*rows): rows into columns", kind="function",
+        func="columns",
+        cases=[([[1, 2, 3], [4, 5, 6]],), ([[1, 2]],), ([],), ([["a", "b"], ["c", "d"], ["e", "f"]],)],
+        prompt=(
+            "Write a function `columns(rows)` that turns a list of"
+            " equal-length rows into a list of columns, each column a"
+            " LIST, using a list comprehension over zip(*rows) -- the"
+            " star hands each row to zip as a separate argument. No"
+            " import is needed.\n\n"
+            "  columns([[1, 2, 3], [4, 5, 6]]) -> [[1, 4], [2, 5], [3, 6]]\n\n"
+            "Return: the list of lists."
+        ),
+        solution="def columns(rows):\n    return [list(c) for c in zip(*rows)]\n",
+        trap="def columns(rows):\n    return [list(c) for c in zip(rows)]\n",
+        note="zip(*rows) unpacks the outer list so zip sees the rows side"
+             " by side and pairs their first items, their second items,"
+             " and so on -- the transpose. zip(rows) sees ONE argument"
+             " and wraps each row in a tuple of one. The comprehension"
+             " turns the tuples into lists.",
+    ),
+    dict(
+        id=3, ledger="P358", concept="PY3 bisect", tier="1 - One tool",
+        title="bisect.bisect_left(): how many are below", kind="function",
+        func="count_below",
+        cases=[([100, 200, 200, 350, 600], 200), ([100, 200], 50), ([], 10), ([5, 5, 5], 5)],
+        prompt=(
+            "Write a function `count_below(sorted_fares, x)` that returns"
+            " how many fares in an already-SORTED list are strictly less"
+            " than x, using bisect.bisect_left() -- the position where x"
+            " would be inserted to keep the order, which is exactly that"
+            " count. Write `import bisect` as the first line.\n\n"
+            "  count_below([100, 200, 200, 350, 600], 200) -> 1\n\n"
             "Return: an integer."
         ),
-        solution=("def count_over(minutes, limit):\n"
+        solution=("import bisect\n\n"
+                  "def count_below(sorted_fares, x):\n"
+                  "    return bisect.bisect_left(sorted_fares, x)\n"),
+        trap=("import bisect\n\n"
+              "def count_below(sorted_fares, x):\n"
+              "    return bisect.bisect_right(sorted_fares, x)\n"),
+        note="bisect_left finds the first position at or after which x"
+             " belongs, so everything before it is strictly smaller;"
+             " bisect_right goes past the equal values and counts them"
+             " too -- 3 instead of 1 for the example. Both are binary"
+             " searches and need the list sorted.",
+    ),
+    dict(
+        id=4, ledger="P359", concept="PY3 sum start", tier="1 - One tool",
+        title="sum(values, start): a total with an opening balance", kind="function",
+        func="total_with_unlock",
+        cases=[([50, 50, 100], 200), ([], 200), ([25], 0), ([10, 10], 150)],
+        prompt=(
+            "Write a function `total_with_unlock(charges, unlock)` that"
+            " returns the unlock fee plus all the per-minute charges, in"
+            " one call of sum() with its second argument, the START"
+            " value. No import is needed.\n\n"
+            "  total_with_unlock([50, 50, 100], 200) -> 400\n\n"
+            "Return: an integer."
+        ),
+        solution="def total_with_unlock(charges, unlock):\n    return sum(charges, unlock)\n",
+        trap="def total_with_unlock(charges, unlock):\n    return sum(charges)\n",
+        note="sum() takes an optional start value that the total begins"
+             " from -- 0 unless you say otherwise. The trap forgets the"
+             " unlock fee entirely. sum(charges) + unlock says the same"
+             " in two steps.",
+    ),
+    dict(
+        id=5, ledger="P360", concept="PY3 sort reverse", tier="1 - One tool",
+        title="sort(reverse=True): biggest first, in place", kind="function",
+        func="longest_first",
+        cases=[([12, 45, 8],), ([],), ([3, 3],), ([1, 2, 3],)],
+        prompt=(
+            "Write a function `longest_first(minutes)` that sorts the"
+            " list itself from longest to shortest with sort(reverse="
+            "True) and then returns that same list. No import is"
+            " needed.\n\n"
+            "  longest_first([12, 45, 8]) -> [45, 12, 8]\n\n"
+            "Return: the list."
+        ),
+        solution="def longest_first(minutes):\n    minutes.sort(reverse=True)\n    return minutes\n",
+        trap="def longest_first(minutes):\n    return minutes.sort(reverse=True)\n",
+        note="list.sort() changes the list in place and returns None, so"
+             " 'return minutes.sort(...)' returns nothing. Two lines:"
+             " sort, then return the list. reverse=True flips the order"
+             " without a second pass.",
+    ),
+    # ======================================================= 2 A simple loop
+    dict(
+        id=6, ledger="P361", concept="PY4 for count in tuple", tier="2 - A simple loop",
+        title="How many rides were at the weekend", kind="function",
+        func="weekend_rides",
+        cases=[([1, 6, 0, 3, 6],), ([],), ([2, 3, 4],), ([0],)],
+        prompt=(
+            "Write a function `weekend_rides(days)` that returns how many"
+            " of the weekday numbers are 0 or 6 -- Sunday or Saturday, as"
+            " SQLite's strftime('%w') numbers them. A for loop with an if"
+            " on d in (0, 6) and a counter.\n\n"
+            "  weekend_rides([1, 6, 0, 3, 6]) -> 3\n\n"
+            "Return: an integer."
+        ),
+        solution=("def weekend_rides(days):\n"
                   "    n = 0\n"
-                  "    for m in minutes:\n"
-                  "        if m > limit:\n"
+                  "    for d in days:\n"
+                  "        if d in (0, 6):\n"
                   "            n += 1\n"
                   "    return n\n"),
-        trap=("def count_over(minutes, limit):\n"
+        trap=("def weekend_rides(days):\n"
               "    n = 0\n"
-              "    for m in minutes:\n"
-              "        if m >= limit:\n"
+              "    for d in days:\n"
+              "        if d == 0 or 6:\n"
               "            n += 1\n"
               "    return n\n"),
-        note="The scheme's free period is thirty minutes INCLUSIVE, so a"
-             " thirty-minute ride is not over it: the test is a strict >."
-             " With >= the thirty-minute ride is counted and the answer"
-             " for the example is 3.",
+        note="'d == 0 or 6' is read as '(d == 0) or 6', and 6 is truthy,"
+             " so the test is always true and every ride counts. 'd in"
+             " (0, 6)' asks the question that was meant; so does"
+             " 'd == 0 or d == 6'.",
     ),
     dict(
-        id=2, ledger="P342", concept="PY4 for sum", tier="1 - Counting",
-        title="The fares added up", kind="function",
-        func="total_fares",
-        cases=[([200, 0, 350, 0],), ([],), ([0, 0],), ([999],)],
+        id=7, ledger="P362", concept="PY4 for first repeat", tier="2 - A simple loop",
+        title="The first station reached twice", kind="function",
+        func="first_revisit",
+        cases=[(["Harbour", "Stadium", "Harbour", "Stadium"],), (["A", "B"],), ([],), (["X", "X"],)],
         prompt=(
-            "Write a function `total_fares(fares)` that returns the sum"
-            " of a list of fares in cents, 0 for an empty list, using a"
-            " for loop and a running total rather than sum().\n\n"
-            "  total_fares([200, 0, 350, 0]) -> 550\n\n"
-            "Return: an integer."
+            "Write a function `first_revisit(stops)` that returns the"
+            " first station whose SECOND visit comes earliest, or None"
+            " when no station is visited twice. A for loop with a seen"
+            " set, returning the stop the moment it is already in the"
+            " set.\n\n"
+            "  first_revisit([\"Harbour\", \"Stadium\", \"Harbour\","
+            " \"Stadium\"]) -> \"Harbour\"\n\n"
+            "Return: the station, or None."
         ),
-        solution=("def total_fares(fares):\n"
-                  "    total = 0\n"
-                  "    for f in fares:\n"
-                  "        total += f\n"
-                  "    return total\n"),
-        trap=("def total_fares(fares):\n"
-              "    total = 0\n"
-              "    for f in fares:\n"
-              "        total = f\n"
-              "    return total\n"),
-        note="total = f replaces the total with each fare instead of"
-             " adding to it, so the function returns the LAST fare -- 0"
-             " for the example. The accumulator pattern is total += f,"
-             " starting from 0.",
-    ),
-    dict(
-        id=3, ledger="P343", concept="PY4 for seen count", tier="1 - Counting",
-        title="How many different stations were visited", kind="function",
-        func="stations_visited",
-        cases=[(["Harbour", "Cathedral", "Harbour", "Stadium"],), ([],), (["Hilltop"],), (["A", "A", "A"],)],
-        prompt=(
-            "Write a function `stations_visited(stops)` that returns how"
-            " many DIFFERENT station names appear in a list of stops. A"
-            " for loop with a set of names seen so far and a counter"
-            " that moves only when the name is new.\n\n"
-            "  stations_visited([\"Harbour\", \"Cathedral\", \"Harbour\","
-            " \"Stadium\"]) -> 3\n\n"
-            "Return: an integer."
-        ),
-        solution=("def stations_visited(stops):\n"
+        solution=("def first_revisit(stops):\n"
                   "    seen = set()\n"
-                  "    n = 0\n"
                   "    for s in stops:\n"
-                  "        if s not in seen:\n"
-                  "            seen.add(s)\n"
-                  "            n += 1\n"
-                  "    return n\n"),
-        trap=("def stations_visited(stops):\n"
+                  "        if s in seen:\n"
+                  "            return s\n"
+                  "        seen.add(s)\n"
+                  "    return None\n"),
+        trap=("def first_revisit(stops):\n"
               "    seen = set()\n"
-              "    n = 0\n"
               "    for s in stops:\n"
-              "        if s in seen:\n"
-              "            n += 1\n"
               "        seen.add(s)\n"
-              "    return n\n"),
-        note="The counter moves for a NEW name, which is 'not in seen';"
-             " counting the names already seen gives the number of"
-             " repeat visits instead, 1 for the example. The set does the"
-             " remembering either way.",
+              "        if s in seen:\n"
+              "            return s\n"
+              "    return None\n"),
+        note="Check, then add. Adding first means every stop is 'already"
+             " seen' the moment it is tested, so the first stop is"
+             " returned whatever it is. The return after the loop is the"
+             " no-revisit answer.",
     ),
     dict(
-        id=4, ledger="P344", concept="PY4 for neighbours same", tier="1 - Counting",
-        title="Rides that ended where the last one did", kind="function",
-        func="count_same_as_previous",
-        cases=[(["Harbour", "Harbour", "Stadium", "Stadium", "Stadium"],), ([],), (["A"],), (["A", "B", "A"],)],
+        id=8, ledger="P363", concept="PY4 for transform int", tier="2 - A simple loop",
+        title="Fares after a discount", kind="function",
+        func="discounted",
+        cases=[([200, 350, 100], 10), ([], 50), ([99], 50), ([250], 0)],
         prompt=(
-            "Write a function `count_same_as_previous(ends)` that returns"
-            " how many end stations in the list are the same as the one"
-            " before them. A for loop over range(1, len(ends)) comparing"
-            " ends[i] with ends[i - 1].\n\n"
-            "  count_same_as_previous([\"Harbour\", \"Harbour\", \"Stadium\","
-            " \"Stadium\", \"Stadium\"]) -> 3\n\n"
-            "Return: an integer."
-        ),
-        solution=("def count_same_as_previous(ends):\n"
-                  "    n = 0\n"
-                  "    for i in range(1, len(ends)):\n"
-                  "        if ends[i] == ends[i - 1]:\n"
-                  "            n += 1\n"
-                  "    return n\n"),
-        trap=("def count_same_as_previous(ends):\n"
-              "    n = 0\n"
-              "    for i in range(1, len(ends)):\n"
-              "        if ends[i] == ends[0]:\n"
-              "            n += 1\n"
-              "    return n\n"),
-        note="The previous item is ends[i - 1], one step back from"
-             " wherever the loop is; ends[0] is always the FIRST item,"
-             " which turns the question into 'how many match the first"
-             " stop'. Starting the loop at 1 keeps i - 1 inside the list.",
-    ),
-    # ========================================================= 2 Searching
-    dict(
-        id=5, ledger="P345", concept="PY4 for first index", tier="2 - Searching",
-        title="The first free ride", kind="function",
-        func="first_free",
-        cases=[([200, 350, 0, 0], ), ([200, 150],), ([],), ([0],)],
-        prompt=(
-            "Write a function `first_free(fares)` that returns the"
-            " POSITION of the first fare that is 0, or -1 if every fare"
-            " was charged. A for loop over enumerate(fares) with a return"
-            " inside it.\n\n"
-            "  first_free([200, 350, 0, 0]) -> 2\n\n"
-            "Return: an integer."
-        ),
-        solution=("def first_free(fares):\n"
-                  "    for i, f in enumerate(fares):\n"
-                  "        if f == 0:\n"
-                  "            return i\n"
-                  "    return -1\n"),
-        trap=("def first_free(fares):\n"
-              "    for i, f in enumerate(fares):\n"
-              "        if f == 0:\n"
-              "            return i\n"
-              "    return 0\n"),
-        note="The value after the loop is the no-match answer, and the"
-             " question says -1. Returning 0 there says 'the first ride"
-             " was free' for a list where nothing was -- 0 is a real"
-             " position, which is why -1 is the usual sentinel.",
-    ),
-    dict(
-        id=6, ledger="P346", concept="PY4 for max by hand", tier="2 - Searching",
-        title="The longest ride, by hand", kind="function",
-        func="longest_ride",
-        cases=[([12, 31, 8, 45, 20],), ([3],), ([7, 7],), ([240, 1],)],
-        prompt=(
-            "Write a function `longest_ride(minutes)` that returns the"
-            " largest value in a non-empty list WITHOUT max(): a best so"
-            " far that starts at minutes[0] and a for loop that replaces"
-            " it when a value is bigger.\n\n"
-            "  longest_ride([12, 31, 8, 45, 20]) -> 45\n\n"
-            "Return: the value."
-        ),
-        solution=("def longest_ride(minutes):\n"
-                  "    best = minutes[0]\n"
-                  "    for m in minutes:\n"
-                  "        if m > best:\n"
-                  "            best = m\n"
-                  "    return best\n"),
-        trap=("def longest_ride(minutes):\n"
-              "    best = minutes[0]\n"
-              "    for m in minutes:\n"
-              "        if m > best:\n"
-              "            best = m\n"
-              "        return best\n"),
-        note="The return is indented inside the loop in the trap, so the"
-             " function answers after looking at the first value only --"
-             " 12 for the example. The return belongs after the loop, at"
-             " the level of the for.",
-    ),
-    dict(
-        id=7, ledger="P347", concept="PY4 for any match", tier="2 - Searching",
-        title="Did any ride end where it started?", kind="function",
-        func="any_round_trip",
-        cases=[([("A", "B"), ("C", "C")],), ([("A", "B")],), ([],), ([("X", "X")],)],
-        prompt=(
-            "Write a function `any_round_trip(rides)` that returns True"
-            " when any (start, end) pair in the list has the same station"
-            " at both ends, and False otherwise. A for loop that unpacks"
-            " each pair -- for start, end in rides -- with a return True"
-            " at the first match, then False after the loop.\n\n"
-            "  any_round_trip([(\"A\", \"B\"), (\"C\", \"C\")]) -> True\n\n"
-            "Return: True or False."
-        ),
-        solution=("def any_round_trip(rides):\n"
-                  "    for start, end in rides:\n"
-                  "        if start == end:\n"
-                  "            return True\n"
-                  "    return False\n"),
-        trap=("def any_round_trip(rides):\n"
-              "    for start, end in rides:\n"
-              "        if start == end:\n"
-              "            return True\n"
-              "        return False\n"),
-        note="A for loop can unpack each tuple into two names as it goes."
-             " The False has to wait until the loop is over; inside the"
-             " loop it fires on the first pair that does NOT match, and"
-             " the example comes out False.",
-    ),
-    dict(
-        id=8, ledger="P348", concept="PY4 for last match", tier="2 - Searching",
-        title="The last station a bike reached", kind="function",
-        func="last_visit",
-        cases=[(["Harbour", "Stadium", "Harbour", "Cathedral"], "Harbour"), (["A", "B"], "C"), ([], "A"), (["A"], "A")],
-        prompt=(
-            "Write a function `last_visit(stops, station)` that returns"
-            " the POSITION of the last stop equal to station, or -1 if it"
-            " never appears. A for loop over range(len(stops)) that"
-            " records every match and returns the record after the"
-            " loop.\n\n"
-            "  last_visit([\"Harbour\", \"Stadium\", \"Harbour\", \"Cathedral\"],"
-            " \"Harbour\") -> 2\n\n"
-            "Return: an integer."
-        ),
-        solution=("def last_visit(stops, station):\n"
-                  "    found = -1\n"
-                  "    for i in range(len(stops)):\n"
-                  "        if stops[i] == station:\n"
-                  "            found = i\n"
-                  "    return found\n"),
-        trap=("def last_visit(stops, station):\n"
-              "    for i in range(len(stops)):\n"
-              "        if stops[i] == station:\n"
-              "            return i\n"
-              "    return -1\n"),
-        note="Returning at the first match gives the FIRST position, 0"
-             " for the example; the last match needs the loop to run on,"
-             " overwriting a variable, and return after it. Starting that"
-             " variable at -1 handles the no-match case.",
-    ),
-    # ========================================================== 3 Building
-    dict(
-        id=9, ledger="P349", concept="PY4 for cap values", tier="3 - Building",
-        title="Fares capped at a maximum", kind="function",
-        func="capped",
-        cases=[([200, 650, 300], 500), ([], 500), ([500], 500), ([700, 800], 500)],
-        prompt=(
-            "Write a function `capped(fares, cap)` that returns a new"
-            " list where every fare above cap is replaced by cap and the"
-            " rest are unchanged, in order. A for loop with an if / else"
-            " and an append.\n\n"
-            "  capped([200, 650, 300], 500) -> [200, 500, 300]\n\n"
+            "Write a function `discounted(fares, pct)` that returns a new"
+            " list of the fares each reduced by pct per cent and rounded"
+            " to a whole number of cents. A for loop that appends"
+            " round(f * (100 - pct) / 100) for each fare.\n\n"
+            "  discounted([200, 350, 100], 10) -> [180, 315, 90]\n\n"
             "Return: the new list."
         ),
-        solution=("def capped(fares, cap):\n"
+        solution=("def discounted(fares, pct):\n"
                   "    out = []\n"
                   "    for f in fares:\n"
-                  "        if f > cap:\n"
-                  "            out.append(cap)\n"
-                  "        else:\n"
-                  "            out.append(f)\n"
+                  "        out.append(round(f * (100 - pct) / 100))\n"
                   "    return out\n"),
-        trap=("def capped(fares, cap):\n"
+        trap=("def discounted(fares, pct):\n"
               "    out = []\n"
               "    for f in fares:\n"
-              "        if f > cap:\n"
-              "            out.append(cap)\n"
+              "        out.append(f * (100 - pct) / 100)\n"
               "    return out\n"),
-        note="A transforming loop appends SOMETHING for every item: the"
-             " cap when the fare is over it, the fare itself otherwise."
-             " Without the else the fares under the cap are dropped and"
-             " the list shrinks to the capped ones. min(f, cap) is the"
-             " one-expression form of the if / else.",
+        note="Division produces a float, so 200 * 90 / 100 is 180.0, and"
+             " the question wants whole cents: round() brings it back to"
+             " an int. 99 at 50 per cent is 49.5, which round() takes to"
+             " 50 -- halves go to the even neighbour.",
     ),
     dict(
-        id=10, ledger="P350", concept="PY4 for format strings", tier="3 - Building",
-        title="Ride lengths as labels", kind="function",
-        func="labels",
-        cases=[([12, 31],), ([],), ([1],), ([0, 240],)],
+        id=9, ledger="P364", concept="PY4 for rising run", tier="2 - A simple loop",
+        title="The longest run of ever-longer rides", kind="function",
+        func="longest_rising",
+        cases=[([5, 8, 12, 3, 4, 9, 10, 2],), ([],), ([7],), ([9, 8, 7],)],
         prompt=(
-            "Write a function `labels(minutes)` that returns a list of"
-            " strings like '12 min' for each ride length, in order. A for"
-            " loop that appends an f-string f\"{m} min\".\n\n"
-            "  labels([12, 31]) -> [\"12 min\", \"31 min\"]\n\n"
-            "Return: the list of strings."
-        ),
-        solution=("def labels(minutes):\n"
-                  "    out = []\n"
-                  "    for m in minutes:\n"
-                  "        out.append(f\"{m} min\")\n"
-                  "    return out\n"),
-        trap=("def labels(minutes):\n"
-              "    out = []\n"
-              "    for m in minutes:\n"
-              "        out.append(m + \" min\")\n"
-              "    return out\n"),
-        note="An f-string converts the number to text as it builds the"
-             " label; m + ' min' tries to add an int to a str and raises"
-             " TypeError. str(m) + ' min' would also work -- the point is"
-             " that the conversion has to happen somewhere.",
-    ),
-    dict(
-        id=11, ledger="P351", concept="PY4 for if else build", tier="3 - Building",
-        title="Short or long, ride by ride", kind="function",
-        func="classify",
-        cases=[([12, 31, 30],), ([],), ([45],), ([1, 2, 3],)],
-        prompt=(
-            "Write a function `classify(minutes)` that returns a list"
-            " with 'long' for each ride over 30 minutes and 'short' for"
-            " the rest, in order. A for loop with an if / else deciding"
-            " which word to append.\n\n"
-            "  classify([12, 31, 30]) -> [\"short\", \"long\", \"short\"]\n\n"
-            "Return: the list of strings."
-        ),
-        solution=("def classify(minutes):\n"
-                  "    out = []\n"
-                  "    for m in minutes:\n"
-                  "        if m > 30:\n"
-                  "            out.append(\"long\")\n"
-                  "        else:\n"
-                  "            out.append(\"short\")\n"
-                  "    return out\n"),
-        trap=("def classify(minutes):\n"
-              "    out = []\n"
-              "    for m in minutes:\n"
-              "        if m > 30:\n"
-              "            out.append(\"long\")\n"
-              "        if m < 30:\n"
-              "            out.append(\"short\")\n"
-              "    return out\n"),
-        note="Two separate ifs leave a gap: a ride of exactly 30 minutes"
-             " is neither over nor under, so nothing is appended and the"
-             " list comes back one short. if / else covers every value"
-             " exactly once, which is what a classification needs.",
-    ),
-    dict(
-        id=12, ledger="P352", concept="PY4 for digits only", tier="3 - Building",
-        title="Just the digits of a station code", kind="function",
-        func="digits_only",
-        cases=[("ST-042",), ("Dock 7B",), ("abc",), ("",)],
-        prompt=(
-            "Write a function `digits_only(s)` that returns a string of"
-            " the digit characters of s, in order, with everything else"
-            " left out. A for loop over the characters with an if on"
-            " ch.isdigit() and a result string built with +=.\n\n"
-            "  digits_only(\"ST-042\") -> \"042\"\n\n"
-            "Return: the string."
-        ),
-        solution=("def digits_only(s):\n"
-                  "    out = \"\"\n"
-                  "    for ch in s:\n"
-                  "        if ch.isdigit():\n"
-                  "            out += ch\n"
-                  "    return out\n"),
-        trap=("def digits_only(s):\n"
-              "    out = 0\n"
-              "    for ch in s:\n"
-              "        if ch.isdigit():\n"
-              "            out += int(ch)\n"
-              "    return out\n"),
-        note="The result is a STRING of digits, so the accumulator starts"
-             " as '' and the characters are added as characters. Starting"
-             " at 0 and adding int(ch) sums the digits instead -- 6 for"
-             " 'ST-042' -- and loses the leading zero for good.",
-    ),
-    # ========================================================== 4 Reducing
-    dict(
-        id=13, ledger="P353", concept="PY4 for longest run", tier="4 - Reducing",
-        title="The longest run of free rides", kind="function",
-        func="longest_free_run",
-        cases=[([0, 0, 200, 0, 0, 0, 150],), ([],), ([200, 300],), ([0],)],
-        prompt=(
-            "Write a function `longest_free_run(fares)` that returns the"
-            " length of the longest stretch of consecutive fares that are"
-            " 0. A for loop with a current run that grows on a 0 and"
-            " resets to 0 on anything else, and a best so far.\n\n"
-            "  longest_free_run([0, 0, 200, 0, 0, 0, 150]) -> 3\n\n"
+            "Write a function `longest_rising(minutes)` that returns the"
+            " length of the longest stretch in which each ride is longer"
+            " than the one before it, 0 for an empty list and 1 for a"
+            " single ride. A for loop over range(1, len(minutes)) with a"
+            " run that grows on a rise and resets to 1 otherwise, and a"
+            " best so far.\n\n"
+            "  longest_rising([5, 8, 12, 3, 4, 9, 10, 2]) -> 4\n\n"
             "Return: an integer."
         ),
-        solution=("def longest_free_run(fares):\n"
-                  "    best = 0\n"
-                  "    run = 0\n"
-                  "    for f in fares:\n"
-                  "        if f == 0:\n"
+        solution=("def longest_rising(minutes):\n"
+                  "    if not minutes:\n"
+                  "        return 0\n"
+                  "    best = 1\n"
+                  "    run = 1\n"
+                  "    for i in range(1, len(minutes)):\n"
+                  "        if minutes[i] > minutes[i - 1]:\n"
                   "            run += 1\n"
                   "        else:\n"
-                  "            run = 0\n"
+                  "            run = 1\n"
                   "        if run > best:\n"
                   "            best = run\n"
                   "    return best\n"),
-        trap=("def longest_free_run(fares):\n"
-              "    best = 0\n"
-              "    run = 0\n"
-              "    for f in fares:\n"
-              "        if f == 0:\n"
+        trap=("def longest_rising(minutes):\n"
+              "    if not minutes:\n"
+              "        return 0\n"
+              "    best = 1\n"
+              "    run = 1\n"
+              "    for i in range(1, len(minutes)):\n"
+              "        if minutes[i] > minutes[i - 1]:\n"
               "            run += 1\n"
+              "        else:\n"
+              "            run = 0\n"
               "        if run > best:\n"
               "            best = run\n"
               "    return best\n"),
-        note="The reset is the line that is easy to forget: without it"
-             " the run keeps counting across the paid rides and the"
-             " example gives 5 instead of 3. Two trackers, the current"
-             " run and the best, and the best is updated every pass.",
+        note="A run is measured in rides, and the ride that breaks the"
+             " streak is itself the start of the next one, so the reset"
+             " is to 1, not 0. Resetting to 0 counts every later run one"
+             " short -- 3 for the example's 3, 4, 9, 10.",
     ),
     dict(
-        id=14, ledger="P354", concept="PY4 for min gap", tier="4 - Reducing",
-        title="The shortest wait between rides", kind="function",
-        func="min_gap",
-        cases=[([10, 25, 27, 60],), ([5],), ([],), ([3, 3, 9],)],
+        id=10, ledger="P365", concept="PY4 while digits product", tier="2 - A simple loop",
+        title="The digits of a bike number, multiplied", kind="function",
+        func="digit_product",
+        cases=[(234,), (7,), (105,), (999,)],
         prompt=(
-            "Write a function `min_gap(starts)` that returns the smallest"
-            " difference between neighbouring start times in a list"
-            " already in order, or None for fewer than two. A for loop"
-            " over range(1, len(starts)) with a best that starts as None"
-            " and is replaced when the gap is smaller or the best is"
-            " still None.\n\n"
-            "  min_gap([10, 25, 27, 60]) -> 2\n\n"
-            "Return: the gap, or None."
-        ),
-        solution=("def min_gap(starts):\n"
-                  "    best = None\n"
-                  "    for i in range(1, len(starts)):\n"
-                  "        gap = starts[i] - starts[i - 1]\n"
-                  "        if best is None or gap < best:\n"
-                  "            best = gap\n"
-                  "    return best\n"),
-        trap=("def min_gap(starts):\n"
-              "    best = 0\n"
-              "    for i in range(1, len(starts)):\n"
-              "        gap = starts[i] - starts[i - 1]\n"
-              "        if gap < best:\n"
-              "            best = gap\n"
-              "    return best\n"),
-        note="A minimum cannot start at 0 -- no positive gap is ever"
-             " smaller than that, so the trap returns 0 for every list."
-             " Starting at None with 'best is None or' in the test takes"
-             " the first gap whatever it is, and gives None when there"
-             " are no gaps at all.",
-    ),
-    dict(
-        id=15, ledger="P355", concept="PY4 for budget break", tier="4 - Reducing",
-        title="How many rides a balance pays for", kind="function",
-        func="rides_affordable",
-        cases=[(1000, [200, 350, 300, 400]), (500, [200, 300]), (100, [100]), (0, [])],
-        prompt=(
-            "Write a function `rides_affordable(balance, fares)` that"
-            " returns how many of the fares, taken in order, the balance"
-            " can pay before it runs short -- a fare EQUAL to what is left"
-            " can still be paid. A for loop that breaks as soon as a fare"
-            " is more than the balance, otherwise subtracts it and counts"
-            " the ride.\n\n"
-            "  rides_affordable(1000, [200, 350, 300, 400]) -> 3\n\n"
+            "Write a function `digit_product(n)` that returns the product"
+            " of the decimal digits of a positive integer, using a while"
+            " loop that multiplies in n % 10 and then replaces n with"
+            " n // 10, running while n is above zero.\n\n"
+            "  digit_product(234) -> 24\n\n"
             "Return: an integer."
         ),
-        solution=("def rides_affordable(balance, fares):\n"
+        solution=("def digit_product(n):\n"
+                  "    product = 1\n"
+                  "    while n > 0:\n"
+                  "        product *= n % 10\n"
+                  "        n //= 10\n"
+                  "    return product\n"),
+        trap=("def digit_product(n):\n"
+              "    product = 0\n"
+              "    while n > 0:\n"
+              "        product *= n % 10\n"
+              "        n //= 10\n"
+              "    return product\n"),
+        note="A product starts at 1; starting at 0 keeps it at 0 forever."
+             " The digit-peeling loop is the same as for a digit sum, with"
+             " *= in place of +=. A 0 among the digits makes the answer 0,"
+             " as it should.",
+    ),
+    # ========================================================== 3 Ride rows
+    dict(
+        id=11, ledger="P366", concept="PY5 count None", tier="3 - Ride rows",
+        title="How many rides were casual", kind="function",
+        func="casual_count",
+        cases=[(RIDES,), ([],), (RIDES[:1],), ([{"ride_id": 9, "member": 0, "minutes": 5, "fare": 0}],)],
+        prompt=(
+            "Each ride is a dict with keys ride_id, member, minutes and"
+            " fare, where member is None for a casual rider. Write a"
+            " function `casual_count(rides)` that returns how many rides"
+            " were casual: a for loop with an if on r[\"member\"] is None"
+            " and a counter. A member id can be 0, and 0 is a member.\n\n"
+            "  casual_count(RIDES) -> 2\n\n"
+            "Return: an integer."
+        ),
+        solution=("def casual_count(rides):\n"
                   "    n = 0\n"
-                  "    for f in fares:\n"
-                  "        if f > balance:\n"
-                  "            break\n"
-                  "        balance -= f\n"
-                  "        n += 1\n"
+                  "    for r in rides:\n"
+                  "        if r[\"member\"] is None:\n"
+                  "            n += 1\n"
                   "    return n\n"),
-        trap=("def rides_affordable(balance, fares):\n"
+        trap=("def casual_count(rides):\n"
               "    n = 0\n"
-              "    for f in fares:\n"
-              "        if f >= balance:\n"
-              "            break\n"
-              "        balance -= f\n"
-              "        n += 1\n"
+              "    for r in rides:\n"
+              "        if not r[\"member\"]:\n"
+              "            n += 1\n"
               "    return n\n"),
-        note="The break condition is the whole question: a fare greater"
-             " than the balance cannot be paid, a fare equal to it can."
-             " With >= the ride that uses up the last cent is refused, so"
-             " 500 pays for one of [200, 300] instead of both. The"
-             " subtraction and the count come after the test, so a"
-             " refused fare is neither paid nor counted.",
+        note="'is None' is the test for the missing member; 'not' is"
+             " true for 0 as well, and a member whose id happened to be 0"
+             " would be counted as casual. This is SQL's member_id IS"
+             " NULL from the bike questions.",
+    ),
+    dict(
+        id=12, ledger="P367", concept="PY5 sum by key", tier="3 - Ride rows",
+        title="What each member paid in all", kind="function",
+        func="fares_by_member",
+        cases=[(RIDES,), ([],), (RIDES[1:2],)],
+        prompt=(
+            "Using the same ride dicts, write a function `fares_by_member("
+            "rides)` that returns a dict mapping each MEMBER to the total"
+            " of their fares -- casual rides, with member None, are left"
+            " out. A for loop with an if on the member, and a dict built"
+            " with get(member, 0) + fare.\n\n"
+            "  fares_by_member(RIDES) -> {7: 200, 9: 100, 2: 0}\n\n"
+            "Return: the dictionary."
+        ),
+        solution=("def fares_by_member(rides):\n"
+                  "    totals = {}\n"
+                  "    for r in rides:\n"
+                  "        if r[\"member\"] is not None:\n"
+                  "            totals[r[\"member\"]] = totals.get(r[\"member\"], 0) + r[\"fare\"]\n"
+                  "    return totals\n"),
+        trap=("def fares_by_member(rides):\n"
+              "    totals = {}\n"
+              "    for r in rides:\n"
+              "        totals[r[\"member\"]] = totals.get(r[\"member\"], 0) + r[\"fare\"]\n"
+              "    return totals\n"),
+        note="A total per key is a dict with get(key, 0) to start each"
+             " member at zero. Without the if, None becomes a key and the"
+             " casual riders' fares are totalled under it -- a GROUP BY"
+             " that forgot its WHERE. A member whose rides were all free"
+             " still appears, with 0.",
+    ),
+    dict(
+        id=13, ledger="P368", concept="PY5 argmax", tier="3 - Ride rows",
+        title="The longest ride's id", kind="function",
+        func="longest_ride_id",
+        cases=[(RIDES,), (RIDES[:2],), (RIDES[4:5],)],
+        prompt=(
+            "Using the same ride dicts, write a function `longest_ride_id("
+            "rides)` that returns the ride_id of the ride with the most"
+            " minutes in a non-empty list, the first one if several tie."
+            " A for loop with a best ride so far, starting at rides[0]."
+            "\n\n"
+            "  longest_ride_id(RIDES) -> 4\n\n"
+            "Return: an integer."
+        ),
+        solution=("def longest_ride_id(rides):\n"
+                  "    best = rides[0]\n"
+                  "    for r in rides:\n"
+                  "        if r[\"minutes\"] > best[\"minutes\"]:\n"
+                  "            best = r\n"
+                  "    return best[\"ride_id\"]\n"),
+        trap=("def longest_ride_id(rides):\n"
+              "    best = rides[0]\n"
+              "    for r in rides:\n"
+              "        if r[\"minutes\"] > best[\"minutes\"]:\n"
+              "            best = r\n"
+              "    return best[\"minutes\"]\n"),
+        note="Tracking the whole best ROW keeps every field of the"
+             " winner to hand, and the question asks for its id -- the"
+             " trap returns its minutes, 60 rather than 4. The strict >"
+             " keeps the first of equals. max(rides, key=lambda r:"
+             " r['minutes']) is the one-line form.",
+    ),
+    dict(
+        id=14, ledger="P369", concept="PY5 filter distinct sorted", tier="3 - Ride rows",
+        title="The members who have ridden for free", kind="function",
+        func="free_riders",
+        cases=[(RIDES,), ([],), (RIDES[1:3],)],
+        prompt=(
+            "Using the same ride dicts, write a function `free_riders("
+            "rides)` that returns a sorted list of the DISTINCT members"
+            " who have at least one ride with fare 0 -- casual rides"
+            " cannot be free, but guard against None anyway. A for loop"
+            " adding to a set under an if, then sorted() of the set.\n\n"
+            "  free_riders(RIDES) -> [2, 7]\n\n"
+            "Return: the sorted list."
+        ),
+        solution=("def free_riders(rides):\n"
+                  "    members = set()\n"
+                  "    for r in rides:\n"
+                  "        if r[\"fare\"] == 0 and r[\"member\"] is not None:\n"
+                  "            members.add(r[\"member\"])\n"
+                  "    return sorted(members)\n"),
+        trap=("def free_riders(rides):\n"
+              "    members = []\n"
+              "    for r in rides:\n"
+              "        if r[\"fare\"] == 0 and r[\"member\"] is not None:\n"
+              "            members.append(r[\"member\"])\n"
+              "    return members\n"),
+        note="A set collects each member once, however many free rides"
+             " they had, and sorted() returns it as an ordered list. A"
+             " list keeps repeats and the order of arrival -- [7, 2] for"
+             " the example, with a second 7 whenever member 7 rides free"
+             " again. SELECT DISTINCT ... ORDER BY, in Python.",
+    ),
+    dict(
+        id=15, ledger="P370", concept="PY5 average filtered", tier="3 - Ride rows",
+        title="How long members ride, on average", kind="function",
+        func="average_member_minutes",
+        cases=[(RIDES,), ([],), (RIDES[1:2],), (RIDES[2:4],)],
+        prompt=(
+            "Using the same ride dicts, write a function"
+            " `average_member_minutes(rides)` that returns the mean"
+            " minutes of the rides that have a member, to one decimal,"
+            " or None when there are no member rides. A for loop keeping"
+            " a total and a count under an if, then the guarded"
+            " division.\n\n"
+            "  average_member_minutes(RIDES) -> 34.2\n\n"
+            "Return: a float, or None."
+        ),
+        solution=("def average_member_minutes(rides):\n"
+                  "    total = 0\n"
+                  "    count = 0\n"
+                  "    for r in rides:\n"
+                  "        if r[\"member\"] is not None:\n"
+                  "            total += r[\"minutes\"]\n"
+                  "            count += 1\n"
+                  "    if count == 0:\n"
+                  "        return None\n"
+                  "    return round(total / count, 1)\n"),
+        trap=("def average_member_minutes(rides):\n"
+              "    total = 0\n"
+              "    count = 0\n"
+              "    for r in rides:\n"
+              "        if r[\"member\"] is not None:\n"
+              "            total += r[\"minutes\"]\n"
+              "        count += 1\n"
+              "    if count == 0:\n"
+              "        return None\n"
+              "    return round(total / count, 1)\n"),
+        note="Both the total and the count belong under the if: counting"
+             " every ride while totalling only the members' divides by"
+             " the wrong number -- 22.8 instead of 34.2. The guard"
+             " before the division is what makes a list with no member"
+             " rides return None rather than crash.",
     ),
 ]
 
