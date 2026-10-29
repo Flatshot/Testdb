@@ -27,17 +27,17 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the second set on the bike-hire scheme (6
+Thirty questions in two tracks, the fourth set on the bike-hire scheme (6
 tables, SEED 1206). **Fifteen SQL** at two tools per question, with the
-tiers named by task -- stations and docks, members and plans, bikes on the
-road, time of day -- bringing in the tools the first bike set left out:
-SQLite's bare column beside MAX, INTERSECT, NTILE, a pivot by conditional
-SUM, SUBSTR under GROUP BY, a covering index graded on the plan, LAG
-partitioned per station, a cumulative percentage. **Three writable** in two
-steps each. **Fifteen Python** in three shapes: five one-tool functions on
-tools no earlier set used, five single simple loops, and five over
-bike-scheme rows -- lists of ride dicts with a member that is None for a
-casual rider.
+tiers named by task -- streaks and spells, labels and text, counting with
+conditions, the fleet's calendar -- on tools no bike set has used: gaps and
+islands, a ROWS frame, FIRST_VALUE and LAST_VALUE with the frame opened,
+GROUP_CONCAT with ORDER BY, COALESCE, FORMAT, FILTER, NOT EXISTS where NOT
+IN would return nothing, CUME_DIST, a named WINDOW, date modifiers,
+COALESCE inside julianday. **Three writable** in two steps each. **Fifteen
+Python**: five one-tool functions on tools no earlier set used, four single
+simple loops and ONE whole program graded on what it prints, and five over
+payment dicts with a member or a ride that is None.
 
 ### The writable stage
 
@@ -47,45 +47,45 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | an `AFTER UPDATE OF ended_at` trigger that UPDATEs the fare of the row that fired it, by CASE on member_id | the fares of the two rides the driver ends |
-| 14 | a `DELETE` with a julianday age and a correlated EXISTS over rides | how many jobs remain, and how many of them are open |
-| 15 | `CREATE TABLE ... AS SELECT` with RANK over a grouped count | the new table's rows |
+| 13 | `ALTER TABLE ... ADD COLUMN minutes ... GENERATED ALWAYS AS (...) VIRTUAL` | the column's average, rounded maximum and NULL count |
+| 14 | `CREATE TABLE bike_moves (...)` with NOT NULL, REFERENCES and a two-column CHECK | the move_ids the driver's four inserts got in |
+| 15 | `CREATE TEMP TABLE gone AS ...; DELETE FROM maintenance WHERE fixed_at IS NULL AND bike_id IN (SELECT ... FROM gone)` | how many jobs remain, and how many of them are open |
 
-13 carries a `driver_sql`: two UPDATEs ending a casual and a member's ride,
-run after your script.
+14 carries a `driver_sql`: four inserts, one good and three that the
+constraints must refuse, run after your script.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1087 | BARE SQLite bare columns | The biggest station in each zone | ex 1 | 1 - Stations and docks |
-| Q1088 | W2 window ranking | Rides per dock, ranked | ex 2 | 1 - Stations and docks |
-| Q1089 | S1 set operations | Bikes casual riders have used that also need fixing | ex 3 | 1 - Stations and docks |
-| Q1090 | W2 window ranking | Riders in quartiles, and what they pay | ex 4 | 2 - Members and plans |
-| Q1091 | C7 CASE | Plans by home zone, as a pivot | ex 5 | 2 - Members and plans |
-| Q1092 | STR string aggregation | Surnames shared within a plan | ex 6 | 2 - Members and plans |
-| Q1093 | X5 covering indexes | Bike 7's rides, through the index | ex 7 | 3 - Bikes on the road |
-| Q1094 | D1 dates & times | The bikes that have sat longest | ex 8 | 3 - Bikes on the road |
-| Q1095 | W2 window ranking | Each bike's busiest month | ex 9 | 3 - Bikes on the road |
-| Q1096 | W1 window frames | Rides by hour, and the share of the day so far | ex 10 | 4 - Time of day |
-| Q1097 | C7 CASE | Weekday or weekend, member or casual | ex 11 | 4 - Time of day |
-| Q1098 | W3 window vs GROUP BY | The longest quiet spell at each station | ex 12 | 4 - Time of day |
-| Q1099 | TRG triggers | Price the ride when it ends **(script)** | ex 13 | 5 - Changing the data |
-| Q1100 | DML update & delete | Clear the stale repair reports **(script)** | ex 14 | 5 - Changing the data |
-| Q1101 | DDL constraints | A league table of stations **(script)** | ex 15 | 5 - Changing the data |
-| P356 | PY3 combinations | itertools.combinations(): every pair of stations | py 1 | 1 - One tool |
-| P357 | PY3 zip star | zip(*rows): rows into columns | py 2 | 1 - One tool |
-| P358 | PY3 bisect | bisect.bisect_left(): how many are below | py 3 | 1 - One tool |
-| P359 | PY3 sum start | sum(values, start): a total with an opening balance | py 4 | 1 - One tool |
-| P360 | PY3 sort reverse | sort(reverse=True): biggest first, in place | py 5 | 1 - One tool |
-| P361 | PY4 for count in tuple | How many rides were at the weekend | py 6 | 2 - A simple loop |
-| P362 | PY4 for first repeat | The first station reached twice | py 7 | 2 - A simple loop |
-| P363 | PY4 for transform int | Fares after a discount | py 8 | 2 - A simple loop |
-| P364 | PY4 for rising run | The longest run of ever-longer rides | py 9 | 2 - A simple loop |
-| P365 | PY4 while digits product | The digits of a bike number, multiplied | py 10 | 2 - A simple loop |
-| P366 | PY5 count None | How many rides were casual | py 11 | 3 - Ride rows |
-| P367 | PY5 sum by key | What each member paid in all | py 12 | 3 - Ride rows |
-| P368 | PY5 argmax | The longest ride's id | py 13 | 3 - Ride rows |
-| P369 | PY5 filter distinct sorted | The members who have ridden for free | py 14 | 3 - Ride rows |
-| P370 | PY5 average filtered | How long members ride, on average | py 15 | 3 - Ride rows |
+| Q1117 | GAP gaps and islands | Each bike's longest run of days in use | ex 1 | 1 - Streaks and spells |
+| Q1118 | W1 window frames | A week's average, rolling | ex 2 | 1 - Streaks and spells |
+| Q1119 | W1 window frames | The first and last ride of every month | ex 3 | 1 - Streaks and spells |
+| Q1120 | G1 GROUP_CONCAT | The stations of each zone, in one cell | ex 4 | 2 - Labels and text |
+| Q1121 | N1 NULLs | Where the members live, with a fallback | ex 5 | 2 - Labels and text |
+| Q1122 | FMT formatting | Fares by plan, in dollars | ex 6 | 2 - Labels and text |
+| Q1123 | FIL FILTER clause | How casual each station is | ex 7 | 3 - Counting with conditions |
+| Q1124 | N1 NULLs and NOT IN | Members never named on a payment | ex 8 | 3 - Counting with conditions |
+| Q1125 | DST distributions | What it takes to be a top-ten-per-cent rider | ex 9 | 3 - Counting with conditions |
+| Q1126 | WIN named windows | The cargo bikes, in order of arrival | ex 10 | 4 - The fleet's calendar |
+| Q1127 | D2 date modifiers | Weeks that start on Monday | ex 11 | 4 - The fleet's calendar |
+| Q1128 | D2 dates & NULL | How old the fleet is | ex 12 | 4 - The fleet's calendar |
+| Q1129 | GEN generated columns | A minutes column that computes itself **(script)** | ex 13 | 5 - Changing the data |
+| Q1130 | DDL constraints | A table that turns bad rows away **(script)** | ex 14 | 5 - Changing the data |
+| Q1131 | TMP temp tables | Close the books on the retired bikes **(script)** | ex 15 | 5 - Changing the data |
+| P386 | PY3 translate | str.translate(): strip the punctuation | py 1 | 1 - One tool |
+| P387 | PY3 deque maxlen | deque(maxlen=3): only the last three | py 2 | 1 - One tool |
+| P388 | PY3 timedelta | timedelta(): the next payment date | py 3 | 1 - One tool |
+| P389 | PY3 sorted tuple key | sorted() with two keys: dearest first, then by id | py 4 | 1 - One tool |
+| P390 | PY3 isdigit | str.isdigit(): is it a bike number? | py 5 | 1 - One tool |
+| P391 | PY4 for vowels | How many vowels in a station name | py 6 | 2 - A simple loop |
+| P392 | PY4 for interleave | Starts and ends, interleaved | py 7 | 2 - A simple loop |
+| P393 | PY4 for running total | The balance after each payment | py 8 | 2 - A simple loop |
+| P394 | PY4 for ties at top | How many share the longest ride | py 9 | 2 - A simple loop |
+| P395 | PY4 program bar chart | A bar chart of the week | py 10 | 2 - A simple loop |
+| P396 | PY5 sum by key | What came in by card and by app | py 11 | 3 - Payment rows |
+| P397 | PY5 count None | How many were subscriptions | py 12 | 3 - Payment rows |
+| P398 | PY5 argmax | The biggest payment | py 13 | 3 - Payment rows |
+| P399 | PY5 distinct sorted | The members who have been billed | py 14 | 3 - Payment rows |
+| P400 | PY5 share | What share of payments came by app | py 15 | 3 - Payment rows |
 
 ## Retired
 
@@ -394,6 +394,66 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1102 | D1 dates & times | How fast each model goes | - | retired |
+| Q1103 | W1 window frames | The longest ride out of each station | - | retired |
+| Q1104 | S1 set operations | Electric bikes that have never needed a battery | - | retired |
+| Q1105 | SPN date spine | Old Mill, month by month, to the end | - | retired |
+| Q1106 | D1 dates & times | Month on month | - | retired |
+| Q1107 | C7 CASE | The week, day by day | - | retired |
+| Q1108 | E1 EXISTS | Riders who never start from home | - | retired |
+| Q1109 | C7 CASE | Members by age, and how much they ride | - | retired |
+| Q1110 | JSN JSON functions | Each member's last three rides, as JSON | - | retired |
+| Q1111 | A3 WHERE vs HAVING | Pay-as-you-go months that cost more than a subscription | - | retired |
+| Q1112 | C3 PARTITION BY | Card or app, zone by zone | - | retired |
+| Q1113 | X7 anti-join shape | Paying for nothing | - | retired |
+| Q1114 | TRG triggers | A bike out on a ride cannot be retired **(script)** | - | retired |
+| Q1115 | ALT ALTER TABLE | A ride count on every bike **(script)** | - | retired |
+| Q1116 | UPS upsert | Retire one bike and add another, in one statement **(script)** | - | retired |
+| P371 | PY3 divmod | divmod(): minutes into hours and minutes | - | retired |
+| P372 | PY3 defaultdict | defaultdict(list): rides grouped by station | - | retired |
+| P373 | PY3 date weekday | date.fromisoformat(): is it a weekend? | - | retired |
+| P374 | PY3 product | itertools.product(): every route | - | retired |
+| P375 | PY3 zip_longest | zip_longest(): two columns of unequal length | - | retired |
+| P376 | PY4 for running max | The record so far | - | retired |
+| P377 | PY4 for adjacent dedupe | Collapse the repeated stops | - | retired |
+| P378 | PY4 for count changes | How many times the bike changed station | - | retired |
+| P379 | PY4 for second largest | The second-longest ride | - | retired |
+| P380 | PY4 while halving | How many charges until the battery is below the limit | - | retired |
+| P381 | PY5 sum by key | What each kind of repair has cost | - | retired |
+| P382 | PY5 filter False sorted | The jobs still open | - | retired |
+| P383 | PY5 count by key filter | Bikes that have been in more than once | - | retired |
+| P384 | PY5 argmax dict | The dearest kind of repair | - | retired |
+| P385 | PY5 share | What share of jobs are fixed | - | retired |
+| Q1087 | BARE SQLite bare columns | The biggest station in each zone | - | retired |
+| Q1088 | W2 window ranking | Rides per dock, ranked | - | retired |
+| Q1089 | S1 set operations | Bikes casual riders have used that also need fixing | - | retired |
+| Q1090 | W2 window ranking | Riders in quartiles, and what they pay | - | retired |
+| Q1091 | C7 CASE | Plans by home zone, as a pivot | - | retired |
+| Q1092 | STR string aggregation | Surnames shared within a plan | - | retired |
+| Q1093 | X5 covering indexes | Bike 7's rides, through the index | - | retired |
+| Q1094 | D1 dates & times | The bikes that have sat longest | - | retired |
+| Q1095 | W2 window ranking | Each bike's busiest month | - | retired |
+| Q1096 | W1 window frames | Rides by hour, and the share of the day so far | - | retired |
+| Q1097 | C7 CASE | Weekday or weekend, member or casual | - | retired |
+| Q1098 | W3 window vs GROUP BY | The longest quiet spell at each station | - | retired |
+| Q1099 | TRG triggers | Price the ride when it ends **(script)** | - | retired |
+| Q1100 | DML update & delete | Clear the stale repair reports **(script)** | - | retired |
+| Q1101 | DDL constraints | A league table of stations **(script)** | - | retired |
+| P356 | PY3 combinations | itertools.combinations(): every pair of stations | - | retired |
+| P357 | PY3 zip star | zip(*rows): rows into columns | - | retired |
+| P358 | PY3 bisect | bisect.bisect_left(): how many are below | - | retired |
+| P359 | PY3 sum start | sum(values, start): a total with an opening balance | - | retired |
+| P360 | PY3 sort reverse | sort(reverse=True): biggest first, in place | - | retired |
+| P361 | PY4 for count in tuple | How many rides were at the weekend | - | retired |
+| P362 | PY4 for first repeat | The first station reached twice | - | retired |
+| P363 | PY4 for transform int | Fares after a discount | - | retired |
+| P364 | PY4 for rising run | The longest run of ever-longer rides | - | retired |
+| P365 | PY4 while digits product | The digits of a bike number, multiplied | - | retired |
+| P366 | PY5 count None | How many rides were casual | - | retired |
+| P367 | PY5 sum by key | What each member paid in all | - | retired |
+| P368 | PY5 argmax | The longest ride's id | - | retired |
+| P369 | PY5 filter distinct sorted | The members who have ridden for free | - | retired |
+| P370 | PY5 average filtered | How long members ride, on average | - | retired |
 | Q1072 | W2 window ranking | The ten busiest routes | - | retired |
 | Q1073 | C2 grain | Where the bikes pile up | - | retired |
 | Q1074 | JSN JSON functions | Zone to zone, as JSON | - | retired |
@@ -1945,7 +2005,7 @@ they still count as asked.
   trigger refusing a ride on a bike already out, an UPDATE closing the
   rides still out with a CASE fare, and a view on a view. Python, fifteen
   single-loop functions.
-- **Q1087-Q1101 and P356-P370** current set, the second on the bike-hire
+- **Q1087-Q1101 and P356-P370** retired set, the second on the bike-hire
   scheme (SEED 1206). SQL, two tools per question in task-named tiers, on
   the tools the first bike set left out: the biggest station per zone by
   SQLite's bare column beside MAX, rides per dock under DENSE_RANK, bikes
@@ -1963,3 +2023,39 @@ they still count as asked.
   functions on itertools.combinations, zip(*rows), bisect_left, sum() with
   a start and sort(reverse=True); five single loops; and five over
   bike-scheme ride dicts with a None member for casual riders.
+- **Q1102-Q1116 and P371-P385** retired set, replaced before it was ever
+  released, the third on the bike-hire
+  scheme (SEED 1206). SQL, two tools per question in task-named tiers, on
+  the tools the first two bike sets did not reach: speed per model from
+  distance and julianday, the longest ride per station by FIRST_VALUE,
+  electric bikes never needing a battery by EXCEPT, Old Mill's months to
+  the end by a recursive spine under a LEFT JOIN, month-on-month change by
+  LAG, the week named by a simple CASE on strftime text, riders who never
+  start from home by two EXISTS, age bands by CASE over julianday with a
+  scalar subquery, each member's last three rides as JSON under
+  ROW_NUMBER, pay-as-you-go months dearer than the fee by HAVING, payment
+  method shares by a partitioned window SUM, subscriptions from members
+  who never ride by NOT EXISTS with COUNT DISTINCT -- and three writable: a
+  BEFORE UPDATE trigger keeping a bike out on a ride in service, ALTER TABLE ADD
+  COLUMN filled by a correlated UPDATE, and an UPSERT that retires one bike
+  and adds another. Python in three shapes: one-tool functions on divmod,
+  defaultdict(list), date.fromisoformat().weekday(), itertools.product and
+  zip_longest; five single loops; and five over maintenance-job dicts.
+- **Q1117-Q1131 and P386-P400** current set, the fourth on the bike-hire
+  scheme (SEED 1206). SQL, two tools per question in task-named tiers, on
+  tools no bike set had used: each bike's longest run of days by gaps and
+  islands, a seven-day moving average by a ROWS frame computed before the
+  filter, the first and last ride of each month by FIRST_VALUE and
+  LAST_VALUE with the frame opened, the stations of a zone by GROUP_CONCAT
+  with ORDER BY, districts with a zone fallback by COALESCE grouped on the
+  result, fares as dollars by FORMAT over a real division, a casual share
+  by FILTER, members never named on a payment by NOT EXISTS where NOT IN
+  meets NULLs, the top-decile ride count by CUME_DIST with a FILTERed MIN,
+  cargo bikes in arrival order through a named WINDOW, weeks labelled by
+  their Monday through 'weekday 0', '-6 days', fleet age with COALESCE
+  inside julianday -- and three writable: a VIRTUAL generated minutes
+  column, a table whose CHECK and REFERENCES refuse three of four driver
+  inserts, and a TEMP table of retired bikes feeding a DELETE of their open
+  jobs. Python: one-tool functions on str.translate with maketrans,
+  deque(maxlen=3), timedelta, sorted with a tuple key and isdigit; four
+  single loops and a printed bar-chart program; five over payment dicts.
