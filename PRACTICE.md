@@ -1,26 +1,27 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the bike-hire scheme, the
-third set on it, at two tools per question with the tiers named by task,
-reaching the tools the first two bike sets did not, and three writable
-questions that each take two steps. **Fifteen Python** in three shapes:
-five functions that are one tool each, on tools no earlier set used; five
-built around one simple loop; and five over lists of maintenance-job dicts
-shaped like the scheme's rows, with a kind, a cost and a fixed flag.
+fourth set on it, at two tools per question with the tiers named by task,
+on tools no bike set had used, and three writable questions that each take
+two steps. **Fifteen Python** in three shapes: five functions that are one
+tool each, on tools no earlier set used; four built around one simple loop
+and ONE whole program graded on what it prints; and five over lists of
+payment dicts shaped like the scheme's rows, with a member or a ride that
+is None.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - The fleet in motion | 1-3 |
-| 2 - The calendar | 4-6 |
-| 3 - Members | 7-9 |
-| 4 - Money | 10-12 |
+| 1 - Streaks and spells | 1-3 |
+| 2 - Labels and text | 4-6 |
+| 3 - Counting with conditions | 7-9 |
+| 4 - The fleet's calendar | 10-12 |
 | 5 - Changing the data | 13-15 |
 
 | Stage | Python questions |
 |---|---|
 | 1 - One tool | 1-5 |
 | 2 - A simple loop | 6-10 |
-| 3 - Job rows | 11-15 |
+| 3 - Payment rows | 11-15 |
 
 ## The schema
 
@@ -64,43 +65,41 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Question 13 runs two UPDATEs of its own *after* your
-script, retiring bike 3, which is docked, and bike 8, which is out on a
-ride. The probe reads both bikes, so both outcomes show. Questions 14 and 15
-are graded on what your script leaves behind.
+**Driver statements.** Question 14 runs four INSERTs of its own *after* your
+script: one good move, one from a station to itself, one for a bike that
+does not exist and one to a station that does not exist. The probe lists
+the moves that got in, so each constraint shows. Questions 13 and 15 are
+graded on what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 13 | `CREATE TRIGGER ... BEFORE UPDATE OF retired_on ON bikes WHEN NEW.retired_on IS NOT NULL AND EXISTS (SELECT 1 FROM rides WHERE bike_id = OLD.bike_id AND ended_at IS NULL) BEGIN SELECT RAISE(ABORT, ...); END` |
-| 14 | `ALTER TABLE bikes ADD COLUMN rides INTEGER NOT NULL DEFAULT 0; UPDATE bikes SET rides = (SELECT COUNT(*) FROM rides r WHERE r.bike_id = bikes.bike_id)` |
-| 15 | `INSERT INTO bikes (...) VALUES (1, ...), (321, ...) ON CONFLICT (bike_id) DO UPDATE SET retired_on = excluded.retired_on` |
+| 13 | `ALTER TABLE rides ADD COLUMN minutes REAL GENERATED ALWAYS AS ((julianday(ended_at) - julianday(started_at)) * 1440) VIRTUAL` |
+| 14 | `CREATE TABLE bike_moves (move_id INTEGER PRIMARY KEY, bike_id INTEGER NOT NULL REFERENCES bikes(bike_id), ..., CHECK (from_station <> to_station))` |
+| 15 | `CREATE TEMP TABLE gone AS SELECT bike_id FROM bikes WHERE retired_on IS NOT NULL; DELETE FROM maintenance WHERE fixed_at IS NULL AND bike_id IN (SELECT bike_id FROM gone)` |
 
 ## Things the data does on purpose
 
 - **100 of the 900 members have never ridden**, and 86 have no
-  district recorded. 81 of the never-riders are on a subscription
-  and have paid for it, which is question 12; the other never-riders are
-  pay-as-you-go and have paid nothing.
+  district recorded -- question 5 files those 86 under the zone of
+  their home station instead of losing them to a NULL group.
 - **7 of the 320 bikes have never been ridden and 18 are
-  retired**; question 14's new column must show the seven at 0, and
-  questions 13 and 15 retire bikes 3 and 1, both in service. Bike 8 is
-  one of the 35 out on a ride, which is what question 13 protects.
-- **59 of the 82 electric bikes have never had a battery job**,
-  and no other model ever has one -- which is why question 3's EXCEPT,
-  written backwards, returns nothing.
-- **Members start only 8 per cent of their rides at their home station**,
-  and 104 riders have never once done so: question 7, if its
-  EXISTS is in place.
-- **Old Mill closed on 2026-03-01** and its last ride is in February;
-  question 4's spine has to make the four months after it appear at 0.
-- **Fares come in multiples of 50**, so a pay-as-you-go month of exactly
-  1200 cents is common: 225 member-months are over the monthly
-  fee and 13 more sit exactly on it, which is the difference
-  between > and >= in question 10.
-- **67 per cent of members' payments are by app**, in every zone
-  alike; question 11's shares are a window over the grouped counts, and
-  the casual riders' 30 per cent of rides pay with no member
-  attached, so they never reach it.
+  retired**; question 12's average age needs the 18 retired bikes'
+  retirement dates and a fallback for the rest, and question 15 deletes
+  the retired bikes' open jobs, which are seven of their sixty-four.
+- **A bike is ridden on 9 per cent of its active days more than once**,
+  which is why question 1's islands need DISTINCT days; the best run anyone
+  manages is 8 days.
+- **22,732 of the payments name a ride and no member**, so
+  payments.member_id is full of NULLs: a NOT IN over it returns nothing,
+  and question 8's NOT EXISTS finds 215 members never named on a
+  payment, 10 of them subscribers whom every charge missed.
+- **30 per cent of rides are by casual riders**, and the share is
+  much the same at every station, which question 7's FILTER shows.
+- **Two of the 31 cargo bikes arrived on the same day**, the one tie in
+  question 10's arrival order, broken by bike_id so that the numbering is
+  reproducible.
+- **Only 90 rides start before six in the morning**, and the day's
+  rides run to 240 minutes at the longest, question 13's maximum.
 - **The busiest route carries 417 rides**, Market Square to Station
   Approach; bikes pile up at Station Approach and drain from Market Square.
 
@@ -114,10 +113,12 @@ form, so a dictionary in a different order is the same dictionary -- but the
 type counts: a tuple is not a list, a set is not a list, and 0 is not False.
 A function that prints its answer instead of returning it returns None, and
 None matches nothing. Questions 1 to 5 are one tool each; where the tool
-needs an import, the question says the line to write. Questions 6 to 15 are
-one simple loop each, the last five over lists of maintenance-job dicts:
-the prompt shows a list called JOBS as its example, and Run passes your
-function that list and a few shorter ones.
+needs an import, the question says the line to write. Questions 6 to 9 and
+11 to 15 are one simple loop each, the last five over lists of payment
+dicts: the prompt shows a list called PAYMENTS as its example, and Run
+passes your function that list and a few shorter ones. Question 10 is a
+**program**: the editor holds a whole program and Check compares what it
+prints, line by line, with the reference, ignoring trailing spaces.
 
 Your code runs in a separate interpreter with a five-second limit, so a loop
 that never ends is stopped and reported, not fatal. It cannot see the
@@ -126,379 +127,384 @@ indentation of the line above.
 
 # SQL
 
-## 1 - The fleet in motion (3)
+## 1 - Streaks and spells (3)
 
-Speed from an integer distance and a julianday interval, where / 1000 and /
-1000.0 give different answers; FIRST_VALUE, whose ORDER BY decides whether
-'first' is longest or shortest; and EXCEPT, which is not symmetric.
+The gaps-and-islands trick, which needs one row per day; a ROWS frame computed
+over every day and filtered afterwards; and FIRST_VALUE with LAST_VALUE, whose
+default frame stops at the current row.
 
-1. **How fast each model goes** (Q1102)
+1. **Each bike's longest run of days in use** (Q1117)
 
-   For each bike model: completed rides, and the average speed in km/h to one
-   decimal -- distance_m / 1000.0 over the hours from julianday, averaged per
-   ride. A join to bikes for the model; every completed ride has a distance.
+   For bikes 1 to 10: the most CONSECUTIVE days on which the bike started at
+   least one ride. The gaps-and-islands trick: a CTE of DISTINCT bike-and-day
+   pairs, then date(day, '-' || ROW_NUMBER() OVER (PARTITION BY bike_id ORDER
+   BY day) || ' days') as a group key that is the same for every day of a run,
+   COUNT per group, MAX per bike.
 
-   *Return: model, rides, avg_kmh*
+   *Return: bike_id, longest_run*
 
-2. **The longest ride out of each station** (Q1103)
+2. **A week's average, rolling** (Q1118)
 
-   For each start station, the ride_id and distance of the LONGEST ride that
-   started there. FIRST_VALUE over a window partitioned by the start station
-   and ordered by distance descending, with DISTINCT to keep one row per
-   station. No station has a tie at the top.
+   For each day of June 2026: the rides started that day and the average over
+   that day and the six before it, to one decimal. A CTE of rides per day over
+   ALL days, AVG with ROWS BETWEEN 6 PRECEDING AND CURRENT ROW, and the filter
+   to June applied OUTSIDE, so that June 1st can see the end of May.
 
-   *Return: station_id, ride_id, distance_m*
+   *Return: day, rides, avg_7d*
 
-3. **Electric bikes that have never needed a battery** (Q1104)
+3. **The first and last ride of every month** (Q1119)
 
-   The electric bikes with no 'battery' maintenance job on record, ever: the
-   electric bike_ids EXCEPT the bike_ids of battery jobs.
+   For each month: the ride_id of the first ride started in it and of the
+   last. FIRST_VALUE and LAST_VALUE over a window partitioned by month and
+   ordered by started_at, with the frame opened to ROWS BETWEEN UNBOUNDED
+   PRECEDING AND UNBOUNDED FOLLOWING, and DISTINCT.
 
-   *Return: bike_id*
+   *Return: month, first_ride, last_ride*
 
-## 2 - The calendar (3)
+## 2 - Labels and text (3)
 
-A recursive month spine LEFT JOINed to a closed station's rides, with the
-station test in the ON clause; LAG against LEAD for month on month; and a simple
-CASE on strftime's TEXT, where an unquoted 0 matches nothing.
+GROUP_CONCAT with its own ORDER BY, COALESCE grouped on the result rather than
+the raw column, and FORMAT, which prints the decimals only if the division left
+any.
 
-4. **Old Mill, month by month, to the end** (Q1105)
+4. **The stations of each zone, in one cell** (Q1120)
 
-   Rides started at Old Mill (station 10) in EVERY month from 2025-01 to
-   2026-06, including the months after it closed, as 0. A recursive CTE that
-   builds the eighteen months -- strftime('%Y-%m', m || '-01', '+1 month')
-   steps one on -- LEFT JOINed to the rides, counting a ride column.
+   For each zone: how many stations, and their names in one text,
+   alphabetical, separated by ', '. GROUP_CONCAT with a separator and an ORDER
+   BY inside the brackets.
 
-   *Return: month, rides*
+   *Return: zone, stations, names*
 
-5. **Month on month** (Q1106)
+5. **Where the members live, with a fallback** (Q1121)
 
-   For each month, the rides started, the change from the month before, and
-   that change as a percentage of the month before to one decimal -- NULL for
-   the first month. A grouped CTE, then LAG over it, used twice.
+   Members counted by district, except that a member with no district is
+   counted under 'zone ' followed by the zone of their home station. COALESCE
+   over the district and the concatenation, with a join to stations.
 
-   *Return: month, rides, change, pct*
+   *Return: place, members*
 
-6. **The week, day by day** (Q1107)
+6. **Fares by plan, in dollars** (Q1122)
 
-   Rides by day of the week, with the day NAMED: strftime('%w') gives '0' for
-   Sunday through '6' for Saturday as TEXT, and a CASE turns it into Sun, Mon,
-   Tue, Wed, Thu, Fri, Sat. Count the rides and average the fare in whole
-   cents.
+   For each plan: the members' fares in all, as TEXT like '$12345.50' --
+   FORMAT('$%.2f', ...) over the cents divided by 100.0. A join from rides to
+   members for the plan.
 
-   *Return: dow, day, rides, avg_fare*
+   *Return: plan, fares*
 
-## 3 - Members (3)
+## 3 - Counting with conditions (3)
 
-Two correlated EXISTS, one for 'has ridden' and one against the member's own
-home station; age bands by julianday rather than birth years; and the window's
-ORDER BY picking the rides while json_group_array's ORDER BY packs them.
+FILTER on one aggregate against WHERE on the whole query, NOT EXISTS where NOT
+IN meets a NULL and returns nothing, and CUME_DIST, whose ORDER BY direction
+decides which end 0.9 names.
 
-7. **Riders who never start from home** (Q1108)
+7. **How casual each station is** (Q1123)
 
-   Members who HAVE ridden but have never started a ride at their own home
-   station, counted by plan. An EXISTS for 'has ridden' and a NOT EXISTS that
-   compares the ride's start station with the member's home station.
+   For each start station: all rides started there, those by casual riders
+   (member_id NULL), and the casual share as a percentage to one decimal.
+   COUNT(*) FILTER (WHERE ...) for the casual count, in one pass over rides.
+
+   *Return: station_id, rides, casual, casual_pct*
+
+8. **Members never named on a payment** (Q1124)
+
+   Members with no payment carrying their member_id, counted by plan -- fare
+   payments name the ride, not the rider, so pay-as-you-go members are mostly
+   here. Use NOT EXISTS; a NOT IN over payments.member_id would meet the NULLs
+   of the fare payments and return nothing.
 
    *Return: plan, members*
 
-8. **Members by age, and how much they ride** (Q1109)
+9. **What it takes to be a top-ten-per-cent rider** (Q1125)
 
-   Members in three age bands as of 2026-06-30 -- 'under 30', '30-49', '50+'
-   -- with how many members and their average number of rides to one decimal.
-   Age in years is the julianday difference divided by 365.25; CASE for the
-   band; a scalar subquery for each member's ride count.
+   For each plan: the ride count that puts a member in the top ten per cent of
+   that plan's riders, and the plan's maximum. A CTE of rides per member,
+   CUME_DIST() OVER (PARTITION BY plan ORDER BY rides), then the smallest
+   count whose CUME_DIST is at least 0.9 -- MIN with a FILTER -- and MAX.
 
-   *Return: band, members, avg_rides*
+   *Return: plan, top_decile_rides, max_rides*
 
-9. **Each member's last three rides, as JSON** (Q1110)
+## 4 - The fleet's calendar (3)
 
-   For members 2 to 6 who have ridden: their member_id and a JSON array of the
-   ride_ids of their three most recent rides, most recent first. ROW_NUMBER
-   partitioned by member ordered by started_at descending in a CTE, then
-   json_group_array with an ORDER BY of its own over the rows numbered 1 to 3.
+A named WINDOW shared by ROW_NUMBER and LAG, 'weekday 0' then '-6 days' for the
+Monday that began a week, and COALESCE inside julianday so the bikes still in
+service count.
 
-   *Return: member_id, last_three*
+10. **The cargo bikes, in order of arrival** (Q1126)
 
-## 4 - Money (3)
+    The cargo bikes in the order they were acquired: bike_id, acquired_on,
+    their place in that order, and the days since the previous cargo bike
+    arrived (NULL for the first). ROW_NUMBER and LAG over ONE named window --
+    WINDOW w AS (ORDER BY acquired_on, bike_id) after the WHERE -- and
+    julianday for the gap.
 
-A WHERE for the plan and a HAVING for the month's total, strict at the fee;
-SUM(COUNT(*)) OVER (PARTITION BY zone) as a denominator; and COUNT(DISTINCT)
-where a join to payments has multiplied the members.
+    *Return: bike_id, acquired_on, nth, days_since_previous*
 
-10. **Pay-as-you-go months that cost more than a subscription** (Q1111)
+11. **Weeks that start on Monday** (Q1127)
 
-    Member-and-month pairs where a pay-as-you-go member's fares in one
-    calendar month came to MORE than the 1200-cent monthly fee: member_id, the
-    month, and the fares. A join to members for the plan, GROUP BY member and
-    strftime month, HAVING on the SUM.
+    Rides per week for the weeks touching June 2026 -- rides started from
+    2026-05-25 up to but not including 2026-07-01 -- labelled by the MONDAY
+    the week began: date(started_at, 'weekday 0', '-6 days') moves forward to
+    the Sunday and back six days. GROUP BY that.
 
-    *Return: member_id, month, fares*
+    *Return: week_of, rides*
 
-11. **Card or app, zone by zone** (Q1112)
+12. **How old the fleet is** (Q1128)
 
-    Members' payments by the zone of their home station and the payment
-    method: the count and its share of that ZONE's payments as a percentage to
-    one decimal. Two joins, GROUP BY zone and method, and a window SUM of
-    COUNT(*) partitioned by zone for the denominator.
+    For each model: the bikes, how many are retired, and the average age in
+    whole days -- a retired bike's age at retirement, an in-service bike's age
+    at 2026-06-30. COALESCE(retired_on, '2026-06-30') inside julianday.
 
-    *Return: zone, method, payments, pct*
-
-12. **Paying for nothing** (Q1113)
-
-    Members who have paid a subscription but have never ridden: by plan, how
-    many such members and the total they have paid. A join to payments, NOT
-    EXISTS over rides, and COUNT DISTINCT of the members.
-
-    *Return: plan, members, paid_cents*
+    *Return: model, bikes, retired, avg_age_days*
 
 ## 5 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A BEFORE UPDATE trigger whose WHEN
-makes the refusal conditional, ALTER TABLE ADD COLUMN filled by an UPDATE that
-names the outer row, and ON CONFLICT DO UPDATE against INSERT OR REPLACE.
+question's probe query reads the result. A VIRTUAL generated column, a CREATE
+TABLE whose CHECK and REFERENCES turn three driver inserts away, and a TEMP
+table feeding a DELETE.
 
-13. **A bike out on a ride cannot be retired** (Q1114)
+13. **A minutes column that computes itself** (Q1129)
 
-    Write a BEFORE UPDATE OF retired_on trigger on bikes that refuses --
-    RAISE(ABORT, ...) -- when the bike has a ride still open (ended_at NULL)
-    and the new retired_on is not NULL, and lets every other update through.
-    The question then retires bikes 3 and 8 in one UPDATE each; bike 8 is out
-    on a ride.
+    Add to rides a column `minutes` that is GENERATED ALWAYS AS the ride's
+    length in minutes -- (julianday(ended_at) - julianday(started_at)) * 1440
+    -- VIRTUAL, so ALTER TABLE can add it without rewriting the table. Open
+    rides get NULL by themselves.
 
-    *Checked: bikes 3 and 8*
+    *Checked: the column's average to one decimal, its rounded maximum, and how many rows have it NULL*
 
-14. **A ride count on every bike** (Q1115)
+14. **A table that turns bad rows away** (Q1130)
 
-    Add an integer column `rides` to bikes with ALTER TABLE ADD COLUMN,
-    DEFAULT 0, then fill it with each bike's number of rides by an UPDATE
-    whose SET is a correlated subquery over rides. Bikes never ridden must end
-    at 0.
+    Create a table `bike_moves (move_id INTEGER PRIMARY KEY, bike_id,
+    from_station, to_station, moved_on)` for bikes trucked between stations:
+    bike_id REFERENCES bikes, from_station and to_station REFERENCES stations,
+    all NOT NULL, moved_on NOT NULL, and a CHECK that from_station <>
+    to_station. The question then inserts four rows: a good one, one moving a
+    bike to the station it is at, one for a bike 999, and one to a station 99.
 
-    *Checked: the total of the new column, how many bikes are at 0, and the largest value*
+    *Checked: the move_ids that got in*
 
-15. **Retire one bike and add another, in one statement** (Q1116)
+15. **Close the books on the retired bikes** (Q1131)
 
-    One INSERT with two VALUES rows -- (1, 'electric', '2026-06-30',
-    '2026-06-30') and (321, 'electric', '2026-06-30', NULL) for (bike_id,
-    model, acquired_on, retired_on) -- with ON CONFLICT (bike_id) DO UPDATE
-    that sets ONLY retired_on from excluded. Bike 1 exists, so its row becomes
-    an update that retires it; bike 1's own model and acquisition date must
-    survive. Bike 321 is new.
+    Two steps: CREATE TEMP TABLE gone AS the bike_ids of the retired bikes,
+    then DELETE the maintenance jobs that are still OPEN (fixed_at NULL) on
+    those bikes -- WHERE bike_id IN (SELECT bike_id FROM gone). Fixed jobs on
+    retired bikes are history and stay.
 
-    *Checked: bikes 1 and 321*
+    *Checked: how many jobs remain, and how many of them are open*
 
 # Python
 
 ## 1 - One tool (5)
 
-Five tools no earlier set used, each the whole answer: divmod against / and %,
-defaultdict(list) appended to rather than assigned, weekday() numbering Monday
-0, product against zip, and zip_longest with its fillvalue.
+Five tools no earlier set used, each the whole answer: a maketrans deletion
+table, deque(maxlen=3) turned back into a list, timedelta for date arithmetic, a
+tuple key that sorts one way then the other, and isdigit against isalnum.
 
-1. **divmod(): minutes into hours and minutes** (P371)
+1. **str.translate(): strip the punctuation** (P386)
 
-   Write a function `hours_minutes(minutes)` that returns a tuple (hours,
-   minutes) for a ride length in minutes, in one call of divmod(minutes, 60),
-   which gives the quotient and the remainder together. No import is needed.
-
-   ```
-   hours_minutes(135) -> (2, 15)
-   ```
-
-   *Return: the tuple.*
-
-2. **defaultdict(list): rides grouped by station** (P372)
-
-   Write a function `rides_by_station(pairs)` that takes (station, ride_id)
-   tuples and returns a dict mapping each station to the list of its ride_ids
-   in order, using collections.defaultdict(list) so that the first append to a
-   new station needs no check; return dict(groups) at the end. Write `from
-   collections import defaultdict` as the first line.
+   Write a function `plain_name(name)` that returns the name with every '.',
+   apostrophe and '-' removed, by name.translate(str.maketrans("", "", ".'-"))
+   -- a table whose third argument lists the characters to delete. No import
+   is needed.
 
    ```
-   rides_by_station([("Harbour", 1), ("Stadium", 2), ("Harbour", 3)]) -> {"Harbour": [1, 3], "Stadium": [2]}
+   plain_name("St. Mary's-on-Hill") -> "St MarysonHill"
    ```
 
-   *Return: the dictionary.*
+   *Return: the new string.*
 
-3. **date.fromisoformat(): is it a weekend?** (P373)
+2. **deque(maxlen=3): only the last three** (P387)
 
-   Write a function `is_weekend(day)` that takes a date as 'YYYY-MM-DD' text
-   and returns True when it is a Saturday or Sunday. date.fromisoformat(day)
-   parses the text and .weekday() numbers Monday 0 to Sunday 6, so the test is
-   >= 5. Write `from datetime import date` as the first line.
+   Write a function `last_three(ride_ids)` that returns a list of the last
+   three ids fed to it in order, fewer if there were fewer, using
+   collections.deque(ride_ids, maxlen=3) -- a queue that drops from the left
+   when a fourth item arrives -- turned back into a list. Write `from
+   collections import deque` as the first line.
 
    ```
-   is_weekend("2026-06-27") -> True
+   last_three([4, 8, 15, 16, 23, 42]) -> [16, 23, 42]
+   ```
+
+   *Return: the list.*
+
+3. **timedelta(): the next payment date** (P388)
+
+   Write a function `next_due(paid_on, days)` that returns the date days after
+   paid_on, both as 'YYYY-MM-DD' text: date.fromisoformat() to parse, +
+   timedelta(days=days) to move, .isoformat() to print. Write `from datetime
+   import date, timedelta` as the first line.
+
+   ```
+   next_due("2026-01-31", 30) -> "2026-03-02"
+   ```
+
+   *Return: the new date as text.*
+
+4. **sorted() with two keys: dearest first, then by id** (P389)
+
+   Write a function `by_fare(rides)` that takes [ride_id, fare] pairs and
+   returns them sorted by fare from highest to lowest, ties by ride_id from
+   lowest up, in ONE sorted() call whose key is a tuple: key=lambda r: (-r[1],
+   r[0]). No import is needed.
+
+   ```
+   by_fare([[3, 200], [1, 350], [2, 200]]) -> [[1, 350], [2, 200], [3, 200]]
+   ```
+
+   *Return: the sorted list.*
+
+5. **str.isdigit(): is it a bike number?** (P390)
+
+   Write a function `is_bike_number(code)` that returns True when the code is
+   made of digits only and is not empty, in one call of the string's isdigit()
+   method. No import is needed.
+
+   ```
+   is_bike_number("0042") -> True
    ```
 
    *Return: True or False.*
 
-4. **itertools.product(): every route** (P374)
-
-   Write a function `routes(starts, ends)` that returns a list of every
-   (start, end) pair, one from each list, in order, INCLUDING a start paired
-   with the same station as end, using list() over itertools.product(starts,
-   ends). Write `import itertools` as the first line.
-
-   ```
-   routes(["Harbour", "Stadium"], ["Hilltop", "Stadium"]) -> [("Harbour", "Hilltop"), ("Harbour", "Stadium"), ("Stadium", "Hilltop"), ("Stadium", "Stadium")]
-   ```
-
-   *Return: the list of tuples.*
-
-5. **zip_longest(): two columns of unequal length** (P375)
-
-   Write a function `side_by_side(a, b)` that pairs the items of two lists
-   position by position as tuples, padding the SHORTER list with 0 so nothing
-   is dropped: list() over itertools.zip_longest(a, b, fillvalue=0). Write
-   `import itertools` as the first line.
-
-   ```
-   side_by_side([1, 2, 3], [10, 20]) -> [(1, 10), (2, 20), (3, 0)]
-   ```
-
-   *Return: the list of tuples.*
-
 ## 2 - A simple loop (5)
 
-An append that belongs outside the if, out[-1] against 'not in out', a range
-that starts at 1, a runner-up that is not equal to the leader, and a while that
-keeps going at >=.
+lower() before testing a vowel, two appends per turn, add then record, a count
+that resets on a new best -- and one whole program printing a bar chart with //
+not round().
 
-6. **The record so far** (P376)
+6. **How many vowels in a station name** (P391)
 
-   Write a function `records(distances)` that returns a list the same length
-   as the input, where each position holds the longest distance seen SO FAR,
-   that one included. A for loop with a best that starts as None and a list
-   built up.
-
-   ```
-   records([12, 9, 15, 15, 30, 4]) -> [12, 12, 15, 15, 30, 30]
-   ```
-
-   *Return: the new list.*
-
-7. **Collapse the repeated stops** (P377)
-
-   Write a function `collapse(stops)` that returns the stops with each run of
-   CONSECUTIVE repeats reduced to one -- a station that comes back later
-   stays. A for loop that appends a stop only when it differs from the last
-   item appended, with the empty list handled.
+   Write a function `vowels(name)` that returns how many characters of the
+   name are vowels, either case. A for loop over the characters, an if on
+   ch.lower() in "aeiou", and a counter.
 
    ```
-   collapse(["A", "A", "B", "B", "B", "A"]) -> ["A", "B", "A"]
-   ```
-
-   *Return: the new list.*
-
-8. **How many times the bike changed station** (P378)
-
-   Write a function `station_changes(stations)` that returns how many times
-   consecutive entries differ -- the number of moves between stations. A for
-   loop over range(1, len(stations)) comparing each entry with the one before,
-   and a counter.
-
-   ```
-   station_changes([3, 3, 5, 5, 5, 2, 3]) -> 3
+   vowels("Botanic Gardens") -> 5
    ```
 
    *Return: an integer.*
 
-9. **The second-longest ride** (P379)
+7. **Starts and ends, interleaved** (P392)
 
-   Write a function `second_longest(minutes)` that returns the second-largest
-   DISTINCT value, or None when there are fewer than two distinct values. One
-   for loop keeping a first and a second, both starting as None, with an elif
-   for a value between them that is not equal to the first.
+   Write a function `interleave(starts, ends)` that takes two lists of the
+   SAME length and returns one list alternating start, end, start, end. A for
+   loop over range(len(starts)) appending two items per turn.
 
    ```
-   second_longest([12, 45, 8, 30]) -> 30
+   interleave(["A", "B", "C"], ["X", "Y", "Z"]) -> ["A", "X", "B", "Y", "C", "Z"]
    ```
 
-   *Return: an integer, or None.*
+   *Return: the new list.*
 
-10. **How many charges until the battery is below the limit** (P380)
+8. **The balance after each payment** (P393)
 
-    A battery's range halves with every cycle of a test. Write a function
-    `halvings(start, limit)` that returns how many halvings it takes for start
-    to drop BELOW limit -- 0 when it already is. A while loop that runs while
-    the value is >= limit, halving with //= 2 and counting.
+   Write a function `running_total(amounts)` that returns a list of the
+   cumulative total after each amount. A for loop with a total that grows and
+   a list that collects it after each step.
+
+   ```
+   running_total([1200, 350, 200]) -> [1200, 1550, 1750]
+   ```
+
+   *Return: the new list.*
+
+9. **How many share the longest ride** (P394)
+
+   Write a function `ties_at_top(minutes)` that returns how many entries equal
+   the largest value, 0 for an empty list, in ONE for loop: a best that starts
+   as None and a count that resets to 1 on a new best and grows by 1 on an
+   equal.
+
+   ```
+   ties_at_top([30, 45, 12, 45, 45]) -> 3
+   ```
+
+   *Return: an integer.*
+
+10. **A bar chart of the week** (P395)
+
+    Write a program that prints one line per day for this dictionary of rides
+    per weekday, in this order:
 
     ```
-    halvings(100, 20) -> 3
+    rides = {"Mon": 5647, "Tue": 5595, "Wed": 5452, "Thu": 5391, "Fri": 5559, "Sat": 5433, "Sun": 5528}
     ```
 
-    *Return: an integer.*
+    Each line is the day, a space, and one '#' for every full 500 rides --
+    rides // 500 of them -- so Monday has eleven. A for loop over
+    rides.items().
 
-## 3 - Job rows (5)
+    Print: seven lines like
 
-Maintenance-job dicts with a kind, a cost and a fixed flag: get(kind, 0) + cost
-against a bare assignment, the FALSE side of a flag, count then filter at > 1,
-totals before any comparison, and / against // in a percentage.
+    *Mon ###########*
 
-11. **What each kind of repair has cost** (P381)
+## 3 - Payment rows (5)
 
-    Each job is a dict with keys job_id, bike_id, kind, cost and fixed (True
-    or False). Write a function `cost_by_kind(jobs)` that returns a dict
-    mapping each kind to the total cost of its jobs, fixed or not. A for loop
-    and get(kind, 0) + cost.
+Payment dicts with a member or a ride that is None: + amount against + 1, 'is
+None' against 'not', > against >= for the first of equals, the None filtered
+before sorted() can crash, and the guard before the division.
+
+11. **What came in by card and by app** (P396)
+
+    Each payment is a dict with keys payment_id, member (None for a casual
+    rider's fare), ride (None for a subscription), amount and method. Write a
+    function `total_by_method(payments)` that returns a dict mapping each
+    method to the total amount. A for loop and get(method, 0) + amount.
 
     ```
-    cost_by_kind(JOBS) -> {"puncture": 2850, "brakes": 2600, "chain": 1900, "battery": 9800}
+    total_by_method(PAYMENTS) -> {"app": 2850, "card": 10250}
     ```
 
     *Return: the dictionary.*
 
-12. **The jobs still open** (P382)
+12. **How many were subscriptions** (P397)
 
-    Using the same job dicts, write a function `open_jobs(jobs)` that returns
-    the job_ids of the jobs NOT yet fixed, in ascending order. A for loop with
-    an if on not j["fixed"], then sorted().
+    Using the same payment dicts, write a function
+    `subscription_count(payments)` that returns how many payments are
+    subscriptions -- their ride is None. A for loop with an if on p["ride"] is
+    None and a counter. A ride id of 0 is a ride.
 
     ```
-    open_jobs(JOBS) -> [3, 5]
+    subscription_count(PAYMENTS) -> 3
+    ```
+
+    *Return: an integer.*
+
+13. **The biggest payment** (P398)
+
+    Using the same payment dicts, write a function
+    `biggest_payment_id(payments)` that returns the payment_id of the largest
+    amount in a non-empty list, the FIRST if several tie. A for loop with a
+    best row so far, starting at payments[0], replaced only on a strictly
+    bigger amount.
+
+    ```
+    biggest_payment_id(PAYMENTS) -> 3
+    ```
+
+    *Return: an integer.*
+
+14. **The members who have been billed** (P399)
+
+    Using the same payment dicts, write a function `members_billed(payments)`
+    that returns a sorted list of the DISTINCT members who appear on a
+    payment, leaving out the None of the casual fares. A for loop adding to a
+    set under an if, then sorted().
+
+    ```
+    members_billed(PAYMENTS) -> [7, 9]
     ```
 
     *Return: the sorted list.*
 
-13. **Bikes that have been in more than once** (P383)
+15. **What share of payments came by app** (P400)
 
-    Using the same job dicts, write a function `repeat_bikes(jobs)` that
-    returns a sorted list of the bike_ids with MORE THAN ONE job. One loop
-    counting jobs per bike in a dict, then a list of the keys whose count is
-    above 1, sorted.
-
-    ```
-    repeat_bikes(JOBS) -> [7, 12]
-    ```
-
-    *Return: the sorted list.*
-
-14. **The dearest kind of repair** (P384)
-
-    Using the same job dicts, write a function `priciest_kind(jobs)` that
-    returns the kind with the highest TOTAL cost in a non-empty list -- the
-    first kind met if several tie. Total per kind in a dict with one loop,
-    then a second loop over the dict keeping the best kind so far.
+    Using the same payment dicts, write a function `app_share(payments)` that
+    returns the percentage of payments whose method is 'app', to one decimal,
+    or None for an empty list. A loop counting the app payments, then 100 *
+    app / len(payments) rounded, behind a guard.
 
     ```
-    priciest_kind(JOBS) -> "battery"
-    ```
-
-    *Return: the kind.*
-
-15. **What share of jobs are fixed** (P385)
-
-    Using the same job dicts, write a function `fixed_share(jobs)` that
-    returns the percentage of jobs that are fixed, to one decimal, or None for
-    an empty list. A loop counting the fixed ones, then 100 * fixed /
-    len(jobs) rounded, behind a guard.
-
-    ```
-    fixed_share(JOBS) -> 66.7
+    app_share(PAYMENTS) -> 66.7
     ```
 
     *Return: a float, or None.*
@@ -512,7 +518,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,471 retired ones.
+1,501 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

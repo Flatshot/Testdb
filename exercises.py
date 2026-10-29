@@ -1,21 +1,22 @@
 """Practice exercises: fifteen questions on the bike-hire schema.
 
-The third set on the bike scheme (SEED 1206), two tools per question, the
-tiers named by task, on the tools the first two bike sets did not reach.
-The fleet in motion -- speed from distance and julianday, the longest ride
-per station by FIRST_VALUE, electric bikes never needing a battery by
-EXCEPT. The calendar -- a recursive month spine LEFT JOINed to a closed
-station's rides, month-on-month change by LAG, the week named by CASE on
-strftime. Members -- riders who never start from home by two EXISTS, age
-bands by CASE over julianday, each member's last three rides as JSON under
-ROW_NUMBER. Money -- pay-as-you-go months dearer than a subscription by
-HAVING, payment method shares by a partitioned window, subscriptions from
-members who never ride by NOT EXISTS. And three WRITABLE questions in two
-steps each:
+The fourth set on the bike scheme (SEED 1206), two tools per question, the
+tiers named by task, on tools no bike set has used. Streaks and spells --
+each bike's longest run of consecutive days by the gaps-and-islands trick,
+a seven-day moving average by a ROWS frame, the first and last ride of
+every month by FIRST_VALUE and LAST_VALUE with the frame opened. Labels
+and text -- station names packed by GROUP_CONCAT with an ORDER BY, a
+district with a zone as fallback by COALESCE, fares printed as dollars by
+FORMAT. Counting with conditions -- a casual share by FILTER, the members
+never named on a payment by NOT EXISTS where NOT IN would return nothing,
+the ride count at the ninetieth percentile by CUME_DIST. The fleet's
+calendar -- cargo bikes in order of arrival through a named WINDOW, weeks
+that start on Monday by date modifiers, bike ages with COALESCE for the
+bikes still in service. And three WRITABLE questions in two steps each:
 
-  * a BEFORE UPDATE trigger that keeps a bike out on a ride in service
-  * ALTER TABLE ADD COLUMN filled by a correlated UPDATE
-  * an UPSERT that retires one bike and adds another in one statement
+  * a VIRTUAL generated column of minutes added to rides
+  * a new table whose CHECK and REFERENCES turn bad rows away
+  * a TEMP table of retired bikes, then a DELETE through it
 
 Each of those runs in a private in-memory copy of the database, so nothing
 you write can reach the real file. The copy persists across Runs of one
@@ -30,410 +31,408 @@ question itself runs AFTER your script.
 import sqlite3
 
 EXERCISES = [
-    # ================================================= 1 The fleet in motion
+    # ================================================= 1 Streaks and spells
     dict(
-        id=1, ledger="Q1102", concept="D1", tier="1 - The fleet in motion",
-        title="How fast each model goes",
+        id=1, ledger="Q1117", concept="GAP", tier="1 - Streaks and spells",
+        title="Each bike's longest run of days in use",
         prompt=(
-            "For each bike model: completed rides, and the average speed"
-            " in km/h to one decimal -- distance_m / 1000.0 over the hours"
-            " from julianday, averaged per ride. A join to bikes for the"
-            " model; every completed ride has a distance.\n\n"
-            "Return: model, rides, avg_kmh"
+            "For bikes 1 to 10: the most CONSECUTIVE days on which the"
+            " bike started at least one ride. The gaps-and-islands trick:"
+            " a CTE of DISTINCT bike-and-day pairs, then date(day, '-' ||"
+            " ROW_NUMBER() OVER (PARTITION BY bike_id ORDER BY day) || '"
+            " days') as a group key that is the same for every day of a"
+            " run, COUNT per group, MAX per bike.\n\n"
+            "Return: bike_id, longest_run"
         ),
-        solution=("SELECT b.model, COUNT(*), ROUND(AVG(r.distance_m / 1000.0 / ((julianday(r.ended_at) - julianday(r.started_at)) * 24)), 1)"
-                  " FROM rides r JOIN bikes b ON b.bike_id = r.bike_id WHERE r.ended_at IS NOT NULL GROUP BY b.model"),
-        trap_sql=("SELECT b.model, COUNT(*), ROUND(AVG(r.distance_m / 1000 / ((julianday(r.ended_at) - julianday(r.started_at)) * 24)), 1)"
-                  " FROM rides r JOIN bikes b ON b.bike_id = r.bike_id WHERE r.ended_at IS NOT NULL GROUP BY b.model"),
-        note="distance_m is an integer, so distance_m / 1000 is integer"
-             " division: a 2,850-metre ride becomes 2 km and every speed"
-             " is pulled down. The 1000.0 makes the division real before"
-             " it happens. Electric bikes are the quickest, cargo bikes"
-             " the slowest, and the gap is wider than the trap shows.",
-        claims=[("three models, electric fastest, cargo slowest",
+        solution=("WITH d AS (SELECT DISTINCT bike_id, date(started_at) AS day FROM rides WHERE bike_id <= 10),"
+                  " g AS (SELECT bike_id, date(day, '-' || ROW_NUMBER() OVER (PARTITION BY bike_id ORDER BY day) || ' days') AS grp FROM d),"
+                  " s AS (SELECT bike_id, COUNT(*) AS len FROM g GROUP BY bike_id, grp)"
+                  " SELECT bike_id, MAX(len) FROM s GROUP BY bike_id"),
+        trap_sql=("WITH d AS (SELECT bike_id, date(started_at) AS day FROM rides WHERE bike_id <= 10),"
+                  " g AS (SELECT bike_id, date(day, '-' || ROW_NUMBER() OVER (PARTITION BY bike_id ORDER BY day) || ' days') AS grp FROM d),"
+                  " s AS (SELECT bike_id, COUNT(*) AS len FROM g GROUP BY bike_id, grp)"
+                  " SELECT bike_id, MAX(len) FROM s GROUP BY bike_id"),
+        note="The trick needs ONE row per day: a day minus its row number"
+             " is constant along a run only when the numbers step with"
+             " the days. Two rides on one day give it two numbers, the"
+             " key drifts, and every run breaks into pieces -- hence the"
+             " DISTINCT. None of these ten manages more than five days"
+             " running; the fleet's record is eight.",
+        claims=[("ten bikes, the best run five days",
+                 lambda rows, c: len(rows) == 10 and max(r[1] for r in rows) == 5
+                 and min(r[1] for r in rows) == 2)],
+    ),
+    dict(
+        id=2, ledger="Q1118", concept="W1", tier="1 - Streaks and spells",
+        title="A week's average, rolling",
+        prompt=(
+            "For each day of June 2026: the rides started that day and the"
+            " average over that day and the six before it, to one decimal."
+            " A CTE of rides per day over ALL days, AVG with ROWS BETWEEN"
+            " 6 PRECEDING AND CURRENT ROW, and the filter to June applied"
+            " OUTSIDE, so that June 1st can see the end of May.\n\n"
+            "Return: day, rides, avg_7d"
+        ),
+        solution=("WITH d AS (SELECT date(started_at) AS day, COUNT(*) AS n FROM rides GROUP BY day),"
+                  " w AS (SELECT day, n, ROUND(AVG(n) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW), 1) AS a FROM d)"
+                  " SELECT day, n, a FROM w WHERE day >= '2026-06-01'"),
+        trap_sql=("WITH d AS (SELECT date(started_at) AS day, COUNT(*) AS n FROM rides WHERE started_at >= '2026-06-01' GROUP BY day)"
+                  " SELECT day, n, ROUND(AVG(n) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW), 1) FROM d"),
+        note="A window sees only the rows that reach it. Filter to June"
+             " first and the first six days average over a shortened"
+             " week -- June 1st over itself alone. Compute the window"
+             " over every day and filter afterwards, in an outer query,"
+             " since a WHERE on the same level runs before the window.",
+        claims=[("thirty days, June 1st already a full week's average",
+                 lambda rows, c: len(rows) == 30 and rows[0][0] == '2026-06-01'
+                 and rows[0][2] != rows[0][1] and all(50 < r[2] < 80 for r in rows))],
+    ),
+    dict(
+        id=3, ledger="Q1119", concept="W1", tier="1 - Streaks and spells",
+        title="The first and last ride of every month",
+        prompt=(
+            "For each month: the ride_id of the first ride started in it"
+            " and of the last. FIRST_VALUE and LAST_VALUE over a window"
+            " partitioned by month and ordered by started_at, with the"
+            " frame opened to ROWS BETWEEN UNBOUNDED PRECEDING AND"
+            " UNBOUNDED FOLLOWING, and DISTINCT.\n\n"
+            "Return: month, first_ride, last_ride"
+        ),
+        solution=("SELECT DISTINCT strftime('%Y-%m', started_at) AS m,"
+                  " FIRST_VALUE(ride_id) OVER (PARTITION BY strftime('%Y-%m', started_at) ORDER BY started_at"
+                  " ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING),"
+                  " LAST_VALUE(ride_id) OVER (PARTITION BY strftime('%Y-%m', started_at) ORDER BY started_at"
+                  " ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM rides"),
+        trap_sql=("SELECT DISTINCT strftime('%Y-%m', started_at) AS m,"
+                  " FIRST_VALUE(ride_id) OVER (PARTITION BY strftime('%Y-%m', started_at) ORDER BY started_at),"
+                  " LAST_VALUE(ride_id) OVER (PARTITION BY strftime('%Y-%m', started_at) ORDER BY started_at) FROM rides"),
+        note="With an ORDER BY and no frame, a window runs from the start"
+             " of the partition to the CURRENT row, so LAST_VALUE is"
+             " always the row itself and DISTINCT leaves 38,000 rows."
+             " UNBOUNDED FOLLOWING opens the frame to the whole month."
+             " Ride ids are issued per bike, not in time order, so the"
+             " first ride of January is number 34,693.",
+        claims=[("eighteen months, January starting with ride 34693",
+                 lambda rows, c: len(rows) == 18 and ('2025-01', 34693, 6117) in rows)],
+    ),
+    # ==================================================== 2 Labels and text
+    dict(
+        id=4, ledger="Q1120", concept="G1", tier="2 - Labels and text",
+        title="The stations of each zone, in one cell",
+        prompt=(
+            "For each zone: how many stations, and their names in one"
+            " text, alphabetical, separated by ', '. GROUP_CONCAT with a"
+            " separator and an ORDER BY inside the brackets.\n\n"
+            "Return: zone, stations, names"
+        ),
+        solution="SELECT zone, COUNT(*), GROUP_CONCAT(name, ', ' ORDER BY name) FROM stations GROUP BY zone",
+        trap_sql="SELECT zone, COUNT(*), GROUP_CONCAT(name, ', ') FROM stations GROUP BY zone",
+        note="GROUP_CONCAT packs a group into one string, and since SQLite"
+             " 3.44 takes its own ORDER BY; without it the names come in"
+             " whatever order the rows arrived, here by station_id, so"
+             " the centre reads 'Market Square, Cathedral, Station"
+             " Approach'. The text is compared exactly.",
+        claims=[("five zones, the centre alphabetical",
+                 lambda rows, c: len(rows) == 5
+                 and ('centre', 3, 'Cathedral, Market Square, Station Approach') in rows)],
+    ),
+    dict(
+        id=5, ledger="Q1121", concept="N1", tier="2 - Labels and text",
+        title="Where the members live, with a fallback",
+        prompt=(
+            "Members counted by district, except that a member with no"
+            " district is counted under 'zone ' followed by the zone of"
+            " their home station. COALESCE over the district and the"
+            " concatenation, with a join to stations.\n\n"
+            "Return: place, members"
+        ),
+        solution=("SELECT COALESCE(m.district, 'zone ' || s.zone) AS place, COUNT(*) FROM members m"
+                  " JOIN stations s ON s.station_id = m.home_station_id GROUP BY place"),
+        trap_sql=("SELECT IFNULL(m.district, 'zone ' || s.zone) AS place, COUNT(*) FROM members m"
+                  " JOIN stations s ON s.station_id = m.home_station_id GROUP BY m.district"),
+        note="The GROUP BY has to be on the COALESCEd value, not the raw"
+             " district: grouping by the district puts all eighty-six"
+             " NULLs in one group and labels it with whichever zone comes"
+             " first. Ten districts and five zone fallbacks make fifteen"
+             " rows. IFNULL and COALESCE are the same thing for two"
+             " arguments.",
+        claims=[("fifteen places, five of them zone fallbacks",
+                 lambda rows, c: len(rows) == 15 and sum(r[0].startswith('zone ') for r in rows) == 5
+                 and sum(r[1] for r in rows) == 900)],
+    ),
+    dict(
+        id=6, ledger="Q1122", concept="FMT", tier="2 - Labels and text",
+        title="Fares by plan, in dollars",
+        prompt=(
+            "For each plan: the members' fares in all, as TEXT like"
+            " '$12345.50' -- FORMAT('$%.2f', ...) over the cents divided"
+            " by 100.0. A join from rides to members for the plan.\n\n"
+            "Return: plan, fares"
+        ),
+        solution=("SELECT m.plan, FORMAT('$%.2f', SUM(r.fare_cents) / 100.0) FROM rides r"
+                  " JOIN members m ON m.member_id = r.member_id GROUP BY m.plan"),
+        trap_sql=("SELECT m.plan, FORMAT('$%.2f', SUM(r.fare_cents) / 100) FROM rides r"
+                  " JOIN members m ON m.member_id = r.member_id GROUP BY m.plan"),
+        note="FORMAT is SQLite's printf: %.2f prints two decimals of"
+             " whatever it is given. Given SUM / 100 it is given an"
+             " integer -- the cents were already thrown away -- and"
+             " prints '.00' on every plan. Divide by 100.0 so the"
+             " decimals exist to be printed. Pay-as-you-go pays the most,"
+             " having no free half hour.",
+        claims=[("three plans, pay-as-you-go the biggest and not round",
                  lambda rows, c: len(rows) == 3
-                 and max(rows, key=lambda r: r[2])[0] == 'electric'
-                 and min(rows, key=lambda r: r[2])[0] == 'cargo')],
+                 and max(rows, key=lambda r: float(r[1][1:]))[0] == 'pay-as-you-go'
+                 and any(not r[1].endswith('.00') for r in rows))],
     ),
+    # =========================================== 3 Counting with conditions
     dict(
-        id=2, ledger="Q1103", concept="W1", tier="1 - The fleet in motion",
-        title="The longest ride out of each station",
+        id=7, ledger="Q1123", concept="FIL", tier="3 - Counting with conditions",
+        title="How casual each station is",
         prompt=(
-            "For each start station, the ride_id and distance of the"
-            " LONGEST ride that started there. FIRST_VALUE over a window"
-            " partitioned by the start station and ordered by distance"
-            " descending, with DISTINCT to keep one row per station. No"
-            " station has a tie at the top.\n\n"
-            "Return: station_id, ride_id, distance_m"
+            "For each start station: all rides started there, those by"
+            " casual riders (member_id NULL), and the casual share as a"
+            " percentage to one decimal. COUNT(*) FILTER (WHERE ...) for"
+            " the casual count, in one pass over rides.\n\n"
+            "Return: station_id, rides, casual, casual_pct"
         ),
-        solution=("SELECT DISTINCT start_station_id,"
-                  " FIRST_VALUE(ride_id) OVER (PARTITION BY start_station_id ORDER BY distance_m DESC),"
-                  " FIRST_VALUE(distance_m) OVER (PARTITION BY start_station_id ORDER BY distance_m DESC)"
-                  " FROM rides WHERE distance_m IS NOT NULL"),
-        trap_sql=("SELECT DISTINCT start_station_id,"
-                  " FIRST_VALUE(ride_id) OVER (PARTITION BY start_station_id ORDER BY distance_m),"
-                  " FIRST_VALUE(distance_m) OVER (PARTITION BY start_station_id ORDER BY distance_m)"
-                  " FROM rides WHERE distance_m IS NOT NULL"),
-        note="FIRST_VALUE returns the first row of the window as ordered,"
-             " so the ORDER BY decides whether 'first' is longest or"
-             " shortest -- ascending gives the shortest hop from each"
-             " station. Two FIRST_VALUEs over the same window carry two"
-             " columns of the same row, and DISTINCT collapses the 38,000"
-             " identical copies to twelve.",
-        claims=[("twelve stations, the longest from University",
-                 lambda rows, c: len(rows) == 12 and max(rows, key=lambda r: r[2])[0] == 4
-                 and all(r[2] > 30000 for r in rows))],
+        solution=("SELECT start_station_id, COUNT(*), COUNT(*) FILTER (WHERE member_id IS NULL),"
+                  " ROUND(100.0 * COUNT(*) FILTER (WHERE member_id IS NULL) / COUNT(*), 1) FROM rides GROUP BY start_station_id"),
+        trap_sql=("SELECT start_station_id, COUNT(*), COUNT(*) FILTER (WHERE member_id IS NULL),"
+                  " ROUND(100.0 * COUNT(*) FILTER (WHERE member_id IS NULL) / COUNT(*), 1) FROM rides"
+                  " WHERE member_id IS NULL GROUP BY start_station_id"),
+        note="FILTER restricts one aggregate; WHERE restricts the whole"
+             " query. Put the casual test in the WHERE as well and the"
+             " denominator is casual too, so every station is 100 per"
+             " cent casual. FILTER is the standard spelling of"
+             " SUM(member_id IS NULL), and reads better with COUNT.",
+        claims=[("twelve stations, each around thirty per cent casual",
+                 lambda rows, c: len(rows) == 12 and all(28 < r[3] < 32 for r in rows))],
     ),
     dict(
-        id=3, ledger="Q1104", concept="S1", tier="1 - The fleet in motion",
-        title="Electric bikes that have never needed a battery",
+        id=8, ledger="Q1124", concept="N1X", tier="3 - Counting with conditions",
+        title="Members never named on a payment",
         prompt=(
-            "The electric bikes with no 'battery' maintenance job on"
-            " record, ever: the electric bike_ids EXCEPT the bike_ids of"
-            " battery jobs.\n\n"
-            "Return: bike_id"
-        ),
-        solution=("SELECT bike_id FROM bikes WHERE model = 'electric'"
-                  " EXCEPT SELECT bike_id FROM maintenance WHERE kind = 'battery'"),
-        trap_sql=("SELECT bike_id FROM maintenance WHERE kind = 'battery'"
-                  " EXCEPT SELECT bike_id FROM bikes WHERE model = 'electric'"),
-        note="EXCEPT is not symmetric: A EXCEPT B is what is in A and not"
-             " in B. Reversed, it asks for battery jobs on non-electric"
-             " bikes, and there are none -- the data is consistent -- so"
-             " the trap returns nothing. Fifty-nine of the eighty-two"
-             " electric bikes have never had a battery fault.",
-        claims=[("fifty-nine bikes",
-                 lambda rows, c: len(rows) == 59)],
-    ),
-    # ======================================================= 2 The calendar
-    dict(
-        id=4, ledger="Q1105", concept="SPN", tier="2 - The calendar",
-        title="Old Mill, month by month, to the end",
-        prompt=(
-            "Rides started at Old Mill (station 10) in EVERY month from"
-            " 2025-01 to 2026-06, including the months after it closed,"
-            " as 0. A recursive CTE that builds the eighteen months --"
-            " strftime('%Y-%m', m || '-01', '+1 month') steps one on --"
-            " LEFT JOINed to the rides, counting a ride column.\n\n"
-            "Return: month, rides"
-        ),
-        solution=("WITH RECURSIVE cal(m) AS (SELECT '2025-01' UNION ALL SELECT strftime('%Y-%m', m || '-01', '+1 month') FROM cal WHERE m < '2026-06')"
-                  " SELECT cal.m, COUNT(r.ride_id) FROM cal"
-                  " LEFT JOIN rides r ON strftime('%Y-%m', r.started_at) = cal.m AND r.start_station_id = 10 GROUP BY cal.m"),
-        trap_sql=("WITH RECURSIVE cal(m) AS (SELECT '2025-01' UNION ALL SELECT strftime('%Y-%m', m || '-01', '+1 month') FROM cal WHERE m < '2026-06')"
-                  " SELECT cal.m, COUNT(r.ride_id) FROM cal"
-                  " LEFT JOIN rides r ON strftime('%Y-%m', r.started_at) = cal.m WHERE r.start_station_id = 10 GROUP BY cal.m"),
-        note="The station test belongs in the ON clause. In the WHERE it"
-             " runs after the LEFT JOIN has kept the empty months with"
-             " NULL rides, and NULL = 10 is not true, so those months"
-             " vanish and the result is fourteen rows -- the inner join"
-             " in disguise. The station closed on 2026-03-01 and its last"
-             " ride is in February.",
-        claims=[("eighteen months, the last four at zero",
-                 lambda rows, c: len(rows) == 18 and sum(r[1] == 0 for r in rows) == 4
-                 and dict(rows)['2026-02'] > 100)],
-    ),
-    dict(
-        id=5, ledger="Q1106", concept="D1", tier="2 - The calendar",
-        title="Month on month",
-        prompt=(
-            "For each month, the rides started, the change from the month"
-            " before, and that change as a percentage of the month before"
-            " to one decimal -- NULL for the first month. A grouped CTE,"
-            " then LAG over it, used twice.\n\n"
-            "Return: month, rides, change, pct"
-        ),
-        solution=("WITH m AS (SELECT strftime('%Y-%m', started_at) AS ym, COUNT(*) AS n FROM rides GROUP BY ym)"
-                  " SELECT ym, n, n - LAG(n) OVER (ORDER BY ym),"
-                  " ROUND(100.0 * (n - LAG(n) OVER (ORDER BY ym)) / LAG(n) OVER (ORDER BY ym), 1) FROM m"),
-        trap_sql=("WITH m AS (SELECT strftime('%Y-%m', started_at) AS ym, COUNT(*) AS n FROM rides GROUP BY ym)"
-                  " SELECT ym, n, n - LEAD(n) OVER (ORDER BY ym),"
-                  " ROUND(100.0 * (n - LEAD(n) OVER (ORDER BY ym)) / LEAD(n) OVER (ORDER BY ym), 1) FROM m"),
-        note="LAG looks back a row, LEAD looks forward: with LEAD the"
-             " change is against the month AFTER and every sign flips,"
-             " and the NULL lands on the last month instead of the first."
-             " The percentage divides by the previous month, not the"
-             " current one. February's dip and March's recovery are the"
-             " biggest swings.",
-        claims=[("eighteen months, the first with no change",
-                 lambda rows, c: len(rows) == 18 and rows[0] == ('2025-01', 1943, None, None)
-                 and min(r[3] for r in rows if r[3] is not None) < -9)],
-    ),
-    dict(
-        id=6, ledger="Q1107", concept="C7", tier="2 - The calendar",
-        title="The week, day by day",
-        prompt=(
-            "Rides by day of the week, with the day NAMED: strftime('%w')"
-            " gives '0' for Sunday through '6' for Saturday as TEXT, and a"
-            " CASE turns it into Sun, Mon, Tue, Wed, Thu, Fri, Sat. Count"
-            " the rides and average the fare in whole cents.\n\n"
-            "Return: dow, day, rides, avg_fare"
-        ),
-        solution=("SELECT strftime('%w', started_at) AS dow,"
-                  " CASE strftime('%w', started_at) WHEN '0' THEN 'Sun' WHEN '1' THEN 'Mon' WHEN '2' THEN 'Tue'"
-                  " WHEN '3' THEN 'Wed' WHEN '4' THEN 'Thu' WHEN '5' THEN 'Fri' ELSE 'Sat' END,"
-                  " COUNT(*), CAST(ROUND(AVG(fare_cents)) AS INTEGER) FROM rides GROUP BY dow"),
-        trap_sql=("SELECT strftime('%w', started_at) AS dow,"
-                  " CASE strftime('%w', started_at) WHEN 0 THEN 'Sun' WHEN 1 THEN 'Mon' WHEN 2 THEN 'Tue'"
-                  " WHEN 3 THEN 'Wed' WHEN 4 THEN 'Thu' WHEN 5 THEN 'Fri' ELSE 'Sat' END,"
-                  " COUNT(*), CAST(ROUND(AVG(fare_cents)) AS INTEGER) FROM rides GROUP BY dow"),
-        note="The simple CASE compares with =, and strftime's '0' is text"
-             " that never equals the integer 0, so every WHEN misses and"
-             " the ELSE names all seven days Saturday. Quote the"
-             " constants. The week is flat -- commuters on weekdays,"
-             " casuals at the weekend -- and Friday's fares run highest.",
-        claims=[("seven days, each named once",
-                 lambda rows, c: len(rows) == 7 and len({r[1] for r in rows}) == 7
-                 and all(5300 < r[2] < 5700 for r in rows))],
-    ),
-    # ============================================================ 3 Members
-    dict(
-        id=7, ledger="Q1108", concept="E1", tier="3 - Members",
-        title="Riders who never start from home",
-        prompt=(
-            "Members who HAVE ridden but have never started a ride at"
-            " their own home station, counted by plan. An EXISTS for 'has"
-            " ridden' and a NOT EXISTS that compares the ride's start"
-            " station with the member's home station.\n\n"
+            "Members with no payment carrying their member_id, counted by"
+            " plan -- fare payments name the ride, not the rider, so"
+            " pay-as-you-go members are mostly here. Use NOT EXISTS; a"
+            " NOT IN over payments.member_id would meet the NULLs of the"
+            " fare payments and return nothing.\n\n"
             "Return: plan, members"
         ),
         solution=("SELECT plan, COUNT(*) FROM members m"
-                  " WHERE EXISTS (SELECT 1 FROM rides r WHERE r.member_id = m.member_id)"
-                  " AND NOT EXISTS (SELECT 1 FROM rides r WHERE r.member_id = m.member_id AND r.start_station_id = m.home_station_id)"
-                  " GROUP BY plan"),
-        trap_sql=("SELECT plan, COUNT(*) FROM members m"
-                  " WHERE NOT EXISTS (SELECT 1 FROM rides r WHERE r.member_id = m.member_id AND r.start_station_id = m.home_station_id)"
-                  " GROUP BY plan"),
-        note="A member with no rides at all also has no ride from home,"
-             " so the NOT EXISTS alone sweeps in the hundred who never"
-             " ride and nearly doubles the counts. The EXISTS first says"
-             " 'among riders'. Inside the subquery both tables are in"
-             " scope, so the comparison crosses them.",
-        claims=[("three plans, about a hundred members in all",
-                 lambda rows, c: len(rows) == 3 and 95 < sum(r[1] for r in rows) < 115)],
+                  " WHERE NOT EXISTS (SELECT 1 FROM payments p WHERE p.member_id = m.member_id) GROUP BY plan"),
+        trap_sql=("SELECT plan, COUNT(*) FROM members"
+                  " WHERE member_id NOT IN (SELECT member_id FROM payments) GROUP BY plan"),
+        note="x NOT IN (list) is x <> each value, ANDed together; one NULL"
+             " in the list makes the whole thing NULL, never true, and the"
+             " query is empty with no warning. NOT EXISTS has no such"
+             " hole. Nine annual and one monthly member have never been"
+             " charged for their plan -- the ones every subscription"
+             " payment missed.",
+        claims=[("three plans, over two hundred pay-as-you-go",
+                 lambda rows, c: len(rows) == 3 and dict(rows)['pay-as-you-go'] > 200
+                 and dict(rows)['annual'] < 20)],
     ),
     dict(
-        id=8, ledger="Q1109", concept="C7", tier="3 - Members",
-        title="Members by age, and how much they ride",
+        id=9, ledger="Q1125", concept="DST", tier="3 - Counting with conditions",
+        title="What it takes to be a top-ten-per-cent rider",
         prompt=(
-            "Members in three age bands as of 2026-06-30 -- 'under 30',"
-            " '30-49', '50+' -- with how many members and their average"
-            " number of rides to one decimal. Age in years is the"
-            " julianday difference divided by 365.25; CASE for the band;"
-            " a scalar subquery for each member's ride count.\n\n"
-            "Return: band, members, avg_rides"
+            "For each plan: the ride count that puts a member in the top"
+            " ten per cent of that plan's riders, and the plan's maximum."
+            " A CTE of rides per member, CUME_DIST() OVER (PARTITION BY"
+            " plan ORDER BY rides), then the smallest count whose"
+            " CUME_DIST is at least 0.9 -- MIN with a FILTER -- and"
+            " MAX.\n\n"
+            "Return: plan, top_decile_rides, max_rides"
         ),
-        solution=("SELECT CASE WHEN (julianday('2026-06-30') - julianday(born_on)) / 365.25 < 30 THEN 'under 30'"
-                  " WHEN (julianday('2026-06-30') - julianday(born_on)) / 365.25 < 50 THEN '30-49' ELSE '50+' END AS band,"
-                  " COUNT(*), ROUND(AVG((SELECT COUNT(*) FROM rides r WHERE r.member_id = m.member_id)), 1)"
-                  " FROM members m GROUP BY band"),
-        trap_sql=("SELECT CASE WHEN 2026 - CAST(SUBSTR(born_on, 1, 4) AS INTEGER) < 30 THEN 'under 30'"
-                  " WHEN 2026 - CAST(SUBSTR(born_on, 1, 4) AS INTEGER) < 50 THEN '30-49' ELSE '50+' END AS band,"
-                  " COUNT(*), ROUND(AVG((SELECT COUNT(*) FROM rides r WHERE r.member_id = m.member_id)), 1)"
-                  " FROM members m GROUP BY band"),
-        note="Subtracting birth years counts a member born in December"
-             " 1996 as 30 in June 2026, half a year early, and moves"
-             " everyone with a later birthday up a band. julianday"
-             " measures the actual elapsed time. The bands ride about the"
-             " same -- age barely shows in this data.",
-        claims=[("three bands, the over-fifties the largest",
-                 lambda rows, c: len(rows) == 3 and max(rows, key=lambda r: r[1])[0] == '50+'
-                 and all(28 < r[2] < 33 for r in rows))],
+        solution=("WITH per AS (SELECT m.plan, COUNT(*) AS n FROM members m JOIN rides r ON r.member_id = m.member_id GROUP BY m.member_id),"
+                  " cd AS (SELECT plan, n, CUME_DIST() OVER (PARTITION BY plan ORDER BY n) AS c FROM per)"
+                  " SELECT plan, MIN(n) FILTER (WHERE c >= 0.9), MAX(n) FROM cd GROUP BY plan"),
+        trap_sql=("WITH per AS (SELECT m.plan, COUNT(*) AS n FROM members m JOIN rides r ON r.member_id = m.member_id GROUP BY m.member_id),"
+                  " cd AS (SELECT plan, n, CUME_DIST() OVER (PARTITION BY plan ORDER BY n DESC) AS c FROM per)"
+                  " SELECT plan, MIN(n) FILTER (WHERE c >= 0.9), MAX(n) FROM cd GROUP BY plan"),
+        note="CUME_DIST is the share of the partition at or below the row"
+             " in the window's order, so ascending puts the heavy riders"
+             " at 0.9 and above. Ordered descending, 0.9 is reached by the"
+             " LIGHTEST riders and the threshold collapses to ten rides."
+             " Thirty-odd rides a year and a half gets you into the top"
+             " tenth on any plan.",
+        claims=[("three plans, the threshold in the thirties",
+                 lambda rows, c: len(rows) == 3 and all(30 <= r[1] <= 35 and r[2] > 200 for r in rows))],
+    ),
+    # ================================================= 4 The fleet's calendar
+    dict(
+        id=10, ledger="Q1126", concept="WIN", tier="4 - The fleet's calendar",
+        title="The cargo bikes, in order of arrival",
+        prompt=(
+            "The cargo bikes in the order they were acquired: bike_id,"
+            " acquired_on, their place in that order, and the days since"
+            " the previous cargo bike arrived (NULL for the first)."
+            " ROW_NUMBER and LAG over ONE named window -- WINDOW w AS"
+            " (ORDER BY acquired_on, bike_id) after the WHERE -- and"
+            " julianday for the gap.\n\n"
+            "Return: bike_id, acquired_on, nth, days_since_previous"
+        ),
+        solution=("SELECT bike_id, acquired_on, ROW_NUMBER() OVER w, julianday(acquired_on) - julianday(LAG(acquired_on) OVER w)"
+                  " FROM bikes WHERE model = 'cargo' WINDOW w AS (ORDER BY acquired_on, bike_id)"),
+        trap_sql=("SELECT bike_id, acquired_on, ROW_NUMBER() OVER w, julianday(acquired_on) - julianday(LAG(acquired_on) OVER (ORDER BY bike_id))"
+                  " FROM bikes WHERE model = 'cargo' WINDOW w AS (ORDER BY acquired_on, bike_id)"),
+        note="A named window is defined once and used by every function"
+             " that says OVER w, so the numbering and the look-back agree."
+             " A LAG with its own ORDER BY bike_id looks at the previous"
+             " bike NUMBER, whose acquisition date has nothing to do with"
+             " this one's, and the gaps go negative. Two cargo bikes"
+             " arrived on the same day, which is why bike_id breaks the"
+             " tie.",
+        claims=[("thirty-one cargo bikes, one same-day pair",
+                 lambda rows, c: len(rows) == 31 and sum(r[3] == 0 for r in rows) == 1
+                 and all(r[3] is None or r[3] >= 0 for r in rows))],
     ),
     dict(
-        id=9, ledger="Q1110", concept="JSN", tier="3 - Members",
-        title="Each member's last three rides, as JSON",
+        id=11, ledger="Q1127", concept="D2", tier="4 - The fleet's calendar",
+        title="Weeks that start on Monday",
         prompt=(
-            "For members 2 to 6 who have ridden: their member_id and a"
-            " JSON array of the ride_ids of their three most recent rides,"
-            " most recent first. ROW_NUMBER partitioned by member ordered"
-            " by started_at descending in a CTE, then json_group_array"
-            " with an ORDER BY of its own over the rows numbered 1 to"
-            " 3.\n\n"
-            "Return: member_id, last_three"
+            "Rides per week for the weeks touching June 2026 -- rides"
+            " started from 2026-05-25 up to but not including 2026-07-01"
+            " -- labelled by the MONDAY the week began: date(started_at,"
+            " 'weekday 0', '-6 days') moves forward to the Sunday and back"
+            " six days. GROUP BY that.\n\n"
+            "Return: week_of, rides"
         ),
-        solution=("WITH r AS (SELECT member_id, ride_id, started_at,"
-                  " ROW_NUMBER() OVER (PARTITION BY member_id ORDER BY started_at DESC) AS rn"
-                  " FROM rides WHERE member_id BETWEEN 2 AND 6)"
-                  " SELECT member_id, json_group_array(ride_id ORDER BY started_at DESC) FROM r WHERE rn <= 3 GROUP BY member_id"),
-        trap_sql=("WITH r AS (SELECT member_id, ride_id, started_at,"
-                  " ROW_NUMBER() OVER (PARTITION BY member_id ORDER BY started_at DESC) AS rn"
-                  " FROM rides WHERE member_id BETWEEN 2 AND 6)"
-                  " SELECT member_id, json_group_array(ride_id ORDER BY started_at) FROM r WHERE rn <= 3 GROUP BY member_id"),
-        note="The window's ORDER BY picks WHICH three rides; the"
-             " aggregate's ORDER BY decides the order they are packed in,"
-             " and JSON text is compared exactly, so oldest-first is a"
-             " different answer. Members 1 and 4 have never ridden and"
-             " are rightly absent.",
-        claims=[("four members, three rides each",
-                 lambda rows, c: len(rows) == 4 and all(r[1].count(',') == 2 for r in rows))],
-    ),
-    # ============================================================== 4 Money
-    dict(
-        id=10, ledger="Q1111", concept="A3", tier="4 - Money",
-        title="Pay-as-you-go months that cost more than a subscription",
-        prompt=(
-            "Member-and-month pairs where a pay-as-you-go member's fares"
-            " in one calendar month came to MORE than the 1200-cent"
-            " monthly fee: member_id, the month, and the fares. A join to"
-            " members for the plan, GROUP BY member and strftime month,"
-            " HAVING on the SUM.\n\n"
-            "Return: member_id, month, fares"
-        ),
-        solution=("SELECT m.member_id, strftime('%Y-%m', r.started_at) AS ym, SUM(r.fare_cents)"
-                  " FROM rides r JOIN members m ON m.member_id = r.member_id WHERE m.plan = 'pay-as-you-go'"
-                  " GROUP BY m.member_id, ym HAVING SUM(r.fare_cents) > 1200"),
-        trap_sql=("SELECT m.member_id, strftime('%Y-%m', r.started_at) AS ym, SUM(r.fare_cents)"
-                  " FROM rides r JOIN members m ON m.member_id = r.member_id WHERE m.plan = 'pay-as-you-go'"
-                  " GROUP BY m.member_id, ym HAVING SUM(r.fare_cents) >= 1200"),
-        note="'More than' is a strict >, and with fares in multiples of"
-             " 50 a month of exactly 1200 is common: thirteen pairs sit"
-             " on the line and >= lets them in. The plan filter is a"
-             " WHERE, the total is a HAVING -- one before grouping, one"
-             " after. Seventy-five members have at least one such month.",
-        claims=[("two hundred and twenty-five pairs, all over 1200",
-                 lambda rows, c: len(rows) == 225 and all(r[2] > 1200 for r in rows))],
+        solution=("SELECT date(started_at, 'weekday 0', '-6 days') AS wk, COUNT(*) FROM rides"
+                  " WHERE started_at >= '2026-05-25' AND started_at < '2026-07-01' GROUP BY wk"),
+        trap_sql=("SELECT date(started_at, 'weekday 1') AS wk, COUNT(*) FROM rides"
+                  " WHERE started_at >= '2026-05-25' AND started_at < '2026-07-01' GROUP BY wk"),
+        note="'weekday N' moves FORWARD to the next day numbered N, or"
+             " stays if already there -- so 'weekday 1' labels each week"
+             " by the Monday AFTER it, a week late, and a Monday's rides"
+             " land in their own week while Tuesday's go to the next."
+             " Forward to Sunday and back six days is the standard way to"
+             " the Monday that began the week.",
+        claims=[("six weeks, all labelled with Mondays",
+                 lambda rows, c: len(rows) == 6 and rows[0][0] == '2026-05-25'
+                 and all(dict(rows).get(k) for k in ('2026-06-01', '2026-06-29')))],
     ),
     dict(
-        id=11, ledger="Q1112", concept="C3", tier="4 - Money",
-        title="Card or app, zone by zone",
+        id=12, ledger="Q1128", concept="D2N", tier="4 - The fleet's calendar",
+        title="How old the fleet is",
         prompt=(
-            "Members' payments by the zone of their home station and the"
-            " payment method: the count and its share of that ZONE's"
-            " payments as a percentage to one decimal. Two joins, GROUP"
-            " BY zone and method, and a window SUM of COUNT(*)"
-            " partitioned by zone for the denominator.\n\n"
-            "Return: zone, method, payments, pct"
+            "For each model: the bikes, how many are retired, and the"
+            " average age in whole days -- a retired bike's age at"
+            " retirement, an in-service bike's age at 2026-06-30."
+            " COALESCE(retired_on, '2026-06-30') inside julianday.\n\n"
+            "Return: model, bikes, retired, avg_age_days"
         ),
-        solution=("SELECT s.zone, p.method, COUNT(*), ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY s.zone), 1)"
-                  " FROM payments p JOIN members m ON m.member_id = p.member_id JOIN stations s ON s.station_id = m.home_station_id"
-                  " GROUP BY s.zone, p.method"),
-        trap_sql=("SELECT s.zone, p.method, COUNT(*), ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1)"
-                  " FROM payments p JOIN members m ON m.member_id = p.member_id JOIN stations s ON s.station_id = m.home_station_id"
-                  " GROUP BY s.zone, p.method"),
-        note="SUM(COUNT(*)) OVER (PARTITION BY zone) adds up the grouped"
-             " counts within one zone, so each zone's two rows total 100."
-             " Without the PARTITION the denominator is every payment in"
-             " the city and the shares shrink to a tenth. Casual riders'"
-             " payments have no member, so they drop out at the first"
-             " join.",
-        claims=[("ten rows, two thirds by app everywhere",
-                 lambda rows, c: len(rows) == 10
-                 and all(60 < r[3] < 72 for r in rows if r[1] == 'app'))],
-    ),
-    dict(
-        id=12, ledger="Q1113", concept="X7", tier="4 - Money",
-        title="Paying for nothing",
-        prompt=(
-            "Members who have paid a subscription but have never ridden:"
-            " by plan, how many such members and the total they have"
-            " paid. A join to payments, NOT EXISTS over rides, and COUNT"
-            " DISTINCT of the members.\n\n"
-            "Return: plan, members, paid_cents"
-        ),
-        solution=("SELECT m.plan, COUNT(DISTINCT m.member_id), SUM(p.amount_cents)"
-                  " FROM members m JOIN payments p ON p.member_id = m.member_id"
-                  " WHERE NOT EXISTS (SELECT 1 FROM rides r WHERE r.member_id = m.member_id) GROUP BY m.plan"),
-        trap_sql=("SELECT m.plan, COUNT(*), SUM(p.amount_cents)"
-                  " FROM members m JOIN payments p ON p.member_id = m.member_id"
-                  " WHERE NOT EXISTS (SELECT 1 FROM rides r WHERE r.member_id = m.member_id) GROUP BY m.plan"),
-        note="The join to payments makes one row per PAYMENT, so COUNT(*)"
-             " counts monthly instalments, not people; COUNT(DISTINCT"
-             " member_id) counts each member once while SUM still adds"
-             " every payment. Pay-as-you-go members pay only per ride,"
-             " so they cannot appear: two plans, not three.",
-        claims=[("two plans, over twelve thousand dollars between them",
-                 lambda rows, c: len(rows) == 2 and sum(r[2] for r in rows) > 1200000
-                 and all(r[1] < 50 for r in rows))],
+        solution=("SELECT model, COUNT(*), SUM(retired_on IS NOT NULL),"
+                  " CAST(ROUND(AVG(julianday(COALESCE(retired_on, '2026-06-30')) - julianday(acquired_on))) AS INTEGER) FROM bikes GROUP BY model"),
+        trap_sql=("SELECT model, COUNT(*), SUM(retired_on IS NOT NULL),"
+                  " CAST(ROUND(AVG(julianday(retired_on) - julianday(acquired_on))) AS INTEGER) FROM bikes GROUP BY model"),
+        note="julianday(NULL) is NULL, and AVG skips NULLs, so without"
+             " the COALESCE the average is over the retired bikes only --"
+             " eighteen of three hundred and twenty -- and says the fleet"
+             " is younger than it is. The fallback date makes every bike"
+             " count. The three models are all about three years old on"
+             " average.",
+        claims=[("three models, around a thousand days old",
+                 lambda rows, c: len(rows) == 3 and all(1000 < r[3] < 1100 for r in rows)
+                 and sum(r[2] for r in rows) == 18)],
     ),
     # ================================================= 5 Changing the data
     dict(
-        id=13, ledger="Q1114", concept="TRG", tier="5 - Changing the data",
+        id=13, ledger="Q1129", concept="GEN", tier="5 - Changing the data",
         kind="script",
-        title="A bike out on a ride cannot be retired",
+        title="A minutes column that computes itself",
         prompt=(
-            "Write a BEFORE UPDATE OF retired_on trigger on bikes that"
-            " refuses -- RAISE(ABORT, ...) -- when the bike has a ride"
-            " still open (ended_at NULL) and the new retired_on is not"
-            " NULL, and lets every other update through. The question"
-            " then retires bikes 3 and 8 in one UPDATE each; bike 8 is"
-            " out on a ride.\n\n"
-            "Checked: bikes 3 and 8"
+            "Add to rides a column `minutes` that is GENERATED ALWAYS AS"
+            " the ride's length in minutes -- (julianday(ended_at) -"
+            " julianday(started_at)) * 1440 -- VIRTUAL, so ALTER TABLE"
+            " can add it without rewriting the table. Open rides get"
+            " NULL by themselves.\n\n"
+            "Checked: the column's average to one decimal, its rounded"
+            " maximum, and how many rows have it NULL"
         ),
-        solution=("CREATE TRIGGER no_retiring_out BEFORE UPDATE OF retired_on ON bikes\n"
-                  "WHEN NEW.retired_on IS NOT NULL AND EXISTS (SELECT 1 FROM rides WHERE bike_id = OLD.bike_id AND ended_at IS NULL)\n"
-                  "BEGIN\n"
-                  "  SELECT RAISE(ABORT, 'bike is out on a ride');\n"
-                  "END;"),
-        trap_sql=("CREATE TRIGGER no_retiring_out BEFORE UPDATE OF retired_on ON bikes\n"
-                  "BEGIN\n"
-                  "  SELECT RAISE(ABORT, 'bike is out on a ride');\n"
-                  "END;"),
-        driver_sql=("UPDATE bikes SET retired_on = '2026-06-30' WHERE bike_id = 3;\n"
-                    "UPDATE bikes SET retired_on = '2026-06-30' WHERE bike_id = 8;"),
-        probe_sql="SELECT bike_id, retired_on FROM bikes WHERE bike_id IN (3, 8) ORDER BY bike_id",
-        note="In an UPDATE trigger OLD is the row as it was and NEW as it"
-             " will be; the WHEN is what makes the refusal conditional."
-             " Without it the trigger refuses every change to retired_on,"
-             " and the docked bike 3 cannot be retired either. A refused"
-             " statement is reported in the status bar, not treated as an"
-             " error.",
-        claims=[("bike 3 retired, bike 8 still in service",
-                 lambda rows, c: rows == [(3, '2026-06-30'), (8, None)])],
+        solution=("ALTER TABLE rides ADD COLUMN minutes REAL"
+                  " GENERATED ALWAYS AS ((julianday(ended_at) - julianday(started_at)) * 1440) VIRTUAL;"),
+        trap_sql=("ALTER TABLE rides ADD COLUMN minutes REAL"
+                  " GENERATED ALWAYS AS ((julianday(ended_at) - julianday(started_at)) * 24) VIRTUAL;"),
+        probe_sql="SELECT ROUND(AVG(minutes), 1), ROUND(MAX(minutes)), SUM(minutes IS NULL) FROM rides",
+        note="A generated column is an expression that behaves as a"
+             " column: queried, indexed, never stored for VIRTUAL. The"
+             " trap multiplies by 24 and gets hours. ALTER TABLE can add"
+             " a VIRTUAL generated column but not a STORED one, which"
+             " would need every row rewritten. The thirty-five open rides"
+             " are NULL because julianday(NULL) is.",
+        claims=[("twenty-two minutes on average, four hours at most, thirty-five NULL",
+                 lambda rows, c: rows == [(22.7, 240.0, 35)])],
     ),
     dict(
-        id=14, ledger="Q1115", concept="ALT", tier="5 - Changing the data",
+        id=14, ledger="Q1130", concept="DDL", tier="5 - Changing the data",
         kind="script",
-        title="A ride count on every bike",
+        title="A table that turns bad rows away",
         prompt=(
-            "Add an integer column `rides` to bikes with ALTER TABLE ADD"
-            " COLUMN, DEFAULT 0, then fill it with each bike's number of"
-            " rides by an UPDATE whose SET is a correlated subquery over"
-            " rides. Bikes never ridden must end at 0.\n\n"
-            "Checked: the total of the new column, how many bikes are at"
-            " 0, and the largest value"
+            "Create a table `bike_moves (move_id INTEGER PRIMARY KEY,"
+            " bike_id, from_station, to_station, moved_on)` for bikes"
+            " trucked between stations: bike_id REFERENCES bikes,"
+            " from_station and to_station REFERENCES stations, all NOT"
+            " NULL, moved_on NOT NULL, and a CHECK that from_station <>"
+            " to_station. The question then inserts four rows: a good"
+            " one, one moving a bike to the station it is at, one for a"
+            " bike 999, and one to a station 99.\n\n"
+            "Checked: the move_ids that got in"
         ),
-        solution=("ALTER TABLE bikes ADD COLUMN rides INTEGER NOT NULL DEFAULT 0;\n"
-                  "UPDATE bikes SET rides = (SELECT COUNT(*) FROM rides r WHERE r.bike_id = bikes.bike_id);"),
-        trap_sql=("ALTER TABLE bikes ADD COLUMN rides INTEGER NOT NULL DEFAULT 0;\n"
-                  "UPDATE bikes SET rides = (SELECT COUNT(*) FROM rides);"),
-        probe_sql="SELECT SUM(rides), SUM(rides = 0), MAX(rides) FROM bikes",
-        note="The subquery has to name the outer row -- bikes.bike_id --"
-             " or it is the same count for every bike: 38,605 on each of"
-             " 320 rows. COUNT(*) of an empty correlated subquery is 0,"
-             " which is what the seven never-ridden bikes need. ALTER"
-             " TABLE ADD COLUMN is instant in SQLite; the rows are not"
-             " rewritten.",
-        claims=[("38,605 rides over 320 bikes, seven at zero",
-                 lambda rows, c: rows == [(38605, 7, 159)])],
+        solution=("CREATE TABLE bike_moves (\n"
+                  "  move_id INTEGER PRIMARY KEY,\n"
+                  "  bike_id INTEGER NOT NULL REFERENCES bikes(bike_id),\n"
+                  "  from_station INTEGER NOT NULL REFERENCES stations(station_id),\n"
+                  "  to_station INTEGER NOT NULL REFERENCES stations(station_id),\n"
+                  "  moved_on TEXT NOT NULL,\n"
+                  "  CHECK (from_station <> to_station)\n"
+                  ");"),
+        trap_sql=("CREATE TABLE bike_moves (\n"
+                  "  move_id INTEGER PRIMARY KEY,\n"
+                  "  bike_id INTEGER NOT NULL REFERENCES bikes(bike_id),\n"
+                  "  from_station INTEGER NOT NULL REFERENCES stations(station_id),\n"
+                  "  to_station INTEGER NOT NULL REFERENCES stations(station_id),\n"
+                  "  moved_on TEXT NOT NULL\n"
+                  ");"),
+        driver_sql=("INSERT INTO bike_moves VALUES (1, 1, 3, 1, '2026-06-30');\n"
+                    "INSERT INTO bike_moves VALUES (2, 1, 3, 3, '2026-06-30');\n"
+                    "INSERT INTO bike_moves VALUES (3, 999, 3, 1, '2026-06-30');\n"
+                    "INSERT INTO bike_moves VALUES (4, 1, 3, 99, '2026-06-30');"),
+        probe_sql="SELECT move_id, bike_id, to_station FROM bike_moves ORDER BY move_id",
+        note="A CHECK can compare two columns of the row, and REFERENCES"
+             " makes the database refuse a bike or station that does not"
+             " exist -- the sandbox has foreign keys ON, as the real app"
+             " does. Without the CHECK, the move from station 3 to station"
+             " 3 is accepted. Each refusal is reported in the status bar,"
+             " not treated as an error.",
+        claims=[("one move in, three turned away",
+                 lambda rows, c: rows == [(1, 1, 1)])],
     ),
     dict(
-        id=15, ledger="Q1116", concept="UPS", tier="5 - Changing the data",
+        id=15, ledger="Q1131", concept="TMP", tier="5 - Changing the data",
         kind="script",
-        title="Retire one bike and add another, in one statement",
+        title="Close the books on the retired bikes",
         prompt=(
-            "One INSERT with two VALUES rows -- (1, 'electric',"
-            " '2026-06-30', '2026-06-30') and (321, 'electric',"
-            " '2026-06-30', NULL) for (bike_id, model, acquired_on,"
-            " retired_on) -- with ON CONFLICT (bike_id) DO UPDATE that"
-            " sets ONLY retired_on from excluded. Bike 1 exists, so its"
-            " row becomes an update that retires it; bike 1's own model"
-            " and acquisition date must survive. Bike 321 is new.\n\n"
-            "Checked: bikes 1 and 321"
+            "Two steps: CREATE TEMP TABLE gone AS the bike_ids of the"
+            " retired bikes, then DELETE the maintenance jobs that are"
+            " still OPEN (fixed_at NULL) on those bikes -- WHERE bike_id"
+            " IN (SELECT bike_id FROM gone). Fixed jobs on retired bikes"
+            " are history and stay.\n\n"
+            "Checked: how many jobs remain, and how many of them are open"
         ),
-        solution=("INSERT INTO bikes (bike_id, model, acquired_on, retired_on)\n"
-                  "VALUES (1, 'electric', '2026-06-30', '2026-06-30'), (321, 'electric', '2026-06-30', NULL)\n"
-                  "ON CONFLICT (bike_id) DO UPDATE SET retired_on = excluded.retired_on;"),
-        trap_sql=("INSERT OR REPLACE INTO bikes (bike_id, model, acquired_on, retired_on)\n"
-                  "VALUES (1, 'electric', '2026-06-30', '2026-06-30'), (321, 'electric', '2026-06-30', NULL);"),
-        probe_sql="SELECT bike_id, model, acquired_on, retired_on FROM bikes WHERE bike_id IN (1, 321) ORDER BY bike_id",
-        note="ON CONFLICT DO UPDATE touches only the columns it names, and"
-             " `excluded` is the row that would have been inserted."
-             " INSERT OR REPLACE deletes the old row and writes the new"
-             " one whole, so bike 1 -- a classic from 2024 -- turns into"
-             " an electric acquired on the day it retired.",
-        claims=[("bike 1 retired as the classic it was, bike 321 new",
-                 lambda rows, c: rows == [(1, 'classic', '2024-09-22', '2026-06-30'), (321, 'electric', '2026-06-30', None)])],
+        solution=("CREATE TEMP TABLE gone AS SELECT bike_id FROM bikes WHERE retired_on IS NOT NULL;\n"
+                  "DELETE FROM maintenance WHERE fixed_at IS NULL AND bike_id IN (SELECT bike_id FROM gone);"),
+        trap_sql=("CREATE TEMP TABLE gone AS SELECT bike_id FROM bikes WHERE retired_on IS NOT NULL;\n"
+                  "DELETE FROM maintenance WHERE bike_id IN (SELECT bike_id FROM gone);"),
+        probe_sql="SELECT COUNT(*), SUM(fixed_at IS NULL) FROM maintenance",
+        note="A TEMP table lives in the connection and vanishes with it,"
+             " which makes it a scratch pad for a multi-step change: build"
+             " the list once, use it in the DELETE. The trap forgets the"
+             " 'still open' half and deletes the retired bikes' whole"
+             " history, sixty-four jobs instead of seven.",
+        claims=[("seven open jobs gone, the fixed ones kept",
+                 lambda rows, c: rows == [(1100 - 7, 114 - 7)])],
     ),
 ]
 
