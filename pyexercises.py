@@ -1,23 +1,20 @@
-"""Python practice exercises: fifteen questions in three shapes and a program.
+"""Python practice exercises: fifteen functions over one list of bikes.
 
-The twenty-sixth Python set: five one-tool functions on tools no earlier
-set used (str.translate with maketrans, collections.deque with maxlen,
-datetime.timedelta, sorted with a tuple key, str.isdigit), four functions
-with one simple loop plus ONE whole program graded on what it prints, and
-five over BIKE-SCHEME ROWS -- this time payments, lists of dicts with a
-member or a ride that is None, an amount and a method.
+The twenty-seventh Python set, and the first in which every question works
+the SAME data: BIKES, a list of seven dicts shaped like the scheme's bikes
+table with a few things bolted on -- a ride count, kilometres ridden and
+the stations the bike has reached, in the order it first reached them.
+One bike has never been ridden, one has retired, two tie on rides. The
+questions ramp from a single line (a comprehension, a sum, a guard) through
+one loop each (a union, an intersection, a count that breaks ties) to two
+steps (aggregate per model, then pick; bucket, then count).
 
-Two kinds of question, told apart by `kind`:
-
-  "program"   the editor holds a whole program, graded on what it prints:
-              the lines must match the reference program's, trailing
-              spaces and blank lines ignored.
-  "function"  the editor defines a function named `func`. Run calls it once
-              per case in `cases` and shows each call and its result; Check
-              compares each result with the reference function's. Values
-              are compared, not their printed form -- a dict in another
-              order is the same dict -- but the container type counts, so a
-              tuple is not a list, and 0 is not False.
+Every question is a `kind="function"`: the editor defines a function named
+`func`. Run calls it once per case in `cases` and shows each call and its
+result; Check compares each result with the reference function's. Values
+are compared, not their printed form -- a dict in another order is the same
+dict -- but the container type counts, so a tuple is not a list, 2024 is
+not "2024", and 0 is not False.
 
 Every question carries a `trap`: a wrong answer a beginner is likely to
 write, which check_questions.py proves the grader rejects. The `note` is
@@ -28,449 +25,494 @@ The code runs in a separate interpreter with a time limit (see pyrun.py).
 
 import pyrun
 
-PAYMENTS = [{"payment_id": 1, "member": 7, "ride": None, "amount": 1200, "method": "app"},
-            {"payment_id": 2, "member": None, "ride": 410, "amount": 350, "method": "card"},
-            {"payment_id": 3, "member": 9, "ride": None, "amount": 9900, "method": "card"},
-            {"payment_id": 4, "member": None, "ride": 411, "amount": 200, "method": "app"},
-            {"payment_id": 5, "member": 7, "ride": None, "amount": 1200, "method": "app"},
-            {"payment_id": 6, "member": None, "ride": 412, "amount": 250, "method": "app"}]
+BIKES = [{"bike_id": 1, "model": "classic", "acquired": "2024-09-22", "retired": None, "rides": 140, "km": 412.5, "stations": [1, 3, 5, 7]},
+         {"bike_id": 2, "model": "classic", "acquired": "2022-10-31", "retired": "2023-07-27", "rides": 61, "km": 150.2, "stations": [3, 5]},
+         {"bike_id": 3, "model": "electric", "acquired": "2022-02-04", "retired": None, "rides": 388, "km": 1480.9, "stations": [1, 2, 3, 5, 9]},
+         {"bike_id": 4, "model": "cargo", "acquired": "2025-03-15", "retired": None, "rides": 44, "km": 96.0, "stations": [5, 9]},
+         {"bike_id": 5, "model": "electric", "acquired": "2023-06-30", "retired": "2026-01-10", "rides": 275, "km": 1012.4, "stations": [9, 7, 5, 2]},
+         {"bike_id": 6, "model": "cargo", "acquired": "2025-11-02", "retired": None, "rides": 0, "km": 0.0, "stations": []},
+         {"bike_id": 7, "model": "classic", "acquired": "2023-01-19", "retired": None, "rides": 140, "km": 530.0, "stations": [1, 5, 7, 11]}]
 
 EXERCISES = [
-    # ============================================================= 1 One tool
+    # ============================================================= 1 One line
     dict(
-        id=1, ledger="P386", concept="PY3 translate", tier="1 - One tool",
-        title="str.translate(): strip the punctuation", kind="function",
-        func="plain_name",
-        cases=[("St. Mary's-on-Hill",), ("Harbour",), ("",), ("O'Neil Rd.",)],
+        id=1, ledger="P401", concept="PY5 filter by argument", tier="1 - One line",
+        title="The bikes of one model", kind="function",
+        func="ids_by_model",
+        cases=[(BIKES, "classic"), (BIKES, "cargo"), (BIKES, "tandem"), ([], "classic")],
         prompt=(
-            "Write a function `plain_name(name)` that returns the name"
-            " with every '.', apostrophe and '-' removed, by"
-            " name.translate(str.maketrans(\"\", \"\", \".'-\")) -- a"
-            " table whose third argument lists the characters to delete."
-            " No import is needed.\n\n"
-            "  plain_name(\"St. Mary's-on-Hill\") -> \"St MarysonHill\"\n\n"
-            "Return: the new string."
+            "BIKES is a list of dicts, one per bike, with keys bike_id,"
+            " model, acquired, retired (None while the bike is in the"
+            " fleet), rides, km and stations (the station ids the bike"
+            " has reached, in the order it first reached them). Write a"
+            " function `ids_by_model(bikes, model)` that returns the"
+            " bike_ids of the bikes of that model, in list order. One"
+            " list comprehension with an if.\n\n"
+            "  ids_by_model(BIKES, \"classic\") -> [1, 2, 7]\n\n"
+            "Return: a list of ints, possibly empty."
         ),
-        solution="def plain_name(name):\n    return name.translate(str.maketrans(\"\", \"\", \".'-\"))\n",
-        trap="def plain_name(name):\n    return name.replace(\".'-\", \"\")\n",
-        note="replace() looks for the three characters as one SEQUENCE,"
-             " which never occurs, so nothing changes. A translation"
-             " table built with the three-argument maketrans deletes each"
-             " listed character wherever it appears, in one pass. Three"
-             " chained replace() calls would also do it.",
+        solution=("def ids_by_model(bikes, model):\n"
+                  "    return [b[\"bike_id\"] for b in bikes if b[\"model\"] == model]\n"),
+        trap=("def ids_by_model(bikes, model):\n"
+              "    return [b for b in bikes if b[\"model\"] == model]\n"),
+        note="The comprehension's first part is what goes INTO the list,"
+             " and the question asks for ids, not bikes: the trap returns"
+             " the whole dicts. A model nobody has, or an empty list,"
+             " gives [] without any special handling, which is the point"
+             " of a comprehension over a loop with appends.",
     ),
     dict(
-        id=2, ledger="P387", concept="PY3 deque maxlen", tier="1 - One tool",
-        title="deque(maxlen=3): only the last three", kind="function",
-        func="last_three",
-        cases=[([4, 8, 15, 16, 23, 42],), ([1, 2],), ([],), ([7, 7, 7, 7],)],
+        id=2, ledger="P402", concept="PY5 sum of a field", tier="1 - One line",
+        title="How far the fleet has gone", kind="function",
+        func="fleet_km",
+        cases=[(BIKES,), (BIKES[:3],), ([BIKES[5]],), ([],)],
         prompt=(
-            "Write a function `last_three(ride_ids)` that returns a list"
-            " of the last three ids fed to it in order, fewer if there"
-            " were fewer, using collections.deque(ride_ids, maxlen=3) --"
-            " a queue that drops from the left when a fourth item"
-            " arrives -- turned back into a list. Write `from collections"
-            " import deque` as the first line.\n\n"
-            "  last_three([4, 8, 15, 16, 23, 42]) -> [16, 23, 42]\n\n"
-            "Return: the list."
+            "Write a function `fleet_km(bikes)` that returns the"
+            " kilometres every bike has ridden, added up and rounded to"
+            " one decimal -- retired bikes included, since their"
+            " kilometres were ridden. sum() over a generator, inside"
+            " round().\n\n"
+            "  fleet_km(BIKES) -> 3682.0\n\n"
+            "Return: a float."
         ),
-        solution=("from collections import deque\n\n"
-                  "def last_three(ride_ids):\n"
-                  "    return list(deque(ride_ids, maxlen=3))\n"),
-        trap=("from collections import deque\n\n"
-              "def last_three(ride_ids):\n"
-              "    return deque(ride_ids, maxlen=3)\n"),
-        note="A deque with a maxlen keeps only the newest items, which is"
-             " the point; but it is a deque, not a list, and the grader"
-             " asks for a list -- hence list(...) around it. ride_ids[-3:]"
-             " is the slice that does the same for a list already in"
-             " hand; the deque shines when items arrive one at a time.",
+        solution=("def fleet_km(bikes):\n"
+                  "    return round(sum(b[\"km\"] for b in bikes), 1)\n"),
+        trap=("def fleet_km(bikes):\n"
+              "    return round(sum(b[\"km\"] for b in bikes if b[\"retired\"] is None), 1)\n"),
+        note="A total of what has been ridden counts every bike that"
+             " rode; filtering out the retired ones answers a different"
+             " question (how far the CURRENT fleet has gone) and drops"
+             " 1,162.6 km. sum() of nothing is 0, and round(0, 1) is 0 --"
+             " an int, which the grader treats as equal to 0.0 here"
+             " because the reference does the same.",
     ),
     dict(
-        id=3, ledger="P388", concept="PY3 timedelta", tier="1 - One tool",
-        title="timedelta(): the next payment date", kind="function",
-        func="next_due",
-        cases=[("2026-01-31", 30), ("2025-12-15", 30), ("2026-02-28", 1), ("2024-02-28", 365)],
+        id=3, ledger="P403", concept="PY5 None guard in a condition", tier="1 - One line",
+        title="How many bikes were in the fleet that day", kind="function",
+        func="in_service_on",
+        cases=[(BIKES, "2026-06-30"), (BIKES, "2023-03-01"), (BIKES, "2025-10-01"), (BIKES, "2021-01-01")],
         prompt=(
-            "Write a function `next_due(paid_on, days)` that returns the"
-            " date days after paid_on, both as 'YYYY-MM-DD' text:"
-            " date.fromisoformat() to parse, + timedelta(days=days) to"
-            " move, .isoformat() to print. Write `from datetime import"
-            " date, timedelta` as the first line.\n\n"
-            "  next_due(\"2026-01-31\", 30) -> \"2026-03-02\"\n\n"
-            "Return: the new date as text."
+            "Write a function `in_service_on(bikes, day)` that returns"
+            " how many bikes were in the fleet on that day: acquired on"
+            " or before it, and either not retired or retired after it."
+            " Dates are ISO strings, so < and <= compare them correctly."
+            " One sum() of a generator with the two conditions; the"
+            " retired test has to check for None FIRST, because None <"
+            " \"2026\" is a TypeError.\n\n"
+            "  in_service_on(BIKES, \"2026-06-30\") -> 5\n\n"
+            "Return: an int."
         ),
-        solution=("from datetime import date, timedelta\n\n"
-                  "def next_due(paid_on, days):\n"
-                  "    return (date.fromisoformat(paid_on) + timedelta(days=days)).isoformat()\n"),
-        trap=("def next_due(paid_on, days):\n"
-              "    return paid_on[:8] + str(int(paid_on[8:]) + days)\n"),
-        note="Adding to the day number as text gives '2026-01-61': dates"
-             " are not strings, and month ends and leap years are exactly"
-             " what timedelta handles for you. Parse, add, format. str()"
-             " of a date is its ISO form too, so str(d) would also do in"
-             " place of isoformat().",
+        solution=("def in_service_on(bikes, day):\n"
+                  "    return sum(1 for b in bikes\n"
+                  "               if b[\"acquired\"] <= day and (b[\"retired\"] is None or b[\"retired\"] > day))\n"),
+        trap=("def in_service_on(bikes, day):\n"
+              "    return sum(1 for b in bikes if b[\"acquired\"] <= day and b[\"retired\"] > day)\n"),
+        note="Python 3 refuses to compare None with a string, so the"
+             " trap raises TypeError on the first bike still in service."
+             " `is None or ...` short-circuits: when retired is None the"
+             " comparison after the `or` is never evaluated. ISO dates"
+             " sort as strings because the biggest unit comes first,"
+             " which is why no date parsing is needed.",
     ),
     dict(
-        id=4, ledger="P389", concept="PY3 sorted tuple key", tier="1 - One tool",
-        title="sorted() with two keys: dearest first, then by id", kind="function",
-        func="by_fare",
-        cases=[([(3, 200), (1, 350), (2, 200)],), ([],), ([(9, 0)],), ([(5, 100), (4, 100), (6, 100)],)],
+        id=4, ledger="P404", concept="PY5 guarded division", tier="1 - One line",
+        title="Kilometres per ride", kind="function",
+        func="km_per_ride",
+        cases=[(BIKES[0],), (BIKES[2],), (BIKES[5],), (BIKES[3],)],
         prompt=(
-            "Write a function `by_fare(rides)` that takes [ride_id, fare]"
-            " pairs and returns them sorted by fare from highest to"
-            " lowest, ties by ride_id from lowest up, in ONE sorted() call"
-            " whose key is a tuple: key=lambda r: (-r[1], r[0]). No import"
-            " is needed.\n\n"
-            "  by_fare([[3, 200], [1, 350], [2, 200]]) -> [[1, 350],"
-            " [2, 200], [3, 200]]\n\n"
-            "Return: the sorted list."
-        ),
-        solution="def by_fare(rides):\n    return sorted(rides, key=lambda r: (-r[1], r[0]))\n",
-        trap="def by_fare(rides):\n    return sorted(rides, key=lambda r: r[1], reverse=True)\n",
-        note="A tuple key sorts by its first item and breaks ties by the"
-             " second. Negating the fare puts the biggest first while the"
-             " id still rises -- reverse=True would flip BOTH, and tied"
-             " fares stay in the order they arrived -- [3, 200] before"
-             " [2, 200] -- because Python's sort is stable and reverse=True"
-             " does not reverse equal keys.",
-    ),
-    dict(
-        id=5, ledger="P390", concept="PY3 isdigit", tier="1 - One tool",
-        title="str.isdigit(): is it a bike number?", kind="function",
-        func="is_bike_number",
-        cases=[("0042",), ("B12",), ("",), ("7",), ("12 ",)],
-        prompt=(
-            "Write a function `is_bike_number(code)` that returns True"
-            " when the code is made of digits only and is not empty, in"
-            " one call of the string's isdigit() method. No import is"
-            " needed.\n\n"
-            "  is_bike_number(\"0042\") -> True\n\n"
-            "Return: True or False."
-        ),
-        solution="def is_bike_number(code):\n    return code.isdigit()\n",
-        trap="def is_bike_number(code):\n    return code.isalnum()\n",
-        note="isdigit() is True only for a non-empty string of digits;"
-             " isalnum() also accepts letters, so 'B12' passes. A trailing"
-             " space fails both, and the empty string fails both, which is"
-             " what the question wants. int(code) in a try is the other"
-             " way, and accepts '-5'.",
-    ),
-    # ======================================================= 2 A simple loop
-    dict(
-        id=6, ledger="P391", concept="PY4 for vowels", tier="2 - A simple loop",
-        title="How many vowels in a station name", kind="function",
-        func="vowels",
-        cases=[("Botanic Gardens",), ("",), ("Rhythm",), ("AEIOU aeiou",)],
-        prompt=(
-            "Write a function `vowels(name)` that returns how many"
-            " characters of the name are vowels, either case. A for loop"
-            " over the characters, an if on ch.lower() in \"aeiou\", and"
-            " a counter.\n\n"
-            "  vowels(\"Botanic Gardens\") -> 5\n\n"
-            "Return: an integer."
-        ),
-        solution=("def vowels(name):\n"
-                  "    n = 0\n"
-                  "    for ch in name:\n"
-                  "        if ch.lower() in \"aeiou\":\n"
-                  "            n += 1\n"
-                  "    return n\n"),
-        trap=("def vowels(name):\n"
-              "    n = 0\n"
-              "    for ch in name:\n"
-              "        if ch in \"aeiou\":\n"
-              "            n += 1\n"
-              "    return n\n"),
-        note="Without the lower() a capital vowel is missed -- 'AEIOU"
-             " aeiou' counts 5 instead of 10. Testing membership in a"
-             " string of the vowels is shorter than five comparisons, and"
-             " a for over a string visits each character.",
-    ),
-    dict(
-        id=7, ledger="P392", concept="PY4 for interleave", tier="2 - A simple loop",
-        title="Starts and ends, interleaved", kind="function",
-        func="interleave",
-        cases=[(["A", "B", "C"], ["X", "Y", "Z"]), ([], []), (["A"], ["B"]), ([1, 2], [3, 4])],
-        prompt=(
-            "Write a function `interleave(starts, ends)` that takes two"
-            " lists of the SAME length and returns one list alternating"
-            " start, end, start, end. A for loop over range(len(starts))"
-            " appending two items per turn.\n\n"
-            "  interleave([\"A\", \"B\", \"C\"], [\"X\", \"Y\", \"Z\"]) ->"
-            " [\"A\", \"X\", \"B\", \"Y\", \"C\", \"Z\"]\n\n"
-            "Return: the new list."
-        ),
-        solution=("def interleave(starts, ends):\n"
-                  "    out = []\n"
-                  "    for i in range(len(starts)):\n"
-                  "        out.append(starts[i])\n"
-                  "        out.append(ends[i])\n"
-                  "    return out\n"),
-        trap=("def interleave(starts, ends):\n"
-              "    out = []\n"
-              "    for i in range(len(starts)):\n"
-              "        out.append((starts[i], ends[i]))\n"
-              "    return out\n"),
-        note="Two appends per turn make a flat list; appending a tuple"
-             " makes a list of pairs, which is zip, not interleaving. The"
-             " index loop is the plain way; for s, e in zip(starts, ends)"
-             " with the same two appends is the idiomatic one.",
-    ),
-    dict(
-        id=8, ledger="P393", concept="PY4 for running total", tier="2 - A simple loop",
-        title="The balance after each payment", kind="function",
-        func="running_total",
-        cases=[([1200, 350, 200],), ([],), ([5],), ([10, -4, 1],)],
-        prompt=(
-            "Write a function `running_total(amounts)` that returns a list"
-            " of the cumulative total after each amount. A for loop with"
-            " a total that grows and a list that collects it after each"
-            " step.\n\n"
-            "  running_total([1200, 350, 200]) -> [1200, 1550, 1750]\n\n"
-            "Return: the new list."
-        ),
-        solution=("def running_total(amounts):\n"
-                  "    out = []\n"
-                  "    total = 0\n"
-                  "    for a in amounts:\n"
-                  "        total += a\n"
-                  "        out.append(total)\n"
-                  "    return out\n"),
-        trap=("def running_total(amounts):\n"
-              "    out = []\n"
-              "    total = 0\n"
-              "    for a in amounts:\n"
-              "        out.append(total)\n"
-              "        total += a\n"
-              "    return out\n"),
-        note="Add first, then record: the other way round records the"
-             " total BEFORE each amount, starting at 0 and missing the"
-             " last. This is SUM(...) OVER (ORDER BY ...) by hand, and"
-             " itertools.accumulate in one call.",
-    ),
-    dict(
-        id=9, ledger="P394", concept="PY4 for ties at top", tier="2 - A simple loop",
-        title="How many share the longest ride", kind="function",
-        func="ties_at_top",
-        cases=[([30, 45, 12, 45, 45],), ([7],), ([],), ([2, 2],)],
-        prompt=(
-            "Write a function `ties_at_top(minutes)` that returns how"
-            " many entries equal the largest value, 0 for an empty list,"
-            " in ONE for loop: a best that starts as None and a count"
-            " that resets to 1 on a new best and grows by 1 on an"
-            " equal.\n\n"
-            "  ties_at_top([30, 45, 12, 45, 45]) -> 3\n\n"
-            "Return: an integer."
-        ),
-        solution=("def ties_at_top(minutes):\n"
-                  "    best = None\n"
-                  "    count = 0\n"
-                  "    for m in minutes:\n"
-                  "        if best is None or m > best:\n"
-                  "            best = m\n"
-                  "            count = 1\n"
-                  "        elif m == best:\n"
-                  "            count += 1\n"
-                  "    return count\n"),
-        trap=("def ties_at_top(minutes):\n"
-              "    best = None\n"
-              "    count = 0\n"
-              "    for m in minutes:\n"
-              "        if best is None or m >= best:\n"
-              "            best = m\n"
-              "            count += 1\n"
-              "    return count\n"),
-        note="A new best must RESET the count to 1, since the earlier"
-             " entries were ties with a smaller value; with >= and a bare"
-             " += the count keeps the 30 that was best for a moment and"
-             " says 4. minutes.count(max(minutes)) is the two-pass"
-             " version.",
-    ),
-    dict(
-        id=10, ledger="P395", concept="PY4 program bar chart", tier="2 - A simple loop",
-        title="A bar chart of the week", kind="program",
-        prompt=(
-            "Write a program that prints one line per day for this"
-            " dictionary of rides per weekday, in this order:\n\n"
-            "  rides = {\"Mon\": 5647, \"Tue\": 5595, \"Wed\": 5452,"
-            " \"Thu\": 5391, \"Fri\": 5559, \"Sat\": 5433, \"Sun\": 5528}\n\n"
-            "Each line is the day, a space, and one '#' for every full 500"
-            " rides -- rides // 500 of them -- so Monday has eleven."
-            " A for loop over rides.items().\n\n"
-            "Print: seven lines like\n\n"
-            "  Mon ###########"
-        ),
-        solution=("rides = {\"Mon\": 5647, \"Tue\": 5595, \"Wed\": 5452, \"Thu\": 5391,"
-                  " \"Fri\": 5559, \"Sat\": 5433, \"Sun\": 5528}\n"
-                  "for day, n in rides.items():\n"
-                  "    print(day, \"#\" * (n // 500))\n"),
-        trap=("rides = {\"Mon\": 5647, \"Tue\": 5595, \"Wed\": 5452, \"Thu\": 5391,"
-              " \"Fri\": 5559, \"Sat\": 5433, \"Sun\": 5528}\n"
-              "for day, n in rides.items():\n"
-              "    print(day, \"#\" * round(n / 500))\n"),
-        note="'One for every FULL 500' is a floor, which // gives;"
-             " round() takes Wednesday's 10.9, Thursday's 10.8 and"
-             " Saturday's 10.9 UP to eleven bars, one too many each. A"
-             " string times an integer repeats it, and print with two"
-             " arguments puts the space in.",
-    ),
-    # ======================================================== 3 Payment rows
-    dict(
-        id=11, ledger="P396", concept="PY5 sum by key", tier="3 - Payment rows",
-        title="What came in by card and by app", kind="function",
-        func="total_by_method",
-        cases=[(PAYMENTS,), ([],), (PAYMENTS[:2],)],
-        prompt=(
-            "Each payment is a dict with keys payment_id, member (None"
-            " for a casual rider's fare), ride (None for a subscription),"
-            " amount and method. Write a function `total_by_method("
-            "payments)` that returns a dict mapping each method to the"
-            " total amount. A for loop and get(method, 0) + amount.\n\n"
-            "  total_by_method(PAYMENTS) -> {\"app\": 2850, \"card\":"
-            " 10250}\n\n"
-            "Return: the dictionary."
-        ),
-        solution=("def total_by_method(payments):\n"
-                  "    totals = {}\n"
-                  "    for p in payments:\n"
-                  "        totals[p[\"method\"]] = totals.get(p[\"method\"], 0) + p[\"amount\"]\n"
-                  "    return totals\n"),
-        trap=("def total_by_method(payments):\n"
-              "    totals = {}\n"
-              "    for p in payments:\n"
-              "        totals[p[\"method\"]] = totals.get(p[\"method\"], 0) + 1\n"
-              "    return totals\n"),
-        note="+ 1 counts the payments; + amount totals them. The shape is"
-             " the same as every GROUP BY SUM in this track: a dict keyed"
-             " by the group, get(key, 0) to start each one at zero.",
-    ),
-    dict(
-        id=12, ledger="P397", concept="PY5 count None", tier="3 - Payment rows",
-        title="How many were subscriptions", kind="function",
-        func="subscription_count",
-        cases=[(PAYMENTS,), ([],), (PAYMENTS[1:2],), ([{"payment_id": 9, "member": 3, "ride": 0, "amount": 100, "method": "app"}],)],
-        prompt=(
-            "Using the same payment dicts, write a function"
-            " `subscription_count(payments)` that returns how many"
-            " payments are subscriptions -- their ride is None. A for"
-            " loop with an if on p[\"ride\"] is None and a counter. A ride"
-            " id of 0 is a ride.\n\n"
-            "  subscription_count(PAYMENTS) -> 3\n\n"
-            "Return: an integer."
-        ),
-        solution=("def subscription_count(payments):\n"
-                  "    n = 0\n"
-                  "    for p in payments:\n"
-                  "        if p[\"ride\"] is None:\n"
-                  "            n += 1\n"
-                  "    return n\n"),
-        trap=("def subscription_count(payments):\n"
-              "    n = 0\n"
-              "    for p in payments:\n"
-              "        if not p[\"ride\"]:\n"
-              "            n += 1\n"
-              "    return n\n"),
-        note="'is None' asks whether the ride is missing; 'not' is also"
-             " true for 0, so a ride numbered 0 would be counted as a"
-             " subscription. The schema's rule is that a payment names a"
-             " ride or a member, never both: ride IS NULL is the"
-             " subscription test there too.",
-    ),
-    dict(
-        id=13, ledger="P398", concept="PY5 argmax", tier="3 - Payment rows",
-        title="The biggest payment", kind="function",
-        func="biggest_payment_id",
-        cases=[(PAYMENTS,), (PAYMENTS[:2],), (PAYMENTS[3:4],), (PAYMENTS[::4],)],
-        prompt=(
-            "Using the same payment dicts, write a function"
-            " `biggest_payment_id(payments)` that returns the payment_id"
-            " of the largest amount in a non-empty list, the FIRST if"
-            " several tie. A for loop with a best row so far, starting at"
-            " payments[0], replaced only on a strictly bigger amount.\n\n"
-            "  biggest_payment_id(PAYMENTS) -> 3\n\n"
-            "Return: an integer."
-        ),
-        solution=("def biggest_payment_id(payments):\n"
-                  "    best = payments[0]\n"
-                  "    for p in payments:\n"
-                  "        if p[\"amount\"] > best[\"amount\"]:\n"
-                  "            best = p\n"
-                  "    return best[\"payment_id\"]\n"),
-        trap=("def biggest_payment_id(payments):\n"
-              "    best = payments[0]\n"
-              "    for p in payments:\n"
-              "        if p[\"amount\"] >= best[\"amount\"]:\n"
-              "            best = p\n"
-              "    return best[\"payment_id\"]\n"),
-        note="> keeps the first of equals, >= takes the last: payments 1"
-             " and 5 are both 1200, and on a list of just those two the"
-             " trap answers 5. ORDER BY amount DESC, payment_id LIMIT 1"
-             " says the same in SQL.",
-    ),
-    dict(
-        id=14, ledger="P399", concept="PY5 distinct sorted", tier="3 - Payment rows",
-        title="The members who have been billed", kind="function",
-        func="members_billed",
-        cases=[(PAYMENTS,), ([],), (PAYMENTS[1:2],)],
-        prompt=(
-            "Using the same payment dicts, write a function"
-            " `members_billed(payments)` that returns a sorted list of"
-            " the DISTINCT members who appear on a payment, leaving out"
-            " the None of the casual fares. A for loop adding to a set"
-            " under an if, then sorted().\n\n"
-            "  members_billed(PAYMENTS) -> [7, 9]\n\n"
-            "Return: the sorted list."
-        ),
-        solution=("def members_billed(payments):\n"
-                  "    members = set()\n"
-                  "    for p in payments:\n"
-                  "        if p[\"member\"] is not None:\n"
-                  "            members.add(p[\"member\"])\n"
-                  "    return sorted(members)\n"),
-        trap=("def members_billed(payments):\n"
-              "    members = set()\n"
-              "    for p in payments:\n"
-              "        members.add(p[\"member\"])\n"
-              "    return sorted(members)\n"),
-        note="Without the if, None goes into the set and sorted() then"
-             " raises a TypeError, because None and an integer cannot be"
-             " ordered -- the crash, not a wrong list, is what the trap"
-             " produces. Filter the NULLs before sorting, as SQL's ORDER"
-             " BY would quietly have put them first.",
-    ),
-    dict(
-        id=15, ledger="P400", concept="PY5 share", tier="3 - Payment rows",
-        title="What share of payments came by app", kind="function",
-        func="app_share",
-        cases=[(PAYMENTS,), ([],), (PAYMENTS[1:2],), (PAYMENTS[:3],)],
-        prompt=(
-            "Using the same payment dicts, write a function `app_share("
-            "payments)` that returns the percentage of payments whose"
-            " method is 'app', to one decimal, or None for an empty list."
-            " A loop counting the app payments, then 100 * app /"
-            " len(payments) rounded, behind a guard.\n\n"
-            "  app_share(PAYMENTS) -> 66.7\n\n"
+            "Write a function `km_per_ride(bike)` that returns one bike's"
+            " kilometres divided by its rides, rounded to two decimals --"
+            " or None for a bike with no rides. A conditional expression:"
+            " round(...) if bike[\"rides\"] else None.\n\n"
+            "  km_per_ride(BIKES[0]) -> 2.95\n\n"
             "Return: a float, or None."
         ),
-        solution=("def app_share(payments):\n"
-                  "    if not payments:\n"
+        solution=("def km_per_ride(bike):\n"
+                  "    return round(bike[\"km\"] / bike[\"rides\"], 2) if bike[\"rides\"] else None\n"),
+        trap=("def km_per_ride(bike):\n"
+              "    return round(bike[\"km\"] / bike[\"rides\"], 2)\n"),
+        note="Bike 6 has never been ridden, and 0.0 / 0 is a"
+             " ZeroDivisionError, not 0. The guard goes before the"
+             " division, and `if bike[\"rides\"]` is enough because 0 is"
+             " the only falsy count. None says 'no figure'; returning 0"
+             " would claim the bike covers no distance per ride, which is"
+             " a different and wrong thing.",
+    ),
+    dict(
+        id=5, ledger="P405", concept="PY5 all()", tier="1 - One line",
+        title="Has every bike been there?", kind="function",
+        func="all_visited",
+        cases=[(BIKES, 5), ([BIKES[0], BIKES[2]], 1), ([BIKES[0], BIKES[2]], 7), ([], 5)],
+        prompt=(
+            "Write a function `all_visited(bikes, station)` that returns"
+            " True when EVERY bike in the list has reached that station"
+            " -- `station in b[\"stations\"]` for all of them -- and"
+            " False otherwise. all() over a generator; all() of nothing"
+            " is True.\n\n"
+            "  all_visited(BIKES, 5) -> False\n\n"
+            "Return: True or False."
+        ),
+        solution=("def all_visited(bikes, station):\n"
+                  "    return all(station in b[\"stations\"] for b in bikes)\n"),
+        trap=("def all_visited(bikes, station):\n"
+              "    return any(station in b[\"stations\"] for b in bikes)\n"),
+        note="any() is 'at least one', all() is 'every one', and they"
+             " disagree on the full list -- six bikes have reached"
+             " station 5 but bike 6 has reached nowhere -- and on an"
+             " empty list, where all() is True (nothing fails the test)"
+             " and any() is False (nothing passes it). Both stop as soon"
+             " as the answer is known.",
+    ),
+    # ============================================================= 2 One loop
+    dict(
+        id=6, ledger="P406", concept="PY4 for set union", tier="2 - One loop",
+        title="Every station anyone has reached", kind="function",
+        func="all_stations",
+        cases=[(BIKES,), (BIKES[:2],), ([BIKES[5]],), ([BIKES[3], BIKES[4]],)],
+        prompt=(
+            "Write a function `all_stations(bikes)` that returns every"
+            " station id any of the bikes has reached, each once, in"
+            " ascending order. A loop that update()s a set with each"
+            " bike's stations, then sorted().\n\n"
+            "  all_stations(BIKES) -> [1, 2, 3, 5, 7, 9, 11]\n\n"
+            "Return: a sorted list of ints."
+        ),
+        solution=("def all_stations(bikes):\n"
+                  "    seen = set()\n"
+                  "    for b in bikes:\n"
+                  "        seen.update(b[\"stations\"])\n"
+                  "    return sorted(seen)\n"),
+        trap=("def all_stations(bikes):\n"
+              "    seen = []\n"
+              "    for b in bikes:\n"
+              "        seen.extend(b[\"stations\"])\n"
+              "    return sorted(seen)\n"),
+        note="A list keeps every copy, so the trap returns station 5 six"
+             " times. A set keeps one of each, update() adds a whole"
+             " iterable at once, and sorted() turns it back into the"
+             " ordered list the question wants -- a set has no order,"
+             " and the grader would reject one.",
+    ),
+    dict(
+        id=7, ledger="P407", concept="PY4 for set intersection", tier="2 - One loop",
+        title="The stations every bike has reached", kind="function",
+        func="common_stations",
+        cases=[([BIKES[0], BIKES[2], BIKES[4]],), ([BIKES[0], BIKES[5]],), ([BIKES[2]],), ([],)],
+        prompt=(
+            "Write a function `common_stations(bikes)` that returns the"
+            " station ids EVERY bike in the list has reached, in"
+            " ascending order, and [] for an empty list. Start from the"
+            " first bike's stations as a set and intersect"
+            " (`&=` or intersection_update) with each of the others.\n\n"
+            "  common_stations([BIKES[0], BIKES[2], BIKES[4]]) -> [5]\n\n"
+            "Return: a sorted list of ints."
+        ),
+        solution=("def common_stations(bikes):\n"
+                  "    if not bikes:\n"
+                  "        return []\n"
+                  "    common = set(bikes[0][\"stations\"])\n"
+                  "    for b in bikes[1:]:\n"
+                  "        common &= set(b[\"stations\"])\n"
+                  "    return sorted(common)\n"),
+        trap=("def common_stations(bikes):\n"
+              "    common = set()\n"
+              "    for b in bikes:\n"
+              "        common &= set(b[\"stations\"])\n"
+              "    return sorted(common)\n"),
+        note="An intersection has to START from something full: begun"
+             " from the empty set it stays empty whatever is intersected"
+             " into it, so the trap answers [] for every list. The"
+             " empty-list guard is what makes bikes[0] safe to read. A"
+             " union starts from the empty set for the mirror-image"
+             " reason.",
+    ),
+    dict(
+        id=8, ledger="P408", concept="PY4 for count then min of max", tier="2 - One loop",
+        title="The station most bikes have reached", kind="function",
+        func="busiest_station",
+        cases=[(BIKES,), ([BIKES[4], BIKES[0]],), ([BIKES[5]],), ([BIKES[1], BIKES[3]],)],
+        prompt=(
+            "Write a function `busiest_station(bikes)` that returns the"
+            " station id that appears in the most bikes' station lists,"
+            " the SMALLEST id when several tie, or None when no bike has"
+            " reached anywhere. A loop counting each station into a"
+            " dict, then the best: the highest count, and among those"
+            " the lowest id.\n\n"
+            "  busiest_station(BIKES) -> 5\n\n"
+            "Return: an int, or None."
+        ),
+        solution=("def busiest_station(bikes):\n"
+                  "    counts = {}\n"
+                  "    for b in bikes:\n"
+                  "        for s in b[\"stations\"]:\n"
+                  "            counts[s] = counts.get(s, 0) + 1\n"
+                  "    if not counts:\n"
                   "        return None\n"
-                  "    app = 0\n"
-                  "    for p in payments:\n"
-                  "        if p[\"method\"] == \"app\":\n"
-                  "            app += 1\n"
-                  "    return round(100 * app / len(payments), 1)\n"),
-        trap=("def app_share(payments):\n"
-              "    app = 0\n"
-              "    for p in payments:\n"
-              "        if p[\"method\"] == \"app\":\n"
-              "            app += 1\n"
-              "    return round(100 * app / len(payments), 1)\n"),
-        note="The guard is the whole difference: on an empty list"
-             " len(payments) is 0 and the division raises"
-             " ZeroDivisionError. Check for the empty case before any"
-             " arithmetic that depends on the size.",
+                  "    top = max(counts.values())\n"
+                  "    return min(s for s in counts if counts[s] == top)\n"),
+        trap=("def busiest_station(bikes):\n"
+              "    counts = {}\n"
+              "    for b in bikes:\n"
+              "        for s in b[\"stations\"]:\n"
+              "            counts[s] = counts.get(s, 0) + 1\n"
+              "    if not counts:\n"
+              "        return None\n"
+              "    return max(counts, key=counts.get)\n"),
+        note="max(counts, key=counts.get) breaks a tie by whichever key"
+             " was inserted first, which depends on the order the bikes"
+             " are listed in: bikes 5 and 1 together put stations 7 and 5"
+             " on two each, and the trap answers 7 because bike 5's list"
+             " starts with 9, 7. 'Smallest id among the best' is two"
+             " steps -- find the top count, then min() of the keys that"
+             " have it -- or one sorted() with a (-count, id) key.",
+    ),
+    dict(
+        id=9, ledger="P409", concept="PY4 for date span with fallback", tier="2 - One loop",
+        title="The bike that has served longest", kind="function",
+        func="longest_lived",
+        cases=[(BIKES, "2026-06-30"), ([BIKES[1], BIKES[3]], "2026-06-30"), ([BIKES[0], BIKES[4]], "2026-06-30"), ([], "2026-06-30")],
+        prompt=(
+            "Write a function `longest_lived(bikes, today)` that returns"
+            " the bike_id of the bike with the most days between its"
+            " acquisition and its retirement -- or `today` if it has"
+            " not retired -- and None for an empty list. Write `from"
+            " datetime import date` and use date.fromisoformat() on both"
+            " strings; subtracting two dates gives a timedelta whose"
+            " .days is the span. A loop keeping the best so far.\n\n"
+            "  longest_lived(BIKES, \"2026-06-30\") -> 3\n\n"
+            "Return: an int, or None."
+        ),
+        solution=("from datetime import date\n\n"
+                  "def longest_lived(bikes, today):\n"
+                  "    best, best_days = None, -1\n"
+                  "    for b in bikes:\n"
+                  "        end = b[\"retired\"] or today\n"
+                  "        days = (date.fromisoformat(end) - date.fromisoformat(b[\"acquired\"])).days\n"
+                  "        if days > best_days:\n"
+                  "            best, best_days = b[\"bike_id\"], days\n"
+                  "    return best\n"),
+        trap=("def longest_lived(bikes, today):\n"
+              "    best, best_date = None, today\n"
+              "    for b in bikes:\n"
+              "        if b[\"acquired\"] < best_date:\n"
+              "            best, best_date = b[\"bike_id\"], b[\"acquired\"]\n"
+              "    return best\n"),
+        note="Longest-serving is not oldest: bike 2 was acquired before"
+             " bike 4 but retired after nine months, and bike 4 has been"
+             " out for fifteen, so the trap, which only looks at"
+             " acquisition dates, picks 2. `b[\"retired\"] or today` is"
+             " the fallback in one expression, because None is falsy and"
+             " a date string is not.",
+    ),
+    dict(
+        id=10, ledger="P410", concept="PY4 for count by derived key", tier="2 - One loop",
+        title="How many bikes arrived each year", kind="function",
+        func="acquired_by_year",
+        cases=[(BIKES,), (BIKES[:2],), ([],), ([BIKES[3], BIKES[5]],)],
+        prompt=(
+            "Write a function `acquired_by_year(bikes)` that returns a"
+            " dict mapping each year, as an INT, to how many bikes were"
+            " acquired in it. The year is the first four characters of"
+            " the acquired string, so int(b[\"acquired\"][:4]) is the"
+            " key; a loop with get(key, 0) + 1.\n\n"
+            "  acquired_by_year(BIKES) -> {2022: 2, 2023: 2, 2024: 1, 2025: 2}\n\n"
+            "Return: a dict of int to int."
+        ),
+        solution=("def acquired_by_year(bikes):\n"
+                  "    years = {}\n"
+                  "    for b in bikes:\n"
+                  "        y = int(b[\"acquired\"][:4])\n"
+                  "        years[y] = years.get(y, 0) + 1\n"
+                  "    return years\n"),
+        trap=("def acquired_by_year(bikes):\n"
+              "    years = {}\n"
+              "    for b in bikes:\n"
+              "        y = b[\"acquired\"][:4]\n"
+              "        years[y] = years.get(y, 0) + 1\n"
+              "    return years\n"),
+        note="A slice of a string is a string: \"2024\" is a different"
+             " dict key from 2024, so {\"2024\": 1} is not {2024: 1}, and"
+             " the grader keeps the types apart. The key is derived from"
+             " the row, not read from it -- a grouping column that does"
+             " not exist until you compute it, like strftime('%Y') in"
+             " SQL.",
+    ),
+    # ============================================================ 3 Two steps
+    dict(
+        id=11, ledger="P411", concept="PY5 accumulate two values", tier="3 - Two steps",
+        title="Bikes and kilometres per model", kind="function",
+        func="model_summary",
+        cases=[(BIKES,), (BIKES[:2],), ([],), ([BIKES[2], BIKES[4], BIKES[5]],)],
+        prompt=(
+            "Write a function `model_summary(bikes)` that returns a dict"
+            " mapping each model to a two-item LIST: how many bikes of"
+            " that model there are and their kilometres added up, the"
+            " km rounded to one decimal at the end. A loop that creates"
+            " [0, 0.0] for a model the first time it is seen and then"
+            " adds to both items; a second pass rounds the km.\n\n"
+            "  model_summary(BIKES) -> {\"classic\": [3, 1092.7], \"electric\": [2, 2493.3], \"cargo\": [2, 96.0]}\n\n"
+            "Return: a dict of str to [int, float]."
+        ),
+        solution=("def model_summary(bikes):\n"
+                  "    out = {}\n"
+                  "    for b in bikes:\n"
+                  "        if b[\"model\"] not in out:\n"
+                  "            out[b[\"model\"]] = [0, 0.0]\n"
+                  "        out[b[\"model\"]][0] += 1\n"
+                  "        out[b[\"model\"]][1] += b[\"km\"]\n"
+                  "    for m in out:\n"
+                  "        out[m][1] = round(out[m][1], 1)\n"
+                  "    return out\n"),
+        trap=("def model_summary(bikes):\n"
+              "    out = {}\n"
+              "    for b in bikes:\n"
+              "        out[b[\"model\"]] = [1, round(b[\"km\"], 1)]\n"
+              "    return out\n"),
+        note="Assigning a fresh [1, km] on every row overwrites the"
+             " previous one, so the trap reports the LAST bike of each"
+             " model rather than the sum. Two running values per key"
+             " need a container that can be updated in place, which a"
+             " list is and a tuple is not: out[m][0] += 1 would fail on"
+             " a tuple. Rounding goes at the end, once per model, not on"
+             " each addition.",
+    ),
+    dict(
+        id=12, ledger="P412", concept="PY5 sort by two keys and slice", tier="3 - Two steps",
+        title="The most-ridden bikes", kind="function",
+        func="top_n",
+        cases=[(BIKES, 3), ([BIKES[6], BIKES[0]], 2), (BIKES, 1), (BIKES, 0)],
+        prompt=(
+            "Write a function `top_n(bikes, n)` that returns the bike_ids"
+            " of the n most-ridden bikes, most rides first, a tie going"
+            " to the LOWER bike_id. sorted() with key=lambda b:"
+            " (-b[\"rides\"], b[\"bike_id\"]), then take the first n and"
+            " keep only the ids.\n\n"
+            "  top_n(BIKES, 3) -> [3, 5, 1]\n\n"
+            "Return: a list of ints, possibly empty."
+        ),
+        solution=("def top_n(bikes, n):\n"
+                  "    ranked = sorted(bikes, key=lambda b: (-b[\"rides\"], b[\"bike_id\"]))\n"
+                  "    return [b[\"bike_id\"] for b in ranked[:n]]\n"),
+        trap=("def top_n(bikes, n):\n"
+              "    ranked = sorted(bikes, key=lambda b: b[\"rides\"], reverse=True)\n"
+              "    return [b[\"bike_id\"] for b in ranked[:n]]\n"),
+        note="reverse=True keeps equal keys in their ORIGINAL order, so a"
+             " tie is decided by how the list happened to be arranged:"
+             " bikes 7 and 1 both have 140 rides, and listed 7 first the"
+             " trap returns [7, 1]. Negating the count in a tuple key"
+             " sorts rides descending and id ascending in one go, with"
+             " no reverse at all. [:n] on a short list just gives the"
+             " whole list, and [:0] gives [].",
+    ),
+    dict(
+        id=13, ledger="P413", concept="PY5 count and count-if per key", tier="3 - Two steps",
+        title="What share of each model has retired", kind="function",
+        func="retired_share",
+        cases=[(BIKES,), ([BIKES[1], BIKES[4]],), ([BIKES[3], BIKES[5]],), ([],)],
+        prompt=(
+            "Write a function `retired_share(bikes)` that returns a dict"
+            " mapping each model to the percentage of its bikes that"
+            " have retired, to one decimal. Two counts per model -- all"
+            " bikes, retired bikes -- then a second pass dividing: 100 *"
+            " retired / total, rounded to 1.\n\n"
+            "  retired_share(BIKES) -> {\"classic\": 33.3, \"electric\": 50.0, \"cargo\": 0.0}\n\n"
+            "Return: a dict of str to float."
+        ),
+        solution=("def retired_share(bikes):\n"
+                  "    total, gone = {}, {}\n"
+                  "    for b in bikes:\n"
+                  "        m = b[\"model\"]\n"
+                  "        total[m] = total.get(m, 0) + 1\n"
+                  "        gone[m] = gone.get(m, 0) + (b[\"retired\"] is not None)\n"
+                  "    return {m: round(100 * gone[m] / total[m], 1) for m in total}\n"),
+        trap=("def retired_share(bikes):\n"
+              "    total, gone = {}, {}\n"
+              "    for b in bikes:\n"
+              "        m = b[\"model\"]\n"
+              "        total[m] = total.get(m, 0) + 1\n"
+              "        gone[m] = gone.get(m, 0) + (b[\"retired\"] is not None)\n"
+              "    return {m: round(100 * gone[m] / total[m]) for m in total}\n"),
+        note="round(x) with no second argument returns an int -- 33, and"
+             " 50 rather than 50.0 -- and the grader keeps ints and"
+             " floats apart; round(x, 1) returns a float even when the"
+             " decimal is 0. Adding a boolean to a count works because"
+             " True is 1, which is the FILTER-on-an-aggregate idea in"
+             " Python. Every model is in `total`, so no model gets a"
+             " division by zero.",
+    ),
+    dict(
+        id=14, ledger="P414", concept="PY5 bucket then count", tier="3 - Two steps",
+        title="Rides in bands of a hundred", kind="function",
+        func="rides_histogram",
+        cases=[(BIKES, 100), (BIKES, 50), (BIKES[:3], 200), ([], 100)],
+        prompt=(
+            "Write a function `rides_histogram(bikes, width)` that"
+            " returns a dict mapping the START of each band of that"
+            " width to how many bikes fall in it: a bike with 140 rides"
+            " is in band 100 when the width is 100 (140 // 100 * 100)"
+            " and in band 100 when it is 50 too; a bike with 0 rides is"
+            " in band 0. A loop with get(band, 0) + 1; bands no bike"
+            " falls in are absent.\n\n"
+            "  rides_histogram(BIKES, 100) -> {100: 2, 0: 3, 300: 1, 200: 1}\n\n"
+            "Return: a dict of int to int."
+        ),
+        solution=("def rides_histogram(bikes, width):\n"
+                  "    bands = {}\n"
+                  "    for b in bikes:\n"
+                  "        band = b[\"rides\"] // width * width\n"
+                  "        bands[band] = bands.get(band, 0) + 1\n"
+                  "    return bands\n"),
+        trap=("def rides_histogram(bikes, width):\n"
+              "    bands = {}\n"
+              "    for b in bikes:\n"
+              "        band = b[\"rides\"] // width\n"
+              "        bands[band] = bands.get(band, 0) + 1\n"
+              "    return bands\n"),
+        note="rides // width is the band's NUMBER (1 for 140 at width"
+             " 100); multiplying back by the width gives its start (100),"
+             " which is what the question asks for -- the trap's keys"
+             " are 0, 1, 2, 3. Bucketing is a derived key like the year"
+             " in question 10, and the same get(key, 0) + 1 counts into"
+             " it.",
+    ),
+    dict(
+        id=15, ledger="P415", concept="PY5 aggregate then argmax", tier="3 - Two steps",
+        title="The model that goes furthest per bike", kind="function",
+        func="best_model",
+        cases=[(BIKES,), ([BIKES[0], BIKES[1], BIKES[6], BIKES[4]],), ([BIKES[3]],), ([],)],
+        prompt=(
+            "Write a function `best_model(bikes)` that returns the model"
+            " with the highest AVERAGE kilometres per bike -- the model's"
+            " km added up, divided by how many bikes it has -- or None"
+            " for an empty list. First a loop accumulating km and count"
+            " per model, then max() over the models with a key that"
+            " divides the two.\n\n"
+            "  best_model(BIKES) -> \"electric\"\n\n"
+            "Return: a str, or None."
+        ),
+        solution=("def best_model(bikes):\n"
+                  "    km, n = {}, {}\n"
+                  "    for b in bikes:\n"
+                  "        m = b[\"model\"]\n"
+                  "        km[m] = km.get(m, 0.0) + b[\"km\"]\n"
+                  "        n[m] = n.get(m, 0) + 1\n"
+                  "    if not km:\n"
+                  "        return None\n"
+                  "    return max(km, key=lambda m: km[m] / n[m])\n"),
+        trap=("def best_model(bikes):\n"
+              "    km = {}\n"
+              "    for b in bikes:\n"
+              "        km[b[\"model\"]] = km.get(b[\"model\"], 0.0) + b[\"km\"]\n"
+              "    if not km:\n"
+              "        return None\n"
+              "    return max(km, key=km.get)\n"),
+        note="Total and average pick different winners when the groups"
+             " are different sizes: three classics together have 1,092.7"
+             " km against one electric bike's 1,012.4, so by total the"
+             " trap says classic, but per bike the electric wins three"
+             " to one. The average needs the count as well as the sum,"
+             " which is why there are two dicts -- or one dict of"
+             " [sum, count] pairs, as in question 11.",
     ),
 ]
 
