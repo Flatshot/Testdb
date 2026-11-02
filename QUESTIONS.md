@@ -27,17 +27,18 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the fifth set on the bike-hire scheme (6
+Thirty questions in two tracks, the sixth set on the bike-hire scheme (6
 tables, SEED 1206). **Fifteen SQL** at two tools per question, with the
-tiers named by task -- reach and traffic, averages done right, between
-events, names and pairs and first months -- on tools no bike set has used:
-relational division, a CROSS JOIN grid with its zeros, UNION ALL, a median
-by ROW_NUMBER against COUNT, division by 1000.0, a VALUES CTE, a RANGE
-frame over julianday, a correlated scalar subquery, LEAD, SUBSTR with
-INSTR, a self-join with a strict inequality, a LEFT JOIN condition in ON.
-**Three writable** in one statement each. **Fifteen Python**, all
-functions over ONE list of bike dicts, ramping from one line through one
-loop to two steps.
+tiers named by task -- shares and bands, rows that don't line up, scalar
+tools, across the calendar -- on tools no bike set has used: SUM(COUNT(*))
+OVER (), integer division as a GROUP BY key, NULLIF inside AVG, a BETWEEN
+join, LIMIT with OFFSET, HAVING against an aggregate of an aggregate, the
+two-argument MAX and MIN, LENGTH with REPLACE, a GLOB character class,
+conditional sums by year, LAG of the previous end station, strftime('%w').
+**Three writable**: a partial UNIQUE INDEX tested by three driver inserts,
+an UPDATE with a CASE in its SET, and a SAVEPOINT rolled back to. **Fifteen
+Python**, simpler by request: small functions over plain values -- lists
+of numbers, lists of strings, one string, two numbers -- with no dicts.
 
 ### The writable stage
 
@@ -47,45 +48,46 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `UPDATE rides SET fare_cents = 0 FROM members m WHERE ... m.plan = 'annual' ...` | the fares' total and how many rides are free |
-| 14 | `INSERT INTO maintenance (...) SELECT ... FROM bikes b WHERE ... NOT EXISTS (open job)` | jobs, open brakes jobs, bikes with more than one open job |
-| 15 | `DELETE FROM maintenance WHERE job_id IN (ROW_NUMBER() over the OPEN jobs ... rn > 1)` | jobs, open jobs, bikes with more than one open job |
+| 13 | `CREATE UNIQUE INDEX one_fare_per_ride ON payments(ride_id) WHERE ride_id IS NOT NULL` | payments, payments naming a ride, the highest payment_id |
+| 14 | `UPDATE stations SET docks = docks + CASE zone WHEN 'centre' THEN 8 ELSE 4 END WHERE closed_on IS NULL` | each zone's docks |
+| 15 | `DELETE ...; SAVEPOINT s; DELETE FROM maintenance; ROLLBACK TO s; RELEASE s` | jobs of each kind |
 
-None carries a `driver_sql`: all three are graded on what the script leaves
-behind.
+13 carries a `driver_sql`: three inserts, one duplicate fare the index must
+refuse and two subscription payments it must let through, run after your
+script.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1132 | DIV relational division | Riders who know their whole zone | ex 1 | 1 - Reach and traffic |
-| Q1133 | CRS cross join grid | Every kind, every month, zeros included | ex 2 | 1 - Reach and traffic |
-| Q1134 | UNA UNION ALL | Each station's traffic, both ends counted | ex 3 | 1 - Reach and traffic |
-| Q1135 | MED median | The middle ride of each model | ex 4 | 2 - Averages, done right |
-| Q1136 | CST integer division | Kilometres per ride, by zone | ex 5 | 2 - Averages, done right |
-| Q1137 | VAL VALUES CTE | What distance pricing would have raised | ex 6 | 2 - Averages, done right |
-| Q1138 | RNG RANGE frames | A week's worth of rides, by the clock | ex 7 | 3 - Between events |
-| Q1139 | SUB correlated subquery | How soon a mended bike goes out again | ex 8 | 3 - Between events |
-| Q1140 | LEAD LEAD | Days until the bike is back in the shop | ex 9 | 3 - Between events |
-| Q1141 | STR SUBSTR and INSTR | The first names the scheme is full of | ex 10 | 4 - Names, pairs and first months |
-| Q1142 | SLF self-join | Stations that opened together | ex 11 | 4 - Names, pairs and first months |
-| Q1143 | FST LEFT JOIN ON vs WHERE | The first month of membership | ex 12 | 4 - Names, pairs and first months |
-| Q1144 | UPF UPDATE FROM | Short rides go free for annual members **(script)** | ex 13 | 5 - Changing the data |
-| Q1145 | INS INSERT SELECT | A brake check for every cargo bike without a job **(script)** | ex 14 | 5 - Changing the data |
-| Q1146 | DDP DELETE through ROW_NUMBER | One open job per bike **(script)** | ex 15 | 5 - Changing the data |
-| P401 | PY5 filter by argument | The bikes of one model | py 1 | 1 - One line |
-| P402 | PY5 sum of a field | How far the fleet has gone | py 2 | 1 - One line |
-| P403 | PY5 None guard in a condition | How many bikes were in the fleet that day | py 3 | 1 - One line |
-| P404 | PY5 guarded division | Kilometres per ride | py 4 | 1 - One line |
-| P405 | PY5 all() | Has every bike been there? | py 5 | 1 - One line |
-| P406 | PY4 for set union | Every station anyone has reached | py 6 | 2 - One loop |
-| P407 | PY4 for set intersection | The stations every bike has reached | py 7 | 2 - One loop |
-| P408 | PY4 for count then min of max | The station most bikes have reached | py 8 | 2 - One loop |
-| P409 | PY4 for date span with fallback | The bike that has served longest | py 9 | 2 - One loop |
-| P410 | PY4 for count by derived key | How many bikes arrived each year | py 10 | 2 - One loop |
-| P411 | PY5 accumulate two values | Bikes and kilometres per model | py 11 | 3 - Two steps |
-| P412 | PY5 sort by two keys and slice | The most-ridden bikes | py 12 | 3 - Two steps |
-| P413 | PY5 count and count-if per key | What share of each model has retired | py 13 | 3 - Two steps |
-| P414 | PY5 bucket then count | Rides in bands of a hundred | py 14 | 3 - Two steps |
-| P415 | PY5 aggregate then argmax | The model that goes furthest per bike | py 15 | 3 - Two steps |
+| Q1147 | TOT grand total by OVER () | Each zone's share of the rides | ex 1 | 1 - Shares and bands |
+| Q1148 | BKT bucketing by integer division | Rides in kilometre bands | ex 2 | 1 - Shares and bands |
+| Q1149 | NUL NULLIF in an aggregate | What a ride costs when it costs anything | ex 3 | 1 - Shares and bands |
+| Q1150 | NEQ non-equi join | Rides taken while the bike was in the shop | ex 4 | 2 - Rows that don't line up |
+| Q1151 | PAG LIMIT and OFFSET | The second page of members | ex 5 | 2 - Rows that don't line up |
+| Q1152 | HAV HAVING vs nested aggregate | Stations busier than the average station | ex 6 | 2 - Rows that don't line up |
+| Q1153 | SCL scalar MAX and MIN | Days each bike was there to be ridden | ex 7 | 3 - Scalar tools |
+| Q1154 | WRD LENGTH and REPLACE | Words and letters in a station's name | ex 8 | 3 - Scalar tools |
+| Q1155 | GLB GLOB character class | First names that start with a vowel | ex 9 | 3 - Scalar tools |
+| Q1156 | YOY conditional sums by year | This year against last, month by month | ex 10 | 4 - Across the calendar |
+| Q1157 | HOP LAG of another column | How often a bike is moved between rides | ex 11 | 4 - Across the calendar |
+| Q1158 | DOW strftime %w | Members who joined at the weekend | ex 12 | 4 - Across the calendar |
+| Q1159 | UNQ partial unique index | One fare per ride, enforced **(script)** | ex 13 | 5 - Changing the data |
+| Q1160 | UPC UPDATE with CASE | More docks, more in the centre **(script)** | ex 14 | 5 - Changing the data |
+| Q1161 | SAV savepoints | An undo for one statement **(script)** | ex 15 | 5 - Changing the data |
+| P416 | PY3 transform with round | Metres into kilometres | py 1 | 1 - Numbers |
+| P417 | PY3 trimmed mean | The average with the extremes left out | py 2 | 1 - Numbers |
+| P418 | PY3 sorted slice sum | The three biggest fares added up | py 3 | 1 - Numbers |
+| P419 | PY3 max key count | The usual length of a ride | py 4 | 1 - Numbers |
+| P420 | PY3 median by hand | The middle ride | py 5 | 1 - Numbers |
+| P421 | PY3 mask with slice | A card number, hidden | py 6 | 2 - Text |
+| P422 | PY3 validate format | Is it a bike code? | py 7 | 2 - Text |
+| P423 | PY3 slice with marker | A name cut to fit | py 8 | 2 - Text |
+| P424 | PY3 conditional plural | One ride, two rides | py 9 | 2 - Text |
+| P425 | PY3 split and reorder | Surname first, turned round | py 10 | 2 - Text |
+| P426 | PY3 share of total list | Each zone's share, as percentages | py 11 | 3 - Lists |
+| P427 | PY3 chunk and sum | Weekly totals from daily counts | py 12 | 3 - Lists |
+| P428 | PY3 sorted key last word | Members in surname order | py 13 | 3 - Lists |
+| P429 | PY3 max minus min guard | How far apart the fares are | py 14 | 3 - Lists |
+| P430 | PY3 percentage change | Up or down on last year | py 15 | 3 - Lists |
 
 ## Retired
 
@@ -394,6 +396,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1132 | DIV relational division | Riders who know their whole zone | - | retired |
+| Q1133 | CRS cross join grid | Every kind, every month, zeros included | - | retired |
+| Q1134 | UNA UNION ALL | Each station's traffic, both ends counted | - | retired |
+| Q1135 | MED median | The middle ride of each model | - | retired |
+| Q1136 | CST integer division | Kilometres per ride, by zone | - | retired |
+| Q1137 | VAL VALUES CTE | What distance pricing would have raised | - | retired |
+| Q1138 | RNG RANGE frames | A week's worth of rides, by the clock | - | retired |
+| Q1139 | SUB correlated subquery | How soon a mended bike goes out again | - | retired |
+| Q1140 | LEAD LEAD | Days until the bike is back in the shop | - | retired |
+| Q1141 | STR SUBSTR and INSTR | The first names the scheme is full of | - | retired |
+| Q1142 | SLF self-join | Stations that opened together | - | retired |
+| Q1143 | FST LEFT JOIN ON vs WHERE | The first month of membership | - | retired |
+| Q1144 | UPF UPDATE FROM | Short rides go free for annual members **(script)** | - | retired |
+| Q1145 | INS INSERT SELECT | A brake check for every cargo bike without a job **(script)** | - | retired |
+| Q1146 | DDP DELETE through ROW_NUMBER | One open job per bike **(script)** | - | retired |
+| P401 | PY5 filter by argument | The bikes of one model | - | retired |
+| P402 | PY5 sum of a field | How far the fleet has gone | - | retired |
+| P403 | PY5 None guard in a condition | How many bikes were in the fleet that day | - | retired |
+| P404 | PY5 guarded division | Kilometres per ride | - | retired |
+| P405 | PY5 all() | Has every bike been there? | - | retired |
+| P406 | PY4 for set union | Every station anyone has reached | - | retired |
+| P407 | PY4 for set intersection | The stations every bike has reached | - | retired |
+| P408 | PY4 for count then min of max | The station most bikes have reached | - | retired |
+| P409 | PY4 for date span with fallback | The bike that has served longest | - | retired |
+| P410 | PY4 for count by derived key | How many bikes arrived each year | - | retired |
+| P411 | PY5 accumulate two values | Bikes and kilometres per model | - | retired |
+| P412 | PY5 sort by two keys and slice | The most-ridden bikes | - | retired |
+| P413 | PY5 count and count-if per key | What share of each model has retired | - | retired |
+| P414 | PY5 bucket then count | Rides in bands of a hundred | - | retired |
+| P415 | PY5 aggregate then argmax | The model that goes furthest per bike | - | retired |
 | Q1117 | GAP gaps and islands | Each bike's longest run of days in use | - | retired |
 | Q1118 | W1 window frames | A week's average, rolling | - | retired |
 | Q1119 | W1 window frames | The first and last ride of every month | - | retired |
@@ -2089,7 +2121,7 @@ they still count as asked.
   jobs. Python: one-tool functions on str.translate with maketrans,
   deque(maxlen=3), timedelta, sorted with a tuple key and isdigit; four
   single loops and a printed bar-chart program; five over payment dicts.
-- **Q1132-Q1146 and P401-P415** current set, the fifth on the bike-hire
+- **Q1132-Q1146 and P401-P415** retired set, the fifth on the bike-hire
   scheme (SEED 1206). SQL, two tools per question in task-named tiers, on
   tools no bike set had used: members who have started from every station
   of their zone by relational division, a month-by-kind grid with its
@@ -2108,3 +2140,24 @@ they still count as asked.
   count that breaks ties, a date span with a fallback, a derived key),
   and five in two steps (two values per key, a tuple-key sort and slice,
   count and count-if per key, bucketing, aggregate then argmax).
+- **Q1147-Q1161 and P416-P430** current set, the sixth on the bike-hire
+  scheme (SEED 1206). SQL, two tools per question in task-named tiers, on
+  tools no bike set had used: each zone's share of all rides by
+  SUM(COUNT(*)) OVER (), kilometre bands by integer division as the GROUP
+  BY key, the average paid fare by AVG over NULLIF, rides during a job by
+  a BETWEEN join, the second page of members by LIMIT and OFFSET, stations
+  above the average station by HAVING against a nested aggregate, days
+  available in the period by the two-argument MAX and MIN, words and
+  letters by LENGTH and REPLACE, vowel-first names by a GLOB class, the
+  first half of 2026 against 2025 by conditional sums, rebalancing moves
+  by LAG of the previous end station, weekend joiners by strftime('%w')
+  -- and three writable: a partial UNIQUE INDEX that refuses a second
+  fare for a ride, an UPDATE whose SET holds a CASE on zone, and a
+  SAVEPOINT that undoes one DELETE and keeps the one before it. Python,
+  simpler by request: fifteen functions over plain values, no dicts --
+  numbers (a conversion with round, a trimmed mean, the top three summed,
+  the commonest value with ties to the smallest, a median by hand), text
+  (a card number masked, a bike code validated, a name cut to fit, a
+  plural, a surname-first name turned round) and lists (shares of a
+  total, weekly totals from daily counts, names by surname, a spread with
+  a guard, a percentage change with a guard).
