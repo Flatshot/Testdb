@@ -27,18 +27,19 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the sixth set on the bike-hire scheme (6
+Thirty questions in two tracks, the seventh set on the bike-hire scheme (6
 tables, SEED 1206). **Fifteen SQL** at two tools per question, with the
-tiers named by task -- shares and bands, rows that don't line up, scalar
-tools, across the calendar -- on tools no bike set has used: SUM(COUNT(*))
-OVER (), integer division as a GROUP BY key, NULLIF inside AVG, a BETWEEN
-join, LIMIT with OFFSET, HAVING against an aggregate of an aggregate, the
-two-argument MAX and MIN, LENGTH with REPLACE, a GLOB character class,
-conditional sums by year, LAG of the previous end station, strftime('%w').
-**Three writable**: a partial UNIQUE INDEX tested by three driver inserts,
-an UPDATE with a CASE in its SET, and a SAVEPOINT rolled back to. **Fifteen
-Python**, simpler by request: small functions over plain values -- lists
-of numbers, lists of strings, one string, two numbers -- with no dicts.
+tiers named by task -- ties, pages and matches; counting what's distinct;
+shaping the output; the calendar, differently -- on tools no bike set has
+used: DENSE_RANK with its ties kept, a row-value comparison for a keyset
+page, EXISTS as a semi-join, COUNT(DISTINCT) against COUNT, one CTE read
+twice, TOTAL where SUM gives NULL, json_group_object, printf with UPPER,
+GROUP_CONCAT(DISTINCT ... ORDER BY), the 'start of month' modifier, 'HH:MM'
+text compared, MAX minus MIN inside a CTE. **Three writable**: a WITH in
+front of a DELETE, an INSERT OR IGNORE, and an ALTER TABLE that renames
+one column and drops another. **Fifteen Python**, at the simpler level of
+the last set: small functions over plain values, no dicts, on constructs
+that set did not use.
 
 ### The writable stage
 
@@ -48,46 +49,45 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `CREATE UNIQUE INDEX one_fare_per_ride ON payments(ride_id) WHERE ride_id IS NOT NULL` | payments, payments naming a ride, the highest payment_id |
-| 14 | `UPDATE stations SET docks = docks + CASE zone WHEN 'centre' THEN 8 ELSE 4 END WHERE closed_on IS NULL` | each zone's docks |
-| 15 | `DELETE ...; SAVEPOINT s; DELETE FROM maintenance; ROLLBACK TO s; RELEASE s` | jobs of each kind |
+| 13 | `WITH short AS (...) DELETE FROM payments WHERE ride_id IN (SELECT ride_id FROM short)` | payments remaining, and how many name a ride |
+| 14 | `INSERT OR IGNORE INTO stations (...) VALUES (...), (...), (...)` | stations, the highest station_id, whether Canal Basin is in |
+| 15 | `ALTER TABLE members RENAME COLUMN ...; ALTER TABLE members DROP COLUMN ...` | the table's column names from pragma_table_info |
 
-13 carries a `driver_sql`: three inserts, one duplicate fare the index must
-refuse and two subscription payments it must let through, run after your
-script.
+None carries a `driver_sql`: all three are graded on what the script leaves
+behind.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1147 | TOT grand total by OVER () | Each zone's share of the rides | ex 1 | 1 - Shares and bands |
-| Q1148 | BKT bucketing by integer division | Rides in kilometre bands | ex 2 | 1 - Shares and bands |
-| Q1149 | NUL NULLIF in an aggregate | What a ride costs when it costs anything | ex 3 | 1 - Shares and bands |
-| Q1150 | NEQ non-equi join | Rides taken while the bike was in the shop | ex 4 | 2 - Rows that don't line up |
-| Q1151 | PAG LIMIT and OFFSET | The second page of members | ex 5 | 2 - Rows that don't line up |
-| Q1152 | HAV HAVING vs nested aggregate | Stations busier than the average station | ex 6 | 2 - Rows that don't line up |
-| Q1153 | SCL scalar MAX and MIN | Days each bike was there to be ridden | ex 7 | 3 - Scalar tools |
-| Q1154 | WRD LENGTH and REPLACE | Words and letters in a station's name | ex 8 | 3 - Scalar tools |
-| Q1155 | GLB GLOB character class | First names that start with a vowel | ex 9 | 3 - Scalar tools |
-| Q1156 | YOY conditional sums by year | This year against last, month by month | ex 10 | 4 - Across the calendar |
-| Q1157 | HOP LAG of another column | How often a bike is moved between rides | ex 11 | 4 - Across the calendar |
-| Q1158 | DOW strftime %w | Members who joined at the weekend | ex 12 | 4 - Across the calendar |
-| Q1159 | UNQ partial unique index | One fare per ride, enforced **(script)** | ex 13 | 5 - Changing the data |
-| Q1160 | UPC UPDATE with CASE | More docks, more in the centre **(script)** | ex 14 | 5 - Changing the data |
-| Q1161 | SAV savepoints | An undo for one statement **(script)** | ex 15 | 5 - Changing the data |
-| P416 | PY3 transform with round | Metres into kilometres | py 1 | 1 - Numbers |
-| P417 | PY3 trimmed mean | The average with the extremes left out | py 2 | 1 - Numbers |
-| P418 | PY3 sorted slice sum | The three biggest fares added up | py 3 | 1 - Numbers |
-| P419 | PY3 max key count | The usual length of a ride | py 4 | 1 - Numbers |
-| P420 | PY3 median by hand | The middle ride | py 5 | 1 - Numbers |
-| P421 | PY3 mask with slice | A card number, hidden | py 6 | 2 - Text |
-| P422 | PY3 validate format | Is it a bike code? | py 7 | 2 - Text |
-| P423 | PY3 slice with marker | A name cut to fit | py 8 | 2 - Text |
-| P424 | PY3 conditional plural | One ride, two rides | py 9 | 2 - Text |
-| P425 | PY3 split and reorder | Surname first, turned round | py 10 | 2 - Text |
-| P426 | PY3 share of total list | Each zone's share, as percentages | py 11 | 3 - Lists |
-| P427 | PY3 chunk and sum | Weekly totals from daily counts | py 12 | 3 - Lists |
-| P428 | PY3 sorted key last word | Members in surname order | py 13 | 3 - Lists |
-| P429 | PY3 max minus min guard | How far apart the fares are | py 14 | 3 - Lists |
-| P430 | PY3 percentage change | Up or down on last year | py 15 | 3 - Lists |
+| Q1162 | DRK DENSE_RANK with ties | The busiest bikes, ties and all | ex 1 | 1 - Ties, pages and matches |
+| Q1163 | ROWV row-value keyset page | The next page of rides, keyset style | ex 2 | 1 - Ties, pages and matches |
+| Q1164 | SEMI EXISTS semi-join | Members who have tried a cargo bike | ex 3 | 1 - Ties, pages and matches |
+| Q1165 | CDV COUNT DISTINCT | Riders against rides at each station | ex 4 | 2 - Counting what's distinct |
+| Q1166 | CTE2 one CTE used twice | Each month against the average month | ex 5 | 2 - Counting what's distinct |
+| Q1167 | TTL TOTAL vs SUM | June's fares at every station, zero included | ex 6 | 2 - Counting what's distinct |
+| Q1168 | JGO json_group_object | Each station's jobs, as one JSON object | ex 7 | 3 - Shaping the output |
+| Q1169 | CONC printf and UPPER | Fleet labels for the cargo bikes | ex 8 | 3 - Shaping the output |
+| Q1170 | GCD GROUP_CONCAT DISTINCT | What has gone wrong with each bike | ex 9 | 3 - Shaping the output |
+| Q1171 | SOM start of month modifier | Joined in the last three days of a month | ex 10 | 4 - The calendar, differently |
+| Q1172 | RSH HH:MM text compare | The morning rush, zone by zone | ex 11 | 4 - The calendar, differently |
+| Q1173 | SPN MAX minus MIN per group | How long each rider has been riding | ex 12 | 4 - The calendar, differently |
+| Q1174 | WDEL WITH before DELETE | Refund the rides that never really happened **(script)** | ex 13 | 5 - Changing the data |
+| Q1175 | IGN INSERT OR IGNORE | New stations from a list, skipping the ones we have **(script)** | ex 14 | 5 - Changing the data |
+| Q1176 | ALT2 RENAME and DROP COLUMN | A column renamed and a column dropped **(script)** | ex 15 | 5 - Changing the data |
+| P431 | PY3 ceiling by floor division | Billed to the next half hour | py 1 | 1 - Numbers |
+| P432 | PY3 if/elif tiers | A fare in three tiers | py 2 | 1 - Numbers |
+| P433 | PY3 two-pass std dev | How much ride lengths vary | py 3 | 1 - Numbers |
+| P434 | PY3 fair split with remainder | A group fare split fairly | py 4 | 1 - Numbers |
+| P435 | PY3 unbroken run check | Are the ride ids unbroken? | py 5 | 1 - Numbers |
+| P436 | PY3 ordinal suffix | 1st, 2nd, 3rd, 11th | py 6 | 2 - Text |
+| P437 | PY3 slug | A station name as a web address | py 7 | 2 - Text |
+| P438 | PY3 validate a clock time | Is it a time of day? | py 8 | 2 - Text |
+| P439 | PY3 replace with computed string | A word blanked out | py 9 | 2 - Text |
+| P440 | PY3 common prefix by loop | Where two names stop agreeing | py 10 | 2 - Text |
+| P441 | PY3 nested comprehension flatten | Every stop on every route, in one list | py 11 | 3 - Lists |
+| P442 | PY3 rotate by slices | The rota, rotated | py 12 | 3 - Lists |
+| P443 | PY3 weighted average over zip | An average that counts the busy stations more | py 13 | 3 - Lists |
+| P444 | PY3 moving average by windows | A smoothed line of daily rides | py 14 | 3 - Lists |
+| P445 | PY3 set difference against range | The ride ids missing from the log | py 15 | 3 - Lists |
 
 ## Retired
 
@@ -396,6 +396,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1147 | TOT grand total by OVER () | Each zone's share of the rides | - | retired |
+| Q1148 | BKT bucketing by integer division | Rides in kilometre bands | - | retired |
+| Q1149 | NUL NULLIF in an aggregate | What a ride costs when it costs anything | - | retired |
+| Q1150 | NEQ non-equi join | Rides taken while the bike was in the shop | - | retired |
+| Q1151 | PAG LIMIT and OFFSET | The second page of members | - | retired |
+| Q1152 | HAV HAVING vs nested aggregate | Stations busier than the average station | - | retired |
+| Q1153 | SCL scalar MAX and MIN | Days each bike was there to be ridden | - | retired |
+| Q1154 | WRD LENGTH and REPLACE | Words and letters in a station's name | - | retired |
+| Q1155 | GLB GLOB character class | First names that start with a vowel | - | retired |
+| Q1156 | YOY conditional sums by year | This year against last, month by month | - | retired |
+| Q1157 | HOP LAG of another column | How often a bike is moved between rides | - | retired |
+| Q1158 | DOW strftime %w | Members who joined at the weekend | - | retired |
+| Q1159 | UNQ partial unique index | One fare per ride, enforced **(script)** | - | retired |
+| Q1160 | UPC UPDATE with CASE | More docks, more in the centre **(script)** | - | retired |
+| Q1161 | SAV savepoints | An undo for one statement **(script)** | - | retired |
+| P416 | PY3 transform with round | Metres into kilometres | - | retired |
+| P417 | PY3 trimmed mean | The average with the extremes left out | - | retired |
+| P418 | PY3 sorted slice sum | The three biggest fares added up | - | retired |
+| P419 | PY3 max key count | The usual length of a ride | - | retired |
+| P420 | PY3 median by hand | The middle ride | - | retired |
+| P421 | PY3 mask with slice | A card number, hidden | - | retired |
+| P422 | PY3 validate format | Is it a bike code? | - | retired |
+| P423 | PY3 slice with marker | A name cut to fit | - | retired |
+| P424 | PY3 conditional plural | One ride, two rides | - | retired |
+| P425 | PY3 split and reorder | Surname first, turned round | - | retired |
+| P426 | PY3 share of total list | Each zone's share, as percentages | - | retired |
+| P427 | PY3 chunk and sum | Weekly totals from daily counts | - | retired |
+| P428 | PY3 sorted key last word | Members in surname order | - | retired |
+| P429 | PY3 max minus min guard | How far apart the fares are | - | retired |
+| P430 | PY3 percentage change | Up or down on last year | - | retired |
 | Q1132 | DIV relational division | Riders who know their whole zone | - | retired |
 | Q1133 | CRS cross join grid | Every kind, every month, zeros included | - | retired |
 | Q1134 | UNA UNION ALL | Each station's traffic, both ends counted | - | retired |
@@ -2140,7 +2170,7 @@ they still count as asked.
   count that breaks ties, a date span with a fallback, a derived key),
   and five in two steps (two values per key, a tuple-key sort and slice,
   count and count-if per key, bucketing, aggregate then argmax).
-- **Q1147-Q1161 and P416-P430** current set, the sixth on the bike-hire
+- **Q1147-Q1161 and P416-P430** retired set, the sixth on the bike-hire
   scheme (SEED 1206). SQL, two tools per question in task-named tiers, on
   tools no bike set had used: each zone's share of all rides by
   SUM(COUNT(*)) OVER (), kilometre bands by integer division as the GROUP
@@ -2161,3 +2191,24 @@ they still count as asked.
   plural, a surname-first name turned round) and lists (shares of a
   total, weekly totals from daily counts, names by surname, a spread with
   a guard, a percentage change with a guard).
+- **Q1162-Q1176 and P431-P445** current set, the seventh on the bike-hire
+  scheme (SEED 1206). SQL, two tools per question in task-named tiers, on
+  tools no bike set had used: the busiest bikes with ties kept by
+  DENSE_RANK, the next page of rides by a row-value comparison, members
+  who have ridden a cargo bike by EXISTS where a join counts rides, riders
+  against rides by COUNT(DISTINCT), each month against the average month
+  by one CTE used twice, June fares at every station by TOTAL where SUM
+  gives NULL, a JSON object per station by json_group_object, fleet labels
+  by printf and UPPER, each bike's job kinds by GROUP_CONCAT(DISTINCT ...
+  ORDER BY), the last three days of a month by 'start of month', the
+  rush hour by comparing 'HH:MM' text, riders' active spans by MAX minus
+  MIN in a CTE -- and three writable: a WITH in front of a DELETE, an
+  INSERT OR IGNORE that skips existing names, and an ALTER TABLE that
+  renames one column and drops another. Python, plain values again on new
+  constructs: numbers (a ceiling by floor division of a negative, a fare
+  in tiers, a two-pass standard deviation, a fair split with the
+  remainder spread, an unbroken-run check), text (an ordinal suffix, a
+  slug, a clock time validated with int(), a word blanked with stars of
+  its own length, a common prefix by loop) and lists (a nested
+  comprehension, a rotation by two slices, a weighted average over zip, a
+  moving average by windowed slices, missing ids by set difference).
