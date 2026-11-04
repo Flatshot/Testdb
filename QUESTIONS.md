@@ -27,19 +27,20 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the seventh set on the bike-hire scheme (6
+Thirty questions in two tracks, the eighth set on the bike-hire scheme (6
 tables, SEED 1206). **Fifteen SQL** at two tools per question, with the
-tiers named by task -- ties, pages and matches; counting what's distinct;
-shaping the output; the calendar, differently -- on tools no bike set has
-used: DENSE_RANK with its ties kept, a row-value comparison for a keyset
-page, EXISTS as a semi-join, COUNT(DISTINCT) against COUNT, one CTE read
-twice, TOTAL where SUM gives NULL, json_group_object, printf with UPPER,
-GROUP_CONCAT(DISTINCT ... ORDER BY), the 'start of month' modifier, 'HH:MM'
-text compared, MAX minus MIN inside a CTE. **Three writable**: a WITH in
-front of a DELETE, an INSERT OR IGNORE, and an ALTER TABLE that renames
-one column and drops another. **Fifteen Python**, at the simpler level of
-the last set: small functions over plain values, no dicts, on constructs
-that set did not use.
+tiers named by task -- nearest and next; text and type; per group, per
+station; ratios and buckets -- on tools no bike set has used: NTH_VALUE
+with the frame opened, EXCLUDE CURRENT ROW, a correlated MAX for the
+latest row per group, MIN and MAX on text, COLLATE NOCASE, typeof, a
+correlated ORDER BY ... LIMIT, a first-per-member CTE under a running sum,
+a self-join on two columns, a ratio of sums, GROUP BY a boolean, quarters
+by integer arithmetic. From this set on the prompts name the tool but do
+not write the statement. **Three writable**: an INSTEAD OF DELETE trigger
+on a view, a CREATE TABLE ... AS SELECT snapshot, and a table whose
+DEFAULTs fill in what an INSERT leaves out. **Fifteen Python**, easier by
+request: everyday tasks over plain lists and strings, no maths beyond
+adding and taking away, no dicts.
 
 ### The writable stage
 
@@ -49,45 +50,45 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `WITH short AS (...) DELETE FROM payments WHERE ride_id IN (SELECT ride_id FROM short)` | payments remaining, and how many name a ride |
-| 14 | `INSERT OR IGNORE INTO stations (...) VALUES (...), (...), (...)` | stations, the highest station_id, whether Canal Basin is in |
-| 15 | `ALTER TABLE members RENAME COLUMN ...; ALTER TABLE members DROP COLUMN ...` | the table's column names from pragma_table_info |
+| 13 | `CREATE VIEW open_jobs ...; CREATE TRIGGER ... INSTEAD OF DELETE ON open_jobs BEGIN UPDATE ... END` | job 9's fixed_at, the job count, the open count |
+| 14 | `CREATE TABLE bike_stats AS SELECT ... two scalar subqueries ...` | rows, and the rides and jobs added up |
+| 15 | `CREATE TABLE incidents (... NOT NULL DEFAULT ... CHECK ...)` | the rows that got in, all five columns |
 
-None carries a `driver_sql`: all three are graded on what the script leaves
-behind.
+13 and 15 carry a `driver_sql`: two DELETEs from the view, and three
+INSERTs of which the last must be refused, run after your script.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1162 | DRK DENSE_RANK with ties | The busiest bikes, ties and all | ex 1 | 1 - Ties, pages and matches |
-| Q1163 | ROWV row-value keyset page | The next page of rides, keyset style | ex 2 | 1 - Ties, pages and matches |
-| Q1164 | SEMI EXISTS semi-join | Members who have tried a cargo bike | ex 3 | 1 - Ties, pages and matches |
-| Q1165 | CDV COUNT DISTINCT | Riders against rides at each station | ex 4 | 2 - Counting what's distinct |
-| Q1166 | CTE2 one CTE used twice | Each month against the average month | ex 5 | 2 - Counting what's distinct |
-| Q1167 | TTL TOTAL vs SUM | June's fares at every station, zero included | ex 6 | 2 - Counting what's distinct |
-| Q1168 | JGO json_group_object | Each station's jobs, as one JSON object | ex 7 | 3 - Shaping the output |
-| Q1169 | CONC printf and UPPER | Fleet labels for the cargo bikes | ex 8 | 3 - Shaping the output |
-| Q1170 | GCD GROUP_CONCAT DISTINCT | What has gone wrong with each bike | ex 9 | 3 - Shaping the output |
-| Q1171 | SOM start of month modifier | Joined in the last three days of a month | ex 10 | 4 - The calendar, differently |
-| Q1172 | RSH HH:MM text compare | The morning rush, zone by zone | ex 11 | 4 - The calendar, differently |
-| Q1173 | SPN MAX minus MIN per group | How long each rider has been riding | ex 12 | 4 - The calendar, differently |
-| Q1174 | WDEL WITH before DELETE | Refund the rides that never really happened **(script)** | ex 13 | 5 - Changing the data |
-| Q1175 | IGN INSERT OR IGNORE | New stations from a list, skipping the ones we have **(script)** | ex 14 | 5 - Changing the data |
-| Q1176 | ALT2 RENAME and DROP COLUMN | A column renamed and a column dropped **(script)** | ex 15 | 5 - Changing the data |
-| P431 | PY3 ceiling by floor division | Billed to the next half hour | py 1 | 1 - Numbers |
-| P432 | PY3 if/elif tiers | A fare in three tiers | py 2 | 1 - Numbers |
-| P433 | PY3 two-pass std dev | How much ride lengths vary | py 3 | 1 - Numbers |
-| P434 | PY3 fair split with remainder | A group fare split fairly | py 4 | 1 - Numbers |
-| P435 | PY3 unbroken run check | Are the ride ids unbroken? | py 5 | 1 - Numbers |
-| P436 | PY3 ordinal suffix | 1st, 2nd, 3rd, 11th | py 6 | 2 - Text |
-| P437 | PY3 slug | A station name as a web address | py 7 | 2 - Text |
-| P438 | PY3 validate a clock time | Is it a time of day? | py 8 | 2 - Text |
-| P439 | PY3 replace with computed string | A word blanked out | py 9 | 2 - Text |
-| P440 | PY3 common prefix by loop | Where two names stop agreeing | py 10 | 2 - Text |
-| P441 | PY3 nested comprehension flatten | Every stop on every route, in one list | py 11 | 3 - Lists |
-| P442 | PY3 rotate by slices | The rota, rotated | py 12 | 3 - Lists |
-| P443 | PY3 weighted average over zip | An average that counts the busy stations more | py 13 | 3 - Lists |
-| P444 | PY3 moving average by windows | A smoothed line of daily rides | py 14 | 3 - Lists |
-| P445 | PY3 set difference against range | The ride ids missing from the log | py 15 | 3 - Lists |
+| Q1177 | NTH NTH_VALUE | The runner-up station in each zone | ex 1 | 1 - Nearest and next |
+| Q1178 | EXC EXCLUDE CURRENT ROW | Each bike against its model-mates | ex 2 | 1 - Nearest and next |
+| Q1179 | GNG correlated MAX per group | Each member's latest ride | ex 3 | 1 - Nearest and next |
+| Q1180 | TXTAGG MIN and MAX on text | First and last in the register, by plan | ex 4 | 2 - Text and type |
+| Q1181 | COL COLLATE NOCASE | The Uddins, however the name was typed | ex 5 | 2 - Text and type |
+| Q1182 | TYP typeof | What the rides table actually holds | ex 6 | 2 - Text and type |
+| Q1183 | CLIM correlated ORDER BY LIMIT | The three latest jobs at each station | ex 7 | 3 - Per group, per station |
+| Q1184 | NEWR first per member then running sum | New riders by month, and the running total | ex 8 | 3 - Per group, per station |
+| Q1185 | SLF2 self-join on two columns | Family at the same station | ex 9 | 3 - Per group, per station |
+| Q1186 | RSUM ratio of sums | What a kilometre costs, by plan | ex 10 | 4 - Ratios and buckets |
+| Q1187 | GRPB GROUP BY a boolean | Members and casuals, model by model | ex 11 | 4 - Ratios and buckets |
+| Q1188 | QTR quarters by integer arithmetic | Rides and fares by quarter | ex 12 | 4 - Ratios and buckets |
+| Q1189 | IOT INSTEAD OF trigger | Deleting from the open-jobs view closes the job **(script)** | ex 13 | 5 - Changing the data |
+| Q1190 | CTAS CREATE TABLE AS SELECT | A snapshot table of every bike's record **(script)** | ex 14 | 5 - Changing the data |
+| Q1191 | DEF DEFAULT values | A table that fills in what you leave out **(script)** | ex 15 | 5 - Changing the data |
+| P446 | PY4 all positions of a value | Every time the bike stopped at Harbour | py 1 | 1 - Counting and finding |
+| P447 | PY4 nth occurrence | The second visit | py 2 | 1 - Counting and finding |
+| P448 | PY4 missing with order kept | The bikes that did not come back | py 3 | 1 - Counting and finding |
+| P449 | PY4 order of two values | Did it reach Harbour before Stadium? | py 4 | 1 - Counting and finding |
+| P450 | PY3 count words | How many words in the name | py 5 | 1 - Counting and finding |
+| P451 | PY3 initial and surname | A name shortened for a badge | py 6 | 2 - Labels |
+| P452 | PY3 join with and | A list of names, with an 'and' | py 7 | 2 - Labels |
+| P453 | PY3 first character test | Does the name start with a vowel? | py 8 | 2 - Labels |
+| P454 | PY3 conditional upper | Shout it if it is urgent | py 9 | 2 - Labels |
+| P455 | PY3 minutes label | Minutes as hours and minutes | py 10 | 2 - Labels |
+| P456 | PY4 split into two lists | Short rides and long rides, sorted into two piles | py 11 | 3 - Checks and filters |
+| P457 | PY4 first and last with guard | Where the day began and ended | py 12 | 3 - Checks and filters |
+| P458 | PY4 round trip check | Was it a round trip? | py 13 | 3 - Checks and filters |
+| P459 | PY4 strip and upper each | Bike codes typed by hand, tidied | py 14 | 3 - Checks and filters |
+| P460 | PY4 keep within a range | Only the ids the fleet actually has | py 15 | 3 - Checks and filters |
 
 ## Retired
 
@@ -396,6 +397,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1162 | DRK DENSE_RANK with ties | The busiest bikes, ties and all | - | retired |
+| Q1163 | ROWV row-value keyset page | The next page of rides, keyset style | - | retired |
+| Q1164 | SEMI EXISTS semi-join | Members who have tried a cargo bike | - | retired |
+| Q1165 | CDV COUNT DISTINCT | Riders against rides at each station | - | retired |
+| Q1166 | CTE2 one CTE used twice | Each month against the average month | - | retired |
+| Q1167 | TTL TOTAL vs SUM | June's fares at every station, zero included | - | retired |
+| Q1168 | JGO json_group_object | Each station's jobs, as one JSON object | - | retired |
+| Q1169 | CONC printf and UPPER | Fleet labels for the cargo bikes | - | retired |
+| Q1170 | GCD GROUP_CONCAT DISTINCT | What has gone wrong with each bike | - | retired |
+| Q1171 | SOM start of month modifier | Joined in the last three days of a month | - | retired |
+| Q1172 | RSH HH:MM text compare | The morning rush, zone by zone | - | retired |
+| Q1173 | SPN MAX minus MIN per group | How long each rider has been riding | - | retired |
+| Q1174 | WDEL WITH before DELETE | Refund the rides that never really happened **(script)** | - | retired |
+| Q1175 | IGN INSERT OR IGNORE | New stations from a list, skipping the ones we have **(script)** | - | retired |
+| Q1176 | ALT2 RENAME and DROP COLUMN | A column renamed and a column dropped **(script)** | - | retired |
+| P431 | PY3 ceiling by floor division | Billed to the next half hour | - | retired |
+| P432 | PY3 if/elif tiers | A fare in three tiers | - | retired |
+| P433 | PY3 two-pass std dev | How much ride lengths vary | - | retired |
+| P434 | PY3 fair split with remainder | A group fare split fairly | - | retired |
+| P435 | PY3 unbroken run check | Are the ride ids unbroken? | - | retired |
+| P436 | PY3 ordinal suffix | 1st, 2nd, 3rd, 11th | - | retired |
+| P437 | PY3 slug | A station name as a web address | - | retired |
+| P438 | PY3 validate a clock time | Is it a time of day? | - | retired |
+| P439 | PY3 replace with computed string | A word blanked out | - | retired |
+| P440 | PY3 common prefix by loop | Where two names stop agreeing | - | retired |
+| P441 | PY3 nested comprehension flatten | Every stop on every route, in one list | - | retired |
+| P442 | PY3 rotate by slices | The rota, rotated | - | retired |
+| P443 | PY3 weighted average over zip | An average that counts the busy stations more | - | retired |
+| P444 | PY3 moving average by windows | A smoothed line of daily rides | - | retired |
+| P445 | PY3 set difference against range | The ride ids missing from the log | - | retired |
 | Q1147 | TOT grand total by OVER () | Each zone's share of the rides | - | retired |
 | Q1148 | BKT bucketing by integer division | Rides in kilometre bands | - | retired |
 | Q1149 | NUL NULLIF in an aggregate | What a ride costs when it costs anything | - | retired |
@@ -2191,7 +2222,7 @@ they still count as asked.
   plural, a surname-first name turned round) and lists (shares of a
   total, weekly totals from daily counts, names by surname, a spread with
   a guard, a percentage change with a guard).
-- **Q1162-Q1176 and P431-P445** current set, the seventh on the bike-hire
+- **Q1162-Q1176 and P431-P445** retired set, the seventh on the bike-hire
   scheme (SEED 1206). SQL, two tools per question in task-named tiers, on
   tools no bike set had used: the busiest bikes with ties kept by
   DENSE_RANK, the next page of rides by a row-value comparison, members
@@ -2212,3 +2243,25 @@ they still count as asked.
   its own length, a common prefix by loop) and lists (a nested
   comprehension, a rotation by two slices, a weighted average over zip, a
   moving average by windowed slices, missing ids by set difference).
+- **Q1177-Q1191 and P446-P460** current set, the eighth on the bike-hire
+  scheme (SEED 1206), and the first whose SQL prompts name the tool
+  without writing the statement. SQL, two tools per question in
+  task-named tiers, on tools no bike set had used: the runner-up station
+  per zone by NTH_VALUE with the frame opened, each bike against its
+  model-mates by EXCLUDE CURRENT ROW, each member's latest ride by a
+  correlated MAX, first and last names by MIN and MAX on text, the Uddins
+  by COLLATE NOCASE, what rides holds by typeof, the three latest jobs
+  per station by a correlated ORDER BY ... LIMIT, new riders by month
+  under a running sum, surname-sharing pairs by a self-join on two
+  columns, cents per kilometre as a ratio of sums, GROUP BY member_id IS
+  NULL, quarters by (month + 2) / 3 -- and three writable: an INSTEAD OF
+  DELETE trigger on a view that closes the job instead, a CREATE TABLE
+  ... AS SELECT snapshot that avoids the two-join fan-out, and a table
+  whose DEFAULTs fill in an INSERT's gaps. Python, easier by request:
+  everyday tasks over plain lists and strings with no maths -- every
+  position of a value, the n-th visit, what is missing with order kept,
+  whether one stop came before another, words in a name; a badge name, a
+  list joined with 'and', a vowel at the front, a message shouted when
+  urgent, minutes as hours and minutes; a split into two lists as a
+  tuple, the first and last stop, a round trip, codes tidied, ids within
+  a range.
