@@ -1,13 +1,14 @@
 """Python practice exercises: fifteen everyday functions over plain values.
 
-The thirty-first Python set, at the easy level of the last one -- no
-statistics, no dicts -- on tasks that set did not cover. Counting and
-finding: the stop after a station, the stations visited only once, visits
-before a point in the day, what two days have in common with the order
-kept, where the stops first change. Labels: a 12-hour clock, a station
-code, a greeting for the hour, a countdown in words, a one-line ride
-summary. Checks and filters: all the same, the stops up to a station, the
-ends swapped, the last n, legs from two lists.
+The thirty-second Python set, at the easy level of the last two -- no
+statistics, no dicts -- on tasks they did not cover. Counting and finding:
+the stops after a station, how long the last stop was repeated, the
+halfway stop, today's visits against yesterday's, names that start with a
+vowel. Labels: a whole-number percentage with a guard, cents as dollars,
+a name turned surname-first, minutes since midnight as a clock time, a
+bulleted list. Checks and filters: the stops between two stations, legs
+from one list, blanks filled in, names from a comma-separated line, a
+list with one position removed.
 
 Every question is a `kind="function"`: the editor defines a function named
 `func`. Run calls it once per case in `cases` and shows each call and its
@@ -27,406 +28,389 @@ import pyrun
 EXERCISES = [
     # ================================================= 1 Counting and finding
     dict(
-        id=1, ledger="P461", concept="PY4 item after a value", tier="1 - Counting and finding",
-        title="Where the bike went after Harbour", kind="function",
-        func="stop_after",
-        cases=[(["Parkway", "Harbour", "Stadium"], "Harbour"), (["Parkway", "Harbour"], "Harbour"), (["Parkway", "Stadium"], "Harbour"), ([], "Harbour")],
+        id=1, ledger="P476", concept="PY3 slice after a value", tier="1 - Counting and finding",
+        title="Everywhere the bike went after Harbour", kind="function",
+        func="after",
+        cases=[(["Parkway", "Harbour", "Stadium", "Hilltop"], "Harbour"), (["Parkway", "Harbour"], "Harbour"), (["Parkway", "Stadium"], "Harbour"), ([], "Harbour")],
         prompt=(
-            "Write a function `stop_after(stops, station)` that returns"
-            " the stop that came right after the station's FIRST"
-            " appearance, or None when the station is missing or was"
-            " the last stop. Two things to check before indexing.\n\n"
-            "  stop_after([\"Parkway\", \"Harbour\", \"Stadium\"], \"Harbour\") -> \"Stadium\"\n\n"
+            "Write a function `after(stops, station)` that returns the"
+            " stops that came after the station's FIRST appearance, not"
+            " including it, or [] if the station never appears. A"
+            " membership test, then index() and a slice.\n\n"
+            "  after([\"Parkway\", \"Harbour\", \"Stadium\", \"Hilltop\"], \"Harbour\") -> [\"Stadium\", \"Hilltop\"]\n\n"
+            "Return: a list of str."
+        ),
+        solution=("def after(stops, station):\n"
+                  "    if station not in stops:\n"
+                  "        return []\n"
+                  "    return stops[stops.index(station) + 1:]\n"),
+        trap=("def after(stops, station):\n"
+              "    return stops[stops.index(station) + 1:]\n"),
+        note="stops[i + 1:] is everything past position i, and it is"
+             " [] when i was the last position, with no special case."
+             " index() raises when the station is missing, so the trap"
+             " crashes on a day that never reached Harbour; the `in`"
+             " test first turns that into the [] the question asks for.",
+    ),
+    dict(
+        id=2, ledger="P477", concept="PY4 run at the end", tier="1 - Counting and finding",
+        title="How long the bike sat at its last stop", kind="function",
+        func="final_streak",
+        cases=[(["Harbour", "Stadium", "Stadium", "Stadium"],), (["Stadium", "Harbour", "Stadium"],), (["Harbour"],), ([],)],
+        prompt=(
+            "Write a function `final_streak(stops)` that returns how"
+            " many times the LAST stop is repeated at the end of the"
+            " list, in a row -- 3 for a list ending Stadium, Stadium,"
+            " Stadium -- and 0 for an empty list. A loop backwards from"
+            " the end that stops at the first different stop.\n\n"
+            "  final_streak([\"Harbour\", \"Stadium\", \"Stadium\", \"Stadium\"]) -> 3\n\n"
+            "Return: an int."
+        ),
+        solution=("def final_streak(stops):\n"
+                  "    n = 0\n"
+                  "    for s in reversed(stops):\n"
+                  "        if stops and s == stops[-1]:\n"
+                  "            n += 1\n"
+                  "        else:\n"
+                  "            break\n"
+                  "    return n\n"),
+        trap=("def final_streak(stops):\n"
+              "    if not stops:\n"
+              "        return 0\n"
+              "    return stops.count(stops[-1])\n"),
+        note="count() counts the last stop everywhere in the day, not"
+             " only at the end: the trap says 2 for a day that went"
+             " Stadium, Harbour, Stadium, where the final run is one."
+             " Walking backwards with reversed() and breaking at the"
+             " first stop that differs counts just the run; an empty"
+             " list never enters the loop and returns 0.",
+    ),
+    dict(
+        id=3, ledger="P478", concept="PY3 middle item with guard", tier="1 - Counting and finding",
+        title="The halfway stop", kind="function",
+        func="halfway",
+        cases=[(["Harbour", "Stadium", "Parkway"],), (["Harbour", "Stadium", "Parkway", "Hilltop"],), (["Harbour"],), ([],)],
+        prompt=(
+            "Write a function `halfway(stops)` that returns the stop in"
+            " the middle of the day -- position len // 2, which for an"
+            " even count is the later of the two middle stops -- or"
+            " None for an empty list.\n\n"
+            "  halfway([\"Harbour\", \"Stadium\", \"Parkway\"]) -> \"Stadium\"\n\n"
             "Return: a str, or None."
         ),
-        solution=("def stop_after(stops, station):\n"
-                  "    if station not in stops:\n"
+        solution=("def halfway(stops):\n"
+                  "    if not stops:\n"
                   "        return None\n"
-                  "    i = stops.index(station)\n"
-                  "    if i == len(stops) - 1:\n"
-                  "        return None\n"
-                  "    return stops[i + 1]\n"),
-        trap=("def stop_after(stops, station):\n"
-              "    return stops[stops.index(station) + 1]\n"),
-        note="Two different things can go wrong with stops[index + 1]:"
-             " index() raises ValueError when the station is not there,"
-             " and the + 1 runs off the end when it was the last stop,"
-             " an IndexError. The trap hits both. Each needs its own"
-             " check, and the order matters -- index() cannot be called"
-             " until `in` has said it is safe.",
+                  "    return stops[len(stops) // 2]\n"),
+        trap=("def halfway(stops):\n"
+              "    return stops[len(stops) // 2]\n"),
+        note="len // 2 is the middle index for an odd count and the"
+             " later middle for an even one, which is what the question"
+             " fixes so that there is one right answer. For an empty"
+             " list the index is 0 and there is nothing at 0: the trap"
+             " raises IndexError where None was asked for.",
     ),
     dict(
-        id=2, ledger="P462", concept="PY4 items appearing once", tier="1 - Counting and finding",
-        title="The stations visited only once", kind="function",
-        func="visited_once",
-        cases=[(["Harbour", "Stadium", "Harbour", "Parkway"],), (["Harbour", "Harbour"],), ([],), (["Stadium"],)],
+        id=4, ledger="P479", concept="PY3 difference of two counts", tier="1 - Counting and finding",
+        title="More visits today than yesterday?", kind="function",
+        func="visits_change",
+        cases=[(["Harbour", "Harbour", "Stadium"], ["Harbour"], "Harbour"), (["Stadium"], ["Harbour", "Harbour"], "Harbour"), ([], [], "Harbour"), (["Harbour"], ["Harbour"], "Harbour")],
         prompt=(
-            "Write a function `visited_once(stops)` that returns the"
-            " stations that appear exactly once in the day's stops, in"
-            " the order they appear. A comprehension that keeps a stop"
-            " when its count() in the list is 1.\n\n"
-            "  visited_once([\"Harbour\", \"Stadium\", \"Harbour\", \"Parkway\"]) -> [\"Stadium\", \"Parkway\"]\n\n"
-            "Return: a list of str."
-        ),
-        solution=("def visited_once(stops):\n"
-                  "    return [s for s in stops if stops.count(s) == 1]\n"),
-        trap=("def visited_once(stops):\n"
-              "    return list(set(stops))\n"),
-        note="set() removes the repeats but keeps one copy of each"
-             " station, so Harbour is still there, and a set has no"
-             " order, so the trap's list comes out in whatever order"
-             " the set holds. count() asks how many times a value"
-             " appears, and == 1 is the question's exact meaning of"
-             " 'only once'.",
-    ),
-    dict(
-        id=3, ledger="P463", concept="PY3 count in a slice", tier="1 - Counting and finding",
-        title="Visits before midday", kind="function",
-        func="visits_before",
-        cases=[(["Harbour", "Stadium", "Harbour", "Harbour"], "Harbour", 3), (["Harbour", "Stadium", "Harbour", "Harbour"], "Harbour", 0), (["Harbour"], "Harbour", 10), ([], "Harbour", 2)],
-        prompt=(
-            "The first n stops of the day happened before midday."
-            " Write a function `visits_before(stops, station, n)` that"
-            " returns how many of those first n stops were at the"
-            " station. A slice, then count().\n\n"
-            "  visits_before([\"Harbour\", \"Stadium\", \"Harbour\", \"Harbour\"], \"Harbour\", 3) -> 2\n\n"
+            "Write a function `visits_change(today, yesterday,"
+            " station)` that returns how many more times the station"
+            " was visited today than yesterday -- negative if fewer."
+            " Two count() calls and a subtraction, today's first.\n\n"
+            "  visits_change([\"Harbour\", \"Harbour\", \"Stadium\"], [\"Harbour\"], \"Harbour\") -> 1\n\n"
             "Return: an int."
         ),
-        solution=("def visits_before(stops, station, n):\n"
-                  "    return stops[:n].count(station)\n"),
-        trap=("def visits_before(stops, station, n):\n"
-              "    return stops.count(station)\n"),
-        note="count() over the whole list ignores the cut-off: the trap"
-             " says 3 for the first three stops, which hold only two"
-             " Harbours. stops[:n] is the first n items -- all of them"
-             " when n is more than the length, none when n is 0 -- and"
-             " count() on that slice is the answer, with no loop and no"
-             " guard.",
+        solution=("def visits_change(today, yesterday, station):\n"
+                  "    return today.count(station) - yesterday.count(station)\n"),
+        trap=("def visits_change(today, yesterday, station):\n"
+              "    return yesterday.count(station) - today.count(station)\n"),
+        note="'How many more today' is today minus yesterday; the trap"
+             " subtracts the other way and reports a rise as a fall."
+             " count() on a list that lacks the station is 0, so the"
+             " empty days need no guard.",
     ),
     dict(
-        id=4, ledger="P464", concept="PY4 common items in order", tier="1 - Counting and finding",
-        title="Stations both bikes reached, in the first bike's order", kind="function",
-        func="both_reached",
-        cases=[(["Stadium", "Harbour", "Parkway"], ["Parkway", "Stadium"]), (["Harbour", "Harbour", "Stadium"], ["Harbour"]), (["Stadium"], ["Parkway"]), ([], ["Stadium"])],
+        id=5, ledger="P480", concept="PY4 count by first letter", tier="1 - Counting and finding",
+        title="How many names start with a vowel", kind="function",
+        func="vowel_names",
+        cases=[(["Aisha", "Umar", "Rosa", "Eleanor"],), (["rosa", "zara"],), ([],), (["Imogen", ""],)],
         prompt=(
-            "Write a function `both_reached(first, second)` that returns"
-            " the stops of the first bike's day that the second bike"
-            " also reached, in the first bike's order, repeats kept. A"
-            " comprehension over the first list with `in` on the"
-            " second.\n\n"
-            "  both_reached([\"Stadium\", \"Harbour\", \"Parkway\"], [\"Parkway\", \"Stadium\"]) -> [\"Stadium\", \"Parkway\"]\n\n"
-            "Return: a list of str."
-        ),
-        solution=("def both_reached(first, second):\n"
-                  "    return [s for s in first if s in second]\n"),
-        trap=("def both_reached(first, second):\n"
-              "    return sorted(set(first) & set(second))\n"),
-        note="Set intersection finds the right stations but drops the"
-             " repeats and the order: the trap returns ['Parkway',"
-             " 'Stadium'] alphabetically, and one Harbour where the"
-             " first bike reached it twice. Looping over the first list"
-             " and testing membership in the second keeps the first"
-             " list's order and its repeats, which is what was asked.",
-    ),
-    dict(
-        id=5, ledger="P465", concept="PY4 first change", tier="1 - Counting and finding",
-        title="When the bike first moved on", kind="function",
-        func="first_change",
-        cases=[(["Harbour", "Harbour", "Stadium", "Harbour"],), (["Harbour", "Harbour"],), (["Harbour", "Stadium"],), ([],)],
-        prompt=(
-            "Write a function `first_change(stops)` that returns the"
-            " position of the first stop that differs from the first"
-            " stop of the day, or -1 if every stop is the same (or"
-            " there are none). A loop with enumerate, comparing with"
-            " stops[0].\n\n"
-            "  first_change([\"Harbour\", \"Harbour\", \"Stadium\", \"Harbour\"]) -> 2\n\n"
+            "Write a function `vowel_names(names)` that returns how"
+            " many of the names begin with a vowel, in either case; an"
+            " empty string does not count. A sum over a generator that"
+            " tests the first character lower-cased, with a guard for"
+            " the empty string.\n\n"
+            "  vowel_names([\"Aisha\", \"Umar\", \"Rosa\", \"Eleanor\"]) -> 3\n\n"
             "Return: an int."
         ),
-        solution=("def first_change(stops):\n"
-                  "    for i, s in enumerate(stops):\n"
-                  "        if s != stops[0]:\n"
-                  "            return i\n"
-                  "    return -1\n"),
-        trap=("def first_change(stops):\n"
-              "    for i, s in enumerate(stops):\n"
-              "        if s != stops[0]:\n"
-              "            return i\n"),
-        note="A loop that never finds a change falls off the end, and a"
-             " function that falls off the end returns None, not -1."
-             " The trap is right whenever a change exists and wrong"
-             " whenever it does not. On an empty list the loop body"
-             " never runs, so stops[0] is never evaluated and the final"
-             " return -1 is reached safely.",
+        solution=("def vowel_names(names):\n"
+                  "    return sum(1 for n in names if n and n[0].lower() in \"aeiou\")\n"),
+        trap=("def vowel_names(names):\n"
+              "    return sum(1 for n in names if n and n[0] in \"aeiou\")\n"),
+        note="Names are capitalised, and 'A' is not in 'aeiou': the"
+             " trap counts none of Aisha, Umar and Eleanor. lower()"
+             " first, then test. The `n and` guard runs before n[0], so"
+             " an empty string is skipped rather than raising, because"
+             " `and` stops at the first false value.",
     ),
     # ================================================================ 2 Labels
     dict(
-        id=6, ledger="P466", concept="PY3 twelve-hour clock", tier="2 - Labels",
-        title="The hour on a 12-hour clock", kind="function",
-        func="twelve_hour",
-        cases=[(15,), (0,), (12,), (8,), (23,)],
+        id=6, ledger="P481", concept="PY3 whole percentage with guard", tier="2 - Labels",
+        title="A percentage, rounded, as a label", kind="function",
+        func="percent_label",
+        cases=[(2, 3), (1, 4), (0, 5), (3, 0)],
         prompt=(
-            "Write a function `twelve_hour(hour)` that turns an hour"
-            " from 0 to 23 into '3 pm', '12 am', '12 pm' or '8 am':"
-            " am before 12, pm from 12; the hour shown is hour % 12,"
-            " except that 0 is shown as 12.\n\n"
-            "  twelve_hour(15) -> \"3 pm\"\n\n"
+            "Write a function `percent_label(part, whole)` that returns"
+            " the share as a whole-number percentage with a percent"
+            " sign, '67%' for 2 of 3, or 'n/a' when the whole is 0."
+            " round() to no decimals, inside an f-string.\n\n"
+            "  percent_label(2, 3) -> \"67%\"\n\n"
             "Return: a str."
         ),
-        solution=("def twelve_hour(hour):\n"
-                  "    suffix = \"am\" if hour < 12 else \"pm\"\n"
-                  "    shown = hour % 12\n"
-                  "    if shown == 0:\n"
-                  "        shown = 12\n"
-                  "    return f\"{shown} {suffix}\"\n"),
-        trap=("def twelve_hour(hour):\n"
-              "    suffix = \"am\" if hour < 12 else \"pm\"\n"
-              "    return f\"{hour % 12} {suffix}\"\n"),
-        note="hour % 12 is 0 for both midnight and noon, and a clock"
-             " shows those as 12: the trap writes '0 am' and '0 pm'. The"
-             " am/pm split and the number shown are two separate"
-             " decisions, and the special case is on the number only."
-             " 12 is pm (noon) and 0 is am (midnight), which the < 12"
-             " test gets right on its own.",
+        solution=("def percent_label(part, whole):\n"
+                  "    if whole == 0:\n"
+                  "        return \"n/a\"\n"
+                  "    return f\"{round(100 * part / whole)}%\"\n"),
+        trap=("def percent_label(part, whole):\n"
+              "    if whole == 0:\n"
+              "        return \"n/a\"\n"
+              "    return f\"{int(100 * part / whole)}%\"\n"),
+        note="int() truncates towards zero, so 66.67 becomes 66 and the"
+             " trap labels two thirds as '66%'; round() gives 67. The"
+             " guard comes first because 100 * part / 0 raises before"
+             " any rounding could happen. A '%' inside an f-string's"
+             " text is just a character.",
     ),
     dict(
-        id=7, ledger="P467", concept="PY3 slice and upper", tier="2 - Labels",
-        title="A three-letter station code", kind="function",
-        func="station_code",
-        cases=[("Market Square",), ("Old Mill",), ("Hilltop",), ("Ab",)],
+        id=7, ledger="P482", concept="PY3 cents to dollars text", tier="2 - Labels",
+        title="Cents as dollars on a receipt", kind="function",
+        func="dollars",
+        cases=[(350,), (1200,), (5,), (0,)],
         prompt=(
-            "Write a function `station_code(name)` that returns the"
-            " first three characters of the name in capitals, or the"
-            " whole name in capitals if it is shorter. A slice and"
-            " upper().\n\n"
-            "  station_code(\"Market Square\") -> \"MAR\"\n\n"
+            "Write a function `dollars(cents)` that returns the amount"
+            " as '$3.50': a dollar sign, the whole dollars, a point, and"
+            " the cents left over always as two digits. // and % give"
+            " the two parts; a format spec pads the second.\n\n"
+            "  dollars(350) -> \"$3.50\"\n\n"
             "Return: a str."
         ),
-        solution=("def station_code(name):\n"
-                  "    return name[:3].upper()\n"),
-        trap=("def station_code(name):\n"
-              "    return name[:3]\n"),
-        note="The trap forgets upper() and returns 'Mar'. A slice past"
-             " the end of a short string just stops at the end, so 'Ab'"
-             " gives 'AB' without any length check. Codes are usually"
-             " capitals so that 'MAR' typed in any case can be matched"
-             " after upper() on both sides.",
+        solution=("def dollars(cents):\n"
+                  "    return f\"${cents // 100}.{cents % 100:02d}\"\n"),
+        trap=("def dollars(cents):\n"
+              "    return f\"${cents / 100}\"\n"),
+        note="cents / 100 is a float, and a float prints as 3.5, not"
+             " 3.50, and 0.05 for five cents: the trap's receipts have"
+             " the wrong number of digits. Splitting into dollars and"
+             " cents with // and % keeps everything an int, and :02d pads"
+             " the cents to two digits with a leading zero when needed.",
     ),
     dict(
-        id=8, ledger="P468", concept="PY4 if/elif by hour", tier="2 - Labels",
-        title="Good morning, good afternoon, good evening", kind="function",
-        func="greeting",
-        cases=[("Hamid", 9), ("Rosa", 12), ("Yusuf", 17), ("Zara", 18), ("Umar", 0)],
+        id=8, ledger="P483", concept="PY3 surname first", tier="2 - Labels",
+        title="A name the way the register writes it", kind="function",
+        func="register_name",
+        cases=[("Hamid Uddin",), ("Ana de la Cruz",), ("Cher",), ("Rosa Villanueva",)],
         prompt=(
-            "Write a function `greeting(name, hour)` that returns 'Good"
-            " morning, Hamid' before 12, 'Good afternoon, ...' from 12"
-            " up to but not including 18, and 'Good evening, ...' from"
-            " 18. An if/elif/else on the hour inside one f-string.\n\n"
-            "  greeting(\"Rosa\", 12) -> \"Good afternoon, Rosa\"\n\n"
+            "Write a function `register_name(name)` that turns 'Hamid"
+            " Uddin' into 'Uddin, Hamid': the LAST word first, a comma"
+            " and a space, then everything before it. A one-word name"
+            " is returned unchanged. split(), a slice, and join().\n\n"
+            "  register_name(\"Hamid Uddin\") -> \"Uddin, Hamid\"\n\n"
             "Return: a str."
         ),
-        solution=("def greeting(name, hour):\n"
-                  "    if hour < 12:\n"
-                  "        part = \"morning\"\n"
-                  "    elif hour < 18:\n"
-                  "        part = \"afternoon\"\n"
-                  "    else:\n"
-                  "        part = \"evening\"\n"
-                  "    return f\"Good {part}, {name}\"\n"),
-        trap=("def greeting(name, hour):\n"
-              "    if hour <= 12:\n"
-              "        part = \"morning\"\n"
-              "    elif hour <= 18:\n"
-              "        part = \"afternoon\"\n"
-              "    else:\n"
-              "        part = \"evening\"\n"
-              "    return f\"Good {part}, {name}\"\n"),
-        note="The boundaries are where these go wrong: noon is"
-             " afternoon and 18:00 is evening, so the tests are < 12"
-             " and < 18, not <=. The trap greets Rosa with 'Good"
-             " morning' at noon and Zara with 'Good afternoon' at six."
-             " Picking the word first and formatting once keeps the"
-             " f-string in a single place.",
+        solution=("def register_name(name):\n"
+                  "    words = name.split()\n"
+                  "    if len(words) < 2:\n"
+                  "        return name\n"
+                  "    return words[-1] + \", \" + \" \".join(words[:-1])\n"),
+        trap=("def register_name(name):\n"
+              "    words = name.split()\n"
+              "    return words[1] + \", \" + words[0]\n"),
+        note="words[1] is the SECOND word, which is the surname only"
+             " for a two-word name: the trap turns 'Ana de la Cruz' into"
+             " 'de, Ana' and crashes on 'Cher'. words[-1] is the last"
+             " word whatever the count, words[:-1] is everything before"
+             " it, and ' '.join puts the spaces back. The one-word guard"
+             " handles the name with nothing to turn round.",
     ),
     dict(
-        id=9, ledger="P469", concept="PY4 if/elif countdown words", tier="2 - Labels",
-        title="Today, tomorrow, in 3 days", kind="function",
-        func="due_label",
-        cases=[(0,), (1,), (3,), (14,)],
+        id=9, ledger="P484", concept="PY3 minutes to clock text", tier="2 - Labels",
+        title="Minutes since midnight as a clock time", kind="function",
+        func="clock",
+        cases=[(485,), (0,), (1439,), (600,)],
         prompt=(
-            "Write a function `due_label(days)` that says when a"
-            " payment is due: 'today' for 0, 'tomorrow' for 1, and 'in"
-            " 3 days' (with the number) for anything more. Two special"
-            " cases, then the general one.\n\n"
-            "  due_label(3) -> \"in 3 days\"\n\n"
+            "Write a function `clock(minutes)` that turns minutes since"
+            " midnight into 'HH:MM' with both parts two digits: 485 is"
+            " '08:05'. divmod() by 60 gives hours and minutes at once;"
+            " a format spec pads each.\n\n"
+            "  clock(485) -> \"08:05\"\n\n"
             "Return: a str."
         ),
-        solution=("def due_label(days):\n"
-                  "    if days == 0:\n"
-                  "        return \"today\"\n"
-                  "    if days == 1:\n"
-                  "        return \"tomorrow\"\n"
-                  "    return f\"in {days} days\"\n"),
-        trap=("def due_label(days):\n"
-              "    return f\"in {days} days\"\n"),
-        note="'in 0 days' and 'in 1 days' are what the trap says, and"
-             " neither is English. Special cases are tested first and"
-             " return early, so the general f-string at the end never"
-             " sees them. Three returns in one function is fine when"
-             " each is a complete answer.",
+        solution=("def clock(minutes):\n"
+                  "    h, m = divmod(minutes, 60)\n"
+                  "    return f\"{h:02d}:{m:02d}\"\n"),
+        trap=("def clock(minutes):\n"
+              "    h, m = divmod(minutes, 60)\n"
+              "    return f\"{h}:{m}\"\n"),
+        note="A clock pads with zeros: '8:5' is not a time. The :02d"
+             " spec means 'at least two digits, zero-filled', and it"
+             " applies to each part separately. divmod(485, 60) is (8,"
+             " 5) in one call, the same pair as 485 // 60 and 485 % 60.",
     ),
     dict(
-        id=10, ledger="P470", concept="PY3 f-string summary", tier="2 - Labels",
-        title="A ride in one line", kind="function",
-        func="ride_summary",
-        cases=[("Harbour", "Stadium", 32), ("Market Square", "Market Square", 5), ("Hilltop", "Old Mill", 120)],
+        id=10, ledger="P485", concept="PY3 join with prefix", tier="2 - Labels",
+        title="A bulleted list of names", kind="function",
+        func="bulleted",
+        cases=[(["Hamid", "Rosa"],), (["Yusuf"],), ([],)],
         prompt=(
-            "Write a function `ride_summary(start, end, minutes)` that"
-            " returns 'Harbour to Stadium (32 min)': the two stations"
-            " joined by ' to ', then the minutes in brackets with"
-            " 'min'. One f-string.\n\n"
-            "  ride_summary(\"Harbour\", \"Stadium\", 32) -> \"Harbour to Stadium (32 min)\"\n\n"
+            "Write a function `bulleted(names)` that returns the names"
+            " as a bulleted list in one string: each name on its own"
+            " line, starting with '- ', lines separated by newlines and"
+            " no newline at the end; '' for no names. A comprehension"
+            " to add the dash, then '\\n'.join.\n\n"
+            "  bulleted([\"Hamid\", \"Rosa\"]) -> \"- Hamid\\n- Rosa\"\n\n"
             "Return: a str."
         ),
-        solution=("def ride_summary(start, end, minutes):\n"
-                  "    return f\"{start} to {end} ({minutes} min)\"\n"),
-        trap=("def ride_summary(start, end, minutes):\n"
-              "    return f\"{start} to {end} {minutes} min\"\n"),
-        note="The grader compares the whole string, so the brackets and"
-             " every space count: the trap's 'Harbour to Stadium 32 min'"
-             " is a different string. An f-string puts each value where"
-             " its braces are, numbers converted to text as they go, so"
-             " no str() is needed.",
+        solution=("def bulleted(names):\n"
+                  "    return \"\\n\".join(\"- \" + n for n in names)\n"),
+        trap=("def bulleted(names):\n"
+              "    return \"\\n\".join(names)\n"),
+        note="join() puts the separator BETWEEN items, never before the"
+             " first or after the last, which is why there is no"
+             " trailing newline and why the dash has to be added to"
+             " each name before joining: the trap's lines have no"
+             " bullets. join() of nothing is '', which is the empty"
+             " case for free.",
     ),
     # ==================================================== 3 Checks and filters
     dict(
-        id=11, ledger="P471", concept="PY3 all the same", tier="3 - Checks and filters",
-        title="Did the bike stay put all day?", kind="function",
-        func="all_same",
-        cases=[(["Harbour", "Harbour", "Harbour"],), (["Harbour", "Stadium"],), (["Harbour"],), ([],)],
+        id=11, ledger="P486", concept="PY3 slice between two values", tier="3 - Checks and filters",
+        title="The stops between Harbour and Stadium", kind="function",
+        func="between",
+        cases=[(["Parkway", "Harbour", "Hilltop", "Riverside", "Stadium", "Parkway"], "Harbour", "Stadium"), (["Harbour", "Stadium"], "Harbour", "Stadium"), (["Harbour", "Hilltop"], "Harbour", "Stadium"), (["Stadium", "Hilltop", "Harbour"], "Harbour", "Stadium")],
         prompt=(
-            "Write a function `all_same(stops)` that returns True when"
-            " every stop is the same station, and True for an empty"
-            " list too (nothing differs). The number of DIFFERENT"
-            " values is the thing to test.\n\n"
-            "  all_same([\"Harbour\", \"Harbour\", \"Harbour\"]) -> True\n\n"
-            "Return: True or False."
-        ),
-        solution=("def all_same(stops):\n"
-                  "    return len(set(stops)) <= 1\n"),
-        trap=("def all_same(stops):\n"
-              "    return len(set(stops)) == 1\n"),
-        note="A set of the stops has one member when they are all the"
-             " same and none when the list is empty, so <= 1 covers"
-             " both; == 1, the trap, calls the empty day False. all(s"
-             " == stops[0] for s in stops) is another way, and it is"
-             " also True for the empty list, because all() of nothing"
-             " is True.",
-    ),
-    dict(
-        id=12, ledger="P472", concept="PY3 slice up to a value", tier="3 - Checks and filters",
-        title="The stops before the bike reached Harbour", kind="function",
-        func="until",
-        cases=[(["Parkway", "Stadium", "Harbour", "Hilltop"], "Harbour"), (["Harbour", "Stadium"], "Harbour"), (["Parkway", "Stadium"], "Harbour"), ([], "Harbour")],
-        prompt=(
-            "Write a function `until(stops, station)` that returns the"
-            " stops before the station's first appearance -- not"
-            " including it -- or the whole list if the station never"
-            " appears. A membership test, then index() and a slice.\n\n"
-            "  until([\"Parkway\", \"Stadium\", \"Harbour\", \"Hilltop\"], \"Harbour\") -> [\"Parkway\", \"Stadium\"]\n\n"
+            "Write a function `between(stops, a, b)` that returns the"
+            " stops strictly between the first a and the first b --"
+            " neither included -- and [] when either is missing or b"
+            " comes before a. Two index() calls and one slice, after"
+            " the checks.\n\n"
+            "  between([\"Parkway\", \"Harbour\", \"Hilltop\", \"Riverside\", \"Stadium\", \"Parkway\"], \"Harbour\", \"Stadium\") -> [\"Hilltop\", \"Riverside\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def until(stops, station):\n"
-                  "    if station not in stops:\n"
-                  "        return stops[:]\n"
-                  "    return stops[:stops.index(station)]\n"),
-        trap=("def until(stops, station):\n"
-              "    return stops[:stops.index(station)]\n"),
-        note="stops[:i] is everything before position i, which is"
-             " exactly 'up to but not including' when i is the"
-             " station's index. index() raises when the station is"
-             " missing, so the trap crashes on a day that never reached"
-             " Harbour; the `in` test first returns the whole list"
-             " instead. stops[:] is a copy, so the caller's list is"
-             " never handed back to be changed.",
+        solution=("def between(stops, a, b):\n"
+                  "    if a not in stops or b not in stops:\n"
+                  "        return []\n"
+                  "    i, j = stops.index(a), stops.index(b)\n"
+                  "    return stops[i + 1:j]\n"),
+        trap=("def between(stops, a, b):\n"
+              "    if a not in stops or b not in stops:\n"
+              "        return []\n"
+              "    return stops[stops.index(a):stops.index(b)]\n"),
+        note="A slice starts AT its first index and stops BEFORE its"
+             " second, so stops[i:j] includes a and excludes b -- the"
+             " trap returns Harbour with the answer. Starting at i + 1"
+             " excludes both ends. When b comes before a the slice is"
+             " empty by itself, since a start past the stop gives [].",
     ),
     dict(
-        id=13, ledger="P473", concept="PY4 swap first and last", tier="3 - Checks and filters",
-        title="The first and last stops swapped", kind="function",
-        func="swap_ends",
+        id=12, ledger="P487", concept="PY3 zip with an offset", tier="3 - Checks and filters",
+        title="The legs of a day, from one list", kind="function",
+        func="legs_of",
         cases=[(["Harbour", "Stadium", "Parkway"],), (["Harbour", "Stadium"],), (["Harbour"],), ([],)],
         prompt=(
-            "Write a function `swap_ends(stops)` that returns a NEW"
-            " list with the first and last stops exchanged and the"
-            " middle unchanged; a list of one or none comes back as a"
-            " copy. Copy the list, then assign to positions 0 and -1"
-            " in one tuple assignment.\n\n"
-            "  swap_ends([\"Harbour\", \"Stadium\", \"Parkway\"]) -> [\"Parkway\", \"Stadium\", \"Harbour\"]\n\n"
+            "Write a function `legs_of(stops)` that returns one string"
+            " per leg between consecutive stops, 'Harbour -> Stadium',"
+            " from a single list of stops; one stop or none gives []."
+            " zip the list with itself shifted by one.\n\n"
+            "  legs_of([\"Harbour\", \"Stadium\", \"Parkway\"]) -> [\"Harbour -> Stadium\", \"Stadium -> Parkway\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def swap_ends(stops):\n"
-                  "    out = list(stops)\n"
-                  "    if len(out) >= 2:\n"
-                  "        out[0], out[-1] = out[-1], out[0]\n"
-                  "    return out\n"),
-        trap=("def swap_ends(stops):\n"
-              "    return stops[-1:] + stops[1:-1] + stops[:1]\n"),
-        note="Three slices glued together look right until a list of"
-             " one: stops[-1:] and stops[:1] are then the same item,"
-             " and the trap returns it twice. Copying and swapping two"
-             " positions in one assignment -- out[0], out[-1] = out[-1],"
-             " out[0] -- changes only the copy, and the length test"
-             " leaves a list of one or none alone.",
+        solution=("def legs_of(stops):\n"
+                  "    return [f\"{a} -> {b}\" for a, b in zip(stops, stops[1:])]\n"),
+        trap=("def legs_of(stops):\n"
+              "    return [f\"{a} -> {b}\" for a, b in zip(stops, stops)]\n"),
+        note="zip(stops, stops[1:]) pairs each stop with the NEXT one,"
+             " because the second list starts one position later and"
+             " zip stops at the shorter, so a list of n stops gives n -"
+             " 1 legs and a list of one gives none. zip(stops, stops),"
+             " the trap, pairs each stop with itself: 'Harbour ->"
+             " Harbour'.",
     ),
     dict(
-        id=14, ledger="P474", concept="PY3 last n with zero", tier="3 - Checks and filters",
-        title="The last few stops", kind="function",
-        func="last_stops",
-        cases=[(["Harbour", "Stadium", "Parkway", "Hilltop"], 2), (["Harbour", "Stadium"], 5), (["Harbour", "Stadium"], 0), ([], 3)],
+        id=13, ledger="P488", concept="PY3 fill blanks", tier="3 - Checks and filters",
+        title="Blanks in the log filled in", kind="function",
+        func="fill_blanks",
+        cases=[(["Harbour", "", "Stadium", ""], "unknown"), ([], "unknown"), (["", ""], "?"), (["Harbour"], "unknown")],
         prompt=(
-            "Write a function `last_stops(stops, n)` that returns the"
-            " last n stops -- all of them if there are fewer than n,"
-            " and [] when n is 0. A negative slice is the natural"
-            " tool, but one value of n needs care.\n\n"
-            "  last_stops([\"Harbour\", \"Stadium\", \"Parkway\", \"Hilltop\"], 2) -> [\"Parkway\", \"Hilltop\"]\n\n"
+            "Some stops were left blank -- an empty string. Write a"
+            " function `fill_blanks(stops, default)` that returns the"
+            " list with every empty string replaced by the default and"
+            " everything else unchanged. A comprehension with a"
+            " conditional expression, or with `or`.\n\n"
+            "  fill_blanks([\"Harbour\", \"\", \"Stadium\", \"\"], \"unknown\") -> [\"Harbour\", \"unknown\", \"Stadium\", \"unknown\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def last_stops(stops, n):\n"
-                  "    if n == 0:\n"
-                  "        return []\n"
-                  "    return stops[-n:]\n"),
-        trap=("def last_stops(stops, n):\n"
-              "    return stops[-n:]\n"),
-        note="stops[-2:] is the last two, and stops[-5:] of a two-item"
-             " list is both items, so the negative slice handles a"
-             " short list by itself. But -0 is 0, and stops[0:] is the"
-             " WHOLE list: the trap returns everything when asked for"
-             " nothing. The one special case has to be tested first;"
-             " stops[len(stops) - n:] is another way round it.",
+        solution=("def fill_blanks(stops, default):\n"
+                  "    return [s if s else default for s in stops]\n"),
+        trap=("def fill_blanks(stops, default):\n"
+              "    return [s if s is not None else default for s in stops]\n"),
+        note="An empty string is not None, so the trap's test never"
+             " fires and the blanks stay blank. `s if s else default`"
+             " uses the empty string's falsiness, and `s or default` is"
+             " the same thing shorter. Either builds a new list and"
+             " leaves the caller's alone.",
     ),
     dict(
-        id=15, ledger="P475", concept="PY3 zip into strings", tier="3 - Checks and filters",
-        title="Each leg of the day, start to end", kind="function",
-        func="legs",
-        cases=[(["Harbour", "Stadium"], ["Stadium", "Parkway"]), (["Harbour"], ["Harbour"]), ([], []), (["A", "B", "C"], ["B", "C"])],
+        id=14, ledger="P489", concept="PY3 split on comma and strip", tier="3 - Checks and filters",
+        title="Names from a comma-separated line", kind="function",
+        func="names_from",
+        cases=[("Hamid, Rosa,Yusuf , Zara",), ("Hamid",), ("",), (" Rosa , ",)],
         prompt=(
-            "Two lists of the same length give each ride's start and"
-            " end station. Write a function `legs(starts, ends)` that"
-            " returns one string per ride, 'Harbour -> Stadium'. zip()"
-            " pairs the lists up; an f-string makes each string. If the"
-            " lists differ in length, stop at the shorter.\n\n"
-            "  legs([\"Harbour\", \"Stadium\"], [\"Stadium\", \"Parkway\"]) -> [\"Harbour -> Stadium\", \"Stadium -> Parkway\"]\n\n"
+            "A form sends names as one line, 'Hamid, Rosa,Yusuf ,"
+            " Zara', with the spacing all over the place. Write a"
+            " function `names_from(line)` that returns the names as a"
+            " list, each stripped of spaces, empty pieces dropped. split"
+            " on the comma, then strip, then keep the non-empty ones.\n\n"
+            "  names_from(\"Hamid, Rosa,Yusuf , Zara\") -> [\"Hamid\", \"Rosa\", \"Yusuf\", \"Zara\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def legs(starts, ends):\n"
-                  "    return [f\"{a} -> {b}\" for a, b in zip(starts, ends)]\n"),
-        trap=("def legs(starts, ends):\n"
-              "    return [(a, b) for a, b in zip(starts, ends)]\n"),
-        note="zip() walks the two lists in step and stops at the"
-             " shorter one, so the mismatched case needs no guard. The"
-             " trap builds tuples instead of strings: the pairs are"
-             " right but the type is not, and the grader keeps ('Harbour',"
-             " 'Stadium') apart from 'Harbour -> Stadium'. The f-string"
-             " is where the arrow and the spaces are decided.",
+        solution=("def names_from(line):\n"
+                  "    return [p.strip() for p in line.split(\",\") if p.strip()]\n"),
+        trap=("def names_from(line):\n"
+              "    return line.split(\",\")\n"),
+        note="split(',') keeps whatever surrounded each comma, so the"
+             " trap returns ' Rosa' and 'Yusuf ' with their spaces, and"
+             " a trailing comma gives an empty last piece. strip() on"
+             " each piece and an if that drops the empty ones make the"
+             " list clean, and ''.split(',') is [''], which the if"
+             " turns into [].",
+    ),
+    dict(
+        id=15, ledger="P490", concept="PY3 remove by position on a copy", tier="3 - Checks and filters",
+        title="A stop struck out", kind="function",
+        func="without_position",
+        cases=[(["Harbour", "Stadium", "Parkway"], 1), (["Harbour", "Stadium", "Parkway"], 0), (["Harbour", "Stadium", "Parkway"], 7), ([], 0)],
+        prompt=(
+            "Write a function `without_position(stops, i)` that returns"
+            " a NEW list with the stop at position i left out, or an"
+            " unchanged copy if there is no such position. Two slices"
+            " joined: everything before i and everything after it.\n\n"
+            "  without_position([\"Harbour\", \"Stadium\", \"Parkway\"], 1) -> [\"Harbour\", \"Parkway\"]\n\n"
+            "Return: a list of str."
+        ),
+        solution=("def without_position(stops, i):\n"
+                  "    return stops[:i] + stops[i + 1:]\n"),
+        trap=("def without_position(stops, i):\n"
+              "    return stops[:i] + stops[i:]\n"),
+        note="stops[:i] ends before position i and stops[i + 1:] begins"
+             " after it, so joining them skips exactly one item. The"
+             " trap's second slice begins AT i and keeps the stop it was"
+             " meant to drop, returning the list unchanged. A position"
+             " past the end makes both slices harmless -- all of the"
+             " list, then nothing -- so no guard is needed, and the"
+             " caller's list is never touched.",
     ),
 ]
 
