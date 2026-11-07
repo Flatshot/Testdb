@@ -27,19 +27,19 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the ninth set on the bike-hire scheme (6
+Thirty questions in two tracks, the tenth set on the bike-hire scheme (6
 tables, SEED 1206). **Fifteen SQL** at two tools per question, with the
-tiers named by task -- finding the rows; patterns and parts; ordered by
-time; branches, distinct and difference -- on tools no bike set has used:
-a row value compared with a subquery, json_each, a half-open date range
-where BETWEEN loses a day, LIKE's underscore, strftime's %d, the 'start of
-year' modifier, unixepoch, a running MAX, LAG with an offset and a
-default, a CASE whose WHEN order matters, COUNT of a DISTINCT CASE, EXCEPT
-on two columns. Prompts name the tool but do not write the statement.
-**Three writable**: an AFTER DELETE audit trigger, a STRICT table, and a
-composite-key table WITHOUT ROWID. **Fifteen Python** at the easy level of
-the last set: everyday tasks over plain lists and strings, no maths, no
-dicts, on tasks that set did not cover.
+tiers named by task -- who, exactly; rank and share; the clock and the
+calendar; capacity and balance -- on tools no bike set has used: EXISTS as
+a column, FULL OUTER JOIN, IS NOT where <> drops NULLs, PERCENT_RANK, two
+window sums with two partitions, a modulo sample, strftime's %W and %M,
+an exact age with the birthday adjustment, a rate per active day, ABS in
+WHERE, MIN of a CASE. Prompts name the tool but do not write the
+statement. **Three writable**: REPLACE INTO, a table renamed with a view
+keeping the old name, and a STORED generated column told from VIRTUAL by
+pragma_table_xinfo. **Fifteen Python** at the easy level of the last two
+sets: everyday tasks over plain lists and strings, no maths, no dicts, on
+tasks those sets did not cover.
 
 ### The writable stage
 
@@ -49,46 +49,44 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `CREATE TABLE deleted_jobs (...); CREATE TRIGGER ... AFTER DELETE ON maintenance BEGIN INSERT ... OLD.* ... END` | the log's row count, lowest and highest job_id, battery jobs |
-| 14 | `CREATE TABLE dock_counts (...) STRICT` | each row's station_id, bikes and typeof(bikes) |
-| 15 | `CREATE TABLE daily_use (..., PRIMARY KEY (bike_id, day)) WITHOUT ROWID` | the rows that got in |
+| 13 | `REPLACE INTO payments (payment_id, ...) VALUES (1, ...)` | payment 1's amount and method, the payment count, the highest id |
+| 14 | `ALTER TABLE maintenance RENAME TO jobs; CREATE VIEW maintenance AS SELECT * FROM jobs` | what sqlite_master calls jobs and maintenance |
+| 15 | `CREATE TABLE invoice_lines (..., total_cents INTEGER GENERATED ALWAYS AS (qty * unit_cents) STORED)` | the totals added up, and pragma_table_xinfo's hidden code |
 
-All three carry a `driver_sql`: two DELETEs, three INSERTs of which one
-must be refused, and three INSERTs of which the last must be refused, run
-after your script.
+15 carries a `driver_sql`: two inserts, run after your script.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1192 | ROWEQ row value = subquery | The busiest route, month by month | ex 1 | 1 - Finding the rows |
-| Q1193 | JSE json_each | Rides at the stations on a list | ex 2 | 1 - Finding the rows |
-| Q1194 | BTW half-open date range | June's rides, and the day BETWEEN loses | ex 3 | 1 - Finding the rows |
-| Q1195 | LIK_ LIKE underscore | Four-letter first names | ex 4 | 2 - Patterns and parts |
-| Q1196 | DOM strftime %d | Which day of the month subscriptions are paid | ex 5 | 2 - Patterns and parts |
-| Q1197 | SOY start of year modifier | Joined in the first week of the year | ex 6 | 2 - Patterns and parts |
-| Q1198 | UNX unixepoch | The longest ride of each month, in minutes | ex 7 | 3 - Ordered by time |
-| Q1199 | RMAX running MAX | The record ride, month by month | ex 8 | 3 - Ordered by time |
-| Q1200 | LAG2 LAG offset and default | Where bike 7 was two rides ago | ex 9 | 3 - Ordered by time |
-| Q1201 | CASEORD CASE order of WHENs | Fares in four bands | ex 10 | 4 - Branches, distinct and difference |
-| Q1202 | CDC COUNT DISTINCT CASE | June's riders against all riders, per station | ex 11 | 4 - Branches, distinct and difference |
-| Q1203 | EXC2 EXCEPT on two columns | The routes that Old Mill's closure took away | ex 12 | 4 - Branches, distinct and difference |
-| Q1204 | AUD AFTER DELETE audit trigger | A log of every deleted job **(script)** | ex 13 | 5 - Changing the data |
-| Q1205 | STRICT STRICT table | A table that insists on its types **(script)** | ex 14 | 5 - Changing the data |
-| Q1206 | WOR composite key WITHOUT ROWID | One row per bike per day, keyed by both **(script)** | ex 15 | 5 - Changing the data |
-| P461 | PY4 item after a value | Where the bike went after Harbour | py 1 | 1 - Counting and finding |
-| P462 | PY4 items appearing once | The stations visited only once | py 2 | 1 - Counting and finding |
-| P463 | PY3 count in a slice | Visits before midday | py 3 | 1 - Counting and finding |
-| P464 | PY4 common items in order | Stations both bikes reached, in the first bike's order | py 4 | 1 - Counting and finding |
-| P465 | PY4 first change | When the bike first moved on | py 5 | 1 - Counting and finding |
-| P466 | PY3 twelve-hour clock | The hour on a 12-hour clock | py 6 | 2 - Labels |
-| P467 | PY3 slice and upper | A three-letter station code | py 7 | 2 - Labels |
-| P468 | PY4 if/elif by hour | Good morning, good afternoon, good evening | py 8 | 2 - Labels |
-| P469 | PY4 if/elif countdown words | Today, tomorrow, in 3 days | py 9 | 2 - Labels |
-| P470 | PY3 f-string summary | A ride in one line | py 10 | 2 - Labels |
-| P471 | PY3 all the same | Did the bike stay put all day? | py 11 | 3 - Checks and filters |
-| P472 | PY3 slice up to a value | The stops before the bike reached Harbour | py 12 | 3 - Checks and filters |
-| P473 | PY4 swap first and last | The first and last stops swapped | py 13 | 3 - Checks and filters |
-| P474 | PY3 last n with zero | The last few stops | py 14 | 3 - Checks and filters |
-| P475 | PY3 zip into strings | Each leg of the day, start to end | py 15 | 3 - Checks and filters |
+| Q1207 | EXS EXISTS as a column | Has this station ever seen a battery job? | ex 1 | 1 - Who, exactly |
+| Q1208 | FOJ FULL OUTER JOIN | Paid, rode, or both | ex 2 | 1 - Who, exactly |
+| Q1209 | ISNOT IS NOT null-safe | Rides that went somewhere else, open ones included | ex 3 | 1 - Who, exactly |
+| Q1210 | PRK PERCENT_RANK | Where each bike stands among its model | ex 4 | 2 - Rank and share |
+| Q1211 | TWOWIN two windows, two partitions | Each station's share of its zone, and of everything | ex 5 | 2 - Rank and share |
+| Q1212 | MOD modulo sample | A one-in-a-hundred sample | ex 6 | 2 - Rank and share |
+| Q1213 | WK strftime %W | Rides by week of the year, 2026 | ex 7 | 3 - The clock and the calendar |
+| Q1214 | MIN00 strftime %M | Rides that began on the hour | ex 8 | 3 - The clock and the calendar |
+| Q1215 | AGEX exact age with birthday adjustment | Members who were 65 or over when the data ends | ex 9 | 3 - The clock and the calendar |
+| Q1216 | UTIL rate per active day | How hard each dock works | ex 10 | 4 - Capacity and balance |
+| Q1217 | ABS ABS in WHERE | Stations out of balance | ex 11 | 4 - Capacity and balance |
+| Q1218 | MINC MIN of a CASE | The first casual ride and the first member ride | ex 12 | 4 - Capacity and balance |
+| Q1219 | RPL REPLACE INTO | A payment re-recorded **(script)** | ex 13 | 5 - Changing the data |
+| Q1220 | RNT RENAME TO with a compatibility view | A table renamed, without breaking the old name **(script)** | ex 14 | 5 - Changing the data |
+| Q1221 | GEN2 STORED generated column | A total that is computed and kept **(script)** | ex 15 | 5 - Changing the data |
+| P476 | PY3 slice after a value | Everywhere the bike went after Harbour | py 1 | 1 - Counting and finding |
+| P477 | PY4 run at the end | How long the bike sat at its last stop | py 2 | 1 - Counting and finding |
+| P478 | PY3 middle item with guard | The halfway stop | py 3 | 1 - Counting and finding |
+| P479 | PY3 difference of two counts | More visits today than yesterday? | py 4 | 1 - Counting and finding |
+| P480 | PY4 count by first letter | How many names start with a vowel | py 5 | 1 - Counting and finding |
+| P481 | PY3 whole percentage with guard | A percentage, rounded, as a label | py 6 | 2 - Labels |
+| P482 | PY3 cents to dollars text | Cents as dollars on a receipt | py 7 | 2 - Labels |
+| P483 | PY3 surname first | A name the way the register writes it | py 8 | 2 - Labels |
+| P484 | PY3 minutes to clock text | Minutes since midnight as a clock time | py 9 | 2 - Labels |
+| P485 | PY3 join with prefix | A bulleted list of names | py 10 | 2 - Labels |
+| P486 | PY3 slice between two values | The stops between Harbour and Stadium | py 11 | 3 - Checks and filters |
+| P487 | PY3 zip with an offset | The legs of a day, from one list | py 12 | 3 - Checks and filters |
+| P488 | PY3 fill blanks | Blanks in the log filled in | py 13 | 3 - Checks and filters |
+| P489 | PY3 split on comma and strip | Names from a comma-separated line | py 14 | 3 - Checks and filters |
+| P490 | PY3 remove by position on a copy | A stop struck out | py 15 | 3 - Checks and filters |
 
 ## Retired
 
@@ -397,6 +395,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1192 | ROWEQ row value = subquery | The busiest route, month by month | - | retired |
+| Q1193 | JSE json_each | Rides at the stations on a list | - | retired |
+| Q1194 | BTW half-open date range | June's rides, and the day BETWEEN loses | - | retired |
+| Q1195 | LIK_ LIKE underscore | Four-letter first names | - | retired |
+| Q1196 | DOM strftime %d | Which day of the month subscriptions are paid | - | retired |
+| Q1197 | SOY start of year modifier | Joined in the first week of the year | - | retired |
+| Q1198 | UNX unixepoch | The longest ride of each month, in minutes | - | retired |
+| Q1199 | RMAX running MAX | The record ride, month by month | - | retired |
+| Q1200 | LAG2 LAG offset and default | Where bike 7 was two rides ago | - | retired |
+| Q1201 | CASEORD CASE order of WHENs | Fares in four bands | - | retired |
+| Q1202 | CDC COUNT DISTINCT CASE | June's riders against all riders, per station | - | retired |
+| Q1203 | EXC2 EXCEPT on two columns | The routes that Old Mill's closure took away | - | retired |
+| Q1204 | AUD AFTER DELETE audit trigger | A log of every deleted job **(script)** | - | retired |
+| Q1205 | STRICT STRICT table | A table that insists on its types **(script)** | - | retired |
+| Q1206 | WOR composite key WITHOUT ROWID | One row per bike per day, keyed by both **(script)** | - | retired |
+| P461 | PY4 item after a value | Where the bike went after Harbour | - | retired |
+| P462 | PY4 items appearing once | The stations visited only once | - | retired |
+| P463 | PY3 count in a slice | Visits before midday | - | retired |
+| P464 | PY4 common items in order | Stations both bikes reached, in the first bike's order | - | retired |
+| P465 | PY4 first change | When the bike first moved on | - | retired |
+| P466 | PY3 twelve-hour clock | The hour on a 12-hour clock | - | retired |
+| P467 | PY3 slice and upper | A three-letter station code | - | retired |
+| P468 | PY4 if/elif by hour | Good morning, good afternoon, good evening | - | retired |
+| P469 | PY4 if/elif countdown words | Today, tomorrow, in 3 days | - | retired |
+| P470 | PY3 f-string summary | A ride in one line | - | retired |
+| P471 | PY3 all the same | Did the bike stay put all day? | - | retired |
+| P472 | PY3 slice up to a value | The stops before the bike reached Harbour | - | retired |
+| P473 | PY4 swap first and last | The first and last stops swapped | - | retired |
+| P474 | PY3 last n with zero | The last few stops | - | retired |
+| P475 | PY3 zip into strings | Each leg of the day, start to end | - | retired |
 | Q1177 | NTH NTH_VALUE | The runner-up station in each zone | - | retired |
 | Q1178 | EXC EXCLUDE CURRENT ROW | Each bike against its model-mates | - | retired |
 | Q1179 | GNG correlated MAX per group | Each member's latest ride | - | retired |
@@ -2295,7 +2323,7 @@ they still count as asked.
   urgent, minutes as hours and minutes; a split into two lists as a
   tuple, the first and last stop, a round trip, codes tidied, ids within
   a range.
-- **Q1192-Q1206 and P461-P475** current set, the ninth on the bike-hire
+- **Q1192-Q1206 and P461-P475** retired set, the ninth on the bike-hire
   scheme (SEED 1206), prompts naming the tool but not the statement. SQL,
   two tools per question in task-named tiers, on tools no bike set had
   used: the busiest route's rides by a row value compared with a subquery,
@@ -2315,3 +2343,23 @@ they still count as asked.
   clock, a station code, a greeting by hour, a countdown in words, a ride
   summary; all the same, stops up to a station, ends swapped, the last n
   with n = 0, legs from two lists.
+- **Q1207-Q1221 and P476-P490** current set, the tenth on the bike-hire
+  scheme (SEED 1206), prompts naming the tool but not the statement. SQL,
+  two tools per question in task-named tiers, on tools no bike set had
+  used: a battery-job flag per station by EXISTS as a column, payers
+  against riders by FULL OUTER JOIN, not-round-trips with the open rides
+  by IS NOT, where each bike stands among its model by PERCENT_RANK, a
+  station's share of its zone and of all by two window sums, a
+  one-in-a-hundred sample by %, rides by week of 2026 by strftime('%W'),
+  rides on the hour by strftime('%M'), seniors by an exact age with the
+  birthday adjustment, rides per dock per active day by COUNT(DISTINCT
+  date), stations out of balance by ABS, first casual and member rides by
+  MIN of a CASE -- and three writable: REPLACE INTO re-recording a
+  payment, a table renamed with a compatibility view, and a STORED
+  generated column told from VIRTUAL by pragma_table_xinfo. Python,
+  everyday tasks again on new ground: the stops after a station, the run
+  at the end, the halfway stop, today's visits against yesterday's, names
+  starting with a vowel; a whole percentage with a guard, cents as
+  dollars, surname-first names, minutes as a clock time, a bulleted list;
+  the stops between two stations, legs from one list, blanks filled,
+  names from a comma-separated line, a position struck out.

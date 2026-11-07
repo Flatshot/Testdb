@@ -1,18 +1,18 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the bike-hire scheme, the
-ninth set on it, at two tools per question with the tiers named by task,
+tenth set on it, at two tools per question with the tiers named by task,
 on tools no bike set had used, and three writable questions; the prompts
 name the tool but do not write the statement. **Fifteen Python** at the
-easy level of the last set: everyday tasks over plain lists and strings,
-with no maths and no dicts, on tasks that set did not cover.
+easy level of the last two sets: everyday tasks over plain lists and
+strings, with no maths and no dicts, on tasks those sets did not cover.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Finding the rows | 1-3 |
-| 2 - Patterns and parts | 4-6 |
-| 3 - Ordered by time | 7-9 |
-| 4 - Branches, distinct and difference | 10-12 |
+| 1 - Who, exactly | 1-3 |
+| 2 - Rank and share | 4-6 |
+| 3 - The clock and the calendar | 7-9 |
+| 4 - Capacity and balance | 10-12 |
 | 5 - Changing the data | 13-15 |
 
 | Stage | Python questions |
@@ -49,8 +49,8 @@ question that measures an open interval says which end to supply.
 ## The writable stage
 
 SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
-instead is constraints, triggers and DDL -- and each of questions 13 to 15
-is one of those.
+instead is conflict clauses, DDL and generated columns -- and each of
+questions 13 to 15 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -63,45 +63,45 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** All three questions run statements of their own
-*after* your script: question 13 deletes jobs 9 and 19 and every open
-battery job, question 14 inserts three dock counts of which 'twelve' must
-be refused, and question 15 inserts three daily rows of which the third
-repeats a key. The probes read what the trigger, the STRICT table and the
-composite key left behind, so each refusal or log entry shows.
+**Driver statements.** Question 15 inserts two invoice lines *after* your
+script, so the probe can add up the generated totals. Questions 13 and 14
+are graded on what the script leaves behind: the payments table, and what
+sqlite_master says about the two names.
 
 | # | Construct |
 |---|---|
-| 13 | `CREATE TABLE deleted_jobs (...); CREATE TRIGGER log_deleted_job AFTER DELETE ON maintenance BEGIN INSERT INTO deleted_jobs (...) VALUES (OLD.job_id, ...); END` |
-| 14 | `CREATE TABLE dock_counts (count_id INTEGER PRIMARY KEY, ..., bikes INTEGER NOT NULL) STRICT` |
-| 15 | `CREATE TABLE daily_use (bike_id ..., day ..., rides ..., PRIMARY KEY (bike_id, day)) WITHOUT ROWID` |
+| 13 | `REPLACE INTO payments (payment_id, ride_id, amount_cents, paid_at, method) VALUES (1, ...)` |
+| 14 | `ALTER TABLE maintenance RENAME TO jobs; CREATE VIEW maintenance AS SELECT * FROM jobs` |
+| 15 | `CREATE TABLE invoice_lines (..., total_cents INTEGER GENERATED ALWAYS AS (qty * unit_cents) STORED)` |
 
 ## Things the data does on purpose
 
-- **The busiest route is Market Square back to Market Square, 592 rides**, and
-  58 of them were in March 2026, the month Old Mill closed; question 1 matches
-  the pair as one row value.
-- **100 rides started on 30 June 2026**, every one of them after midnight,
-  which a BETWEEN that ends at '2026-06-30' loses and question 3's half-open
-  range keeps.
-- **Rosa, Zara and Umar are the only four-letter first names, 122 members
-  between them**, the ones LIKE's underscores find in question 4.
-- **5,801 subscription payments are spread across the month, 126 of them on a
-  31st**, question 5's lightest day because only seven months have one.
-- **Only 13 members joined in the first week of a year, across four years**,
-  question 6's count; the first week of every MONTH would be a quarter of the
-  members.
-- **The longest ride is 240 minutes and the longest distance 65,956 metres**,
-  set in October 2025, the record question 8's running MAX carries forward to
-  June.
-- **15,873 rides were free**, the band that question 10's CASE must test
-  first; 163 different members started at Market Square in June, the most
-  anywhere, and none at Old Mill.
-- **23 routes ridden in June 2025 were not ridden in June 2026, every one
-  touching Old Mill**, which question 12's EXCEPT finds; the other way round
-  there are none.
-- **Only 1 battery job is open**, so question 13's log holds three rows, two
-  of them jobs 9 and 19.
+- **3 stations have never had a battery job reported**, the ones question 1's
+  EXISTS flags with 0; a LEFT JOIN's COUNT(*) would flag every station with 1.
+- **81 subscribers have paid and never ridden, and 196 riders have never been
+  named on a payment**, the two sides question 2's FULL OUTER JOIN keeps; pay-
+  as-you-go riders pay per ride, so all of them are on the second side.
+- **35 rides are still out with no end station**, which question 3's IS NOT
+  counts as not-round-trips and <> would drop.
+- **Bike 2 has 43 rides, below 96 per cent of the classics**, question 4's
+  PERCENT_RANK; Market Square takes 37.0 per cent of the centre's rides,
+  question 5's zone share.
+- **386 rides have an id that is a multiple of 100**, question 6's sample,
+  which lands within a few per cent of the truth for the big models and misses
+  by a sixth for the cargo bikes' 36.
+- **Week 00 of 2026 has 291 rides and week 26 has 160**, the short weeks at
+  either end of question 7's range; 1.73 per cent of rides start on the hour,
+  question 8's figure, close to the one in sixty that chance predicts.
+- **256 members were 65 or over on 30 June 2026, against 266 by a plain
+  difference of years**, the ten whose birthday had not yet come that question
+  9 leaves out.
+- **Old Mill was active on 422 days, not 546**, which makes it question 10's
+  busiest station per dock per day; Station Approach gains 794 bikes over the
+  data and Market Square loses 567, question 11's two biggest imbalances.
+- **Every station saw a casual rider and a member within its first week**, the
+  two timestamps question 12 pulls from one scan.
+- **Payment 1 is 300 cents by app for ride 12152**, the row question 13 re-
+  records as 350 by card.
 - **The data ends at 2026-06-30 23:59**, with 35 rides still out and 114 jobs
   open.
 
@@ -113,9 +113,9 @@ shows every call and its result in the output pane, and Check compares each
 result with the reference function's. Values are compared, not their printed
 form -- but the type counts: a tuple is not a list, and 0 is not False. A
 function that prints its answer instead of returning it returns None, and
-None matches nothing. The inputs are everyday values: a list of station
-names for questions 1 to 5, an hour, a name or a few words for 6 to 10, a
-list of stops for 11 to 15. Each prompt shows one example call with its
+None matches nothing. The inputs are everyday values: lists of station
+names for questions 1 to 5, a number or a name for 6 to 10, a list of stops
+or a line of text for 11 to 15. Each prompt shows one example call with its
 answer, and Run adds a few more, including the empty list or the edge the
 question warns about.
 
@@ -126,366 +126,369 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Finding the rows (3)
+## 1 - Who, exactly (3)
 
-Two columns compared as one row value against a subquery, json_each turning a
-JSON array into rows to join on, and >= the first day with < the day after
-instead of BETWEEN.
+EXISTS as a 1-or-0 column where a LEFT JOIN's COUNT(*) counts the empty match,
+FULL OUTER JOIN keeping both sides' strays, and IS NOT treating NULL as a value.
 
-1. **The busiest route, month by month** (Q1192)
+1. **Has this station ever seen a battery job?** (Q1207)
 
-   For each month: how many rides took the single busiest route, the (start,
-   end) pair with the most finished rides overall. Compare the two columns as
-   one ROW VALUE against a subquery that returns that pair, rather than
-   testing start and end separately.
+   For every station: a 1 or 0 saying whether a battery job has ever been
+   reported there, and how many have. EXISTS is an expression, so it can sit
+   in the SELECT list as a column; a scalar subquery gives the count.
 
-   *Return: month, rides*
+   *Return: name, had_battery_job, battery_jobs*
 
-2. **Rides at the stations on a list** (Q1193)
+2. **Paid, rode, or both** (Q1208)
 
-   A caller hands you station ids as a JSON array, '[2, 5, 7, 99]'. For each
-   station on the list that exists: its name and how many rides started there.
-   json_each() turns the array into rows you can join on.
+   For each plan: members who have paid a subscription but never ridden,
+   members who have ridden but never paid one, and members who have done both.
+   A FULL OUTER JOIN between the distinct paying members and the distinct
+   riding members keeps the members on either side alone; COALESCE the two ids
+   to reach the plan.
 
-   *Return: name, rides*
+   *Return: plan, paid_never_rode, rode_never_paid, both*
 
-3. **June's rides, and the day BETWEEN loses** (Q1194)
+3. **Rides that went somewhere else, open ones included** (Q1209)
 
-   For each zone, of the start station: the rides that started in June 2026.
-   Timestamps carry a time of day, so a range that ends at '2026-06-30' stops
-   at midnight on the 30th; use a half-open range instead, up to but not
-   including the first of July.
+   For each zone, of the start station: its rides, and how many did NOT end
+   where they began -- counting a ride still out, whose end station is NULL,
+   as not a round trip. The NULL-safe comparison is IS NOT, which <> is not.
 
-   *Return: zone, rides*
+   *Return: zone, rides, not_round_trips*
 
-## 2 - Patterns and parts (3)
+## 2 - Rank and share (3)
 
-LIKE's _ for exactly one character, strftime's %d for the day of the month, and
-'start of year' chained with '+7 days'.
+PERCENT_RANK as the share strictly below, two SUM windows with different
+partitions in one SELECT, and % picking one id in a hundred with a CASE that has
+no ELSE.
 
-4. **Four-letter first names** (Q1195)
+4. **Where each bike stands among its model** (Q1210)
 
-   For each plan: its members, and how many have a first name of exactly four
-   letters. LIKE's other wildcard, _, matches exactly one character; the first
-   name ends at the first space.
+   For bikes 1 to 10: the model, the bike's rides, and the share of its model-
+   mates that have FEWER rides, as a fraction from 0 to 1 to three decimals.
+   PERCENT_RANK over the model's bikes, computed over every bike in a CTE and
+   filtered afterwards; bikes never ridden count as 0 rides.
 
-   *Return: plan, members, four_letter*
+   *Return: bike_id, model, rides, pct_rank*
 
-5. **Which day of the month subscriptions are paid** (Q1196)
+5. **Each station's share of its zone, and of everything** (Q1211)
 
-   For each day of the month, '01' to '31': how many SUBSCRIPTION payments
-   fell on it. A subscription payment names a member; strftime has a format
-   code for the day of the month.
+   For every station: its zone, its rides, its share of the ZONE's rides and
+   its share of ALL rides, both as percentages to one decimal. Two window SUMs
+   over a CTE of rides per station: one partitioned by zone, one over the
+   whole result.
 
-   *Return: day, payments*
+   *Return: name, zone, rides, zone_pct, all_pct*
 
-6. **Joined in the first week of the year** (Q1197)
+6. **A one-in-a-hundred sample** (Q1212)
 
-   For each year members joined in: how many joined, and how many of them
-   within the first seven days of that year. A date modifier walks any date
-   back to the start of its year; a second one moves forward from there.
+   For each model: how many rides fall in a one-in-a-hundred sample -- the
+   rides whose ride_id is a multiple of 100 -- the sample's average distance
+   in whole metres, and the average over every ride of the model. The modulo
+   operator % picks the sample; a CASE inside AVG keeps the other rides out of
+   it.
 
-   *Return: year, joined, first_week*
+   *Return: model, sampled, sample_avg_m, all_avg_m*
 
-## 3 - Ordered by time (3)
+## 3 - The clock and the calendar (3)
 
-unixepoch for seconds that divide cleanly into minutes, a window MAX whose ORDER
-BY makes it the record so far, and LAG with an offset of 2 and a default of 0.
+%W against %U, %M against %S, and a year difference corrected by comparing 'MM-
+DD' text.
 
-7. **The longest ride of each month, in minutes** (Q1198)
+7. **Rides by week of the year, 2026** (Q1213)
 
-   For each month: the length in whole minutes of its longest finished ride.
-   unixepoch() turns a timestamp into seconds, and seconds subtract cleanly.
+   For 2026: rides per week number, weeks starting on Monday, '00' for the
+   days before the first Monday. strftime has two week-number codes; one
+   counts Monday-led weeks and the other Sunday-led.
 
-   *Return: month, longest_minutes*
+   *Return: week, rides*
 
-8. **The record ride, month by month** (Q1199)
+8. **Rides that began on the hour** (Q1214)
 
-   For each month: the longest distance ridden that month, and the longest
-   ridden in ANY month up to and including it -- the record to date. A monthly
-   MAX in a CTE, then a window MAX ordered by month over it.
+   For each zone, of the start station: its rides, how many started at exactly
+   zero minutes past an hour, and that as a percentage to two decimals.
+   strftime has a code for the minute of the hour.
 
-   *Return: month, longest_m, record_m*
+   *Return: zone, rides, on_the_hour, pct*
 
-9. **Where bike 7 was two rides ago** (Q1200)
+9. **Members who were 65 or over when the data ends** (Q1215)
 
-   For each ride bike 7 started in June 2026: where it started, and where it
-   started TWO rides earlier, with 0 when there is no such ride. LAG takes an
-   offset and a default as its second and third arguments; compute over all of
-   bike 7's rides and filter to June afterwards.
+   For each plan: its members, and how many were 65 or older on 2026-06-30 --
+   an EXACT age, so a member whose 65th birthday fell in July 2026 is not
+   counted. Take the difference of the years, then subtract one if the
+   birthday's month-and-day had not yet come round.
 
-   *Return: ride_id, started_at, start_station_id, two_back*
+   *Return: plan, members, seniors*
 
-## 4 - Branches, distinct and difference (3)
+## 4 - Capacity and balance (3)
 
-A CASE tested from the narrowest band out, COUNT of a DISTINCT CASE with no
-ELSE, and EXCEPT subtracting whole (start, end) rows with the operands the right
-way round.
+COUNT(DISTINCT date(...)) for the days a station was really open, ABS for a
+difference in either direction, and MIN over a CASE with no ELSE.
 
-10. **Fares in four bands** (Q1201)
+10. **How hard each dock works** (Q1216)
 
-    Every ride in one of four bands: 'free', 'under $2', 'under $5' and '$5
-    and up' -- with how many rides and the fares added up in dollars. One
-    CASE; its WHEN tests are checked in order and the first true one wins, so
-    think about which band has to be tested first.
+    For every station: its docks, its rides, the number of DAYS on which a
+    ride started there, and the rides per dock per active day to three
+    decimals. The active days are a COUNT of DISTINCT dates; Old Mill's are
+    fewer, and dividing by the data's 546 days instead would understate it.
 
-    *Return: band, rides, fares*
+    *Return: name, docks, rides, active_days, per_dock_day*
 
-11. **June's riders against all riders, per station** (Q1202)
+11. **Stations out of balance** (Q1217)
 
-    For every station: how many different members have ever started a ride
-    there, and how many different members did so in June 2026. Both from one
-    pass over rides: the second count is a COUNT of DISTINCT over a CASE that
-    yields the member only for June rows.
+    The stations where rides ending and rides starting differ by MORE than a
+    hundred, in either direction: the starts, the ends, and the net gain (ends
+    minus starts, negative for a drain). Two scalar subqueries per station,
+    and ABS in the WHERE.
 
-    *Return: name, riders_ever, riders_june*
+    *Return: name, starts, ends, net*
 
-12. **The routes that Old Mill's closure took away** (Q1203)
+12. **The first casual ride and the first member ride** (Q1218)
 
-    Every route -- a start station and an end station, by name -- that was
-    ridden in June 2025 but not in June 2026. EXCEPT works on rows of two
-    columns as well as one; join to stations for the names afterwards.
+    For every station: when its first ride by a casual rider started, and when
+    its first ride by a member did. One pass over rides: MIN of a CASE that
+    yields the timestamp only for the rows of each kind, and nothing -- NULL
+    -- for the others.
 
-    *Return: from_station, to_station*
+    *Return: name, first_casual, first_member*
 
 ## 5 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. An AFTER DELETE trigger reading OLD, a
-STRICT table, and a composite PRIMARY KEY on a WITHOUT ROWID table.
+question's probe query reads the result. REPLACE INTO, RENAME TO with a view
+behind the old name, and STORED against VIRTUAL.
 
-13. **A log of every deleted job** (Q1204)
+13. **A payment re-recorded** (Q1219)
 
-    Nothing should vanish from maintenance without a trace. Create a table
-    deleted_jobs with job_id (the primary key), bike_id, kind and cost_cents,
-    all required, plus a deleted_on text column defaulting to '2026-07-01';
-    then an AFTER DELETE trigger on maintenance that copies the removed row's
-    four values into it. The question then deletes jobs 9 and 19, and every
-    open battery job.
+    Payment 1 was keyed in wrong: it was 350 cents by card, not 300 by app.
+    Re-record it in ONE statement, keeping payment_id 1, ride 12152 and the
+    time '2025-01-01 02:42': REPLACE INTO writes the row as given, removing
+    the old row with that id first.
 
-    *Checked: how many rows the log has, its lowest and highest job_id, and how many are battery jobs*
+    *Checked: payment 1's amount and method, how many payments there are, and the highest payment_id*
 
-14. **A table that insists on its types** (Q1205)
+14. **A table renamed, without breaking the old name** (Q1220)
 
-    Create dock_counts with count_id as the integer primary key, station_id
-    (integer, required), counted_on (text, required) and bikes (integer,
-    required) -- as a STRICT table, so that a value of the wrong type is
-    refused rather than stored as given. The question then inserts three
-    counts: 17, the word 'twelve', and the text '9'.
+    The maintenance table is to be called jobs from now on, but old reports
+    still query maintenance. Rename the table with ALTER TABLE, then create a
+    VIEW called maintenance that selects everything from jobs, so both names
+    work.
 
-    *Checked: each row's station_id, bikes and typeof(bikes)*
+    *Checked: what sqlite_master says the names jobs and maintenance are*
 
-15. **One row per bike per day, keyed by both** (Q1206)
+15. **A total that is computed and kept** (Q1221)
 
-    Create daily_use with bike_id (referencing bikes), day (text) and rides
-    (integer), all required, whose PRIMARY KEY is the pair (bike_id, day) -- a
-    composite key -- and declared WITHOUT ROWID, as a table keyed by its own
-    columns can be. The question then inserts three rows, the third repeating
-    a bike-and-day.
+    Create invoice_lines with line_id as the integer primary key, job_id
+    (required, referencing maintenance), qty and unit_cents (integers,
+    required), and total_cents as a GENERATED column equal to qty times
+    unit_cents that is STORED -- written to disk when the row is, not
+    recomputed on every read. The question then inserts two lines.
 
-    *Checked: the rows that got in*
+    *Checked: the totals added up, and the 'hidden' code pragma_table_xinfo gives the total_cents column (3 for stored, 2 for virtual)*
 
 # Python
 
 ## 1 - Counting and finding (5)
 
-`in` before index() and a length check before + 1, count() == 1 rather than
-set(), count() on a slice, `in` on the second list to keep the first list's
-order, and -1 after the loop.
+`in` before index(), a backwards loop that breaks, len // 2 behind a guard,
+today's count minus yesterday's, and lower() before testing a first letter.
 
-1. **Where the bike went after Harbour** (P461)
+1. **Everywhere the bike went after Harbour** (P476)
 
-   Write a function `stop_after(stops, station)` that returns the stop that
-   came right after the station's FIRST appearance, or None when the station
-   is missing or was the last stop. Two things to check before indexing.
-
-   ```
-   stop_after(["Parkway", "Harbour", "Stadium"], "Harbour") -> "Stadium"
-   ```
-
-   *Return: a str, or None.*
-
-2. **The stations visited only once** (P462)
-
-   Write a function `visited_once(stops)` that returns the stations that
-   appear exactly once in the day's stops, in the order they appear. A
-   comprehension that keeps a stop when its count() in the list is 1.
+   Write a function `after(stops, station)` that returns the stops that came
+   after the station's FIRST appearance, not including it, or [] if the
+   station never appears. A membership test, then index() and a slice.
 
    ```
-   visited_once(["Harbour", "Stadium", "Harbour", "Parkway"]) -> ["Stadium", "Parkway"]
+   after(["Parkway", "Harbour", "Stadium", "Hilltop"], "Harbour") -> ["Stadium", "Hilltop"]
    ```
 
    *Return: a list of str.*
 
-3. **Visits before midday** (P463)
+2. **How long the bike sat at its last stop** (P477)
 
-   The first n stops of the day happened before midday. Write a function
-   `visits_before(stops, station, n)` that returns how many of those first n
-   stops were at the station. A slice, then count().
+   Write a function `final_streak(stops)` that returns how many times the LAST
+   stop is repeated at the end of the list, in a row -- 3 for a list ending
+   Stadium, Stadium, Stadium -- and 0 for an empty list. A loop backwards from
+   the end that stops at the first different stop.
 
    ```
-   visits_before(["Harbour", "Stadium", "Harbour", "Harbour"], "Harbour", 3) -> 2
+   final_streak(["Harbour", "Stadium", "Stadium", "Stadium"]) -> 3
    ```
 
    *Return: an int.*
 
-4. **Stations both bikes reached, in the first bike's order** (P464)
+3. **The halfway stop** (P478)
 
-   Write a function `both_reached(first, second)` that returns the stops of
-   the first bike's day that the second bike also reached, in the first bike's
-   order, repeats kept. A comprehension over the first list with `in` on the
-   second.
-
-   ```
-   both_reached(["Stadium", "Harbour", "Parkway"], ["Parkway", "Stadium"]) -> ["Stadium", "Parkway"]
-   ```
-
-   *Return: a list of str.*
-
-5. **When the bike first moved on** (P465)
-
-   Write a function `first_change(stops)` that returns the position of the
-   first stop that differs from the first stop of the day, or -1 if every stop
-   is the same (or there are none). A loop with enumerate, comparing with
-   stops[0].
+   Write a function `halfway(stops)` that returns the stop in the middle of
+   the day -- position len // 2, which for an even count is the later of the
+   two middle stops -- or None for an empty list.
 
    ```
-   first_change(["Harbour", "Harbour", "Stadium", "Harbour"]) -> 2
+   halfway(["Harbour", "Stadium", "Parkway"]) -> "Stadium"
+   ```
+
+   *Return: a str, or None.*
+
+4. **More visits today than yesterday?** (P479)
+
+   Write a function `visits_change(today, yesterday, station)` that returns
+   how many more times the station was visited today than yesterday --
+   negative if fewer. Two count() calls and a subtraction, today's first.
+
+   ```
+   visits_change(["Harbour", "Harbour", "Stadium"], ["Harbour"], "Harbour") -> 1
+   ```
+
+   *Return: an int.*
+
+5. **How many names start with a vowel** (P480)
+
+   Write a function `vowel_names(names)` that returns how many of the names
+   begin with a vowel, in either case; an empty string does not count. A sum
+   over a generator that tests the first character lower-cased, with a guard
+   for the empty string.
+
+   ```
+   vowel_names(["Aisha", "Umar", "Rosa", "Eleanor"]) -> 3
    ```
 
    *Return: an int.*
 
 ## 2 - Labels (5)
 
-hour % 12 with 0 shown as 12, a slice then upper(), < 12 and < 18 at the
-boundaries, special cases returned early, and an f-string whose brackets and
-spaces are part of the answer.
+round() rather than int(), // and % with :02d rather than a float, words[-1]
+rather than words[1], divmod into two padded parts, and the dash added before
+join().
 
-6. **The hour on a 12-hour clock** (P466)
+6. **A percentage, rounded, as a label** (P481)
 
-   Write a function `twelve_hour(hour)` that turns an hour from 0 to 23 into
-   '3 pm', '12 am', '12 pm' or '8 am': am before 12, pm from 12; the hour
-   shown is hour % 12, except that 0 is shown as 12.
-
-   ```
-   twelve_hour(15) -> "3 pm"
-   ```
-
-   *Return: a str.*
-
-7. **A three-letter station code** (P467)
-
-   Write a function `station_code(name)` that returns the first three
-   characters of the name in capitals, or the whole name in capitals if it is
-   shorter. A slice and upper().
+   Write a function `percent_label(part, whole)` that returns the share as a
+   whole-number percentage with a percent sign, '67%' for 2 of 3, or 'n/a'
+   when the whole is 0. round() to no decimals, inside an f-string.
 
    ```
-   station_code("Market Square") -> "MAR"
+   percent_label(2, 3) -> "67%"
    ```
 
    *Return: a str.*
 
-8. **Good morning, good afternoon, good evening** (P468)
+7. **Cents as dollars on a receipt** (P482)
 
-   Write a function `greeting(name, hour)` that returns 'Good morning, Hamid'
-   before 12, 'Good afternoon, ...' from 12 up to but not including 18, and
-   'Good evening, ...' from 18. An if/elif/else on the hour inside one
-   f-string.
-
-   ```
-   greeting("Rosa", 12) -> "Good afternoon, Rosa"
-   ```
-
-   *Return: a str.*
-
-9. **Today, tomorrow, in 3 days** (P469)
-
-   Write a function `due_label(days)` that says when a payment is due: 'today'
-   for 0, 'tomorrow' for 1, and 'in 3 days' (with the number) for anything
-   more. Two special cases, then the general one.
+   Write a function `dollars(cents)` that returns the amount as '$3.50': a
+   dollar sign, the whole dollars, a point, and the cents left over always as
+   two digits. // and % give the two parts; a format spec pads the second.
 
    ```
-   due_label(3) -> "in 3 days"
+   dollars(350) -> "$3.50"
    ```
 
    *Return: a str.*
 
-10. **A ride in one line** (P470)
+8. **A name the way the register writes it** (P483)
 
-    Write a function `ride_summary(start, end, minutes)` that returns 'Harbour
-    to Stadium (32 min)': the two stations joined by ' to ', then the minutes
-    in brackets with 'min'. One f-string.
+   Write a function `register_name(name)` that turns 'Hamid Uddin' into
+   'Uddin, Hamid': the LAST word first, a comma and a space, then everything
+   before it. A one-word name is returned unchanged. split(), a slice, and
+   join().
+
+   ```
+   register_name("Hamid Uddin") -> "Uddin, Hamid"
+   ```
+
+   *Return: a str.*
+
+9. **Minutes since midnight as a clock time** (P484)
+
+   Write a function `clock(minutes)` that turns minutes since midnight into
+   'HH:MM' with both parts two digits: 485 is '08:05'. divmod() by 60 gives
+   hours and minutes at once; a format spec pads each.
+
+   ```
+   clock(485) -> "08:05"
+   ```
+
+   *Return: a str.*
+
+10. **A bulleted list of names** (P485)
+
+    Write a function `bulleted(names)` that returns the names as a bulleted
+    list in one string: each name on its own line, starting with '- ', lines
+    separated by newlines and no newline at the end; '' for no names. A
+    comprehension to add the dash, then '\n'.join.
 
     ```
-    ride_summary("Harbour", "Stadium", 32) -> "Harbour to Stadium (32 min)"
+    bulleted(["Hamid", "Rosa"]) -> "- Hamid\n- Rosa"
     ```
 
     *Return: a str.*
 
 ## 3 - Checks and filters (5)
 
-len(set()) <= 1 so the empty day counts, index() only after `in`, two positions
-swapped on a copy, n == 0 tested before a negative slice, and zip() into
-f-strings rather than tuples.
+i + 1 to leave the first end out, zip with the list shifted by one, the empty
+string's falsiness, strip() after split(','), and two slices that skip one
+position.
 
-11. **Did the bike stay put all day?** (P471)
+11. **The stops between Harbour and Stadium** (P486)
 
-    Write a function `all_same(stops)` that returns True when every stop is
-    the same station, and True for an empty list too (nothing differs). The
-    number of DIFFERENT values is the thing to test.
-
-    ```
-    all_same(["Harbour", "Harbour", "Harbour"]) -> True
-    ```
-
-    *Return: True or False.*
-
-12. **The stops before the bike reached Harbour** (P472)
-
-    Write a function `until(stops, station)` that returns the stops before the
-    station's first appearance -- not including it -- or the whole list if the
-    station never appears. A membership test, then index() and a slice.
+    Write a function `between(stops, a, b)` that returns the stops strictly
+    between the first a and the first b -- neither included -- and [] when
+    either is missing or b comes before a. Two index() calls and one slice,
+    after the checks.
 
     ```
-    until(["Parkway", "Stadium", "Harbour", "Hilltop"], "Harbour") -> ["Parkway", "Stadium"]
+    between(["Parkway", "Harbour", "Hilltop", "Riverside", "Stadium", "Parkway"], "Harbour", "Stadium") -> ["Hilltop", "Riverside"]
     ```
 
     *Return: a list of str.*
 
-13. **The first and last stops swapped** (P473)
+12. **The legs of a day, from one list** (P487)
 
-    Write a function `swap_ends(stops)` that returns a NEW list with the first
-    and last stops exchanged and the middle unchanged; a list of one or none
-    comes back as a copy. Copy the list, then assign to positions 0 and -1 in
-    one tuple assignment.
-
-    ```
-    swap_ends(["Harbour", "Stadium", "Parkway"]) -> ["Parkway", "Stadium", "Harbour"]
-    ```
-
-    *Return: a list of str.*
-
-14. **The last few stops** (P474)
-
-    Write a function `last_stops(stops, n)` that returns the last n stops --
-    all of them if there are fewer than n, and [] when n is 0. A negative
-    slice is the natural tool, but one value of n needs care.
+    Write a function `legs_of(stops)` that returns one string per leg between
+    consecutive stops, 'Harbour -> Stadium', from a single list of stops; one
+    stop or none gives []. zip the list with itself shifted by one.
 
     ```
-    last_stops(["Harbour", "Stadium", "Parkway", "Hilltop"], 2) -> ["Parkway", "Hilltop"]
+    legs_of(["Harbour", "Stadium", "Parkway"]) -> ["Harbour -> Stadium", "Stadium -> Parkway"]
     ```
 
     *Return: a list of str.*
 
-15. **Each leg of the day, start to end** (P475)
+13. **Blanks in the log filled in** (P488)
 
-    Two lists of the same length give each ride's start and end station. Write
-    a function `legs(starts, ends)` that returns one string per ride, 'Harbour
-    -> Stadium'. zip() pairs the lists up; an f-string makes each string. If
-    the lists differ in length, stop at the shorter.
+    Some stops were left blank -- an empty string. Write a function
+    `fill_blanks(stops, default)` that returns the list with every empty
+    string replaced by the default and everything else unchanged. A
+    comprehension with a conditional expression, or with `or`.
 
     ```
-    legs(["Harbour", "Stadium"], ["Stadium", "Parkway"]) -> ["Harbour -> Stadium", "Stadium -> Parkway"]
+    fill_blanks(["Harbour", "", "Stadium", ""], "unknown") -> ["Harbour", "unknown", "Stadium", "unknown"]
+    ```
+
+    *Return: a list of str.*
+
+14. **Names from a comma-separated line** (P489)
+
+    A form sends names as one line, 'Hamid, Rosa,Yusuf , Zara', with the
+    spacing all over the place. Write a function `names_from(line)` that
+    returns the names as a list, each stripped of spaces, empty pieces
+    dropped. split on the comma, then strip, then keep the non-empty ones.
+
+    ```
+    names_from("Hamid, Rosa,Yusuf , Zara") -> ["Hamid", "Rosa", "Yusuf", "Zara"]
+    ```
+
+    *Return: a list of str.*
+
+15. **A stop struck out** (P490)
+
+    Write a function `without_position(stops, i)` that returns a NEW list with
+    the stop at position i left out, or an unchanged copy if there is no such
+    position. Two slices joined: everything before i and everything after it.
+
+    ```
+    without_position(["Harbour", "Stadium", "Parkway"], 1) -> ["Harbour", "Parkway"]
     ```
 
     *Return: a list of str.*
@@ -499,7 +502,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,651 retired ones.
+1,681 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
