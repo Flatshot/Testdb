@@ -1,4 +1,4 @@
-"""Populate testdb with practice data for a city bike-hire scheme.
+"""Populate testdb with practice data for a regional parcel courier.
 
 Deterministic: the RNG is seeded and no wall-clock dates are used, so running
 this twice produces byte-identical data. Safe to re-run -- it drops every table
@@ -7,14 +7,16 @@ first, so a schema change is picked up.
     python seed.py
 
 The gaps below are deliberate. Questions about anti-joins, NULL handling,
-open intervals and COUNT need something real to find:
+open intervals, sequences and COUNT need something real to find:
 
-  * members who have never ridden, and members with no district recorded
-  * bikes never ridden, and bikes retired
-  * a station closed part-way through the data
-  * rides still out (ended_at NULL), and rides by casual riders (member_id NULL)
-  * maintenance jobs still open
-  * subscription payments that members have missed
+  * customers who have never sent a parcel, and customers with no postcode area
+  * couriers who have left
+  * a depot closed part-way through the data
+  * parcels still in transit (delivered_at NULL), and parcels lost after a
+    failed delivery attempt
+  * walk-in parcels with no customer (customer_id NULL)
+  * failed delivery attempts, each followed by another attempt
+  * invoices not yet paid
 """
 
 import random
@@ -22,34 +24,31 @@ from datetime import date, datetime, timedelta
 
 import db
 
-SEED = 1206
+SEED = 1241
 
-# Rides are spread across this window. The data ends at SNAPSHOT: a ride that
-# would have ended after it is left out instead, and a job not yet fixed by
-# then is left open.
+# Parcels are collected across this window. The data ends at SNAPSHOT: a
+# parcel that would have been delivered after it is still in transit, and an
+# invoice for June is issued on 1 July, after the end, so there is none.
 RANGE_START = date(2025, 1, 1)
 RANGE_END = date(2026, 6, 30)
 SNAPSHOT = datetime(2026, 6, 30, 23, 59)
 
-FREE_MINUTES = 30            # a member's ride inside this costs nothing
-MEMBER_RATE = 100            # cents per started 15 minutes beyond the free half hour
-CASUAL_BASE = 200            # cents to unlock, casual rider
-CASUAL_RATE = 50             # cents per started 10 minutes, casual rider
-PAYG_BASE = 150              # cents to unlock, pay-as-you-go member
-PAYG_RATE = 50               # cents per started 10 minutes, pay-as-you-go member
-MONTHLY_FEE = 1200           # cents
-ANNUAL_FEE = 9900            # cents
+# Postage: a base per service plus a rate per started kilogram.
+BASE = {"economy": 350, "standard": 500, "express": 900}      # cents
+PER_KG = {"economy": 60, "standard": 90, "express": 150}      # cents per started kg
+# How long the line haul takes, in days, by service (min, max); delivery is
+# the next working morning after arrival.
+TRANSIT = {"economy": (2, 5), "standard": (1, 2), "express": (0, 1)}
 
-TABLES = ["stations", "bikes", "members", "rides", "maintenance", "payments"]
+TABLES = ["depots", "couriers", "customers", "parcels", "scans", "invoices"]
 
-STATIONS = [("Market Square", "centre", 40, "2019-04-01"), ("Cathedral", "centre", 24, "2019-04-01"),
-            ("Station Approach", "centre", 36, "2019-04-01"), ("University", "north", 32, "2019-06-15"),
-            ("Botanic Gardens", "north", 20, "2020-03-01"), ("Hilltop", "north", 16, "2021-05-20"),
-            ("Harbour", "east", 28, "2019-09-10"), ("East Quay", "east", 18, "2022-07-01"),
-            ("Stadium", "south", 30, "2020-08-14"), ("Old Mill", "south", 14, "2021-11-02"),
-            ("Parkway", "west", 22, "2020-01-20"), ("Riverside", "west", 26, "2019-04-01")]
-CLOSED_STATION = 10          # Old Mill closes part-way through
-CLOSED_ON = date(2026, 3, 1)
+DEPOTS = [("Central Hub", "central", 48, "2017-03-01"), ("Old Foundry", "central", 12, "2018-06-11"),
+          ("Northgate", "north", 24, "2017-03-01"), ("Moorside", "north", 16, "2020-09-15"),
+          ("Docklands", "east", 30, "2017-03-01"), ("Harbour Point", "east", 14, "2021-02-01"),
+          ("Southfield", "south", 20, "2018-01-20"), ("Millbank", "south", 18, "2019-10-05"),
+          ("Westway", "west", 26, "2017-03-01"), ("Hillcrest", "west", 10, "2022-05-30")]
+CLOSED_DEPOT = 2             # Old Foundry closes part-way through
+CLOSED_ON = date(2026, 2, 1)
 
 FIRST = ["Aisha", "Bartholomew", "Cerys", "Dmitri", "Eleanor", "Farouk",
          "Grace", "Hamid", "Imogen", "Jonah", "Kwame", "Leila", "Marcus",
@@ -60,17 +59,13 @@ LAST = ["Achebe", "Baxter", "Chowdhury", "Dalgleish", "Ekwueme", "Fairweather",
         "Lindqvist", "Mbeki", "Nakamura", "Okonjo", "Papadopoulos", "Quraishi",
         "Rasmussen", "Sowerby", "Tremblay", "Uddin", "Villanueva", "Whitcombe",
         "Yilmaz", "Zielinski"]
-DISTRICTS = ["Old Town", "Docklands", "Northfield", "Southgate", "Westbrook",
-             "Eastmoor", "Hillside", "Riverbank", "Millfield", "Greenway"]
-MODELS = ["classic"] * 6 + ["electric"] * 3 + ["cargo"]
-PLANS = ["annual"] * 4 + ["monthly"] * 4 + ["pay-as-you-go"] * 2
-KINDS = ["puncture"] * 4 + ["brakes"] * 2 + ["battery", "chain", "chain", "other"]
-COST = {"puncture": (800, 1500), "brakes": (1500, 4000), "battery": (6000, 15000),
-        "chain": (1200, 3000), "other": (500, 8000)}
-
-# Typical ride lengths by model, in minutes, and typical speed in metres a
-# minute -- cargo bikes are hired for errands, electrics go further.
-TYPICAL = {"classic": (18, 180), "electric": (24, 260), "cargo": (35, 150)}
+TRADES = ["Bakery", "Books", "Bicycles", "Pharmacy", "Florist", "Printers", "Textiles",
+          "Hardware", "Ceramics", "Optics", "Coffee", "Garden Supplies", "Records", "Toys"]
+SUFFIX = ["Ltd", "& Sons", "& Co", "Supplies", "Direct", "Studio"]
+AREAS = ["NG1", "NG2", "NG3", "NG5", "NG7", "NG9", "DE1", "DE22", "LE1", "LE4", "S1", "S8"]
+VEHICLES = ["van"] * 6 + ["bike"] * 3 + ["lorry"]
+SERVICES = ["economy"] * 5 + ["standard"] * 3 + ["express"] * 2
+KINDS = ["personal"] * 13 + ["business"] * 7
 
 
 def _d(d):
@@ -85,14 +80,16 @@ def _ceil_div(a, b):
     return -(-a // b)
 
 
-def fare(minutes, plan):
-    """What a ride costs, in cents, for a rider on `plan` (None = casual)."""
-    if plan is None:
-        return CASUAL_BASE + CASUAL_RATE * _ceil_div(minutes, 10)
-    if plan == "pay-as-you-go":
-        return PAYG_BASE + PAYG_RATE * _ceil_div(minutes, 10)
-    extra = max(minutes - FREE_MINUTES, 0)
-    return MEMBER_RATE * _ceil_div(extra, 15) if extra else 0
+def postage(service, weight_g):
+    """Postage in cents: a base for the service plus a rate per started kg."""
+    return BASE[service] + PER_KG[service] * _ceil_div(weight_g, 1000)
+
+
+def _next_morning(rng, t, days=1):
+    """A time in the morning `days` days after t's date."""
+    day = t.date() + timedelta(days=days)
+    return datetime.combine(day, datetime.min.time()) + timedelta(
+        hours=rng.randint(7, 11), minutes=rng.randint(0, 59))
 
 
 def seed():
@@ -108,141 +105,152 @@ def seed():
         conn.executescript(db.SCHEMA_PATH.read_text(encoding="utf-8"))
         conn.execute("PRAGMA foreign_keys=ON")
 
-        # ---- stations: twelve, one of which closes ------------------------
+        # ---- depots: ten, one of which closes ------------------------------
         with conn:
             conn.executemany(
-                "INSERT INTO stations (station_id, name, zone, docks, opened_on, closed_on)"
+                "INSERT INTO depots (depot_id, name, region, bays, opened_on, closed_on)"
                 " VALUES (?,?,?,?,?,?)",
-                [(i + 1, n, z, d, o, _d(CLOSED_ON) if i + 1 == CLOSED_STATION else None)
-                 for i, (n, z, d, o) in enumerate(STATIONS)])
-        open_stations = [s for s in range(1, len(STATIONS) + 1)]
+                [(i + 1, n, r, b, o, _d(CLOSED_ON) if i + 1 == CLOSED_DEPOT else None)
+                 for i, (n, r, b, o) in enumerate(DEPOTS)])
+        depots = list(range(1, len(DEPOTS) + 1))
+        open_depots = [d for d in depots if d != CLOSED_DEPOT]
 
-        # ---- bikes: 320, some retired --------------------------------------
-        bikes = []
-        for _ in range(320):
-            model = rng.choice(MODELS)
-            acquired = date(2022, 1, 1) + timedelta(days=rng.randint(0, 1200))
-            retired = None
-            if rng.random() < 0.06:
-                retired = _d(RANGE_START + timedelta(days=rng.randint(30, 500)))
-            bikes.append((model, _d(acquired), retired))
+        # ---- couriers: 60, a few who have left -----------------------------
+        couriers = []
+        for _ in range(60):
+            depot = rng.choice(depots)
+            hired = date(2018, 1, 1) + timedelta(days=rng.randint(0, 2900))
+            left = None
+            if rng.random() < 0.13:
+                left = _d(RANGE_START + timedelta(days=rng.randint(60, 500)))
+            couriers.append((f"{rng.choice(FIRST)} {rng.choice(LAST)}", depot,
+                             rng.choice(VEHICLES), _d(hired), left))
+        # the closed depot's couriers move to the hub when it shuts; in the
+        # data that shows as their depot being the hub from the start, except
+        # for two who left when it closed
         with conn:
             conn.executemany(
-                "INSERT INTO bikes (model, acquired_on, retired_on) VALUES (?,?,?)", bikes)
+                "INSERT INTO couriers (name, depot_id, vehicle, hired_on, left_on)"
+                " VALUES (?,?,?,?,?)", couriers)
 
-        # ---- members: 900, some who never ride -----------------------------
-        members = []
-        for _ in range(900):
-            born = date(1945, 1, 1) + timedelta(days=rng.randint(0, 22000))
-            joined = date(2023, 1, 1) + timedelta(days=rng.randint(0, 1270))
-            joined = min(joined, RANGE_END)
-            district = None if rng.random() < 0.1 else rng.choice(DISTRICTS)
-            members.append((f"{rng.choice(FIRST)} {rng.choice(LAST)}", _d(born), _d(joined),
-                            rng.choice(PLANS), rng.randint(1, len(STATIONS)), district))
-        with conn:
-            conn.executemany(
-                "INSERT INTO members (name, born_on, joined_on, plan, home_station_id, district)"
-                " VALUES (?,?,?,?,?,?)", members)
-        never = set(rng.sample(range(1, 901), 100))
-        riders = [m for m in range(1, 901) if m not in never]
-        commuters = rng.sample(riders, 40)          # a heavy tail of regulars
+        def courier_at(depot, when):
+            """A courier working from `depot` on `when`, or from the hub."""
+            pool = [i + 1 for i, c in enumerate(couriers)
+                    if c[1] == depot and c[3] <= _d(when.date())
+                    and (c[4] is None or c[4] > _d(when.date()))]
+            if not pool:
+                pool = [i + 1 for i, c in enumerate(couriers)
+                        if c[1] == 1 and (c[4] is None or c[4] > _d(when.date()))]
+            return rng.choice(pool)
 
-        # ---- rides: one bike at a time, with gaps between -----------------
-        rides = []
-        for bid, (model, acquired, retired) in enumerate(bikes, start=1):
-            if rng.random() < 0.03:
-                continue                                    # never ridden
-            end = datetime.fromisoformat(retired) if retired else SNAPSHOT
-            start_day = max(RANGE_START, date.fromisoformat(acquired))
-            when = datetime.combine(start_day, datetime.min.time()) + timedelta(
-                minutes=rng.randint(0, 14 * 24 * 60))
-            typical_min, speed = TYPICAL[model]
-            while when < end:
-                if rng.random() < 0.3:
-                    member, plan = None, None                # casual rider
-                else:
-                    member = rng.choice(commuters) if rng.random() < 0.3 else rng.choice(riders)
-                    plan = members[member - 1][3]
-                from_s = rng.choice(open_stations)
-                if from_s == CLOSED_STATION and when.date() >= CLOSED_ON:
-                    from_s = 1
-                to_s = from_s if rng.random() < 0.08 else rng.choice(open_stations)
-                minutes = max(2, int(rng.expovariate(1 / typical_min)) + 2)
-                minutes = min(minutes, 240)
-                ended = when + timedelta(minutes=minutes)
-                if to_s == CLOSED_STATION and ended.date() >= CLOSED_ON:
-                    to_s = 3
-                if ended > end:
-                    rides.append((bid, member, from_s, None, _t(when), None, None, 0))
-                    break
-                dist = int(minutes * speed * rng.uniform(0.6, 1.3))
-                rides.append((bid, member, from_s, to_s, _t(when), _t(ended), dist,
-                              fare(minutes, plan)))
-                # the bike waits at the dock -- a few days on average, so a
-                # bike sees about a hundred rides over the eighteen months
-                gap = int(rng.expovariate(1 / 6000)) + 30
-                when = ended + timedelta(minutes=min(gap, 20 * 24 * 60))
-                # nobody unlocks a bike in the small hours: push to the morning
-                if when.hour < 6:
-                    when = when.replace(hour=rng.randint(6, 9), minute=rng.randint(0, 59))
-                elif when.hour >= 23:
-                    when = (when + timedelta(days=1)).replace(hour=rng.randint(6, 9),
-                                                              minute=rng.randint(0, 59))
-            # a few bikes are out on the road as the data ends
-            if not retired and rng.random() < 0.12:
-                out_from = SNAPSHOT - timedelta(minutes=rng.randint(5, 600))
-                if not rides or rides[-1][0] != bid or rides[-1][5] is None or rides[-1][5] < _t(out_from):
-                    rides.append((bid, rng.choice(riders) if rng.random() < 0.7 else None,
-                                  rng.choice([s for s in open_stations if s != CLOSED_STATION]),
-                                  None, _t(out_from), None, None, 0))
-        with conn:
-            conn.executemany(
-                "INSERT INTO rides (bike_id, member_id, start_station_id, end_station_id,"
-                " started_at, ended_at, distance_m, fare_cents) VALUES (?,?,?,?,?,?,?,?)", rides)
-
-        # ---- maintenance: 1,100 jobs, some still open -----------------------
-        jobs = []
-        for _ in range(1100):
-            bid = rng.randint(1, 320)
-            model = bikes[bid - 1][0]
+        # ---- customers: 700, some who never send ---------------------------
+        customers = []
+        for _ in range(700):
             kind = rng.choice(KINDS)
-            if kind == "battery" and model != "electric":
-                kind = "chain"
-            reported = datetime.combine(RANGE_START, datetime.min.time()) + timedelta(
-                minutes=rng.randint(0, 546 * 24 * 60))
-            fixed = reported + timedelta(hours=rng.randint(2, 240))
-            fixed_s = _t(fixed) if fixed <= SNAPSHOT and rng.random() < 0.92 else None
-            lo, hi = COST[kind]
-            jobs.append((bid, rng.randint(1, len(STATIONS)), _t(reported), fixed_s, kind,
-                         rng.randint(lo, hi) // 10 * 10))
+            if kind == "business":
+                name = f"{rng.choice(LAST)} {rng.choice(TRADES)} {rng.choice(SUFFIX)}"
+            else:
+                name = f"{rng.choice(FIRST)} {rng.choice(LAST)}"
+            joined = date(2022, 1, 1) + timedelta(days=rng.randint(0, 1640))
+            joined = min(joined, RANGE_END)
+            area = None if rng.random() < 0.1 else rng.choice(AREAS)
+            customers.append((name, kind, rng.choice(depots), _d(joined), area))
         with conn:
             conn.executemany(
-                "INSERT INTO maintenance (bike_id, station_id, reported_at, fixed_at, kind,"
-                " cost_cents) VALUES (?,?,?,?,?,?)", jobs)
+                "INSERT INTO customers (name, kind, depot_id, joined_on, postcode_area)"
+                " VALUES (?,?,?,?,?)", customers)
+        never = set(rng.sample(range(1, 701), 80))
+        senders = [c for c in range(1, 701) if c not in never]
+        heavy = rng.sample([c for c in senders if customers[c - 1][1] == "business"], 25)
 
-        # ---- payments: fares per ride, subscriptions per member -------------
-        payments = []
-        for rid, (bid, member, from_s, to_s, started, ended, dist, cents) in enumerate(rides, start=1):
-            if cents == 0 or ended is None:
-                continue
-            payments.append((None, rid, cents, ended, rng.choice(["card", "card", "app"])))
-        for mid, (name, born, joined, plan, home, district) in enumerate(members, start=1):
-            if plan == "pay-as-you-go":
-                continue
-            due = date.fromisoformat(joined)
-            step = timedelta(days=365) if plan == "annual" else timedelta(days=30)
-            amount = ANNUAL_FEE if plan == "annual" else MONTHLY_FEE
-            while due <= RANGE_END:
-                if due >= RANGE_START and rng.random() >= 0.06:      # a few missed payments
-                    paid = datetime.combine(due, datetime.min.time()) + timedelta(
-                        minutes=rng.randint(8 * 60, 22 * 60))
-                    payments.append((mid, None, amount, _t(paid), rng.choice(["card", "app", "app"])))
-                due = due + step
-        payments.sort(key=lambda p: p[3])
+        # ---- parcels and their scans ---------------------------------------
+        parcels, scans = [], []
+        n_parcels = 24_000
+        span_minutes = int((SNAPSHOT - datetime.combine(RANGE_START, datetime.min.time()))
+                           .total_seconds() // 60)
+        for _ in range(n_parcels):
+            collected = datetime.combine(RANGE_START, datetime.min.time()) + timedelta(
+                minutes=rng.randint(0, span_minutes))
+            # counters open 8 to 18; nothing is handed in at night
+            collected = collected.replace(hour=rng.randint(8, 17), minute=rng.randint(0, 59))
+            if rng.random() < 0.25:
+                cust, origin = None, rng.choice(depots)                    # walk-in
+            else:
+                cust = rng.choice(heavy) if rng.random() < 0.35 else rng.choice(senders)
+                origin = customers[cust - 1][2]
+                joined = date.fromisoformat(customers[cust - 1][3])
+                if collected.date() < joined:
+                    collected = collected.replace(year=joined.year, month=joined.month, day=joined.day)
+            if origin == CLOSED_DEPOT and collected.date() >= CLOSED_ON:
+                origin = 1
+            dest = origin if rng.random() < 0.2 else rng.choice(depots)
+            if dest == CLOSED_DEPOT and collected.date() >= CLOSED_ON - timedelta(days=7):
+                dest = 1
+            service = rng.choice(SERVICES)
+            weight = min(int(rng.lognormvariate(7.3, 0.9)) + 50, 30_000)
+            lo, hi = TRANSIT[service]
+            pid = len(parcels) + 1
+            trail = [(pid, origin, None, _t(collected), "collected")]
+            if dest != origin:
+                departed = collected + timedelta(hours=rng.randint(2, 9))
+                arrived = departed + timedelta(days=rng.randint(lo, hi), hours=rng.randint(1, 12))
+                trail.append((pid, origin, None, _t(departed), "departed"))
+                trail.append((pid, dest, None, _t(arrived), "arrived"))
+            else:
+                arrived = collected
+            out = _next_morning(rng, arrived) if dest != origin or rng.random() < 0.5 else arrived + timedelta(hours=2)
+            lost = rng.random() < 0.005
+            attempts = 1 + (rng.random() < 0.12) + (rng.random() < 0.02)
+            courier = courier_at(dest, out)
+            delivered = None
+            for attempt in range(attempts):
+                trail.append((pid, dest, courier, _t(out), "out_for_delivery"))
+                if attempt < attempts - 1 or lost:
+                    trail.append((pid, dest, courier, _t(out + timedelta(hours=rng.randint(1, 6))), "failed"))
+                    out = _next_morning(rng, out)
+                else:
+                    delivered = out + timedelta(minutes=rng.randint(30, 420))
+                    trail.append((pid, dest, courier, _t(delivered), "delivered"))
+            # cut the trail at the snapshot: what has not happened yet is not there
+            trail = [s for s in trail if s[3] <= _t(SNAPSHOT)]
+            if delivered is None or delivered > SNAPSHOT or lost:
+                delivered, courier = None, None
+            parcels.append((cust, origin, dest, service, weight, _t(collected),
+                            _t(delivered) if delivered else None, courier, postage(service, weight)))
+            scans.extend(trail)
         with conn:
             conn.executemany(
-                "INSERT INTO payments (member_id, ride_id, amount_cents, paid_at, method)"
-                " VALUES (?,?,?,?,?)", payments)
+                "INSERT INTO parcels (customer_id, origin_depot_id, dest_depot_id, service,"
+                " weight_g, collected_at, delivered_at, courier_id, postage_cents)"
+                " VALUES (?,?,?,?,?,?,?,?,?)", parcels)
+            scans.sort(key=lambda s: (s[3], s[0]))
+            conn.executemany(
+                "INSERT INTO scans (parcel_id, depot_id, courier_id, scanned_at, status)"
+                " VALUES (?,?,?,?,?)", scans)
+
+        # ---- invoices: a business customer's month of postage ---------------
+        totals = {}
+        for cust, origin, dest, service, weight, collected, delivered, courier, cents in parcels:
+            if cust is None or customers[cust - 1][1] != "business":
+                continue
+            totals[(cust, collected[:7])] = totals.get((cust, collected[:7]), 0) + cents
+        invoices = []
+        for (cust, period), cents in sorted(totals.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+            year, month = int(period[:4]), int(period[5:])
+            issued = date(year + (month == 12), month % 12 + 1, 1)
+            if issued > RANGE_END:
+                continue                                        # June's bill is not out yet
+            paid, method = None, None
+            if rng.random() < 0.88:
+                paid = _d(issued + timedelta(days=rng.randint(3, 45)))
+                method = rng.choice(["transfer", "transfer", "card"])
+                if paid > _d(RANGE_END):
+                    paid, method = None, None
+            invoices.append((cust, period, cents, _d(issued), paid, method))
+        with conn:
+            conn.executemany(
+                "INSERT INTO invoices (customer_id, period, amount_cents, issued_on, paid_on, method)"
+                " VALUES (?,?,?,?,?,?)", invoices)
         # the sandbox copies this file into memory for every writable question,
         # so give back the space a re-seed leaves behind
         conn.execute("VACUUM")

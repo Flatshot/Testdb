@@ -1,14 +1,14 @@
 """Python practice exercises: fifteen everyday functions over plain values.
 
-The thirty-second Python set, at the easy level of the last two -- no
-statistics, no dicts -- on tasks they did not cover. Counting and finding:
-the stops after a station, how long the last stop was repeated, the
-halfway stop, today's visits against yesterday's, names that start with a
-vowel. Labels: a whole-number percentage with a guard, cents as dollars,
-a name turned surname-first, minutes since midnight as a clock time, a
-bulleted list. Checks and filters: the stops between two stations, legs
-from one list, blanks filled in, names from a comma-separated line, a
-list with one position removed.
+The thirty-third Python set, at the easy level of the last three -- no
+statistics, no dicts -- in the courier's terms, on tasks the earlier sets
+did not cover. Counting and finding: the status before a given one, the
+attempts before delivery, parcels that stayed local, the n-th scan from the
+end, words across several lines. Labels: grams as a weight label, a route
+label that says 'local', a status code as words, an address from its
+parts, whether a box fits. Checks and filters: the codes of one depot,
+codes sorted by weight, overweight flags, the first and last date, the
+depots a list of codes mentions.
 
 Every question is a `kind="function"`: the editor defines a function named
 `func`. Run calls it once per case in `cases` and shows each call and its
@@ -28,389 +28,383 @@ import pyrun
 EXERCISES = [
     # ================================================= 1 Counting and finding
     dict(
-        id=1, ledger="P476", concept="PY3 slice after a value", tier="1 - Counting and finding",
-        title="Everywhere the bike went after Harbour", kind="function",
-        func="after",
-        cases=[(["Parkway", "Harbour", "Stadium", "Hilltop"], "Harbour"), (["Parkway", "Harbour"], "Harbour"), (["Parkway", "Stadium"], "Harbour"), ([], "Harbour")],
+        id=1, ledger="P491", concept="PY4 item before a value", tier="1 - Counting and finding",
+        title="What happened just before the delivery", kind="function",
+        func="status_before",
+        cases=[(["collected", "departed", "arrived", "out_for_delivery", "delivered"], "delivered"), (["collected", "delivered"], "collected"), (["collected", "departed"], "delivered"), ([], "delivered")],
         prompt=(
-            "Write a function `after(stops, station)` that returns the"
-            " stops that came after the station's FIRST appearance, not"
-            " including it, or [] if the station never appears. A"
-            " membership test, then index() and a slice.\n\n"
-            "  after([\"Parkway\", \"Harbour\", \"Stadium\", \"Hilltop\"], \"Harbour\") -> [\"Stadium\", \"Hilltop\"]\n\n"
-            "Return: a list of str."
-        ),
-        solution=("def after(stops, station):\n"
-                  "    if station not in stops:\n"
-                  "        return []\n"
-                  "    return stops[stops.index(station) + 1:]\n"),
-        trap=("def after(stops, station):\n"
-              "    return stops[stops.index(station) + 1:]\n"),
-        note="stops[i + 1:] is everything past position i, and it is"
-             " [] when i was the last position, with no special case."
-             " index() raises when the station is missing, so the trap"
-             " crashes on a day that never reached Harbour; the `in`"
-             " test first turns that into the [] the question asks for.",
-    ),
-    dict(
-        id=2, ledger="P477", concept="PY4 run at the end", tier="1 - Counting and finding",
-        title="How long the bike sat at its last stop", kind="function",
-        func="final_streak",
-        cases=[(["Harbour", "Stadium", "Stadium", "Stadium"],), (["Stadium", "Harbour", "Stadium"],), (["Harbour"],), ([],)],
-        prompt=(
-            "Write a function `final_streak(stops)` that returns how"
-            " many times the LAST stop is repeated at the end of the"
-            " list, in a row -- 3 for a list ending Stadium, Stadium,"
-            " Stadium -- and 0 for an empty list. A loop backwards from"
-            " the end that stops at the first different stop.\n\n"
-            "  final_streak([\"Harbour\", \"Stadium\", \"Stadium\", \"Stadium\"]) -> 3\n\n"
-            "Return: an int."
-        ),
-        solution=("def final_streak(stops):\n"
-                  "    n = 0\n"
-                  "    for s in reversed(stops):\n"
-                  "        if stops and s == stops[-1]:\n"
-                  "            n += 1\n"
-                  "        else:\n"
-                  "            break\n"
-                  "    return n\n"),
-        trap=("def final_streak(stops):\n"
-              "    if not stops:\n"
-              "        return 0\n"
-              "    return stops.count(stops[-1])\n"),
-        note="count() counts the last stop everywhere in the day, not"
-             " only at the end: the trap says 2 for a day that went"
-             " Stadium, Harbour, Stadium, where the final run is one."
-             " Walking backwards with reversed() and breaking at the"
-             " first stop that differs counts just the run; an empty"
-             " list never enters the loop and returns 0.",
-    ),
-    dict(
-        id=3, ledger="P478", concept="PY3 middle item with guard", tier="1 - Counting and finding",
-        title="The halfway stop", kind="function",
-        func="halfway",
-        cases=[(["Harbour", "Stadium", "Parkway"],), (["Harbour", "Stadium", "Parkway", "Hilltop"],), (["Harbour"],), ([],)],
-        prompt=(
-            "Write a function `halfway(stops)` that returns the stop in"
-            " the middle of the day -- position len // 2, which for an"
-            " even count is the later of the two middle stops -- or"
-            " None for an empty list.\n\n"
-            "  halfway([\"Harbour\", \"Stadium\", \"Parkway\"]) -> \"Stadium\"\n\n"
+            "A parcel's trail is a list of status words in time order."
+            " Write a function `status_before(trail, status)` that"
+            " returns the status that came right before the FIRST"
+            " appearance of the given one, or None when it is missing"
+            " or was the first entry.\n\n"
+            "  status_before([\"collected\", \"departed\", \"arrived\", \"out_for_delivery\", \"delivered\"], \"delivered\") -> \"out_for_delivery\"\n\n"
             "Return: a str, or None."
         ),
-        solution=("def halfway(stops):\n"
-                  "    if not stops:\n"
+        solution=("def status_before(trail, status):\n"
+                  "    if status not in trail:\n"
                   "        return None\n"
-                  "    return stops[len(stops) // 2]\n"),
-        trap=("def halfway(stops):\n"
-              "    return stops[len(stops) // 2]\n"),
-        note="len // 2 is the middle index for an odd count and the"
-             " later middle for an even one, which is what the question"
-             " fixes so that there is one right answer. For an empty"
-             " list the index is 0 and there is nothing at 0: the trap"
-             " raises IndexError where None was asked for.",
+                  "    i = trail.index(status)\n"
+                  "    if i == 0:\n"
+                  "        return None\n"
+                  "    return trail[i - 1]\n"),
+        trap=("def status_before(trail, status):\n"
+              "    return trail[trail.index(status) - 1]\n"),
+        note="Two things can go wrong with trail[index - 1]: index()"
+             " raises when the status is missing, and when the status is"
+             " first, index - 1 is -1, which Python reads as the LAST item"
+             " -- so the trap answers 'delivered' for the status before"
+             " 'collected', which is backwards. The two checks catch"
+             " both.",
     ),
     dict(
-        id=4, ledger="P479", concept="PY3 difference of two counts", tier="1 - Counting and finding",
-        title="More visits today than yesterday?", kind="function",
-        func="visits_change",
-        cases=[(["Harbour", "Harbour", "Stadium"], ["Harbour"], "Harbour"), (["Stadium"], ["Harbour", "Harbour"], "Harbour"), ([], [], "Harbour"), (["Harbour"], ["Harbour"], "Harbour")],
+        id=2, ledger="P492", concept="PY4 count before a value", tier="1 - Counting and finding",
+        title="How many attempts it took", kind="function",
+        func="attempts",
+        cases=[(["collected", "out_for_delivery", "failed", "out_for_delivery", "delivered"],), (["collected", "out_for_delivery", "delivered"],), (["collected", "out_for_delivery", "failed"],), ([],)],
         prompt=(
-            "Write a function `visits_change(today, yesterday,"
-            " station)` that returns how many more times the station"
-            " was visited today than yesterday -- negative if fewer."
-            " Two count() calls and a subtraction, today's first.\n\n"
-            "  visits_change([\"Harbour\", \"Harbour\", \"Stadium\"], [\"Harbour\"], \"Harbour\") -> 1\n\n"
+            "Write a function `attempts(trail)` that returns how many"
+            " 'out_for_delivery' entries come before the first"
+            " 'delivered' -- or in the whole trail if the parcel was"
+            " never delivered. Cut the list at the delivery with a"
+            " slice, then count().\n\n"
+            "  attempts([\"collected\", \"out_for_delivery\", \"failed\", \"out_for_delivery\", \"delivered\"]) -> 2\n\n"
             "Return: an int."
         ),
-        solution=("def visits_change(today, yesterday, station):\n"
-                  "    return today.count(station) - yesterday.count(station)\n"),
-        trap=("def visits_change(today, yesterday, station):\n"
-              "    return yesterday.count(station) - today.count(station)\n"),
-        note="'How many more today' is today minus yesterday; the trap"
-             " subtracts the other way and reports a rise as a fall."
-             " count() on a list that lacks the station is 0, so the"
-             " empty days need no guard.",
+        solution=("def attempts(trail):\n"
+                  "    if \"delivered\" in trail:\n"
+                  "        trail = trail[:trail.index(\"delivered\")]\n"
+                  "    return trail.count(\"out_for_delivery\")\n"),
+        trap=("def attempts(trail):\n"
+              "    return trail.index(\"delivered\")\n"),
+        note="The position of 'delivered' is not the number of attempts:"
+             " the trap counts every entry before it, collected and"
+             " failed included, and crashes when the parcel was never"
+             " delivered. Slicing up to the delivery and counting the"
+             " one status answers exactly the question, and a trail with"
+             " no 'delivered' is counted whole.",
     ),
     dict(
-        id=5, ledger="P480", concept="PY4 count by first letter", tier="1 - Counting and finding",
-        title="How many names start with a vowel", kind="function",
-        func="vowel_names",
-        cases=[(["Aisha", "Umar", "Rosa", "Eleanor"],), (["rosa", "zara"],), ([],), (["Imogen", ""],)],
+        id=3, ledger="P493", concept="PY4 zip and compare", tier="1 - Counting and finding",
+        title="Parcels that never left their depot", kind="function",
+        func="local_count",
+        cases=[(["Millbank", "Central Hub", "Westway"], ["Millbank", "Northgate", "Westway"]), (["Millbank", "Central Hub"], ["Central Hub", "Millbank"]), ([], []), (["Hub", "Hub"], ["Hub", "Hub"])],
         prompt=(
-            "Write a function `vowel_names(names)` that returns how"
-            " many of the names begin with a vowel, in either case; an"
-            " empty string does not count. A sum over a generator that"
-            " tests the first character lower-cased, with a guard for"
-            " the empty string.\n\n"
-            "  vowel_names([\"Aisha\", \"Umar\", \"Rosa\", \"Eleanor\"]) -> 3\n\n"
+            "Two lists line up parcel by parcel: where each was"
+            " collected and where it was delivered. Write a function"
+            " `local_count(origins, dests)` that returns how many"
+            " parcels had the same depot at both ends. zip() walks the"
+            " two lists together; a sum of comparisons counts.\n\n"
+            "  local_count([\"Millbank\", \"Central Hub\", \"Westway\"], [\"Millbank\", \"Northgate\", \"Westway\"]) -> 2\n\n"
             "Return: an int."
         ),
-        solution=("def vowel_names(names):\n"
-                  "    return sum(1 for n in names if n and n[0].lower() in \"aeiou\")\n"),
-        trap=("def vowel_names(names):\n"
-              "    return sum(1 for n in names if n and n[0] in \"aeiou\")\n"),
-        note="Names are capitalised, and 'A' is not in 'aeiou': the"
-             " trap counts none of Aisha, Umar and Eleanor. lower()"
-             " first, then test. The `n and` guard runs before n[0], so"
-             " an empty string is skipped rather than raising, because"
-             " `and` stops at the first false value.",
+        solution=("def local_count(origins, dests):\n"
+                  "    return sum(a == b for a, b in zip(origins, dests))\n"),
+        trap=("def local_count(origins, dests):\n"
+              "    return sum(o in dests for o in origins)\n"),
+        note="`o in dests` asks whether the origin appears ANYWHERE in"
+             " the destinations, not at the same position: two parcels"
+             " that swapped depots -- Millbank to Central Hub and Central"
+             " Hub to Millbank -- are both counted local by the trap,"
+             " when neither stayed put. zip() pairs position with"
+             " position, which is what 'the same parcel' means here, and"
+             " a bool sums as 1 or 0.",
+    ),
+    dict(
+        id=4, ledger="P494", concept="PY3 nth from the end", tier="1 - Counting and finding",
+        title="The second-last scan", kind="function",
+        func="from_end",
+        cases=[(["collected", "departed", "arrived", "delivered"], 2), (["collected", "delivered"], 1), (["collected"], 2), ([], 1)],
+        prompt=(
+            "Write a function `from_end(trail, n)` that returns the"
+            " n-th entry counting from the end -- 1 for the last, 2"
+            " for the one before it -- or None when the trail is too"
+            " short. A negative index, behind a length check.\n\n"
+            "  from_end([\"collected\", \"departed\", \"arrived\", \"delivered\"], 2) -> \"arrived\"\n\n"
+            "Return: a str, or None."
+        ),
+        solution=("def from_end(trail, n):\n"
+                  "    if n > len(trail):\n"
+                  "        return None\n"
+                  "    return trail[-n]\n"),
+        trap=("def from_end(trail, n):\n"
+              "    return trail[-n]\n"),
+        note="trail[-1] is the last item and trail[-2] the one before, so"
+             " trail[-n] is the n-th from the end -- until n is bigger"
+             " than the list, when it raises IndexError, which is the"
+             " trap's failure on a one-entry trail. One comparison with"
+             " len() turns that into None.",
+    ),
+    dict(
+        id=5, ledger="P495", concept="PY3 sum of word counts", tier="1 - Counting and finding",
+        title="Words across every line of a label", kind="function",
+        func="total_words",
+        cases=[(["Flat 2", "14 Harbour Street", "Millbank"],), (["", "  "],), ([],), (["one"],)],
+        prompt=(
+            "An address label is a list of lines. Write a function"
+            " `total_words(lines)` that returns how many words there"
+            " are across all the lines. split() with no argument"
+            " handles any spacing; sum() over a generator adds the"
+            " counts.\n\n"
+            "  total_words([\"Flat 2\", \"14 Harbour Street\", \"Millbank\"]) -> 6\n\n"
+            "Return: an int."
+        ),
+        solution=("def total_words(lines):\n"
+                  "    return sum(len(line.split()) for line in lines)\n"),
+        trap=("def total_words(lines):\n"
+              "    return len(lines)\n"),
+        note="len(lines) counts the LINES, three for the example where"
+             " there are six words. Each line has to be split into words"
+             " and the lengths added up; a blank line splits to [] and"
+             " contributes 0, and an empty list sums to 0.",
     ),
     # ================================================================ 2 Labels
     dict(
-        id=6, ledger="P481", concept="PY3 whole percentage with guard", tier="2 - Labels",
-        title="A percentage, rounded, as a label", kind="function",
-        func="percent_label",
-        cases=[(2, 3), (1, 4), (0, 5), (3, 0)],
+        id=6, ledger="P496", concept="PY3 unit label by threshold", tier="2 - Labels",
+        title="Grams or kilograms, whichever reads better", kind="function",
+        func="weight_label",
+        cases=[(750,), (2500,), (1000,), (30000,)],
         prompt=(
-            "Write a function `percent_label(part, whole)` that returns"
-            " the share as a whole-number percentage with a percent"
-            " sign, '67%' for 2 of 3, or 'n/a' when the whole is 0."
-            " round() to no decimals, inside an f-string.\n\n"
-            "  percent_label(2, 3) -> \"67%\"\n\n"
+            "Write a function `weight_label(grams)` that returns '750 g'"
+            " for anything under a kilogram and '2.5 kg' from a"
+            " kilogram up, the kilograms to one decimal. An if on the"
+            " threshold; division by 1000 and round(..., 1) for the"
+            " heavier case.\n\n"
+            "  weight_label(2500) -> \"2.5 kg\"\n\n"
             "Return: a str."
         ),
-        solution=("def percent_label(part, whole):\n"
-                  "    if whole == 0:\n"
-                  "        return \"n/a\"\n"
-                  "    return f\"{round(100 * part / whole)}%\"\n"),
-        trap=("def percent_label(part, whole):\n"
-              "    if whole == 0:\n"
-              "        return \"n/a\"\n"
-              "    return f\"{int(100 * part / whole)}%\"\n"),
-        note="int() truncates towards zero, so 66.67 becomes 66 and the"
-             " trap labels two thirds as '66%'; round() gives 67. The"
-             " guard comes first because 100 * part / 0 raises before"
-             " any rounding could happen. A '%' inside an f-string's"
-             " text is just a character.",
+        solution=("def weight_label(grams):\n"
+                  "    if grams < 1000:\n"
+                  "        return f\"{grams} g\"\n"
+                  "    return f\"{round(grams / 1000, 1)} kg\"\n"),
+        trap=("def weight_label(grams):\n"
+              "    return f\"{round(grams / 1000, 1)} kg\"\n"),
+        note="Everything in kilograms, the trap, labels a letter '0.8"
+             " kg', which nobody writes. The threshold picks the unit"
+             " and the shape of the number with it: whole grams below,"
+             " one decimal of kilograms above, and exactly 1000 g is"
+             " '1.0 kg'.",
     ),
     dict(
-        id=7, ledger="P482", concept="PY3 cents to dollars text", tier="2 - Labels",
-        title="Cents as dollars on a receipt", kind="function",
-        func="dollars",
-        cases=[(350,), (1200,), (5,), (0,)],
+        id=7, ledger="P497", concept="PY3 conditional f-string", tier="2 - Labels",
+        title="A route label that knows when nothing moved", kind="function",
+        func="route_label",
+        cases=[("Millbank", "Central Hub"), ("Millbank", "Millbank"), ("Westway", "Hillcrest")],
         prompt=(
-            "Write a function `dollars(cents)` that returns the amount"
-            " as '$3.50': a dollar sign, the whole dollars, a point, and"
-            " the cents left over always as two digits. // and % give"
-            " the two parts; a format spec pads the second.\n\n"
-            "  dollars(350) -> \"$3.50\"\n\n"
+            "Write a function `route_label(origin, dest)` that returns"
+            " 'Millbank -> Central Hub' for a parcel that moved between"
+            " depots and 'Millbank (local)' for one delivered from the"
+            " depot it was handed in at. A conditional expression"
+            " choosing between two f-strings.\n\n"
+            "  route_label(\"Millbank\", \"Millbank\") -> \"Millbank (local)\"\n\n"
             "Return: a str."
         ),
-        solution=("def dollars(cents):\n"
-                  "    return f\"${cents // 100}.{cents % 100:02d}\"\n"),
-        trap=("def dollars(cents):\n"
-              "    return f\"${cents / 100}\"\n"),
-        note="cents / 100 is a float, and a float prints as 3.5, not"
-             " 3.50, and 0.05 for five cents: the trap's receipts have"
-             " the wrong number of digits. Splitting into dollars and"
-             " cents with // and % keeps everything an int, and :02d pads"
-             " the cents to two digits with a leading zero when needed.",
+        solution=("def route_label(origin, dest):\n"
+                  "    return f\"{origin} (local)\" if origin == dest else f\"{origin} -> {dest}\"\n"),
+        trap=("def route_label(origin, dest):\n"
+              "    return f\"{origin} -> {dest}\"\n"),
+        note="'Millbank -> Millbank' is true but unhelpful, and the"
+             " question asks for the special case to be named. A"
+             " conditional expression -- one value if the test holds,"
+             " another if not -- keeps the two labels side by side on"
+             " one line.",
     ),
     dict(
-        id=8, ledger="P483", concept="PY3 surname first", tier="2 - Labels",
-        title="A name the way the register writes it", kind="function",
-        func="register_name",
-        cases=[("Hamid Uddin",), ("Ana de la Cruz",), ("Cher",), ("Rosa Villanueva",)],
+        id=8, ledger="P498", concept="PY3 snake case to words", tier="2 - Labels",
+        title="A status code as words", kind="function",
+        func="status_words",
+        cases=[("out_for_delivery",), ("delivered",), ("failed",), ("collected_at_counter",)],
         prompt=(
-            "Write a function `register_name(name)` that turns 'Hamid"
-            " Uddin' into 'Uddin, Hamid': the LAST word first, a comma"
-            " and a space, then everything before it. A one-word name"
-            " is returned unchanged. split(), a slice, and join().\n\n"
-            "  register_name(\"Hamid Uddin\") -> \"Uddin, Hamid\"\n\n"
+            "Status codes are written like 'out_for_delivery'. Write a"
+            " function `status_words(code)` that returns them as a"
+            " phrase with a capital only at the start: 'Out for"
+            " delivery'. replace() the underscores, then capitalize().\n\n"
+            "  status_words(\"out_for_delivery\") -> \"Out for delivery\"\n\n"
             "Return: a str."
         ),
-        solution=("def register_name(name):\n"
-                  "    words = name.split()\n"
-                  "    if len(words) < 2:\n"
-                  "        return name\n"
-                  "    return words[-1] + \", \" + \" \".join(words[:-1])\n"),
-        trap=("def register_name(name):\n"
-              "    words = name.split()\n"
-              "    return words[1] + \", \" + words[0]\n"),
-        note="words[1] is the SECOND word, which is the surname only"
-             " for a two-word name: the trap turns 'Ana de la Cruz' into"
-             " 'de, Ana' and crashes on 'Cher'. words[-1] is the last"
-             " word whatever the count, words[:-1] is everything before"
-             " it, and ' '.join puts the spaces back. The one-word guard"
-             " handles the name with nothing to turn round.",
+        solution=("def status_words(code):\n"
+                  "    return code.replace(\"_\", \" \").capitalize()\n"),
+        trap=("def status_words(code):\n"
+              "    return code.replace(\"_\", \" \").title()\n"),
+        note="title() capitalises every word -- 'Out For Delivery' --"
+             " where the question wants a sentence-style phrase with one"
+             " capital; capitalize() upper-cases the first character and"
+             " lower-cases the rest. Both are chained after replace(),"
+             " which has already turned the underscores into spaces.",
     ),
     dict(
-        id=9, ledger="P484", concept="PY3 minutes to clock text", tier="2 - Labels",
-        title="Minutes since midnight as a clock time", kind="function",
-        func="clock",
-        cases=[(485,), (0,), (1439,), (600,)],
+        id=9, ledger="P499", concept="PY3 join the non-empty", tier="2 - Labels",
+        title="An address on one line, blanks skipped", kind="function",
+        func="address_line",
+        cases=[(["Flat 2", "", "14 Harbour Street", "Millbank"],), (["", ""],), (["Westway"],), ([],)],
         prompt=(
-            "Write a function `clock(minutes)` that turns minutes since"
-            " midnight into 'HH:MM' with both parts two digits: 485 is"
-            " '08:05'. divmod() by 60 gives hours and minutes at once;"
-            " a format spec pads each.\n\n"
-            "  clock(485) -> \"08:05\"\n\n"
+            "Address forms arrive with some lines left blank. Write a"
+            " function `address_line(parts)` that joins the non-empty"
+            " parts with ', ' into one line, skipping the blanks so no"
+            " two commas meet. A generator that keeps the truthy parts,"
+            " inside join().\n\n"
+            "  address_line([\"Flat 2\", \"\", \"14 Harbour Street\", \"Millbank\"]) -> \"Flat 2, 14 Harbour Street, Millbank\"\n\n"
             "Return: a str."
         ),
-        solution=("def clock(minutes):\n"
-                  "    h, m = divmod(minutes, 60)\n"
-                  "    return f\"{h:02d}:{m:02d}\"\n"),
-        trap=("def clock(minutes):\n"
-              "    h, m = divmod(minutes, 60)\n"
-              "    return f\"{h}:{m}\"\n"),
-        note="A clock pads with zeros: '8:5' is not a time. The :02d"
-             " spec means 'at least two digits, zero-filled', and it"
-             " applies to each part separately. divmod(485, 60) is (8,"
-             " 5) in one call, the same pair as 485 // 60 and 485 % 60.",
+        solution=("def address_line(parts):\n"
+                  "    return \", \".join(p for p in parts if p)\n"),
+        trap=("def address_line(parts):\n"
+              "    return \", \".join(parts)\n"),
+        note="join() puts the separator between EVERY pair, blanks"
+             " included, so the trap writes 'Flat 2, , 14 Harbour"
+             " Street, Millbank'. Filtering the parts first -- `if p`"
+             " keeps the non-empty strings -- means join() only ever"
+             " sees real lines, and a list of blanks gives ''.",
     ),
     dict(
-        id=10, ledger="P485", concept="PY3 join with prefix", tier="2 - Labels",
-        title="A bulleted list of names", kind="function",
-        func="bulleted",
-        cases=[(["Hamid", "Rosa"],), (["Yusuf"],), ([],)],
+        id=10, ledger="P500", concept="PY3 max of several values", tier="2 - Labels",
+        title="Will the box fit through the hatch?", kind="function",
+        func="fits",
+        cases=[(30, 20, 10, 40), (50, 20, 10, 40), (10, 10, 45, 40), (40, 40, 40, 40)],
         prompt=(
-            "Write a function `bulleted(names)` that returns the names"
-            " as a bulleted list in one string: each name on its own"
-            " line, starting with '- ', lines separated by newlines and"
-            " no newline at the end; '' for no names. A comprehension"
-            " to add the dash, then '\\n'.join.\n\n"
-            "  bulleted([\"Hamid\", \"Rosa\"]) -> \"- Hamid\\n- Rosa\"\n\n"
-            "Return: a str."
+            "A parcel fits through the sorting hatch when NONE of its"
+            " three sides is longer than the hatch. Write a function"
+            " `fits(length, width, height, hatch)` that returns True or"
+            " False. max() takes several arguments, so the longest side"
+            " is one call.\n\n"
+            "  fits(30, 20, 10, 40) -> True\n\n"
+            "Return: True or False."
         ),
-        solution=("def bulleted(names):\n"
-                  "    return \"\\n\".join(\"- \" + n for n in names)\n"),
-        trap=("def bulleted(names):\n"
-              "    return \"\\n\".join(names)\n"),
-        note="join() puts the separator BETWEEN items, never before the"
-             " first or after the last, which is why there is no"
-             " trailing newline and why the dash has to be added to"
-             " each name before joining: the trap's lines have no"
-             " bullets. join() of nothing is '', which is the empty"
-             " case for free.",
+        solution=("def fits(length, width, height, hatch):\n"
+                  "    return max(length, width, height) <= hatch\n"),
+        trap=("def fits(length, width, height, hatch):\n"
+              "    return length <= hatch and width <= hatch\n"),
+        note="Three sides, three tests, and the trap forgets the height:"
+             " a 45-centimetre-tall box is waved through a 40-centimetre"
+             " hatch. max() of the three sides against the hatch is the"
+             " same as testing all three with and, in one comparison;"
+             " <= lets a side exactly the hatch's size through, as the"
+             " question says.",
     ),
     # ==================================================== 3 Checks and filters
     dict(
-        id=11, ledger="P486", concept="PY3 slice between two values", tier="3 - Checks and filters",
-        title="The stops between Harbour and Stadium", kind="function",
-        func="between",
-        cases=[(["Parkway", "Harbour", "Hilltop", "Riverside", "Stadium", "Parkway"], "Harbour", "Stadium"), (["Harbour", "Stadium"], "Harbour", "Stadium"), (["Harbour", "Hilltop"], "Harbour", "Stadium"), (["Stadium", "Hilltop", "Harbour"], "Harbour", "Stadium")],
+        id=11, ledger="P501", concept="PY3 filter by prefix", tier="3 - Checks and filters",
+        title="The parcels from one depot", kind="function",
+        func="codes_from",
+        cases=[(["MB-0012", "CH-0007", "MB-0031", "WW-0002"], "MB"), (["CH-0007"], "MB"), ([], "MB"), (["MB-0012", "XMB-99"], "MB")],
         prompt=(
-            "Write a function `between(stops, a, b)` that returns the"
-            " stops strictly between the first a and the first b --"
-            " neither included -- and [] when either is missing or b"
-            " comes before a. Two index() calls and one slice, after"
-            " the checks.\n\n"
-            "  between([\"Parkway\", \"Harbour\", \"Hilltop\", \"Riverside\", \"Stadium\", \"Parkway\"], \"Harbour\", \"Stadium\") -> [\"Hilltop\", \"Riverside\"]\n\n"
+            "A parcel code starts with its origin depot's two-letter"
+            " code and a hyphen: 'MB-0012'. Write a function"
+            " `codes_from(codes, depot)` that returns the codes from"
+            " that depot, in order. startswith() with the depot code and"
+            " the hyphen, in a comprehension.\n\n"
+            "  codes_from([\"MB-0012\", \"CH-0007\", \"MB-0031\", \"WW-0002\"], \"MB\") -> [\"MB-0012\", \"MB-0031\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def between(stops, a, b):\n"
-                  "    if a not in stops or b not in stops:\n"
-                  "        return []\n"
-                  "    i, j = stops.index(a), stops.index(b)\n"
-                  "    return stops[i + 1:j]\n"),
-        trap=("def between(stops, a, b):\n"
-              "    if a not in stops or b not in stops:\n"
-              "        return []\n"
-              "    return stops[stops.index(a):stops.index(b)]\n"),
-        note="A slice starts AT its first index and stops BEFORE its"
-             " second, so stops[i:j] includes a and excludes b -- the"
-             " trap returns Harbour with the answer. Starting at i + 1"
-             " excludes both ends. When b comes before a the slice is"
-             " empty by itself, since a start past the stop gives [].",
+        solution=("def codes_from(codes, depot):\n"
+                  "    return [c for c in codes if c.startswith(depot + \"-\")]\n"),
+        trap=("def codes_from(codes, depot):\n"
+              "    return [c for c in codes if depot in c]\n"),
+        note="`depot in c` finds the letters ANYWHERE in the code, so"
+             " the trap keeps 'XMB-99' for depot MB. startswith() tests"
+             " the front only, and adding the hyphen to the prefix stops"
+             " 'MB' matching a depot 'MBX'. The comprehension keeps the"
+             " order the codes came in.",
     ),
     dict(
-        id=12, ledger="P487", concept="PY3 zip with an offset", tier="3 - Checks and filters",
-        title="The legs of a day, from one list", kind="function",
-        func="legs_of",
-        cases=[(["Harbour", "Stadium", "Parkway"],), (["Harbour", "Stadium"],), (["Harbour"],), ([],)],
+        id=12, ledger="P502", concept="PY3 sort one list by another", tier="3 - Checks and filters",
+        title="Parcel codes, lightest first", kind="function",
+        func="by_weight",
+        cases=[(["MB-0012", "CH-0007", "WW-0002"], [2500, 750, 1200]), (["A", "B"], [5, 5]), ([], []), (["Z"], [1])],
         prompt=(
-            "Write a function `legs_of(stops)` that returns one string"
-            " per leg between consecutive stops, 'Harbour -> Stadium',"
-            " from a single list of stops; one stop or none gives []."
-            " zip the list with itself shifted by one.\n\n"
-            "  legs_of([\"Harbour\", \"Stadium\", \"Parkway\"]) -> [\"Harbour -> Stadium\", \"Stadium -> Parkway\"]\n\n"
+            "Two lists line up: parcel codes and their weights. Write a"
+            " function `by_weight(codes, weights)` that returns the"
+            " codes in order of weight, lightest first, codes alone."
+            " zip() the weights with the codes, sorted(), then take the"
+            " codes back out.\n\n"
+            "  by_weight([\"MB-0012\", \"CH-0007\", \"WW-0002\"], [2500, 750, 1200]) -> [\"CH-0007\", \"WW-0002\", \"MB-0012\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def legs_of(stops):\n"
-                  "    return [f\"{a} -> {b}\" for a, b in zip(stops, stops[1:])]\n"),
-        trap=("def legs_of(stops):\n"
-              "    return [f\"{a} -> {b}\" for a, b in zip(stops, stops)]\n"),
-        note="zip(stops, stops[1:]) pairs each stop with the NEXT one,"
-             " because the second list starts one position later and"
-             " zip stops at the shorter, so a list of n stops gives n -"
-             " 1 legs and a list of one gives none. zip(stops, stops),"
-             " the trap, pairs each stop with itself: 'Harbour ->"
-             " Harbour'.",
+        solution=("def by_weight(codes, weights):\n"
+                  "    return [c for w, c in sorted(zip(weights, codes))]\n"),
+        trap=("def by_weight(codes, weights):\n"
+              "    return sorted(codes)\n"),
+        note="sorted(codes) sorts the codes alphabetically and never"
+             " looks at the weights. Zipping the weights FIRST makes"
+             " each pair sort by weight, with the code as a tiebreak,"
+             " and the comprehension drops the weights again. The same"
+             " thing with a key: sorted(codes, key=lambda c:"
+             " weights[codes.index(c)]), but the zip is cleaner.",
     ),
     dict(
-        id=13, ledger="P488", concept="PY3 fill blanks", tier="3 - Checks and filters",
-        title="Blanks in the log filled in", kind="function",
-        func="fill_blanks",
-        cases=[(["Harbour", "", "Stadium", ""], "unknown"), ([], "unknown"), (["", ""], "?"), (["Harbour"], "unknown")],
+        id=13, ledger="P503", concept="PY3 list of booleans", tier="3 - Checks and filters",
+        title="Which parcels are over the limit", kind="function",
+        func="over_limit",
+        cases=[([2500, 750, 12000], 10000), ([], 10000), ([10000], 10000), ([15000, 20000], 10000)],
         prompt=(
-            "Some stops were left blank -- an empty string. Write a"
-            " function `fill_blanks(stops, default)` that returns the"
-            " list with every empty string replaced by the default and"
-            " everything else unchanged. A comprehension with a"
-            " conditional expression, or with `or`.\n\n"
-            "  fill_blanks([\"Harbour\", \"\", \"Stadium\", \"\"], \"unknown\") -> [\"Harbour\", \"unknown\", \"Stadium\", \"unknown\"]\n\n"
-            "Return: a list of str."
+            "Write a function `over_limit(weights, limit)` that returns"
+            " a list of True and False, one per parcel in order, saying"
+            " whether it is over the limit. A comprehension whose"
+            " expression is the comparison itself.\n\n"
+            "  over_limit([2500, 750, 12000], 10000) -> [False, False, True]\n\n"
+            "Return: a list of bool."
         ),
-        solution=("def fill_blanks(stops, default):\n"
-                  "    return [s if s else default for s in stops]\n"),
-        trap=("def fill_blanks(stops, default):\n"
-              "    return [s if s is not None else default for s in stops]\n"),
-        note="An empty string is not None, so the trap's test never"
-             " fires and the blanks stay blank. `s if s else default`"
-             " uses the empty string's falsiness, and `s or default` is"
-             " the same thing shorter. Either builds a new list and"
-             " leaves the caller's alone.",
+        solution=("def over_limit(weights, limit):\n"
+                  "    return [w > limit for w in weights]\n"),
+        trap=("def over_limit(weights, limit):\n"
+              "    return [w for w in weights if w > limit]\n"),
+        note="A comprehension with an `if` FILTERS -- it keeps the heavy"
+             " weights themselves, [12000] -- while the question wants a"
+             " flag for every parcel, which is a comprehension whose"
+             " expression is the test: no if, one result per input. A"
+             " comparison is already a bool, so no conditional"
+             " expression is needed.",
     ),
     dict(
-        id=14, ledger="P489", concept="PY3 split on comma and strip", tier="3 - Checks and filters",
-        title="Names from a comma-separated line", kind="function",
-        func="names_from",
-        cases=[("Hamid, Rosa,Yusuf , Zara",), ("Hamid",), ("",), (" Rosa , ",)],
+        id=14, ledger="P504", concept="PY3 min and max of dates", tier="3 - Checks and filters",
+        title="The first and last collection", kind="function",
+        func="date_range",
+        cases=[(["2026-03-04", "2025-11-30", "2026-01-15"],), (["2026-06-30"],), ([],), (["2025-01-01", "2025-01-01"],)],
         prompt=(
-            "A form sends names as one line, 'Hamid, Rosa,Yusuf ,"
-            " Zara', with the spacing all over the place. Write a"
-            " function `names_from(line)` that returns the names as a"
-            " list, each stripped of spaces, empty pieces dropped. split"
-            " on the comma, then strip, then keep the non-empty ones.\n\n"
-            "  names_from(\"Hamid, Rosa,Yusuf , Zara\") -> [\"Hamid\", \"Rosa\", \"Yusuf\", \"Zara\"]\n\n"
-            "Return: a list of str."
+            "Write a function `date_range(dates)` that returns the"
+            " earliest and latest of a list of ISO dates as a tuple, or"
+            " None for an empty list. ISO dates compare correctly as"
+            " text, so min() and max() do it without parsing.\n\n"
+            "  date_range([\"2026-03-04\", \"2025-11-30\", \"2026-01-15\"]) -> (\"2025-11-30\", \"2026-03-04\")\n\n"
+            "Return: a tuple of two str, or None."
         ),
-        solution=("def names_from(line):\n"
-                  "    return [p.strip() for p in line.split(\",\") if p.strip()]\n"),
-        trap=("def names_from(line):\n"
-              "    return line.split(\",\")\n"),
-        note="split(',') keeps whatever surrounded each comma, so the"
-             " trap returns ' Rosa' and 'Yusuf ' with their spaces, and"
-             " a trailing comma gives an empty last piece. strip() on"
-             " each piece and an if that drops the empty ones make the"
-             " list clean, and ''.split(',') is [''], which the if"
-             " turns into [].",
+        solution=("def date_range(dates):\n"
+                  "    if not dates:\n"
+                  "        return None\n"
+                  "    return min(dates), max(dates)\n"),
+        trap=("def date_range(dates):\n"
+              "    if not dates:\n"
+              "        return None\n"
+              "    return dates[0], dates[-1]\n"),
+        note="The first and last ITEMS are the first and last dates only"
+             " if the list is sorted, and this one is not: the trap"
+             " returns March then January. min() and max() compare the"
+             " strings, and 'YYYY-MM-DD' puts the biggest unit first, so"
+             " text order is date order.",
     ),
     dict(
-        id=15, ledger="P490", concept="PY3 remove by position on a copy", tier="3 - Checks and filters",
-        title="A stop struck out", kind="function",
-        func="without_position",
-        cases=[(["Harbour", "Stadium", "Parkway"], 1), (["Harbour", "Stadium", "Parkway"], 0), (["Harbour", "Stadium", "Parkway"], 7), ([], 0)],
+        id=15, ledger="P505", concept="PY3 derived set sorted", tier="3 - Checks and filters",
+        title="Which depots a batch of codes mentions", kind="function",
+        func="depots_in",
+        cases=[(["MB-0012", "CH-0007", "MB-0031", "WW-0002"],), (["MB-0001", "MB-0002"],), ([],), (["WW-9"],)],
         prompt=(
-            "Write a function `without_position(stops, i)` that returns"
-            " a NEW list with the stop at position i left out, or an"
-            " unchanged copy if there is no such position. Two slices"
-            " joined: everything before i and everything after it.\n\n"
-            "  without_position([\"Harbour\", \"Stadium\", \"Parkway\"], 1) -> [\"Harbour\", \"Parkway\"]\n\n"
-            "Return: a list of str."
+            "Write a function `depots_in(codes)` that returns the"
+            " distinct depot codes -- the part before the hyphen --"
+            " mentioned in a list of parcel codes, in alphabetical"
+            " order. Split each code at the hyphen, collect the first"
+            " parts in a set, sort.\n\n"
+            "  depots_in([\"MB-0012\", \"CH-0007\", \"MB-0031\", \"WW-0002\"]) -> [\"CH\", \"MB\", \"WW\"]\n\n"
+            "Return: a sorted list of str."
         ),
-        solution=("def without_position(stops, i):\n"
-                  "    return stops[:i] + stops[i + 1:]\n"),
-        trap=("def without_position(stops, i):\n"
-              "    return stops[:i] + stops[i:]\n"),
-        note="stops[:i] ends before position i and stops[i + 1:] begins"
-             " after it, so joining them skips exactly one item. The"
-             " trap's second slice begins AT i and keeps the stop it was"
-             " meant to drop, returning the list unchanged. A position"
-             " past the end makes both slices harmless -- all of the"
-             " list, then nothing -- so no guard is needed, and the"
-             " caller's list is never touched.",
+        solution=("def depots_in(codes):\n"
+                  "    return sorted({c.split(\"-\")[0] for c in codes})\n"),
+        trap=("def depots_in(codes):\n"
+              "    return sorted(c.split(\"-\")[0] for c in codes)\n"),
+        note="Without the set, the trap lists MB twice. The curly"
+             " brackets make a set comprehension, which keeps one of"
+             " each value, and sorted() turns it back into the ordered"
+             " list asked for. split('-')[0] is the text before the"
+             " first hyphen.",
     ),
 ]
 
