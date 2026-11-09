@@ -1,18 +1,18 @@
 # SQL and Python practice exercises
 
-Thirty questions in two tabs. **Fifteen SQL** on the bike-hire scheme, the
-tenth set on it, at two tools per question with the tiers named by task,
-on tools no bike set had used, and three writable questions; the prompts
-name the tool but do not write the statement. **Fifteen Python** at the
-easy level of the last two sets: everyday tasks over plain lists and
-strings, with no maths and no dicts, on tasks those sets did not cover.
+Thirty questions in two tabs. **Fifteen SQL** on a NEW schema, a regional
+parcel courier, at two tools per question with the tiers named by task,
+and three writable questions; the prompts name the tool but do not write
+the statement. **Fifteen Python** at the easy level of the last three
+sets: everyday tasks over plain lists and strings in the courier's terms,
+with no maths and no dicts.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Who, exactly | 1-3 |
-| 2 - Rank and share | 4-6 |
-| 3 - The clock and the calendar | 7-9 |
-| 4 - Capacity and balance | 10-12 |
+| 1 - The parcel's trail | 1-3 |
+| 2 - Depots and routes | 4-6 |
+| 3 - Customers and money | 7-9 |
+| 4 - People and time | 10-12 |
 | 5 - Changing the data | 13-15 |
 
 | Stage | Python questions |
@@ -23,34 +23,38 @@ strings, with no maths and no dicts, on tasks those sets did not cover.
 
 ## The schema
 
-Six tables. `stations` are the docks, each in a `zone` with so many docks,
-opened on a date and perhaps closed. `bikes` are the fleet: a `model`, an
-acquisition date, perhaps retired. `members` have a `plan` -- annual,
-monthly or pay-as-you-go -- and a home station. `rides` is the centre: a
-bike, a member OR NULL for a casual rider, a start station, an end station
-that is NULL while the ride is out, `started_at` and `ended_at`
-timestamps, metres ridden, and a `fare_cents` that is 0 for a member's
-ride inside the free half hour. `maintenance` jobs take a bike off the
-road from `reported_at` until `fixed_at`, which is NULL while the job is
-open. `payments` are money in: a fare names its ride, a subscription names
-its member, never both. Double-click a table in the left pane to see its
-columns.
+Six tables. `depots` are the buildings, each in a `region` with so many
+loading bays, opened on a date and perhaps closed. `couriers` work from a
+depot with a `vehicle` -- bike, van or lorry -- hired on a date, perhaps
+left. `customers` are businesses or people with a home depot; a
+`postcode_area` that may be NULL. `parcels` is the centre: a customer OR
+NULL for a walk-in at the counter, an origin depot and a destination depot,
+a `service` (economy, standard or express), a weight in grams,
+`collected_at`, a `delivered_at` and `courier_id` that are NULL while the
+parcel is still moving, and the `postage_cents` decided when it was
+collected. `scans` is the trail: one row per event in time order --
+collected, departed, arrived, out_for_delivery, failed, delivered -- at a
+depot, with the courier for the last three. `invoices` bill a business
+customer's month of postage, issued on the first of the next month and
+paid on a date or not yet. Double-click a table in the left pane to see
+its columns.
 
 **Dates and times are text**: 'YYYY-MM-DD' for dates, 'YYYY-MM-DD HH:MM'
 for timestamps. They compare correctly as text; `julianday()` turns either
-into a number of days you can subtract -- multiply by 1440 for minutes --
-and `date()` cuts a timestamp to its day.
+into a number of days you can subtract -- multiply by 24 for hours -- and
+`date()` cuts a timestamp to its day.
 
-**The data ends at 2026-06-30 23:59.** Anything that would have ended after
-that is open instead -- 35 rides have no end, 11 of them by
-casual riders; 114 maintenance jobs are unfixed -- and every
-question that measures an open interval says which end to supply.
+**The data ends at 2026-06-30 23:59.** Anything that would have happened
+after that has not happened -- 271 parcels have no delivery,
+113 of them after a failed attempt and nothing since; June's invoices
+are not out -- and every question that measures an open interval says
+which end to supply.
 
 ## The writable stage
 
 SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
-instead is conflict clauses, DDL and generated columns -- and each of
-questions 13 to 15 is one of those.
+instead is triggers, constraints and plain DML -- and each of questions 13
+to 15 is one of those.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -63,47 +67,46 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Question 15 inserts two invoice lines *after* your
-script, so the probe can add up the generated totals. Questions 13 and 14
-are graded on what the script leaves behind: the payments table, and what
-sqlite_master says about the two names.
+**Driver statements.** Question 13 inserts two scans *after* your script:
+a 'delivered' scan for parcel 40, which the trigger must act on, and a
+'failed' scan for parcel 122, which it must ignore. Questions 14 and 15
+are graded on what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 13 | `REPLACE INTO payments (payment_id, ride_id, amount_cents, paid_at, method) VALUES (1, ...)` |
-| 14 | `ALTER TABLE maintenance RENAME TO jobs; CREATE VIEW maintenance AS SELECT * FROM jobs` |
-| 15 | `CREATE TABLE invoice_lines (..., total_cents INTEGER GENERATED ALWAYS AS (qty * unit_cents) STORED)` |
+| 13 | `CREATE TRIGGER complete_on_delivery AFTER INSERT ON scans WHEN NEW.status = 'delivered' BEGIN UPDATE parcels SET ... WHERE parcel_id = NEW.parcel_id; END` |
+| 14 | `UPDATE parcels SET postage_cents = postage_cents + 500 WHERE collected_at >= '2026-06-01' AND weight_g > 10000` |
+| 15 | `DELETE FROM customers WHERE NOT EXISTS (SELECT 1 FROM parcels ...) AND NOT EXISTS (SELECT 1 FROM invoices ...)` |
 
 ## Things the data does on purpose
 
-- **3 stations have never had a battery job reported**, the ones question 1's
-  EXISTS flags with 0; a LEFT JOIN's COUNT(*) would flag every station with 1.
-- **81 subscribers have paid and never ridden, and 196 riders have never been
-  named on a payment**, the two sides question 2's FULL OUTER JOIN keeps; pay-
-  as-you-go riders pay per ride, so all of them are on the second side.
-- **35 rides are still out with no end station**, which question 3's IS NOT
-  counts as not-round-trips and <> would drop.
-- **Bike 2 has 43 rides, below 96 per cent of the classics**, question 4's
-  PERCENT_RANK; Market Square takes 37.0 per cent of the centre's rides,
-  question 5's zone share.
-- **386 rides have an id that is a multiple of 100**, question 6's sample,
-  which lands within a few per cent of the truth for the big models and misses
-  by a sixth for the cargo bikes' 36.
-- **Week 00 of 2026 has 291 rides and week 26 has 160**, the short weeks at
-  either end of question 7's range; 1.73 per cent of rides start on the hour,
-  question 8's figure, close to the one in sixty that chance predicts.
-- **256 members were 65 or over on 30 June 2026, against 266 by a plain
-  difference of years**, the ten whose birthday had not yet come that question
-  9 leaves out.
-- **Old Mill was active on 422 days, not 546**, which makes it question 10's
-  busiest station per dock per day; Station Approach gains 794 bikes over the
-  data and Market Square loses 567, question 11's two biggest imbalances.
-- **Every station saw a casual rider and a member within its first week**, the
-  two timestamps question 12 pulls from one scan.
-- **Payment 1 is 300 cents by app for ride 12152**, the row question 13 re-
-  records as 350 by card.
-- **The data ends at 2026-06-30 23:59**, with 35 rides still out and 114 jobs
-  open.
+- **5,954 of the 24,000 parcels were handed in by strangers at the counter**
+  and have no customer, which question 7 counts as a category; it is also why
+  question 15's NOT IN would delete nobody.
+- **80 of the 700 customers have never sent a parcel**, the ones question 15
+  removes; 73 have no postcode area recorded, and 15 of the 60 couriers have
+  left.
+- **Old Foundry closed on 2026-02-01**, and the 558 parcels its customers have
+  sent since were all handed in at Central Hub, the switch question 6 shows
+  month by month.
+- **3,345 parcels came back to the depot at least once, 72 of them twice**,
+  which is why question 3 counts with EXISTS rather than a join; 113 were
+  never delivered at all.
+- **Express gets 55.4 per cent of its parcels there within 48 hours and
+  economy takes 94 hours on average**, question 2's figures -- in hours, after
+  the julianday days are multiplied up.
+- **29 per cent of parcels stay at one depot**, so the local 'routes' would
+  crowd out question 4's list without the WHERE; Millbank sends 827 more
+  parcels than it receives, question 5's biggest imbalance.
+- **Postage is a base per service plus a rate per STARTED kilogram**, which
+  question 9 recovers band by band when the ceiling is computed right.
+- **332 invoices are unpaid, owed by 174 of the 247 business customers**,
+  question 8's list; every invoice equals its month's postage.
+- **19 couriers ride bikes** and make one or two drops on a working day,
+  question 10's rate once the days are counted as distinct dates.
+- **Volume grew from 1,099 parcels in January 2025 to 1,523 in June 2026**, as
+  customers joined, the climb question 12's LAG shows; 31 of June's 1,523
+  parcels weigh over ten kilograms, the ones question 14 surcharges.
 
 ## How the Python questions are graded
 
@@ -113,9 +116,10 @@ shows every call and its result in the output pane, and Check compares each
 result with the reference function's. Values are compared, not their printed
 form -- but the type counts: a tuple is not a list, and 0 is not False. A
 function that prints its answer instead of returning it returns None, and
-None matches nothing. The inputs are everyday values: lists of station
-names for questions 1 to 5, a number or a name for 6 to 10, a list of stops
-or a line of text for 11 to 15. Each prompt shows one example call with its
+None matches nothing. The inputs are everyday values in the courier's terms:
+a parcel's trail of status words or two lists of depots for questions 1 to
+5, a number, a code or a few strings for 6 to 10, lists of parcel codes,
+weights or dates for 11 to 15. Each prompt shows one example call with its
 answer, and Run adds a few more, including the empty list or the edge the
 question warns about.
 
@@ -126,372 +130,378 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Who, exactly (3)
+## 1 - The parcel's trail (3)
 
-EXISTS as a 1-or-0 column where a LEFT JOIN's COUNT(*) counts the empty match,
-FULL OUTER JOIN keeping both sides' strays, and IS NOT treating NULL as a value.
+ROW_NUMBER restarted per parcel by PARTITION BY, julianday differences
+multiplied by 24 before they are compared with hours, and SUM of an EXISTS where
+a join would count attempts.
 
-1. **Has this station ever seen a battery job?** (Q1207)
+1. **Each parcel's trail, step by step** (Q1222)
 
-   For every station: a 1 or 0 saying whether a battery job has ever been
-   reported there, and how many have. EXISTS is an expression, so it can sit
-   in the SELECT list as a column; a scalar subquery gives the count.
+   For parcels 1 to 5: every scan, numbered from 1 within its own parcel in
+   time order, with the status and the time. A window numbering function
+   partitioned by parcel.
 
-   *Return: name, had_battery_job, battery_jobs*
+   *Return: parcel_id, step, status, scanned_at*
 
-2. **Paid, rode, or both** (Q1208)
+2. **How long each service really takes** (Q1223)
 
-   For each plan: members who have paid a subscription but never ridden,
-   members who have ridden but never paid one, and members who have done both.
-   A FULL OUTER JOIN between the distinct paying members and the distinct
-   riding members keeps the members on either side alone; COALESCE the two ids
-   to reach the plan.
+   For each service: the delivered parcels, the average hours from collection
+   to delivery to one decimal, and the share delivered within 48 hours as a
+   percentage to one decimal. julianday differences are in DAYS; the average
+   of a true-or-false comparison is a share.
 
-   *Return: plan, paid_never_rode, rode_never_paid, both*
+   *Return: service, delivered, avg_hours, within_48h_pct*
 
-3. **Rides that went somewhere else, open ones included** (Q1209)
+3. **Parcels that came back to the depot** (Q1224)
 
-   For each zone, of the start station: its rides, and how many did NOT end
-   where they began -- counting a ride still out, whose end station is NULL,
-   as not a round trip. The NULL-safe comparison is IS NOT, which <> is not.
+   For each service: its parcels, how many of them have a failed delivery
+   attempt somewhere in their trail, and that as a percentage to one decimal.
+   A parcel with two failed attempts counts once, which a join to scans would
+   not do; EXISTS does.
 
-   *Return: zone, rides, not_round_trips*
+   *Return: service, parcels, with_failure, pct*
 
-## 2 - Rank and share (3)
+## 2 - Depots and routes (3)
 
-PERCENT_RANK as the share strictly below, two SUM windows with different
-partitions in one SELECT, and % picking one id in a hundred with a CASE that has
-no ELSE.
+The same table joined twice under two aliases with the local parcels excluded,
+two scalar subqueries where a double join would multiply, and two conditional
+sums that follow the customers across a depot's closure.
 
-4. **Where each bike stands among its model** (Q1210)
+4. **The ten busiest routes between depots** (Q1225)
 
-   For bikes 1 to 10: the model, the bike's rides, and the share of its model-
-   mates that have FEWER rides, as a fraction from 0 to 1 to three decimals.
-   PERCENT_RANK over the model's bikes, computed over every bike in a CTE and
-   filtered afterwards; bikes never ridden count as 0 rides.
+   The ten depot-to-depot routes with the most parcels, by name, leaving out
+   the local parcels that stay at one depot. Join depots twice, once for each
+   end; group by the pair; order by the count, then by the two names so a tie
+   cannot shuffle the list.
 
-   *Return: bike_id, model, rides, pct_rank*
+   *Return: from_depot, to_depot, parcels*
 
-5. **Each station's share of its zone, and of everything** (Q1211)
+5. **Parcels in against parcels out, at every depot** (Q1226)
 
-   For every station: its zone, its rides, its share of the ZONE's rides and
-   its share of ALL rides, both as percentages to one decimal. Two window SUMs
-   over a CTE of rides per station: one partitioned by zone, one over the
-   whole result.
+   For every depot: the parcels collected there, the parcels delivered to it,
+   and the difference (in minus out). Two counts of the same table on two
+   different keys -- scalar subqueries, or two conditional sums; joining
+   parcels twice would multiply.
 
-   *Return: name, zone, rides, zone_pct, all_pct*
+   *Return: name, sent, received, net*
 
-6. **A one-in-a-hundred sample** (Q1212)
+6. **Where Old Foundry's customers went** (Q1227)
 
-   For each model: how many rides fall in a one-in-a-hundred sample -- the
-   rides whose ride_id is a multiple of 100 -- the sample's average distance
-   in whole metres, and the average over every ride of the model. The modulo
-   operator % picks the sample; a CASE inside AVG keeps the other rides out of
-   it.
+   Old Foundry closed on 2026-02-01. For each month from October 2025: how
+   many parcels its customers (the ones whose home depot it is) handed in at
+   Old Foundry, and how many at Central Hub. One GROUP BY on the month with
+   two conditional sums on the origin.
 
-   *Return: model, sampled, sample_avg_m, all_avg_m*
+   *Return: month, at_old_foundry, at_central_hub*
 
-## 3 - The clock and the calendar (3)
+## 3 - Customers and money (3)
 
-%W against %U, %M against %S, and a year difference corrected by comparing 'MM-
-DD' text.
+SUM(column IS NULL) for a NULL that means something, a WHERE before the GROUP BY
+so every aggregate is over the unpaid rows, and (weight - 1) / 1000 + 1 for a
+started kilogram.
 
-7. **Rides by week of the year, 2026** (Q1213)
+7. **Walk-ins at the counter** (Q1228)
 
-   For 2026: rides per week number, weeks starting on Monday, '00' for the
-   days before the first Monday. strftime has two week-number codes; one
-   counts Monday-led weeks and the other Sunday-led.
+   For each service: its parcels, how many were handed in by someone with no
+   customer account, and that as a percentage to one decimal. A parcel's
+   customer_id is NULL for a walk-in: a NULL that means something, so it is
+   counted, not skipped.
 
-   *Return: week, rides*
+   *Return: service, parcels, walk_ins, pct*
 
-8. **Rides that began on the hour** (Q1214)
+8. **The ten customers who owe the most** (Q1229)
 
-   For each zone, of the start station: its rides, how many started at exactly
-   zero minutes past an hour, and that as a percentage to two decimals.
-   strftime has a code for the minute of the hour.
+   The ten business customers with the most unpaid invoice money outstanding:
+   their name, how many invoices are unpaid, the total owed in cents, and the
+   issue date of the oldest. An unpaid invoice has no paid_on. Order by the
+   total, then by customer_id to settle a tie.
 
-   *Return: zone, rides, on_the_hour, pct*
+   *Return: name, unpaid_invoices, owed_cents, oldest_issued*
 
-9. **Members who were 65 or over when the data ends** (Q1215)
+9. **The postage table, recovered from the parcels** (Q1230)
 
-   For each plan: its members, and how many were 65 or older on 2026-06-30 --
-   an EXACT age, so a member whose 65th birthday fell in July 2026 is not
-   counted. Take the difference of the years, then subtract one if the
-   birthday's month-and-day had not yet come round.
+   Postage is a base per service plus a rate per STARTED kilogram. For each
+   service and each started-kilogram band from 1 to 5: how many parcels, and
+   the postage they paid (one value per band). The band is integer arithmetic
+   on weight_g such that 1 to 1000 grams is band 1 and 1001 to 2000 is band 2.
 
-   *Return: plan, members, seniors*
+   *Return: service, kg_band, parcels, postage_cents*
 
-## 4 - Capacity and balance (3)
+## 4 - People and time (3)
 
-COUNT(DISTINCT date(...)) for the days a station was really open, ABS for a
-difference in either direction, and MIN over a CASE with no ELSE.
+COUNT(DISTINCT date(...)) for the days actually worked, CASE on strftime's TEXT
+digit, and LAG left to return NULL on the first row.
 
-10. **How hard each dock works** (Q1216)
+10. **How many drops a bike courier makes in a day** (Q1231)
 
-    For every station: its docks, its rides, the number of DAYS on which a
-    ride started there, and the rides per dock per active day to three
-    decimals. The active days are a COUNT of DISTINCT dates; Old Mill's are
-    fewer, and dividing by the data's 546 days instead would understate it.
+    For each courier on a bike: their deliveries, the number of DAYS on which
+    they delivered something, and the deliveries per such day to two decimals.
+    The days are a COUNT of DISTINCT dates; the span from first to last
+    delivery would count the days off.
 
-    *Return: name, docks, rides, active_days, per_dock_day*
+    *Return: name, deliveries, days, per_day*
 
-11. **Stations out of balance** (Q1217)
+11. **Which day of the week people post things** (Q1232)
 
-    The stations where rides ending and rides starting differ by MORE than a
-    hundred, in either direction: the starts, the ends, and the net gain (ends
-    minus starts, negative for a drain). Two scalar subqueries per station,
-    and ABS in the WHERE.
+    Parcels collected on each day of the week, with the day NAMED -- 'Monday',
+    not '1'. strftime gives the weekday as a digit from '0' for Sunday; a CASE
+    turns it into a word.
 
-    *Return: name, starts, ends, net*
+    *Return: weekday, parcels*
 
-12. **The first casual ride and the first member ride** (Q1218)
+12. **Month on month** (Q1233)
 
-    For every station: when its first ride by a casual rider started, and when
-    its first ride by a member did. One pass over rides: MIN of a CASE that
-    yields the timestamp only for the rows of each kind, and nothing -- NULL
-    -- for the others.
+    For each month: the parcels collected, and the change from the month
+    before -- NULL for the first month, since there is nothing before it. A
+    CTE of parcels per month, then a window function that looks one row back.
 
-    *Return: name, first_casual, first_member*
+    *Return: month, parcels, change*
 
 ## 5 - Changing the data (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. REPLACE INTO, RENAME TO with a view
-behind the old name, and STORED against VIRTUAL.
+question's probe query reads the result. A trigger whose WHEN clause picks the
+scans that matter, an UPDATE narrowed by AND, and NOT EXISTS where NOT IN meets
+a NULL.
 
-13. **A payment re-recorded** (Q1219)
+13. **A delivery scan completes the parcel** (Q1234)
 
-    Payment 1 was keyed in wrong: it was 350 cents by card, not 300 by app.
-    Re-record it in ONE statement, keeping payment_id 1, ride 12152 and the
-    time '2025-01-01 02:42': REPLACE INTO writes the row as given, removing
-    the old row with that id first.
+    When a scan with status 'delivered' is inserted, the parcel should be
+    marked delivered: its delivered_at set to the scan's time and its
+    courier_id to the scan's courier. Write an AFTER INSERT trigger on scans
+    with a WHEN clause so that only delivery scans do this. The question then
+    inserts a 'delivered' scan for parcel 40 and a 'failed' scan for parcel
+    122.
 
-    *Checked: payment 1's amount and method, how many payments there are, and the highest payment_id*
+    *Checked: parcel 40's delivered_at and courier_id, parcel 122's delivered_at, and how many parcels are delivered*
 
-14. **A table renamed, without breaking the old name** (Q1220)
+14. **A surcharge on June's heavy parcels** (Q1235)
 
-    The maintenance table is to be called jobs from now on, but old reports
-    still query maintenance. Rename the table with ALTER TABLE, then create a
-    VIEW called maintenance that selects everything from jobs, so both names
-    work.
+    From June 2026 a parcel over ten kilograms carries a surcharge of 500
+    cents. Add it, in one UPDATE, to the postage of every parcel collected in
+    June 2026 that weighs more than 10,000 grams -- and to no other.
 
-    *Checked: what sqlite_master says the names jobs and maintenance are*
+    *Checked: how many parcels were collected in June, and their postage added up*
 
-15. **A total that is computed and kept** (Q1221)
+15. **Clearing out the customers who never sent anything** (Q1236)
 
-    Create invoice_lines with line_id as the integer primary key, job_id
-    (required, referencing maintenance), qty and unit_cents (integers,
-    required), and total_cents as a GENERATED column equal to qty times
-    unit_cents that is STORED -- written to disk when the row is, not
-    recomputed on every read. The question then inserts two lines.
+    Delete every customer who has never sent a parcel and has no invoice. Test
+    'never sent' with NOT EXISTS, not NOT IN: parcels.customer_id is NULL on
+    every walk-in row, and a NOT IN over a list that holds a NULL is never
+    true.
 
-    *Checked: the totals added up, and the 'hidden' code pragma_table_xinfo gives the total_cents column (3 for stored, 2 for virtual)*
+    *Checked: how many customers remain, and how many of them have never sent a parcel*
 
 # Python
 
 ## 1 - Counting and finding (5)
 
-`in` before index(), a backwards loop that breaks, len // 2 behind a guard,
-today's count minus yesterday's, and lower() before testing a first letter.
+index() only after `in`, and -1 as an index means the LAST item; a slice up to
+the delivery before count(); zip for position against position; a length check
+before a negative index; split() per line summed.
 
-1. **Everywhere the bike went after Harbour** (P476)
+1. **What happened just before the delivery** (P491)
 
-   Write a function `after(stops, station)` that returns the stops that came
-   after the station's FIRST appearance, not including it, or [] if the
-   station never appears. A membership test, then index() and a slice.
-
-   ```
-   after(["Parkway", "Harbour", "Stadium", "Hilltop"], "Harbour") -> ["Stadium", "Hilltop"]
-   ```
-
-   *Return: a list of str.*
-
-2. **How long the bike sat at its last stop** (P477)
-
-   Write a function `final_streak(stops)` that returns how many times the LAST
-   stop is repeated at the end of the list, in a row -- 3 for a list ending
-   Stadium, Stadium, Stadium -- and 0 for an empty list. A loop backwards from
-   the end that stops at the first different stop.
+   A parcel's trail is a list of status words in time order. Write a function
+   `status_before(trail, status)` that returns the status that came right
+   before the FIRST appearance of the given one, or None when it is missing or
+   was the first entry.
 
    ```
-   final_streak(["Harbour", "Stadium", "Stadium", "Stadium"]) -> 3
-   ```
-
-   *Return: an int.*
-
-3. **The halfway stop** (P478)
-
-   Write a function `halfway(stops)` that returns the stop in the middle of
-   the day -- position len // 2, which for an even count is the later of the
-   two middle stops -- or None for an empty list.
-
-   ```
-   halfway(["Harbour", "Stadium", "Parkway"]) -> "Stadium"
+   status_before(["collected", "departed", "arrived", "out_for_delivery", "delivered"], "delivered") -> "out_for_delivery"
    ```
 
    *Return: a str, or None.*
 
-4. **More visits today than yesterday?** (P479)
+2. **How many attempts it took** (P492)
 
-   Write a function `visits_change(today, yesterday, station)` that returns
-   how many more times the station was visited today than yesterday --
-   negative if fewer. Two count() calls and a subtraction, today's first.
+   Write a function `attempts(trail)` that returns how many 'out_for_delivery'
+   entries come before the first 'delivered' -- or in the whole trail if the
+   parcel was never delivered. Cut the list at the delivery with a slice, then
+   count().
 
    ```
-   visits_change(["Harbour", "Harbour", "Stadium"], ["Harbour"], "Harbour") -> 1
+   attempts(["collected", "out_for_delivery", "failed", "out_for_delivery", "delivered"]) -> 2
    ```
 
    *Return: an int.*
 
-5. **How many names start with a vowel** (P480)
+3. **Parcels that never left their depot** (P493)
 
-   Write a function `vowel_names(names)` that returns how many of the names
-   begin with a vowel, in either case; an empty string does not count. A sum
-   over a generator that tests the first character lower-cased, with a guard
-   for the empty string.
+   Two lists line up parcel by parcel: where each was collected and where it
+   was delivered. Write a function `local_count(origins, dests)` that returns
+   how many parcels had the same depot at both ends. zip() walks the two lists
+   together; a sum of comparisons counts.
 
    ```
-   vowel_names(["Aisha", "Umar", "Rosa", "Eleanor"]) -> 3
+   local_count(["Millbank", "Central Hub", "Westway"], ["Millbank", "Northgate", "Westway"]) -> 2
+   ```
+
+   *Return: an int.*
+
+4. **The second-last scan** (P494)
+
+   Write a function `from_end(trail, n)` that returns the n-th entry counting
+   from the end -- 1 for the last, 2 for the one before it -- or None when the
+   trail is too short. A negative index, behind a length check.
+
+   ```
+   from_end(["collected", "departed", "arrived", "delivered"], 2) -> "arrived"
+   ```
+
+   *Return: a str, or None.*
+
+5. **Words across every line of a label** (P495)
+
+   An address label is a list of lines. Write a function `total_words(lines)`
+   that returns how many words there are across all the lines. split() with no
+   argument handles any spacing; sum() over a generator adds the counts.
+
+   ```
+   total_words(["Flat 2", "14 Harbour Street", "Millbank"]) -> 6
    ```
 
    *Return: an int.*
 
 ## 2 - Labels (5)
 
-round() rather than int(), // and % with :02d rather than a float, words[-1]
-rather than words[1], divmod into two padded parts, and the dash added before
-join().
+A threshold that picks the unit, a conditional expression between two f-strings,
+capitalize() against title(), a filter before join(), and max() of three sides.
 
-6. **A percentage, rounded, as a label** (P481)
+6. **Grams or kilograms, whichever reads better** (P496)
 
-   Write a function `percent_label(part, whole)` that returns the share as a
-   whole-number percentage with a percent sign, '67%' for 2 of 3, or 'n/a'
-   when the whole is 0. round() to no decimals, inside an f-string.
-
-   ```
-   percent_label(2, 3) -> "67%"
-   ```
-
-   *Return: a str.*
-
-7. **Cents as dollars on a receipt** (P482)
-
-   Write a function `dollars(cents)` that returns the amount as '$3.50': a
-   dollar sign, the whole dollars, a point, and the cents left over always as
-   two digits. // and % give the two parts; a format spec pads the second.
+   Write a function `weight_label(grams)` that returns '750 g' for anything
+   under a kilogram and '2.5 kg' from a kilogram up, the kilograms to one
+   decimal. An if on the threshold; division by 1000 and round(..., 1) for the
+   heavier case.
 
    ```
-   dollars(350) -> "$3.50"
+   weight_label(2500) -> "2.5 kg"
    ```
 
    *Return: a str.*
 
-8. **A name the way the register writes it** (P483)
+7. **A route label that knows when nothing moved** (P497)
 
-   Write a function `register_name(name)` that turns 'Hamid Uddin' into
-   'Uddin, Hamid': the LAST word first, a comma and a space, then everything
-   before it. A one-word name is returned unchanged. split(), a slice, and
-   join().
-
-   ```
-   register_name("Hamid Uddin") -> "Uddin, Hamid"
-   ```
-
-   *Return: a str.*
-
-9. **Minutes since midnight as a clock time** (P484)
-
-   Write a function `clock(minutes)` that turns minutes since midnight into
-   'HH:MM' with both parts two digits: 485 is '08:05'. divmod() by 60 gives
-   hours and minutes at once; a format spec pads each.
+   Write a function `route_label(origin, dest)` that returns 'Millbank ->
+   Central Hub' for a parcel that moved between depots and 'Millbank (local)'
+   for one delivered from the depot it was handed in at. A conditional
+   expression choosing between two f-strings.
 
    ```
-   clock(485) -> "08:05"
+   route_label("Millbank", "Millbank") -> "Millbank (local)"
    ```
 
    *Return: a str.*
 
-10. **A bulleted list of names** (P485)
+8. **A status code as words** (P498)
 
-    Write a function `bulleted(names)` that returns the names as a bulleted
-    list in one string: each name on its own line, starting with '- ', lines
-    separated by newlines and no newline at the end; '' for no names. A
-    comprehension to add the dash, then '\n'.join.
+   Status codes are written like 'out_for_delivery'. Write a function
+   `status_words(code)` that returns them as a phrase with a capital only at
+   the start: 'Out for delivery'. replace() the underscores, then
+   capitalize().
+
+   ```
+   status_words("out_for_delivery") -> "Out for delivery"
+   ```
+
+   *Return: a str.*
+
+9. **An address on one line, blanks skipped** (P499)
+
+   Address forms arrive with some lines left blank. Write a function
+   `address_line(parts)` that joins the non-empty parts with ', ' into one
+   line, skipping the blanks so no two commas meet. A generator that keeps the
+   truthy parts, inside join().
+
+   ```
+   address_line(["Flat 2", "", "14 Harbour Street", "Millbank"]) -> "Flat 2, 14 Harbour Street, Millbank"
+   ```
+
+   *Return: a str.*
+
+10. **Will the box fit through the hatch?** (P500)
+
+    A parcel fits through the sorting hatch when NONE of its three sides is
+    longer than the hatch. Write a function `fits(length, width, height,
+    hatch)` that returns True or False. max() takes several arguments, so the
+    longest side is one call.
 
     ```
-    bulleted(["Hamid", "Rosa"]) -> "- Hamid\n- Rosa"
+    fits(30, 20, 10, 40) -> True
     ```
 
-    *Return: a str.*
+    *Return: True or False.*
 
 ## 3 - Checks and filters (5)
 
-i + 1 to leave the first end out, zip with the list shifted by one, the empty
-string's falsiness, strip() after split(','), and two slices that skip one
-position.
+startswith() with the hyphen rather than `in`, zip the weights first then
+sorted(), a comprehension whose expression is the test, min() and max() rather
+than [0] and [-1], and a set comprehension before sorted().
 
-11. **The stops between Harbour and Stadium** (P486)
+11. **The parcels from one depot** (P501)
 
-    Write a function `between(stops, a, b)` that returns the stops strictly
-    between the first a and the first b -- neither included -- and [] when
-    either is missing or b comes before a. Two index() calls and one slice,
-    after the checks.
-
-    ```
-    between(["Parkway", "Harbour", "Hilltop", "Riverside", "Stadium", "Parkway"], "Harbour", "Stadium") -> ["Hilltop", "Riverside"]
-    ```
-
-    *Return: a list of str.*
-
-12. **The legs of a day, from one list** (P487)
-
-    Write a function `legs_of(stops)` that returns one string per leg between
-    consecutive stops, 'Harbour -> Stadium', from a single list of stops; one
-    stop or none gives []. zip the list with itself shifted by one.
+    A parcel code starts with its origin depot's two-letter code and a hyphen:
+    'MB-0012'. Write a function `codes_from(codes, depot)` that returns the
+    codes from that depot, in order. startswith() with the depot code and the
+    hyphen, in a comprehension.
 
     ```
-    legs_of(["Harbour", "Stadium", "Parkway"]) -> ["Harbour -> Stadium", "Stadium -> Parkway"]
+    codes_from(["MB-0012", "CH-0007", "MB-0031", "WW-0002"], "MB") -> ["MB-0012", "MB-0031"]
     ```
 
     *Return: a list of str.*
 
-13. **Blanks in the log filled in** (P488)
+12. **Parcel codes, lightest first** (P502)
 
-    Some stops were left blank -- an empty string. Write a function
-    `fill_blanks(stops, default)` that returns the list with every empty
-    string replaced by the default and everything else unchanged. A
-    comprehension with a conditional expression, or with `or`.
-
-    ```
-    fill_blanks(["Harbour", "", "Stadium", ""], "unknown") -> ["Harbour", "unknown", "Stadium", "unknown"]
-    ```
-
-    *Return: a list of str.*
-
-14. **Names from a comma-separated line** (P489)
-
-    A form sends names as one line, 'Hamid, Rosa,Yusuf , Zara', with the
-    spacing all over the place. Write a function `names_from(line)` that
-    returns the names as a list, each stripped of spaces, empty pieces
-    dropped. split on the comma, then strip, then keep the non-empty ones.
+    Two lists line up: parcel codes and their weights. Write a function
+    `by_weight(codes, weights)` that returns the codes in order of weight,
+    lightest first, codes alone. zip() the weights with the codes, sorted(),
+    then take the codes back out.
 
     ```
-    names_from("Hamid, Rosa,Yusuf , Zara") -> ["Hamid", "Rosa", "Yusuf", "Zara"]
+    by_weight(["MB-0012", "CH-0007", "WW-0002"], [2500, 750, 1200]) -> ["CH-0007", "WW-0002", "MB-0012"]
     ```
 
     *Return: a list of str.*
 
-15. **A stop struck out** (P490)
+13. **Which parcels are over the limit** (P503)
 
-    Write a function `without_position(stops, i)` that returns a NEW list with
-    the stop at position i left out, or an unchanged copy if there is no such
-    position. Two slices joined: everything before i and everything after it.
+    Write a function `over_limit(weights, limit)` that returns a list of True
+    and False, one per parcel in order, saying whether it is over the limit. A
+    comprehension whose expression is the comparison itself.
 
     ```
-    without_position(["Harbour", "Stadium", "Parkway"], 1) -> ["Harbour", "Parkway"]
+    over_limit([2500, 750, 12000], 10000) -> [False, False, True]
     ```
 
-    *Return: a list of str.*
+    *Return: a list of bool.*
+
+14. **The first and last collection** (P504)
+
+    Write a function `date_range(dates)` that returns the earliest and latest
+    of a list of ISO dates as a tuple, or None for an empty list. ISO dates
+    compare correctly as text, so min() and max() do it without parsing.
+
+    ```
+    date_range(["2026-03-04", "2025-11-30", "2026-01-15"]) -> ("2025-11-30", "2026-03-04")
+    ```
+
+    *Return: a tuple of two str, or None.*
+
+15. **Which depots a batch of codes mentions** (P505)
+
+    Write a function `depots_in(codes)` that returns the distinct depot codes
+    -- the part before the hyphen -- mentioned in a list of parcel codes, in
+    alphabetical order. Split each code at the hyphen, collect the first parts
+    in a set, sort.
+
+    ```
+    depots_in(["MB-0012", "CH-0007", "MB-0031", "WW-0002"]) -> ["CH", "MB", "WW"]
+    ```
+
+    *Return: a sorted list of str.*
 
 ## The one concept with no question here
 
@@ -502,7 +512,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,681 retired ones.
+1,711 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

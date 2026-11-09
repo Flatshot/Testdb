@@ -1,20 +1,23 @@
-"""Practice exercises: fifteen questions on the bike-hire schema.
+"""Practice exercises: fifteen questions on the parcel-courier schema.
 
-The tenth set on the bike scheme (SEED 1206), two tools per question, the
-tiers named by task, on tools no bike set has used, with prompts that name
-the tool but do not write the statement. Who, exactly -- an EXISTS used as
-a column, a FULL OUTER JOIN of payers and riders, IS NOT where <> would
-drop the open rides. Rank and share -- PERCENT_RANK among a bike's
-model-mates, two window sums with two different partitions in one query,
-a one-in-a-hundred sample by the modulo operator. The clock and the
-calendar -- rides by week number, rides that began on the hour, an exact
-age with the birthday-not-yet adjustment. Capacity and balance -- rides
-per dock per active day, stations out of balance by ABS, the first casual
-and first member ride by MIN of a CASE. And three WRITABLE questions:
+The first set on the courier scheme (SEED 1241), two tools per question,
+the tiers named by task, with prompts that name the tool but do not write
+the statement. The parcel's trail -- each scan's place in its parcel's
+story by ROW_NUMBER partitioned, transit times by julianday with a share
+inside 48 hours, parcels that suffered a failed attempt by EXISTS where a
+join would count attempts. Depots and routes -- the busiest routes by a
+two-column GROUP BY with two aliases of depots, parcels in against out by
+scalar subqueries, Old Foundry's customers rerouted by conditional sums
+across its closure. Customers and money -- walk-in parcels as a NULL
+category, the customers owing most by HAVING-free aggregation over a
+filtered join, the postage table recovered by integer arithmetic on
+weight. People and time -- deliveries per working day by COUNT DISTINCT
+of a date, collections by weekday name through CASE on strftime, month on
+month by LAG. And three WRITABLE questions:
 
-  * a REPLACE INTO that re-records a payment
-  * a table renamed, with a view keeping the old name alive
-  * a STORED generated column, told from VIRTUAL by pragma_table_xinfo
+  * a trigger with a WHEN clause that completes a parcel on its delivery scan
+  * an UPDATE adding a surcharge to a slice of the parcels
+  * a DELETE of the customers who never sent, where NOT IN meets a NULL
 
 Each of those runs in a private in-memory copy of the database, so nothing
 you write can reach the real file. The copy persists across Runs of one
@@ -29,450 +32,442 @@ question itself runs AFTER your script.
 import sqlite3
 
 EXERCISES = [
-    # ========================================================= 1 Who, exactly
+    # =================================================== 1 The parcel's trail
     dict(
-        id=1, ledger="Q1207", concept="EXS", tier="1 - Who, exactly",
-        title="Has this station ever seen a battery job?",
+        id=1, ledger="Q1222", concept="SEQ", tier="1 - The parcel's trail",
+        title="Each parcel's trail, step by step",
         prompt=(
-            "For every station: a 1 or 0 saying whether a battery job"
-            " has ever been reported there, and how many have. EXISTS"
-            " is an expression, so it can sit in the SELECT list as a"
-            " column; a scalar subquery gives the count.\n\n"
-            "Return: name, had_battery_job, battery_jobs"
+            "For parcels 1 to 5: every scan, numbered from 1 within its"
+            " own parcel in time order, with the status and the time."
+            " A window numbering function partitioned by parcel.\n\n"
+            "Return: parcel_id, step, status, scanned_at"
         ),
-        solution=("SELECT s.name,"
-                  " EXISTS (SELECT 1 FROM maintenance m WHERE m.station_id = s.station_id AND m.kind = 'battery'),"
-                  " (SELECT COUNT(*) FROM maintenance m WHERE m.station_id = s.station_id AND m.kind = 'battery')"
-                  " FROM stations s"),
-        trap_sql=("SELECT s.name, COUNT(*) > 0, COUNT(*)"
-                  " FROM stations s LEFT JOIN maintenance m ON m.station_id = s.station_id AND m.kind = 'battery'"
-                  " GROUP BY s.name"),
-        note="EXISTS returns 1 or 0 and can be used anywhere an"
-             " expression can, not only in WHERE: as a flag column it"
-             " answers 'is there any?' without a join. The trap's LEFT"
-             " JOIN keeps a row for every station even when nothing"
-             " matched, and COUNT(*) counts that row, so every station"
-             " shows 1 and one job. Three stations have never had a"
-             " battery job reported.",
-        claims=[("twelve stations, three without",
-                 lambda rows, c: len(rows) == 12 and sum(r[1] == 0 for r in rows) == 3),
-                ("the flag agrees with the count",
-                 lambda rows, c: all((r[1] == 1) == (r[2] > 0) for r in rows))],
+        solution=("SELECT parcel_id, ROW_NUMBER() OVER (PARTITION BY parcel_id ORDER BY scanned_at), status, scanned_at"
+                  " FROM scans WHERE parcel_id <= 5"),
+        trap_sql=("SELECT parcel_id, ROW_NUMBER() OVER (ORDER BY scanned_at), status, scanned_at"
+                  " FROM scans WHERE parcel_id <= 5"),
+        note="PARTITION BY restarts the numbering for each parcel, so"
+             " every trail begins at step 1; without it the trap numbers"
+             " all 23 scans in one run and parcel 2's trail starts at"
+             " step 6. The trail is the schema's ordered sequence inside"
+             " a parent: collected, departed, arrived, out for delivery,"
+             " delivered -- and a local parcel, which never departs, has"
+             " three steps instead of five.",
+        claims=[("23 scans, every trail starting at 1",
+                 lambda rows, c: len(rows) == 23 and all(any(r[0] == p and r[1] == 1 for r in rows) for p in range(1, 6))),
+                ("parcel 3's trail is three steps",
+                 lambda rows, c: max(r[1] for r in rows if r[0] == 3) == 3)],
     ),
     dict(
-        id=2, ledger="Q1208", concept="FOJ", tier="1 - Who, exactly",
-        title="Paid, rode, or both",
+        id=2, ledger="Q1223", concept="TRANSIT", tier="1 - The parcel's trail",
+        title="How long each service really takes",
         prompt=(
-            "For each plan: members who have paid a subscription but"
-            " never ridden, members who have ridden but never paid one,"
-            " and members who have done both. A FULL OUTER JOIN between"
-            " the distinct paying members and the distinct riding"
-            " members keeps the members on either side alone; COALESCE"
-            " the two ids to reach the plan.\n\n"
-            "Return: plan, paid_never_rode, rode_never_paid, both"
+            "For each service: the delivered parcels, the average hours"
+            " from collection to delivery to one decimal, and the share"
+            " delivered within 48 hours as a percentage to one decimal."
+            " julianday differences are in DAYS; the average of a"
+            " true-or-false comparison is a share.\n\n"
+            "Return: service, delivered, avg_hours, within_48h_pct"
         ),
-        solution=("WITH p AS (SELECT DISTINCT member_id FROM payments WHERE member_id IS NOT NULL),"
-                  " r AS (SELECT DISTINCT member_id FROM rides WHERE member_id IS NOT NULL)"
-                  " SELECT m.plan, SUM(r.member_id IS NULL), SUM(p.member_id IS NULL), SUM(p.member_id IS NOT NULL AND r.member_id IS NOT NULL)"
-                  " FROM p FULL OUTER JOIN r ON r.member_id = p.member_id"
-                  " JOIN members m ON m.member_id = COALESCE(p.member_id, r.member_id) GROUP BY m.plan"),
-        trap_sql=("WITH p AS (SELECT DISTINCT member_id FROM payments WHERE member_id IS NOT NULL),"
-                  " r AS (SELECT DISTINCT member_id FROM rides WHERE member_id IS NOT NULL)"
-                  " SELECT m.plan, SUM(r.member_id IS NULL), SUM(p.member_id IS NULL), SUM(p.member_id IS NOT NULL AND r.member_id IS NOT NULL)"
-                  " FROM p LEFT JOIN r ON r.member_id = p.member_id"
-                  " JOIN members m ON m.member_id = COALESCE(p.member_id, r.member_id) GROUP BY m.plan"),
-        note="FULL OUTER JOIN (SQLite 3.39 and later) keeps the"
-             " unmatched rows of BOTH sides, so one query sees the"
-             " payers without rides and the riders without payments; a"
-             " LEFT JOIN, the trap, keeps only the left side's strays"
-             " and never meets the 196 riders who were never named on a"
-             " payment -- the pay-as-you-go plan vanishes entirely. The"
-             " two NULL tests tell the three groups apart.",
-        claims=[("three plans, every pay-as-you-go rider unnamed on a payment",
-                 lambda rows, c: len(rows) == 3 and ("pay-as-you-go", 0, 186, 0) in rows),
-                ("81 subscribers paid and never rode",
-                 lambda rows, c: sum(r[1] for r in rows) == 81)],
+        solution=("SELECT service, COUNT(*), ROUND(AVG((julianday(delivered_at) - julianday(collected_at)) * 24), 1),"
+                  " ROUND(100.0 * AVG((julianday(delivered_at) - julianday(collected_at)) * 24 <= 48), 1)"
+                  " FROM parcels WHERE delivered_at IS NOT NULL GROUP BY service"),
+        trap_sql=("SELECT service, COUNT(*), ROUND(AVG((julianday(delivered_at) - julianday(collected_at)) * 24), 1),"
+                  " ROUND(100.0 * AVG(julianday(delivered_at) - julianday(collected_at) <= 48), 1)"
+                  " FROM parcels WHERE delivered_at IS NOT NULL GROUP BY service"),
+        note="julianday(b) - julianday(a) is a number of days, so hours"
+             " need * 24 on both sides of the question: the trap compares"
+             " DAYS with 48 and finds every parcel inside it. AVG of a"
+             " comparison is the share of rows where it holds, because"
+             " true is 1 and false is 0. Express is the only service that"
+             " gets more than half its parcels there within two days, and"
+             " its average is still just under 44 hours.",
+        claims=[("three services, express the fastest",
+                 lambda rows, c: len(rows) == 3 and min(rows, key=lambda r: r[2])[0] == "express"),
+                ("only express mostly within 48 hours",
+                 lambda rows, c: all((r[3] > 50) == (r[0] == "express") for r in rows))],
     ),
     dict(
-        id=3, ledger="Q1209", concept="ISNOT", tier="1 - Who, exactly",
-        title="Rides that went somewhere else, open ones included",
+        id=3, ledger="Q1224", concept="FAILED", tier="1 - The parcel's trail",
+        title="Parcels that came back to the depot",
         prompt=(
-            "For each zone, of the start station: its rides, and how"
-            " many did NOT end where they began -- counting a ride"
-            " still out, whose end station is NULL, as not a round"
-            " trip. The NULL-safe comparison is IS NOT, which <> is"
-            " not.\n\n"
-            "Return: zone, rides, not_round_trips"
+            "For each service: its parcels, how many of them have a"
+            " failed delivery attempt somewhere in their trail, and that"
+            " as a percentage to one decimal. A parcel with two failed"
+            " attempts counts once, which a join to scans would not"
+            " do; EXISTS does.\n\n"
+            "Return: service, parcels, with_failure, pct"
         ),
-        solution=("SELECT s.zone, COUNT(*), SUM(r.end_station_id IS NOT r.start_station_id)"
-                  " FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.zone"),
-        trap_sql=("SELECT s.zone, COUNT(*), SUM(r.end_station_id <> r.start_station_id)"
-                  " FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.zone"),
-        note="NULL <> 5 is NULL, not true, and SUM skips it, so the trap"
-             " leaves the 35 open rides out of every count. IS and IS NOT"
-             " treat NULL as a value: NULL IS NOT 5 is true, and NULL IS"
-             " NULL is true. The difference is small here -- 35 rides in"
-             " 38,605 -- which is exactly how this kind of error hides.",
-        claims=[("five zones, the centre's 8701",
-                 lambda rows, c: len(rows) == 5 and ("centre", 10361, 8701) in rows),
-                ("35 more than the <> version in all",
-                 lambda rows, c: sum(r[2] for r in rows) == 32522)],
+        solution=("SELECT p.service, COUNT(*),"
+                  " SUM(EXISTS (SELECT 1 FROM scans s WHERE s.parcel_id = p.parcel_id AND s.status = 'failed')),"
+                  " ROUND(100.0 * SUM(EXISTS (SELECT 1 FROM scans s WHERE s.parcel_id = p.parcel_id AND s.status = 'failed')) / COUNT(*), 1)"
+                  " FROM parcels p GROUP BY p.service"),
+        trap_sql=("SELECT p.service, COUNT(DISTINCT p.parcel_id), COUNT(*),"
+                  " ROUND(100.0 * COUNT(*) / COUNT(DISTINCT p.parcel_id), 1)"
+                  " FROM parcels p JOIN scans s ON s.parcel_id = p.parcel_id AND s.status = 'failed' GROUP BY p.service"),
+        note="EXISTS asks a yes-or-no question per parcel and is 1 or 0,"
+             " so SUM of it counts parcels, however many failed scans"
+             " each has. The trap joins the failed scans and counts rows:"
+             " 72 parcels failed twice, so it reports attempts, not"
+             " parcels, and its first column is only the parcels that"
+             " failed at all. One parcel in seven comes back to the"
+             " depot at least once, on every service alike.",
+        claims=[("three services, each near 14 per cent",
+                 lambda rows, c: len(rows) == 3 and all(13 <= r[3] <= 15 for r in rows)),
+                ("3345 parcels with a failure",
+                 lambda rows, c: sum(r[2] for r in rows) == 3345)],
     ),
-    # ======================================================= 2 Rank and share
+    # =================================================== 2 Depots and routes
     dict(
-        id=4, ledger="Q1210", concept="PRK", tier="2 - Rank and share",
-        title="Where each bike stands among its model",
+        id=4, ledger="Q1225", concept="ROUTES", tier="2 - Depots and routes",
+        title="The ten busiest routes between depots",
         prompt=(
-            "For bikes 1 to 10: the model, the bike's rides, and the"
-            " share of its model-mates that have FEWER rides, as a"
-            " fraction from 0 to 1 to three decimals. PERCENT_RANK"
-            " over the model's bikes, computed over every bike in a"
-            " CTE and filtered afterwards; bikes never ridden count as"
-            " 0 rides.\n\n"
-            "Return: bike_id, model, rides, pct_rank"
+            "The ten depot-to-depot routes with the most parcels, by"
+            " name, leaving out the local parcels that stay at one"
+            " depot. Join depots twice, once for each end; group by"
+            " the pair; order by the count, then by the two names so a"
+            " tie cannot shuffle the list.\n\n"
+            "Return: from_depot, to_depot, parcels"
         ),
-        solution=("WITH per AS (SELECT b.bike_id, b.model, COUNT(r.ride_id) AS n FROM bikes b LEFT JOIN rides r ON r.bike_id = b.bike_id GROUP BY b.bike_id),"
-                  " w AS (SELECT bike_id, model, n, ROUND(PERCENT_RANK() OVER (PARTITION BY model ORDER BY n), 3) AS pr FROM per)"
-                  " SELECT bike_id, model, n, pr FROM w WHERE bike_id <= 10"),
-        trap_sql=("WITH per AS (SELECT b.bike_id, b.model, COUNT(r.ride_id) AS n FROM bikes b LEFT JOIN rides r ON r.bike_id = b.bike_id GROUP BY b.bike_id),"
-                  " w AS (SELECT bike_id, model, n, ROUND(CUME_DIST() OVER (PARTITION BY model ORDER BY n), 3) AS pr FROM per)"
-                  " SELECT bike_id, model, n, pr FROM w WHERE bike_id <= 10"),
-        note="PERCENT_RANK is (rank - 1) / (rows - 1): the share of the"
-             " partition strictly BELOW the row, 0 for the lowest and 1"
-             " for the highest. CUME_DIST, the trap, is the share at or"
-             " below, which counts the row itself and its ties, so the"
-             " lowest bike gets a small positive number instead of 0."
-             " Bike 2, with 43 rides, is below 96 per cent of the"
-             " classics.",
-        claims=[("ten bikes, bike 2 at 0.039",
-                 lambda rows, c: len(rows) == 10 and (2, "classic", 43, 0.039) in rows),
-                ("bikes 3 and 4 tie",
-                 lambda rows, c: [r[3] for r in rows if r[0] in (3, 4)] == [0.311, 0.311])],
-    ),
-    dict(
-        id=5, ledger="Q1211", concept="TWOWIN", tier="2 - Rank and share",
-        title="Each station's share of its zone, and of everything",
-        prompt=(
-            "For every station: its zone, its rides, its share of the"
-            " ZONE's rides and its share of ALL rides, both as"
-            " percentages to one decimal. Two window SUMs over a CTE of"
-            " rides per station: one partitioned by zone, one over the"
-            " whole result.\n\n"
-            "Return: name, zone, rides, zone_pct, all_pct"
-        ),
-        solution=("WITH per AS (SELECT s.zone, s.name, COUNT(*) AS n FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.station_id)"
-                  " SELECT name, zone, n, ROUND(100.0 * n / SUM(n) OVER (PARTITION BY zone), 1), ROUND(100.0 * n / SUM(n) OVER (), 1) FROM per"),
-        trap_sql=("WITH per AS (SELECT s.zone, s.name, COUNT(*) AS n FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.station_id)"
-                  " SELECT name, zone, n, ROUND(100.0 * n / SUM(n) OVER (), 1), ROUND(100.0 * n / SUM(n) OVER (), 1) FROM per"),
-        note="Each window has its own OVER clause, so one query can"
-             " total by zone and overall at once: the same SUM(n) with"
-             " two different partitions. The trap uses the whole-result"
-             " window twice and the zone share is just the overall share"
-             " again. The two-station zones split roughly in half; in"
-             " the centre, Market Square takes 37 per cent.",
-        claims=[("twelve stations, Market Square 37.0 of its zone and 9.9 of all",
-                 lambda rows, c: len(rows) == 12 and ("Market Square", "centre", 3834, 37.0, 9.9) in rows),
-                ("each zone's shares add to a hundred",
-                 lambda rows, c: all(abs(sum(r[3] for r in rows if r[1] == z) - 100) < 0.2 for z in {r[1] for r in rows}))],
+        solution=("SELECT a.name, b.name, COUNT(*) FROM parcels p"
+                  " JOIN depots a ON a.depot_id = p.origin_depot_id JOIN depots b ON b.depot_id = p.dest_depot_id"
+                  " WHERE p.origin_depot_id <> p.dest_depot_id GROUP BY a.name, b.name"
+                  " ORDER BY COUNT(*) DESC, a.name, b.name LIMIT 10"),
+        trap_sql=("SELECT a.name, b.name, COUNT(*) FROM parcels p"
+                  " JOIN depots a ON a.depot_id = p.origin_depot_id JOIN depots b ON b.depot_id = p.dest_depot_id"
+                  " GROUP BY a.name, b.name ORDER BY COUNT(*) DESC, a.name, b.name LIMIT 10"),
+        note="Joining the same table twice with two aliases is how one"
+             " row's two foreign keys to depots both get a name. Local"
+             " parcels -- the same depot at both ends -- are a fifth of"
+             " the traffic, and the trap's top ten is nine of them;"
+             " WHERE origin <> dest keeps the routes that actually move."
+             " Millbank sends a lot: six of the ten busiest routes start"
+             " there.",
+        claims=[("ten routes, Millbank to Central Hub the busiest",
+                 lambda rows, c: len(rows) == 10 and max(rows, key=lambda r: r[2]) == ("Millbank", "Central Hub", 327)),
+                ("no local route among them",
+                 lambda rows, c: all(r[0] != r[1] for r in rows))],
     ),
     dict(
-        id=6, ledger="Q1212", concept="MOD", tier="2 - Rank and share",
-        title="A one-in-a-hundred sample",
+        id=5, ledger="Q1226", concept="FLOW", tier="2 - Depots and routes",
+        title="Parcels in against parcels out, at every depot",
         prompt=(
-            "For each model: how many rides fall in a one-in-a-hundred"
-            " sample -- the rides whose ride_id is a multiple of 100 --"
-            " the sample's average distance in whole metres, and the"
-            " average over every ride of the model. The modulo operator"
-            " % picks the sample; a CASE inside AVG keeps the other"
-            " rides out of it.\n\n"
-            "Return: model, sampled, sample_avg_m, all_avg_m"
+            "For every depot: the parcels collected there, the parcels"
+            " delivered to it, and the difference (in minus out). Two"
+            " counts of the same table on two different keys -- scalar"
+            " subqueries, or two conditional sums; joining parcels"
+            " twice would multiply.\n\n"
+            "Return: name, sent, received, net"
         ),
-        solution=("SELECT b.model, SUM(r.ride_id % 100 = 0), ROUND(AVG(CASE WHEN r.ride_id % 100 = 0 THEN r.distance_m END)), ROUND(AVG(r.distance_m))"
-                  " FROM rides r JOIN bikes b ON b.bike_id = r.bike_id GROUP BY b.model"),
-        trap_sql=("SELECT b.model, SUM(r.ride_id % 100 = 0), ROUND(AVG(CASE WHEN r.ride_id % 100 = 0 THEN r.distance_m ELSE 0 END)), ROUND(AVG(r.distance_m))"
-                  " FROM rides r JOIN bikes b ON b.bike_id = r.bike_id GROUP BY b.model"),
-        note="x % 100 = 0 is true for one id in a hundred, and since"
-             " ids are handed out in order it is a fair sample of the"
-             " table -- 386 rides. A CASE with no ELSE gives NULL for"
-             " the rest and AVG skips NULLs; with ELSE 0, the trap, the"
-             " non-sample rides are averaged in as zero-metre rides and"
-             " the sample average collapses. The classic and electric"
-             " samples land within a few per cent of the truth; the"
-             " cargo sample, 36 rides, is off by a sixth.",
-        claims=[("three models, 253 classic rides sampled",
-                 lambda rows, c: len(rows) == 3 and any(r[0] == "classic" and r[1] == 253 for r in rows)),
-                ("386 sampled in all",
-                 lambda rows, c: sum(r[1] for r in rows) == 386)],
-    ),
-    # ============================================ 3 The clock and the calendar
-    dict(
-        id=7, ledger="Q1213", concept="WK", tier="3 - The clock and the calendar",
-        title="Rides by week of the year, 2026",
-        prompt=(
-            "For 2026: rides per week number, weeks starting on Monday,"
-            " '00' for the days before the first Monday. strftime has"
-            " two week-number codes; one counts Monday-led weeks and"
-            " the other Sunday-led.\n\n"
-            "Return: week, rides"
-        ),
-        solution="SELECT strftime('%W', started_at), COUNT(*) FROM rides WHERE started_at >= '2026-01-01' GROUP BY strftime('%W', started_at)",
-        trap_sql="SELECT strftime('%U', started_at), COUNT(*) FROM rides WHERE started_at >= '2026-01-01' GROUP BY strftime('%U', started_at)",
-        note="%W numbers the weeks from the first Monday of the year,"
-             " %U from the first Sunday; both call the days before that"
-             " week 00, which is why week 00 is short. The trap's %U"
-             " shifts every boundary by a day and most counts with it."
-             " Week 26 is short too: the data stops on a Tuesday.",
-        claims=[("27 weeks, week 01 with 510 rides",
-                 lambda rows, c: len(rows) == 27 and ("01", 510) in rows),
-                ("weeks 00 and 26 the short ones",
-                 lambda rows, c: sorted(rows, key=lambda r: r[1])[:2] == [("26", 160), ("00", 291)])],
+        solution=("SELECT d.name, (SELECT COUNT(*) FROM parcels WHERE origin_depot_id = d.depot_id),"
+                  " (SELECT COUNT(*) FROM parcels WHERE dest_depot_id = d.depot_id),"
+                  " (SELECT COUNT(*) FROM parcels WHERE dest_depot_id = d.depot_id) - (SELECT COUNT(*) FROM parcels WHERE origin_depot_id = d.depot_id)"
+                  " FROM depots d"),
+        trap_sql=("SELECT d.name, COUNT(o.parcel_id), COUNT(i.parcel_id), COUNT(i.parcel_id) - COUNT(o.parcel_id)"
+                  " FROM depots d LEFT JOIN parcels o ON o.origin_depot_id = d.depot_id LEFT JOIN parcels i ON i.dest_depot_id = d.depot_id"
+                  " GROUP BY d.name"),
+        note="A depot is referenced by two columns of parcels, and"
+             " counting each is a separate question. Two scalar"
+             " subqueries ask them separately; the trap joins parcels"
+             " twice onto depots and every sent parcel meets every"
+             " received one, so the counts come out in the millions. The"
+             " depots that send more than they receive -- Millbank,"
+             " Southfield, Central Hub -- are the ones with the business"
+             " customers.",
+        claims=[("ten depots, Millbank down 827",
+                 lambda rows, c: len(rows) == 10 and ("Millbank", 3461, 2634, -827) in rows),
+                ("the nets add up to zero",
+                 lambda rows, c: sum(r[3] for r in rows) == 0)],
     ),
     dict(
-        id=8, ledger="Q1214", concept="MIN00", tier="3 - The clock and the calendar",
-        title="Rides that began on the hour",
+        id=6, ledger="Q1227", concept="RER", tier="2 - Depots and routes",
+        title="Where Old Foundry's customers went",
         prompt=(
-            "For each zone, of the start station: its rides, how many"
-            " started at exactly zero minutes past an hour, and that as"
-            " a percentage to two decimals. strftime has a code for the"
-            " minute of the hour.\n\n"
-            "Return: zone, rides, on_the_hour, pct"
+            "Old Foundry closed on 2026-02-01. For each month from"
+            " October 2025: how many parcels its customers (the ones"
+            " whose home depot it is) handed in at Old Foundry, and how"
+            " many at Central Hub. One GROUP BY on the month with two"
+            " conditional sums on the origin.\n\n"
+            "Return: month, at_old_foundry, at_central_hub"
         ),
-        solution=("SELECT s.zone, COUNT(*), SUM(strftime('%M', r.started_at) = '00'),"
-                  " ROUND(100.0 * SUM(strftime('%M', r.started_at) = '00') / COUNT(*), 2)"
-                  " FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.zone"),
-        trap_sql=("SELECT s.zone, COUNT(*), SUM(strftime('%S', r.started_at) = '00'),"
-                  " ROUND(100.0 * SUM(strftime('%S', r.started_at) = '00') / COUNT(*), 2)"
-                  " FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.zone"),
-        note="%M is the minute, %S the second -- and since the data"
-             " records minutes only, every ride's seconds are 00, so the"
-             " trap counts all of them. One ride in sixty would start on"
-             " the hour by chance, 1.67 per cent, and the zones sit"
-             " close to that: the start times are random to the minute.",
-        claims=[("five zones, each between 1.5 and 2 per cent",
-                 lambda rows, c: len(rows) == 5 and all(1.5 <= r[3] <= 2 for r in rows)),
-                ("the centre's 188 on the hour",
-                 lambda rows, c: ("centre", 10361, 188, 1.81) in rows)],
+        solution=("SELECT strftime('%Y-%m', p.collected_at), SUM(p.origin_depot_id = 2), SUM(p.origin_depot_id = 1)"
+                  " FROM parcels p JOIN customers c ON c.customer_id = p.customer_id"
+                  " WHERE c.depot_id = 2 AND p.collected_at >= '2025-10-01' GROUP BY strftime('%Y-%m', p.collected_at)"),
+        trap_sql=("SELECT strftime('%Y-%m', p.collected_at), COUNT(*), 0"
+                  " FROM parcels p JOIN customers c ON c.customer_id = p.customer_id"
+                  " WHERE c.depot_id = 2 AND p.origin_depot_id = 2 AND p.collected_at >= '2025-10-01' GROUP BY strftime('%Y-%m', p.collected_at)"),
+        note="A customer's home depot and a parcel's origin depot are"
+             " two different foreign keys to depots, and the question"
+             " lives in the gap between them: the customers stay, the"
+             " origin moves. Filtering parcels to origin = Old Foundry,"
+             " the trap, loses every month after the closure. From"
+             " February every one of those customers' parcels was handed"
+             " in at the hub.",
+        claims=[("nine months, the switch in February 2026",
+                 lambda rows, c: len(rows) == 9 and ("2026-01", 83, 0) in rows and ("2026-02", 0, 89) in rows),
+                ("never both in one month",
+                 lambda rows, c: all(r[1] == 0 or r[2] == 0 for r in rows))],
+    ),
+    # ================================================ 3 Customers and money
+    dict(
+        id=7, ledger="Q1228", concept="WALKIN", tier="3 - Customers and money",
+        title="Walk-ins at the counter",
+        prompt=(
+            "For each service: its parcels, how many were handed in by"
+            " someone with no customer account, and that as a"
+            " percentage to one decimal. A parcel's customer_id is NULL"
+            " for a walk-in: a NULL that means something, so it is"
+            " counted, not skipped.\n\n"
+            "Return: service, parcels, walk_ins, pct"
+        ),
+        solution=("SELECT service, COUNT(*), SUM(customer_id IS NULL), ROUND(100.0 * SUM(customer_id IS NULL) / COUNT(*), 1)"
+                  " FROM parcels GROUP BY service"),
+        trap_sql=("SELECT service, COUNT(*), COUNT(customer_id), ROUND(100.0 * COUNT(customer_id) / COUNT(*), 1)"
+                  " FROM parcels GROUP BY service"),
+        note="COUNT(customer_id) counts the rows where it is NOT NULL,"
+             " so the trap reports the account customers' parcels and"
+             " calls them walk-ins. SUM(customer_id IS NULL) counts the"
+             " NULLs themselves, which here are a category -- a stranger"
+             " at the counter -- rather than missing data. A quarter of"
+             " parcels on every service are walk-ins, and they pay the"
+             " same postage.",
+        claims=[("three services, each about a quarter walk-ins",
+                 lambda rows, c: len(rows) == 3 and all(24 <= r[3] <= 26 for r in rows)),
+                ("5954 walk-in parcels",
+                 lambda rows, c: sum(r[2] for r in rows) == 5954)],
     ),
     dict(
-        id=9, ledger="Q1215", concept="AGEX", tier="3 - The clock and the calendar",
-        title="Members who were 65 or over when the data ends",
+        id=8, ledger="Q1229", concept="UNPAID", tier="3 - Customers and money",
+        title="The ten customers who owe the most",
         prompt=(
-            "For each plan: its members, and how many were 65 or"
-            " older on 2026-06-30 -- an EXACT age, so a member whose"
-            " 65th birthday fell in July 2026 is not counted. Take the"
-            " difference of the years, then subtract one if the"
-            " birthday's month-and-day had not yet come round.\n\n"
-            "Return: plan, members, seniors"
+            "The ten business customers with the most unpaid invoice"
+            " money outstanding: their name, how many invoices are"
+            " unpaid, the total owed in cents, and the issue date of"
+            " the oldest. An unpaid invoice has no paid_on. Order by the"
+            " total, then by customer_id to settle a tie.\n\n"
+            "Return: name, unpaid_invoices, owed_cents, oldest_issued"
         ),
-        solution=("SELECT plan, COUNT(*),"
-                  " SUM((strftime('%Y', '2026-06-30') - strftime('%Y', born_on))"
-                  " - (strftime('%m-%d', '2026-06-30') < strftime('%m-%d', born_on)) >= 65)"
-                  " FROM members GROUP BY plan"),
-        trap_sql=("SELECT plan, COUNT(*),"
-                  " SUM(strftime('%Y', '2026-06-30') - strftime('%Y', born_on) >= 65)"
-                  " FROM members GROUP BY plan"),
-        note="Subtracting years gives the age a person turns THIS year,"
-             " which is one too many for anyone whose birthday is still"
-             " ahead; comparing 'MM-DD' text, which sorts correctly,"
-             " says whether it is, and subtracting that true-or-false"
-             " (1 or 0) corrects it. The trap counts ten members who"
-             " were still 64 on 30 June. A quarter of the members are"
-             " 65 or over.",
-        claims=[("three plans, 87 annual seniors",
-                 lambda rows, c: len(rows) == 3 and ("annual", 324, 87) in rows),
-                ("256 seniors in all",
-                 lambda rows, c: sum(r[2] for r in rows) == 256)],
-    ),
-    # ================================================ 4 Capacity and balance
-    dict(
-        id=10, ledger="Q1216", concept="UTIL", tier="4 - Capacity and balance",
-        title="How hard each dock works",
-        prompt=(
-            "For every station: its docks, its rides, the number of"
-            " DAYS on which a ride started there, and the rides per"
-            " dock per active day to three decimals. The active days"
-            " are a COUNT of DISTINCT dates; Old Mill's are fewer, and"
-            " dividing by the data's 546 days instead would understate"
-            " it.\n\n"
-            "Return: name, docks, rides, active_days, per_dock_day"
-        ),
-        solution=("SELECT s.name, s.docks, COUNT(*), COUNT(DISTINCT date(r.started_at)),"
-                  " ROUND(1.0 * COUNT(*) / s.docks / COUNT(DISTINCT date(r.started_at)), 3)"
-                  " FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.station_id"),
-        trap_sql=("SELECT s.name, s.docks, COUNT(*), COUNT(DISTINCT date(r.started_at)),"
-                  " ROUND(1.0 * COUNT(*) / s.docks / 546, 3)"
-                  " FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.station_id"),
-        note="A rate per day needs the right number of days, and"
-             " COUNT(DISTINCT date(...)) counts the days the station was"
-             " actually in use: Old Mill closed in March and has 422,"
-             " not 546. The trap divides every station by the full span"
-             " and makes the closed station look idle when, per dock"
-             " per day, it was the busiest of all. Big stations have"
-             " spare docks; Hilltop's sixteen are the busiest among the"
-             " open ones.",
-        claims=[("twelve stations, Old Mill's 422 active days",
-                 lambda rows, c: len(rows) == 12 and ("Old Mill", 14, 2500, 422, 0.423) in rows),
-                ("Old Mill the busiest per dock",
-                 lambda rows, c: max(rows, key=lambda r: r[4])[0] == "Old Mill")],
+        solution=("SELECT c.name, COUNT(*), SUM(i.amount_cents), MIN(i.issued_on)"
+                  " FROM invoices i JOIN customers c ON c.customer_id = i.customer_id"
+                  " WHERE i.paid_on IS NULL GROUP BY c.customer_id ORDER BY SUM(i.amount_cents) DESC, c.customer_id LIMIT 10"),
+        trap_sql=("SELECT c.name, COUNT(*), SUM(i.amount_cents), MIN(i.issued_on)"
+                  " FROM invoices i JOIN customers c ON c.customer_id = i.customer_id"
+                  " GROUP BY c.customer_id ORDER BY SUM(i.amount_cents) DESC, c.customer_id LIMIT 10"),
+        note="The WHERE on paid_on IS NULL comes before the grouping, so"
+             " every aggregate -- the count, the sum, the oldest date --"
+             " is over the unpaid invoices only; the trap totals every"
+             " invoice and ranks the biggest customers, paid up or not."
+             " 174 customers owe something; the top ten owe between 286"
+             " and 550 dollars each, some of it since early 2025.",
+        claims=[("ten customers, Papadopoulos Garden Supplies first",
+                 lambda rows, c: len(rows) == 10 and max(rows, key=lambda r: r[2])[0] == "Papadopoulos Garden Supplies & Co"),
+                ("every one owes more than 280 dollars",
+                 lambda rows, c: all(r[2] > 28000 for r in rows))],
     ),
     dict(
-        id=11, ledger="Q1217", concept="ABS", tier="4 - Capacity and balance",
-        title="Stations out of balance",
+        id=9, ledger="Q1230", concept="KG", tier="3 - Customers and money",
+        title="The postage table, recovered from the parcels",
         prompt=(
-            "The stations where rides ending and rides starting differ"
-            " by MORE than a hundred, in either direction: the starts,"
-            " the ends, and the net gain (ends minus starts, negative"
-            " for a drain). Two scalar subqueries per station, and ABS"
-            " in the WHERE.\n\n"
-            "Return: name, starts, ends, net"
+            "Postage is a base per service plus a rate per STARTED"
+            " kilogram. For each service and each started-kilogram band"
+            " from 1 to 5: how many parcels, and the postage they paid"
+            " (one value per band). The band is integer arithmetic on"
+            " weight_g such that 1 to 1000 grams is band 1 and 1001 to"
+            " 2000 is band 2.\n\n"
+            "Return: service, kg_band, parcels, postage_cents"
         ),
-        solution=("WITH t AS (SELECT s.name, (SELECT COUNT(*) FROM rides WHERE start_station_id = s.station_id) AS starts,"
-                  " (SELECT COUNT(*) FROM rides WHERE end_station_id = s.station_id) AS ends FROM stations s)"
-                  " SELECT name, starts, ends, ends - starts FROM t WHERE ABS(ends - starts) > 100"),
-        trap_sql=("WITH t AS (SELECT s.name, (SELECT COUNT(*) FROM rides WHERE start_station_id = s.station_id) AS starts,"
-                  " (SELECT COUNT(*) FROM rides WHERE end_station_id = s.station_id) AS ends FROM stations s)"
-                  " SELECT name, starts, ends, ends - starts FROM t WHERE ends - starts > 100"),
-        note="'Differ by more than a hundred' is a condition on the"
-             " size of the difference, whatever its sign, and ABS is"
-             " how a WHERE says so. Without it the trap keeps only the"
-             " stations that GAIN bikes and misses the two that drain."
-             " Station Approach gains nearly 800 bikes over the data and"
-             " Market Square loses nearly 600, which is what the crew's"
-             " van is for.",
-        claims=[("three stations, two draining and one filling",
-                 lambda rows, c: len(rows) == 3 and sum(r[3] < 0 for r in rows) == 2),
-                ("Station Approach up 794",
-                 lambda rows, c: ("Station Approach", 3214, 4008, 794) in rows)],
+        solution=("SELECT service, (weight_g - 1) / 1000 + 1, COUNT(*), MIN(postage_cents)"
+                  " FROM parcels WHERE weight_g <= 5000 GROUP BY service, (weight_g - 1) / 1000 + 1"),
+        trap_sql=("SELECT service, weight_g / 1000, COUNT(*), MIN(postage_cents)"
+                  " FROM parcels WHERE weight_g <= 5000 GROUP BY service, weight_g / 1000"),
+        note="'Started kilogram' is a ceiling: (weight - 1) / 1000 + 1 in"
+             " integer arithmetic puts 1000 g in band 1 and 1001 g in"
+             " band 2. Plain weight / 1000, the trap, is a floor -- 999 g"
+             " lands in band 0 and 1000 g in band 1 -- and the bands no"
+             " longer match the postage, so MIN and MAX disagree inside"
+             " them. Recovered: economy 350 + 60 a kilo, standard 500 +"
+             " 90, express 900 + 150.",
+        claims=[("fifteen bands, economy's first kilo 410 cents",
+                 lambda rows, c: len(rows) == 15 and ("economy", 1, 3734, 410) in rows),
+                ("each band one price",
+                 lambda rows, c: all(r[3] == c.execute("SELECT MAX(postage_cents) FROM parcels WHERE service = ? AND (weight_g - 1) / 1000 + 1 = ?", (r[0], r[1])).fetchone()[0] for r in rows))],
+    ),
+    # ===================================================== 4 People and time
+    dict(
+        id=10, ledger="Q1231", concept="COURIER", tier="4 - People and time",
+        title="How many drops a bike courier makes in a day",
+        prompt=(
+            "For each courier on a bike: their deliveries, the number"
+            " of DAYS on which they delivered something, and the"
+            " deliveries per such day to two decimals. The days are a"
+            " COUNT of DISTINCT dates; the span from first to last"
+            " delivery would count the days off.\n\n"
+            "Return: name, deliveries, days, per_day"
+        ),
+        solution=("SELECT c.name, COUNT(*), COUNT(DISTINCT date(p.delivered_at)), ROUND(1.0 * COUNT(*) / COUNT(DISTINCT date(p.delivered_at)), 2)"
+                  " FROM parcels p JOIN couriers c ON c.courier_id = p.courier_id WHERE c.vehicle = 'bike' GROUP BY c.courier_id"),
+        trap_sql=("SELECT c.name, COUNT(*), COUNT(DISTINCT date(p.delivered_at)),"
+                  " ROUND(COUNT(*) / (julianday(MAX(p.delivered_at)) - julianday(MIN(p.delivered_at))), 2)"
+                  " FROM parcels p JOIN couriers c ON c.courier_id = p.courier_id WHERE c.vehicle = 'bike' GROUP BY c.courier_id"),
+        note="date() cuts a timestamp to its day and COUNT(DISTINCT)"
+             " counts the different days, which is 'days worked' as far"
+             " as the data knows. The span between first and last"
+             " delivery, the trap, includes every day the courier was"
+             " off and halves the rate. Bike couriers make one or two"
+             " drops on a working day; the vans do the volume.",
+        claims=[("nineteen bike couriers, each between 1 and 2 a day",
+                 lambda rows, c: len(rows) == 19 and all(1 <= r[3] <= 2 for r in rows)),
+                ("Samir Chowdhury the busiest with 643",
+                 lambda rows, c: max(rows, key=lambda r: r[1])[0] == "Samir Chowdhury")],
     ),
     dict(
-        id=12, ledger="Q1218", concept="MINC", tier="4 - Capacity and balance",
-        title="The first casual ride and the first member ride",
+        id=11, ledger="Q1232", concept="WEEKDAY", tier="4 - People and time",
+        title="Which day of the week people post things",
         prompt=(
-            "For every station: when its first ride by a casual rider"
-            " started, and when its first ride by a member did. One"
-            " pass over rides: MIN of a CASE that yields the timestamp"
-            " only for the rows of each kind, and nothing -- NULL --"
-            " for the others.\n\n"
-            "Return: name, first_casual, first_member"
+            "Parcels collected on each day of the week, with the day"
+            " NAMED -- 'Monday', not '1'. strftime gives the weekday as"
+            " a digit from '0' for Sunday; a CASE turns it into a word."
+            "\n\n"
+            "Return: weekday, parcels"
         ),
-        solution=("SELECT s.name, MIN(CASE WHEN r.member_id IS NULL THEN r.started_at END),"
-                  " MIN(CASE WHEN r.member_id IS NOT NULL THEN r.started_at END)"
-                  " FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.name"),
-        trap_sql=("SELECT s.name, MIN(CASE WHEN r.member_id IS NULL THEN r.started_at ELSE '' END),"
-                  " MIN(CASE WHEN r.member_id IS NOT NULL THEN r.started_at ELSE '' END)"
-                  " FROM rides r JOIN stations s ON s.station_id = r.start_station_id GROUP BY s.name"),
-        note="MIN skips NULLs, so a CASE with no ELSE hands it only the"
-             " rows that qualify, and two such CASEs give two"
-             " conditional minimums from one scan. Give the CASE an"
-             " ELSE '' and the empty string, which sorts before every"
-             " timestamp, becomes the minimum everywhere: the trap"
-             " returns blanks. Every station had both kinds of rider"
-             " within its first week.",
-        claims=[("twelve stations, every first ride in the first week of 2025",
-                 lambda rows, c: len(rows) == 12 and all(r[1] < "2025-01-08" and r[2] < "2025-01-08" for r in rows)),
-                ("Old Mill's first ride was casual",
-                 lambda rows, c: any(r[0] == "Old Mill" and r[1] < r[2] for r in rows))],
+        solution=("SELECT CASE strftime('%w', collected_at) WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday' WHEN '2' THEN 'Tuesday'"
+                  " WHEN '3' THEN 'Wednesday' WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday' ELSE 'Saturday' END, COUNT(*)"
+                  " FROM parcels GROUP BY strftime('%w', collected_at)"),
+        trap_sql=("SELECT CASE strftime('%w', collected_at) WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday'"
+                  " WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' ELSE 'Saturday' END, COUNT(*)"
+                  " FROM parcels GROUP BY strftime('%w', collected_at)"),
+        note="strftime returns TEXT, so the CASE must compare with '0',"
+             " not 0: the trap's integer WHENs never match a text '1'"
+             " and every day falls through to the ELSE, Saturday, seven"
+             " times over. The simple form of CASE -- CASE x WHEN a THEN"
+             " ... -- is for exactly this kind of lookup. Collections are"
+             " flat across the week, Sunday included: counters are open"
+             " seven days.",
+        claims=[("seven days, Monday the busiest",
+                 lambda rows, c: len(rows) == 7 and max(rows, key=lambda r: r[1])[0] == "Monday"),
+                ("every day between 3200 and 3600",
+                 lambda rows, c: all(3200 <= r[1] <= 3600 for r in rows))],
+    ),
+    dict(
+        id=12, ledger="Q1233", concept="MOM", tier="4 - People and time",
+        title="Month on month",
+        prompt=(
+            "For each month: the parcels collected, and the change from"
+            " the month before -- NULL for the first month, since there"
+            " is nothing before it. A CTE of parcels per month, then a"
+            " window function that looks one row back.\n\n"
+            "Return: month, parcels, change"
+        ),
+        solution=("WITH m AS (SELECT strftime('%Y-%m', collected_at) AS mo, COUNT(*) AS n FROM parcels GROUP BY mo)"
+                  " SELECT mo, n, n - LAG(n) OVER (ORDER BY mo) FROM m"),
+        trap_sql=("WITH m AS (SELECT strftime('%Y-%m', collected_at) AS mo, COUNT(*) AS n FROM parcels GROUP BY mo)"
+                  " SELECT mo, n, n - LAG(n, 1, 0) OVER (ORDER BY mo) FROM m"),
+        note="LAG(n) is the previous row's n in the window's order, and"
+             " on the first row there is none, so the difference is NULL"
+             " -- which is the honest answer. Giving LAG a default of 0,"
+             " the trap, reports January 2025 as a rise of 1,099 parcels"
+             " from nothing. The volume grew through 2025 as customers"
+             " joined, from 1,100 a month to over 1,500.",
+        claims=[("eighteen months, the first with no change",
+                 lambda rows, c: len(rows) == 18 and ("2025-01", 1099, None) in rows),
+                ("changes sum to the growth over the period",
+                 lambda rows, c: sum(r[2] for r in rows if r[2] is not None) == 1523 - 1099)],
     ),
     # =================================================== 5 Changing the data
     dict(
-        id=13, ledger="Q1219", concept="RPL", tier="5 - Changing the data",
+        id=13, ledger="Q1234", concept="TRG", tier="5 - Changing the data",
         kind="script",
-        title="A payment re-recorded",
+        title="A delivery scan completes the parcel",
         prompt=(
-            "Payment 1 was keyed in wrong: it was 350 cents by card,"
-            " not 300 by app. Re-record it in ONE statement, keeping"
-            " payment_id 1, ride 12152 and the time '2025-01-01 02:42':"
-            " REPLACE INTO writes the row as given, removing the old"
-            " row with that id first.\n\n"
-            "Checked: payment 1's amount and method, how many payments"
-            " there are, and the highest payment_id"
+            "When a scan with status 'delivered' is inserted, the"
+            " parcel should be marked delivered: its delivered_at set"
+            " to the scan's time and its courier_id to the scan's"
+            " courier. Write an AFTER INSERT trigger on scans with a"
+            " WHEN clause so that only delivery scans do this. The"
+            " question then inserts a 'delivered' scan for parcel 40"
+            " and a 'failed' scan for parcel 122.\n\n"
+            "Checked: parcel 40's delivered_at and courier_id, parcel"
+            " 122's delivered_at, and how many parcels are delivered"
         ),
-        solution=("REPLACE INTO payments (payment_id, ride_id, amount_cents, paid_at, method)"
-                  " VALUES (1, 12152, 350, '2025-01-01 02:42', 'card');"),
-        trap_sql=("INSERT OR IGNORE INTO payments (payment_id, ride_id, amount_cents, paid_at, method)"
-                  " VALUES (1, 12152, 350, '2025-01-01 02:42', 'card');"),
-        probe_sql=("SELECT (SELECT amount_cents FROM payments WHERE payment_id = 1),"
-                   " (SELECT method FROM payments WHERE payment_id = 1),"
-                   " (SELECT COUNT(*) FROM payments), (SELECT MAX(payment_id) FROM payments)"),
-        note="REPLACE INTO is INSERT OR REPLACE: a row that would break"
-             " the primary key is DELETED and the new row inserted, so"
-             " the count stays at 28,533 and payment 1 now says 350 by"
-             " card. It is a blunt tool -- every column must be given"
-             " again, and a DELETE trigger would fire -- where an UPDATE"
-             " changes only what is named. OR IGNORE, the trap, keeps"
-             " the old row and drops the new one in silence.",
-        claims=[("payment 1 now 350 by card, nothing added",
-                 lambda rows, c: rows == [(350, "card", 28533, 28533)])],
+        solution=("CREATE TRIGGER complete_on_delivery AFTER INSERT ON scans\n"
+                  "WHEN NEW.status = 'delivered'\n"
+                  "BEGIN\n"
+                  "  UPDATE parcels SET delivered_at = NEW.scanned_at, courier_id = NEW.courier_id\n"
+                  "  WHERE parcel_id = NEW.parcel_id;\n"
+                  "END;"),
+        trap_sql=("CREATE TRIGGER complete_on_delivery AFTER INSERT ON scans\n"
+                  "BEGIN\n"
+                  "  UPDATE parcels SET delivered_at = NEW.scanned_at, courier_id = NEW.courier_id\n"
+                  "  WHERE parcel_id = NEW.parcel_id;\n"
+                  "END;"),
+        driver_sql=("INSERT INTO scans (parcel_id, depot_id, courier_id, scanned_at, status) VALUES (40, 5, 7, '2026-07-01 10:00', 'delivered');\n"
+                    "INSERT INTO scans (parcel_id, depot_id, courier_id, scanned_at, status) VALUES (122, 1, 3, '2026-07-01 11:00', 'failed');"),
+        probe_sql=("SELECT (SELECT delivered_at FROM parcels WHERE parcel_id = 40), (SELECT courier_id FROM parcels WHERE parcel_id = 40),"
+                   " (SELECT delivered_at FROM parcels WHERE parcel_id = 122), (SELECT COUNT(*) FROM parcels WHERE delivered_at IS NOT NULL)"),
+        note="A trigger's WHEN clause decides whether the body runs at"
+             " all, and NEW is the row just inserted, so the trigger can"
+             " read the scan's status, time and courier. Without the"
+             " WHEN, the trap fires on every scan and marks parcel 122"
+             " delivered on the strength of a FAILED attempt. Parcels 40"
+             " and 122 are two of the lost ones; the driver's delivery"
+             " brings 40 home.",
+        claims=[("parcel 40 delivered, parcel 122 still not",
+                 lambda rows, c: rows == [("2026-07-01 10:00", 7, None, 23730)])],
     ),
     dict(
-        id=14, ledger="Q1220", concept="RNT", tier="5 - Changing the data",
+        id=14, ledger="Q1235", concept="UPD", tier="5 - Changing the data",
         kind="script",
-        title="A table renamed, without breaking the old name",
+        title="A surcharge on June's heavy parcels",
         prompt=(
-            "The maintenance table is to be called jobs from now on,"
-            " but old reports still query maintenance. Rename the table"
-            " with ALTER TABLE, then create a VIEW called maintenance"
-            " that selects everything from jobs, so both names work.\n\n"
-            "Checked: what sqlite_master says the names jobs and"
-            " maintenance are"
+            "From June 2026 a parcel over ten kilograms carries a"
+            " surcharge of 500 cents. Add it, in one UPDATE, to the"
+            " postage of every parcel collected in June 2026 that"
+            " weighs more than 10,000 grams -- and to no other.\n\n"
+            "Checked: how many parcels were collected in June, and"
+            " their postage added up"
         ),
-        solution=("ALTER TABLE maintenance RENAME TO jobs;\n"
-                  "CREATE VIEW maintenance AS SELECT * FROM jobs;"),
-        trap_sql="ALTER TABLE maintenance RENAME TO jobs;",
-        probe_sql="SELECT name, type FROM sqlite_master WHERE name IN ('jobs', 'maintenance') ORDER BY name",
-        note="ALTER TABLE ... RENAME TO changes the table's name and"
-             " fixes up the indexes and triggers that belong to it; it"
-             " does not fix the queries written against the old name,"
-             " which is what the view is for -- a compatibility shim"
-             " that can be dropped once the reports catch up. sqlite_master"
-             " lists every object with its type, which is how the probe"
-             " can tell a table from a view of the same name.",
-        claims=[("jobs a table, maintenance a view",
-                 lambda rows, c: rows == [("jobs", "table"), ("maintenance", "view")])],
+        solution=("UPDATE parcels SET postage_cents = postage_cents + 500"
+                  " WHERE collected_at >= '2026-06-01' AND weight_g > 10000;"),
+        trap_sql=("UPDATE parcels SET postage_cents = postage_cents + 500"
+                  " WHERE collected_at >= '2026-06-01';"),
+        probe_sql="SELECT COUNT(*), SUM(postage_cents) FROM parcels WHERE collected_at >= '2026-06-01'",
+        note="An UPDATE's WHERE is the whole of its policy, and two"
+             " conditions joined by AND narrow it to the rows that meet"
+             " both. The trap forgets the weight and charges all 1,523"
+             " June parcels, 761,500 cents instead of the 15,500 that 31"
+             " heavy parcels owe. SET postage_cents = postage_cents + 500"
+             " reads the old value and writes the new one in a single"
+             " step.",
+        claims=[("31 parcels surcharged, 15,500 cents",
+                 lambda rows, c: rows == [(1523, 1134020 + 31 * 500)])],
     ),
     dict(
-        id=15, ledger="Q1221", concept="GEN2", tier="5 - Changing the data",
+        id=15, ledger="Q1236", concept="DEL", tier="5 - Changing the data",
         kind="script",
-        title="A total that is computed and kept",
+        title="Clearing out the customers who never sent anything",
         prompt=(
-            "Create invoice_lines with line_id as the integer primary"
-            " key, job_id (required, referencing maintenance), qty and"
-            " unit_cents (integers, required), and total_cents as a"
-            " GENERATED column equal to qty times unit_cents that is"
-            " STORED -- written to disk when the row is, not recomputed"
-            " on every read. The question then inserts two lines.\n\n"
-            "Checked: the totals added up, and the 'hidden' code"
-            " pragma_table_xinfo gives the total_cents column (3 for"
-            " stored, 2 for virtual)"
+            "Delete every customer who has never sent a parcel and has"
+            " no invoice. Test 'never sent' with NOT EXISTS, not NOT IN:"
+            " parcels.customer_id is NULL on every walk-in row, and a"
+            " NOT IN over a list that holds a NULL is never true.\n\n"
+            "Checked: how many customers remain, and how many of them"
+            " have never sent a parcel"
         ),
-        solution=("CREATE TABLE invoice_lines (\n"
-                  "  line_id     INTEGER PRIMARY KEY,\n"
-                  "  job_id      INTEGER NOT NULL REFERENCES maintenance(job_id),\n"
-                  "  qty         INTEGER NOT NULL,\n"
-                  "  unit_cents  INTEGER NOT NULL,\n"
-                  "  total_cents INTEGER GENERATED ALWAYS AS (qty * unit_cents) STORED\n"
-                  ");"),
-        trap_sql=("CREATE TABLE invoice_lines (\n"
-                  "  line_id     INTEGER PRIMARY KEY,\n"
-                  "  job_id      INTEGER NOT NULL REFERENCES maintenance(job_id),\n"
-                  "  qty         INTEGER NOT NULL,\n"
-                  "  unit_cents  INTEGER NOT NULL,\n"
-                  "  total_cents INTEGER GENERATED ALWAYS AS (qty * unit_cents)\n"
-                  ");"),
-        driver_sql=("INSERT INTO invoice_lines (job_id, qty, unit_cents) VALUES (1, 2, 1500);\n"
-                    "INSERT INTO invoice_lines (job_id, qty, unit_cents) VALUES (1, 1, 700);"),
-        probe_sql=("SELECT (SELECT SUM(total_cents) FROM invoice_lines),"
-                   " (SELECT hidden FROM pragma_table_xinfo('invoice_lines') WHERE name = 'total_cents')"),
-        note="A generated column is VIRTUAL unless you say STORED:"
-             " virtual is computed each time it is read and costs no"
-             " space, stored is computed on write and can be indexed."
-             " Both give the same totals, which is why the probe also"
-             " reads pragma_table_xinfo, whose hidden column is 2 for a"
-             " virtual generated column and 3 for a stored one; the"
-             " trap leaves the keyword off and gets 2. STORED columns"
-             " cannot be added by ALTER TABLE, only in CREATE TABLE.",
-        claims=[("3700 cents, stored",
-                 lambda rows, c: rows == [(3700, 3)])],
+        solution=("DELETE FROM customers WHERE NOT EXISTS (SELECT 1 FROM parcels p WHERE p.customer_id = customers.customer_id)"
+                  " AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.customer_id = customers.customer_id);"),
+        trap_sql=("DELETE FROM customers WHERE customer_id NOT IN (SELECT customer_id FROM parcels)"
+                  " AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.customer_id = customers.customer_id);"),
+        probe_sql=("SELECT COUNT(*), SUM(NOT EXISTS (SELECT 1 FROM parcels p WHERE p.customer_id = c.customer_id)) FROM customers c"),
+        note="x NOT IN (list) is x <> every item, and x <> NULL is NULL,"
+             " so a NULL anywhere in the list makes NOT IN NULL -- never"
+             " true -- for every x: the trap deletes nobody and reports"
+             " success. 5,954 walk-in parcels put a NULL in that list."
+             " NOT EXISTS has no such problem, because it asks whether a"
+             " matching row exists rather than comparing values. The 80"
+             " customers go; foreign keys would have stopped the DELETE"
+             " if any of them had a parcel or an invoice.",
+        claims=[("80 customers gone, none left who never sent",
+                 lambda rows, c: rows == [(620, 0)])],
     ),
 ]
 
