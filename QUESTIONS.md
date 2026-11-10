@@ -27,19 +27,20 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the first set on a NEW schema: a regional
-parcel courier (6 tables, SEED 1241) replacing the bike-hire scheme.
-Depots, couriers, customers, parcels, scans and invoices: every parcel
-leaves an ORDERED SEQUENCE of scans, parcels give intervals with open ends
-between two depots, postage and invoices give money, a walk-in's NULL
-customer_id gives a NULL that is a category. **Fifteen SQL** at two tools
-per question, with the tiers named by task -- the parcel's trail; depots
-and routes; customers and money; people and time -- and prompts that name
-the tool but do not write the statement. **Three writable**: a trigger
-with a WHEN clause, an UPDATE with two conditions, and a DELETE where NOT
-IN would meet a NULL. **Fifteen Python** at the easy level of the last
-three sets: everyday tasks over plain lists and strings in the courier's
-terms, no maths, no dicts.
+Thirty questions in two tracks, the second set on the parcel-courier
+scheme (6 tables, SEED 1241). **Fifteen SQL** at two tools per question,
+with the tiers named by task -- trails and gaps; depots and regions;
+customers and money; people and vehicles -- on tools the first courier set
+left out: a correlated MAX for the latest scan, an aggregate of an
+aggregate, LAG partitioned, a CROSS JOIN grid with its zeros, a window SUM
+partitioned, ROW_NUMBER = 1 per group, two aggregates in one HAVING, a
+WHERE before the GROUP BY, NOT EXISTS on two columns, COALESCE inside
+julianday, a LEFT JOIN condition in ON with a date modifier, SQLite's bare
+column beside MAX. Prompts name the tool but do not write the statement.
+**Three writable**: a view of the lost parcels, an upsert on the
+(customer, period) key, and a column added then filled. **Fifteen
+Python** at the easy level of the last four sets: everyday tasks over
+plain lists and strings in the courier's terms, no maths, no dicts.
 
 ### The writable stage
 
@@ -49,45 +50,45 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `CREATE TRIGGER ... AFTER INSERT ON scans WHEN NEW.status = 'delivered' BEGIN UPDATE parcels ... END` | parcel 40's delivered_at and courier, parcel 122's delivered_at, the delivered count |
-| 14 | `UPDATE parcels SET postage_cents = postage_cents + 500 WHERE collected_at >= '2026-06-01' AND weight_g > 10000` | June's parcels and their postage added up |
-| 15 | `DELETE FROM customers WHERE NOT EXISTS (...) AND NOT EXISTS (...)` | customers remaining, and how many of them never sent |
+| 13 | `CREATE VIEW lost_parcels AS SELECT ... WHERE delivered_at IS NULL AND (latest scan) = 'failed'` | the view's row count, and how many are economy |
+| 14 | `INSERT INTO invoices (...) VALUES (...), (...) ON CONFLICT (customer_id, period) DO UPDATE SET amount_cents = excluded.amount_cents` | the two amounts, the invoice count, the highest invoice_id |
+| 15 | `ALTER TABLE parcels ADD COLUMN is_local ...; UPDATE parcels SET is_local = 1 WHERE ...` | parcels flagged, and how many there are |
 
-13 carries a `driver_sql`: a 'delivered' scan and a 'failed' scan, run
-after your script.
+None carries a `driver_sql`: all three are graded on what the script leaves
+behind.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1222 | SEQ ROW_NUMBER per parent | Each parcel's trail, step by step | ex 1 | 1 - The parcel's trail |
-| Q1223 | TRANSIT julianday hours and AVG of a comparison | How long each service really takes | ex 2 | 1 - The parcel's trail |
-| Q1224 | FAILED EXISTS counted | Parcels that came back to the depot | ex 3 | 1 - The parcel's trail |
-| Q1225 | ROUTES two aliases, top ten with tiebreak | The ten busiest routes between depots | ex 4 | 2 - Depots and routes |
-| Q1226 | FLOW two scalar subqueries | Parcels in against parcels out, at every depot | ex 5 | 2 - Depots and routes |
-| Q1227 | RER conditional sums across a closure | Where Old Foundry's customers went | ex 6 | 2 - Depots and routes |
-| Q1228 | WALKIN NULL as a category | Walk-ins at the counter | ex 7 | 3 - Customers and money |
-| Q1229 | UNPAID filtered aggregate top ten | The ten customers who owe the most | ex 8 | 3 - Customers and money |
-| Q1230 | KG ceiling by integer arithmetic | The postage table, recovered from the parcels | ex 9 | 3 - Customers and money |
-| Q1231 | COURIER COUNT DISTINCT date | How many drops a bike courier makes in a day | ex 10 | 4 - People and time |
-| Q1232 | WEEKDAY CASE on strftime text | Which day of the week people post things | ex 11 | 4 - People and time |
-| Q1233 | MOM LAG with NULL first row | Month on month | ex 12 | 4 - People and time |
-| Q1234 | TRG trigger with WHEN | A delivery scan completes the parcel **(script)** | ex 13 | 5 - Changing the data |
-| Q1235 | UPD UPDATE with two conditions | A surcharge on June's heavy parcels **(script)** | ex 14 | 5 - Changing the data |
-| Q1236 | DEL DELETE with NOT EXISTS vs NOT IN | Clearing out the customers who never sent anything **(script)** | ex 15 | 5 - Changing the data |
-| P491 | PY4 item before a value | What happened just before the delivery | py 1 | 1 - Counting and finding |
-| P492 | PY4 count before a value | How many attempts it took | py 2 | 1 - Counting and finding |
-| P493 | PY4 zip and compare | Parcels that never left their depot | py 3 | 1 - Counting and finding |
-| P494 | PY3 nth from the end | The second-last scan | py 4 | 1 - Counting and finding |
-| P495 | PY3 sum of word counts | Words across every line of a label | py 5 | 1 - Counting and finding |
-| P496 | PY3 unit label by threshold | Grams or kilograms, whichever reads better | py 6 | 2 - Labels |
-| P497 | PY3 conditional f-string | A route label that knows when nothing moved | py 7 | 2 - Labels |
-| P498 | PY3 snake case to words | A status code as words | py 8 | 2 - Labels |
-| P499 | PY3 join the non-empty | An address on one line, blanks skipped | py 9 | 2 - Labels |
-| P500 | PY3 max of several values | Will the box fit through the hatch? | py 10 | 2 - Labels |
-| P501 | PY3 filter by prefix | The parcels from one depot | py 11 | 3 - Checks and filters |
-| P502 | PY3 sort one list by another | Parcel codes, lightest first | py 12 | 3 - Checks and filters |
-| P503 | PY3 list of booleans | Which parcels are over the limit | py 13 | 3 - Checks and filters |
-| P504 | PY3 min and max of dates | The first and last collection | py 14 | 3 - Checks and filters |
-| P505 | PY3 derived set sorted | Which depots a batch of codes mentions | py 15 | 3 - Checks and filters |
+| Q1237 | LASTFAIL correlated MAX for the latest row | The parcels that were never heard of again | ex 1 | 1 - Trails and gaps |
+| Q1238 | HIST aggregate of an aggregate | How long a trail is | ex 2 | 1 - Trails and gaps |
+| Q1239 | QUIET LAG partitioned | The longest quiet spell at each depot | ex 3 | 1 - Trails and gaps |
+| Q1240 | GRID CROSS JOIN grid with zeros | Every depot, every month of 2026, zeros included | ex 4 | 2 - Depots and regions |
+| Q1241 | PART window SUM partitioned | Each depot's share of its region | ex 5 | 2 - Depots and regions |
+| Q1242 | TOP1 ROW_NUMBER = 1 per group | The busiest hour at each depot's counter | ex 6 | 2 - Depots and regions |
+| Q1243 | HAV two aggregates in HAVING | Big senders who pay well | ex 7 | 3 - Customers and money |
+| Q1244 | PAYLAG filtered before grouping | How quickly invoices get paid, by method | ex 8 | 3 - Customers and money |
+| Q1245 | NOTBILLED NOT EXISTS on two columns | June's postage, not yet on a bill | ex 9 | 3 - Customers and money |
+| Q1246 | COAL COALESCE inside julianday | How long couriers stay | ex 10 | 4 - People and vehicles |
+| Q1247 | FIRST30 LEFT JOIN condition in ON with a date modifier | A new courier's first month | ex 11 | 4 - People and vehicles |
+| Q1248 | BARE SQLite bare column beside MAX | The top courier at each depot | ex 12 | 4 - People and vehicles |
+| Q1249 | VIEW CREATE VIEW | A view of the lost parcels **(script)** | ex 13 | 5 - Changing the data |
+| Q1250 | UPSERT ON CONFLICT DO UPDATE | One invoice corrected, one created, in one statement **(script)** | ex 14 | 5 - Changing the data |
+| Q1251 | ADDCOL ADD COLUMN then UPDATE | A flag column, added and filled **(script)** | ex 15 | 5 - Changing the data |
+| P506 | PY4 adjacent pair exists | Did a failure come straight after an attempt? | py 1 | 1 - Counting and finding |
+| P507 | PY3 argmax via zip | The code of the heaviest parcel | py 2 | 1 - Counting and finding |
+| P508 | PY3 int of a split part | The number inside a parcel code | py 3 | 1 - Counting and finding |
+| P509 | PY4 count by last item | How many trails end in a delivery | py 4 | 1 - Counting and finding |
+| P510 | PY3 max of lengths with default | The longest trail in the batch | py 5 | 1 - Counting and finding |
+| P511 | PY3 list lookup by index | A billing period as words | py 6 | 2 - Labels |
+| P512 | PY3 check digit | A check digit on the end | py 7 | 2 - Labels |
+| P513 | PY3 f-string with units | A box's size on the label | py 8 | 2 - Labels |
+| P514 | PY3 replace upper wrap | A status as a badge | py 9 | 2 - Labels |
+| P515 | PY3 sentence from parts | A tracking message | py 10 | 2 - Labels |
+| P516 | PY3 filter one list by another | The codes of the parcels over the limit | py 11 | 3 - Checks and filters |
+| P517 | PY4 shape check with guards | Is the trail well formed? | py 12 | 3 - Checks and filters |
+| P518 | PY4 after the last occurrence | The trail since the last failure | py 13 | 3 - Checks and filters |
+| P519 | PY3 sort by a numeric key | Codes in numeric order, not text order | py 14 | 3 - Checks and filters |
+| P520 | PY4 flag repeats with a set | Which scans are repeats | py 15 | 3 - Checks and filters |
 
 ## Retired
 
@@ -396,6 +397,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1222 | SEQ ROW_NUMBER per parent | Each parcel's trail, step by step | - | retired |
+| Q1223 | TRANSIT julianday hours and AVG of a comparison | How long each service really takes | - | retired |
+| Q1224 | FAILED EXISTS counted | Parcels that came back to the depot | - | retired |
+| Q1225 | ROUTES two aliases, top ten with tiebreak | The ten busiest routes between depots | - | retired |
+| Q1226 | FLOW two scalar subqueries | Parcels in against parcels out, at every depot | - | retired |
+| Q1227 | RER conditional sums across a closure | Where Old Foundry's customers went | - | retired |
+| Q1228 | WALKIN NULL as a category | Walk-ins at the counter | - | retired |
+| Q1229 | UNPAID filtered aggregate top ten | The ten customers who owe the most | - | retired |
+| Q1230 | KG ceiling by integer arithmetic | The postage table, recovered from the parcels | - | retired |
+| Q1231 | COURIER COUNT DISTINCT date | How many drops a bike courier makes in a day | - | retired |
+| Q1232 | WEEKDAY CASE on strftime text | Which day of the week people post things | - | retired |
+| Q1233 | MOM LAG with NULL first row | Month on month | - | retired |
+| Q1234 | TRG trigger with WHEN | A delivery scan completes the parcel **(script)** | - | retired |
+| Q1235 | UPD UPDATE with two conditions | A surcharge on June's heavy parcels **(script)** | - | retired |
+| Q1236 | DEL DELETE with NOT EXISTS vs NOT IN | Clearing out the customers who never sent anything **(script)** | - | retired |
+| P491 | PY4 item before a value | What happened just before the delivery | - | retired |
+| P492 | PY4 count before a value | How many attempts it took | - | retired |
+| P493 | PY4 zip and compare | Parcels that never left their depot | - | retired |
+| P494 | PY3 nth from the end | The second-last scan | - | retired |
+| P495 | PY3 sum of word counts | Words across every line of a label | - | retired |
+| P496 | PY3 unit label by threshold | Grams or kilograms, whichever reads better | - | retired |
+| P497 | PY3 conditional f-string | A route label that knows when nothing moved | - | retired |
+| P498 | PY3 snake case to words | A status code as words | - | retired |
+| P499 | PY3 join the non-empty | An address on one line, blanks skipped | - | retired |
+| P500 | PY3 max of several values | Will the box fit through the hatch? | - | retired |
+| P501 | PY3 filter by prefix | The parcels from one depot | - | retired |
+| P502 | PY3 sort one list by another | Parcel codes, lightest first | - | retired |
+| P503 | PY3 list of booleans | Which parcels are over the limit | - | retired |
+| P504 | PY3 min and max of dates | The first and last collection | - | retired |
+| P505 | PY3 derived set sorted | Which depots a batch of codes mentions | - | retired |
 | Q1207 | EXS EXISTS as a column | Has this station ever seen a battery job? | - | retired |
 | Q1208 | FOJ FULL OUTER JOIN | Paid, rode, or both | - | retired |
 | Q1209 | ISNOT IS NOT null-safe | Rides that went somewhere else, open ones included | - | retired |
@@ -2394,7 +2425,7 @@ they still count as asked.
   dollars, surname-first names, minutes as a clock time, a bulleted list;
   the stops between two stations, legs from one list, blanks filled,
   names from a comma-separated line, a position struck out.
-- **Q1222-Q1236 and P491-P505** current set, on a NEW schema: a regional
+- **Q1222-Q1236 and P491-P505** retired set, on a NEW schema: a regional
   parcel courier (6 tables, SEED 1241) replacing the bike-hire scheme after
   ten sets. Depots, couriers, customers, parcels, scans and invoices: each
   parcel's scans are an ordered sequence inside a parent, parcels run from
@@ -2424,3 +2455,27 @@ they still count as asked.
   address line with blanks skipped, whether a box fits by max(); codes
   from one depot, codes sorted by weight, overweight flags, the first and
   last date, the depots a batch mentions.
+- **Q1237-Q1251 and P506-P520** current set, the second on the
+  parcel-courier scheme (SEED 1241), prompts naming the tool but not the
+  statement. SQL, two tools per question in task-named tiers, on tools the
+  first courier set left out: the parcels whose latest scan is a failure by
+  a correlated MAX, trail lengths by an aggregate of an aggregate, the
+  longest quiet spell per depot by LAG partitioned, a depot-by-month grid
+  with its zeros by CROSS JOIN and LEFT JOIN, each depot's share of its
+  region by a window SUM partitioned, the busiest hour per depot by
+  ROW_NUMBER = 1 with a tiebreak, big senders who pay well by two
+  aggregates in one HAVING, days to pay by method with the unpaid filtered
+  before grouping, June's postage not yet billed by NOT EXISTS on two
+  columns, courier tenure with COALESCE inside julianday, a new courier's
+  first month with the condition in ON and a date modifier, the top
+  courier per depot by SQLite's bare column beside MAX -- and three
+  writable: a view of the lost parcels, an INSERT ... ON CONFLICT DO
+  UPDATE that corrects one invoice and creates another, and a column added
+  then filled by an UPDATE. Python, everyday tasks in the courier's terms:
+  an adjacent pair of statuses by zip, the heaviest parcel's code by
+  max() over zipped pairs, the number inside a code, trails ending in a
+  delivery, the longest trail with max(default=); a billing period as
+  words by list lookup, a check digit, a box label, a status badge, a
+  tracking message; codes over a limit from two lists, a trail's shape
+  checked, the trail since the last failure, codes sorted by their
+  number, repeats flagged with a set.
