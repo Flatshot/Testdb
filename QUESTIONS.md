@@ -27,19 +27,20 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the third set on the parcel-courier scheme
-(6 tables, SEED 1241). **Fifteen SQL** at two tools per question, with the
-tiers named by task -- along the trail; regions and routes; weight and
-money; couriers and time -- on tools the first two courier sets left out:
-LEAD within a partition, LAST_VALUE with the frame opened, a
-conditional-sum pivot, json_group_object at the right grain, UNION ALL
-stacking two ends, COUNT(DISTINCT) in HAVING, NTILE, a ratio of sums, the
-FILTER clause, a span minus the distinct days, a running SUM, a CASE with
-ranges. Prompts name the tool but do not write the statement. **Three
-writable**: a BEFORE INSERT trigger that RAISEs, a VIRTUAL generated
-column, and a TEMP table feeding an INSERT ... SELECT. **Fifteen Python**
-at the easy level of the last five sets: everyday tasks over plain lists
-and strings in the courier's terms, no maths, no dicts.
+Thirty questions in two tracks, the fourth set on the parcel-courier
+scheme (6 tables, SEED 1241). **Fifteen SQL** at two tools per question,
+with the tiers named by task -- trails and runs; depots and regions;
+customers and money; weights and days -- on tools the first three courier
+sets left out: gaps and islands, a ROWS frame computed before the filter,
+GROUP_CONCAT with ORDER BY, relational division, a self-join on region, a
+recursive date spine, a LEFT JOIN anti-join, CUME_DIST with a FILTERed
+MIN, printf with a thousands separator, a median by ROW_NUMBER against
+COUNT, AVG of a comparison on strftime, a ratio with a tiebreak. Prompts
+name the tool but do not write the statement. **Three writable**: UPDATE
+... FROM, an AFTER UPDATE OF trigger with a WHEN clause, and an INSERT ...
+SELECT with GROUP BY. **Fifteen Python** at the easy level of the last six
+sets: everyday tasks over plain lists and strings in the courier's terms,
+no maths, no dicts.
 
 ### The writable stage
 
@@ -49,45 +50,45 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 13 | `CREATE TRIGGER ... BEFORE INSERT ON scans WHEN NEW.status = 'delivered' AND (...) IS NOT NULL BEGIN SELECT RAISE(ABORT, ...); END` | how many scans dated July got in |
-| 14 | `ALTER TABLE parcels ADD COLUMN weight_kg REAL GENERATED ALWAYS AS (weight_g / 1000.0) VIRTUAL` | the column's average, maximum and storage type |
-| 15 | `CREATE TABLE refunds (...); CREATE TEMP TABLE lost AS ...; INSERT INTO refunds SELECT ...` | the refund count and the cents added up |
+| 13 | `UPDATE customers SET depot_id = 1 FROM depots d WHERE customers.depot_id = d.depot_id AND d.closed_on IS NOT NULL` | customers at depot 1, at depot 2, and in all |
+| 14 | `CREATE TRIGGER ... AFTER UPDATE OF delivered_at ON parcels WHEN NEW.delivered_at IS NOT NULL AND OLD.delivered_at IS NULL BEGIN INSERT INTO scans ... END` | parcel 40's delivered scans, any July scan for parcel 41, the scan count |
+| 15 | `INSERT INTO invoices (...) SELECT ... FROM parcels JOIN customers ... WHERE kind = 'business' AND ... GROUP BY customer_id` | June's invoice count, their total, the earliest issue date |
 
-13 carries a `driver_sql`: a second 'delivered' scan for a delivered parcel
-and a first one for a lost parcel, run after your script.
+14 carries a `driver_sql`: parcel 40 marked delivered and parcel 41's
+postage changed, run after your script.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1252 | LEADT LEAD within a partition | What happens after the van leaves | ex 1 | 1 - Along the trail |
-| Q1253 | LASTV LAST_VALUE with the frame opened | Where the moving parcels are | ex 2 | 1 - Along the trail |
-| Q1254 | PIVOT conditional-sum pivot | Attempts, failures and deliveries, vehicle by vehicle | ex 3 | 1 - Along the trail |
-| Q1255 | JSON json_group_object at the right grain | Where each region's parcels go, as one JSON object | ex 4 | 2 - Regions and routes |
-| Q1256 | UNIONALL UNION ALL stacking two ends | Parcels leaving each region, and arriving | ex 5 | 2 - Regions and routes |
-| Q1257 | MULTI COUNT DISTINCT in HAVING | Customers who use more than one depot | ex 6 | 2 - Regions and routes |
-| Q1258 | NTILE NTILE(4) | Parcels in four weight bands of equal size | ex 7 | 3 - Weight and money |
-| Q1259 | CPK ratio of sums | What a kilogram costs to send | ex 8 | 3 - Weight and money |
-| Q1260 | FILTER FILTER clause | Paid and unpaid, side by side, by home depot | ex 9 | 3 - Weight and money |
-| Q1261 | IDLE span minus distinct days | Days without a delivery | ex 10 | 4 - Couriers and time |
-| Q1262 | RUN running SUM | Parcels to date, month by month | ex 11 | 4 - Couriers and time |
-| Q1263 | BANDS CASE with ranges | Couriers by how long they have been here | ex 12 | 4 - Couriers and time |
-| Q1264 | RAISE BEFORE INSERT trigger with RAISE | A parcel cannot be delivered twice **(script)** | ex 13 | 5 - Changing the data |
-| Q1265 | GEN VIRTUAL generated column | Kilograms, computed on the fly **(script)** | ex 14 | 5 - Changing the data |
-| Q1266 | TMP TEMP table feeding INSERT SELECT | Refunds for the lost parcels **(script)** | ex 15 | 5 - Changing the data |
-| P521 | PY3 index with a start | The next attempt after a point in the trail | py 1 | 1 - Counting and finding |
-| P522 | PY3 nth largest | The second-heaviest parcel | py 2 | 1 - Counting and finding |
-| P523 | PY3 filter by a converted part | Codes numbered above a line | py 3 | 1 - Counting and finding |
-| P524 | PY3 count by text date | Deliveries before the cut-off | py 4 | 1 - Counting and finding |
-| P525 | PY4 any over last items | Is anything in the batch lost? | py 5 | 1 - Counting and finding |
-| P526 | PY3 padded id in a label | An invoice number from its parts | py 6 | 2 - Labels |
-| P527 | PY3 plural and money together | A one-line summary of the month | py 7 | 2 - Labels |
-| P528 | PY3 text bar | A percentage as a bar of hashes | py 8 | 2 - Labels |
-| P529 | PY3 join with conditional quoting | An address as a CSV line | py 9 | 2 - Labels |
-| P530 | PY3 mask each word | A name reduced to initials and stars | py 10 | 2 - Labels |
-| P531 | PY3 filter by a format test | Only the codes that are well formed | py 11 | 3 - Checks and filters |
-| P532 | PY3 sort by a custom order | Services in priority order | py 12 | 3 - Checks and filters |
-| P533 | PY3 split a list at a value | The trail before and after arrival | py 13 | 3 - Checks and filters |
-| P534 | PY3 removeprefix over a list | Codes with the depot stripped off | py 14 | 3 - Checks and filters |
-| P535 | PY3 max over a filtered zip | The latest delivery in the batch | py 15 | 3 - Checks and filters |
+| Q1267 | STREAK gaps and islands | Each bike courier's longest unbroken run of days | ex 1 | 1 - Trails and runs |
+| Q1268 | MA7 ROWS frame before the filter | A week's collections, rolling | ex 2 | 1 - Trails and runs |
+| Q1269 | GC GROUP_CONCAT with ORDER BY | A troubled trail in one line | ex 3 | 1 - Trails and runs |
+| Q1270 | DIV relational division | Customers who have sent to every region | ex 4 | 2 - Depots and regions |
+| Q1271 | SELF self-join on region | Neighbours in the same region | ex 5 | 2 - Depots and regions |
+| Q1272 | SPINE recursive date spine | Old Foundry, month by month, to the end | ex 6 | 2 - Depots and regions |
+| Q1273 | ANTI LEFT JOIN anti-join | Businesses that have never been billed | ex 7 | 3 - Customers and money |
+| Q1274 | DST CUME_DIST with a FILTERed MIN | What it takes to be a top-ten-per-cent sender | ex 8 | 3 - Customers and money |
+| Q1275 | FMT printf with a thousands separator | Invoiced money, printed as money | ex 9 | 3 - Customers and money |
+| Q1276 | MED median by ROW_NUMBER against COUNT | The middle parcel of each service | ex 10 | 4 - Weights and days |
+| Q1277 | WKND AVG of a comparison on strftime | Weekend deliveries, by vehicle | ex 11 | 4 - Weights and days |
+| Q1278 | RATE ratio with a tiebreak, top five | The couriers whose attempts most often succeed | ex 12 | 4 - Weights and days |
+| Q1279 | UPDFROM UPDATE ... FROM | A closed depot's customers move to the hub **(script)** | ex 13 | 5 - Changing the data |
+| Q1280 | UPDTRG AFTER UPDATE OF trigger with WHEN | Marking a parcel delivered writes its last scan **(script)** | ex 14 | 5 - Changing the data |
+| Q1281 | INSSEL INSERT ... SELECT with GROUP BY | Billing June **(script)** | ex 15 | 5 - Changing the data |
+| P536 | PY3 rank by counting heavier | Where a parcel ranks by weight | py 1 | 1 - Counting and finding |
+| P537 | PY4 first mismatch with zip | Where the manifest and the scans first disagree | py 2 | 1 - Counting and finding |
+| P538 | PY3 capacity minus a sum | Room left in the van | py 3 | 1 - Counting and finding |
+| P539 | PY4 membership over nested lists | How many trails had a failure anywhere | py 4 | 1 - Counting and finding |
+| P540 | PY3 all share a derived value | Is the whole batch from one depot? | py 5 | 1 - Counting and finding |
+| P541 | PY3 bucket to a slot label | The delivery slot for an hour | py 6 | 2 - Labels |
+| P542 | PY3 slice of a timestamp | Just the time of a scan | py 7 | 2 - Labels |
+| P543 | PY3 ratio in lowest terms | Parcels per courier, as a ratio | py 8 | 2 - Labels |
+| P544 | PY3 multi-line f-string | A three-line address label | py 9 | 2 - Labels |
+| P545 | PY3 signed difference in words | Early, late, or on time | py 10 | 2 - Labels |
+| P546 | PY4 filter nested lists by last item | The trails that were not lost | py 11 | 3 - Checks and filters |
+| P547 | PY3 sort by a tuple key | Codes in depot order, then by number | py 12 | 3 - Checks and filters |
+| P548 | PY3 duplicates ignoring case | The same code typed two ways | py 13 | 3 - Checks and filters |
+| P549 | PY3 split into tuples | Codes taken apart | py 14 | 3 - Checks and filters |
+| P550 | PY3 sorted check on a derived key | Are the codes in numeric order? | py 15 | 3 - Checks and filters |
 
 ## Retired
 
@@ -396,6 +397,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1252 | LEADT LEAD within a partition | What happens after the van leaves | - | retired |
+| Q1253 | LASTV LAST_VALUE with the frame opened | Where the moving parcels are | - | retired |
+| Q1254 | PIVOT conditional-sum pivot | Attempts, failures and deliveries, vehicle by vehicle | - | retired |
+| Q1255 | JSON json_group_object at the right grain | Where each region's parcels go, as one JSON object | - | retired |
+| Q1256 | UNIONALL UNION ALL stacking two ends | Parcels leaving each region, and arriving | - | retired |
+| Q1257 | MULTI COUNT DISTINCT in HAVING | Customers who use more than one depot | - | retired |
+| Q1258 | NTILE NTILE(4) | Parcels in four weight bands of equal size | - | retired |
+| Q1259 | CPK ratio of sums | What a kilogram costs to send | - | retired |
+| Q1260 | FILTER FILTER clause | Paid and unpaid, side by side, by home depot | - | retired |
+| Q1261 | IDLE span minus distinct days | Days without a delivery | - | retired |
+| Q1262 | RUN running SUM | Parcels to date, month by month | - | retired |
+| Q1263 | BANDS CASE with ranges | Couriers by how long they have been here | - | retired |
+| Q1264 | RAISE BEFORE INSERT trigger with RAISE | A parcel cannot be delivered twice **(script)** | - | retired |
+| Q1265 | GEN VIRTUAL generated column | Kilograms, computed on the fly **(script)** | - | retired |
+| Q1266 | TMP TEMP table feeding INSERT SELECT | Refunds for the lost parcels **(script)** | - | retired |
+| P521 | PY3 index with a start | The next attempt after a point in the trail | - | retired |
+| P522 | PY3 nth largest | The second-heaviest parcel | - | retired |
+| P523 | PY3 filter by a converted part | Codes numbered above a line | - | retired |
+| P524 | PY3 count by text date | Deliveries before the cut-off | - | retired |
+| P525 | PY4 any over last items | Is anything in the batch lost? | - | retired |
+| P526 | PY3 padded id in a label | An invoice number from its parts | - | retired |
+| P527 | PY3 plural and money together | A one-line summary of the month | - | retired |
+| P528 | PY3 text bar | A percentage as a bar of hashes | - | retired |
+| P529 | PY3 join with conditional quoting | An address as a CSV line | - | retired |
+| P530 | PY3 mask each word | A name reduced to initials and stars | - | retired |
+| P531 | PY3 filter by a format test | Only the codes that are well formed | - | retired |
+| P532 | PY3 sort by a custom order | Services in priority order | - | retired |
+| P533 | PY3 split a list at a value | The trail before and after arrival | - | retired |
+| P534 | PY3 removeprefix over a list | Codes with the depot stripped off | - | retired |
+| P535 | PY3 max over a filtered zip | The latest delivery in the batch | - | retired |
 | Q1237 | LASTFAIL correlated MAX for the latest row | The parcels that were never heard of again | - | retired |
 | Q1238 | HIST aggregate of an aggregate | How long a trail is | - | retired |
 | Q1239 | QUIET LAG partitioned | The longest quiet spell at each depot | - | retired |
@@ -2508,7 +2539,7 @@ they still count as asked.
   tracking message; codes over a limit from two lists, a trail's shape
   checked, the trail since the last failure, codes sorted by their
   number, repeats flagged with a set.
-- **Q1252-Q1266 and P521-P535** current set, the third on the
+- **Q1252-Q1266 and P521-P535** retired set, the third on the
   parcel-courier scheme (SEED 1241), prompts naming the tool but not the
   statement. SQL, two tools per question in task-named tiers, on tools the
   first two courier sets left out: what follows an attempt by LEAD within
@@ -2529,3 +2560,26 @@ they still count as asked.
   line with quoting, a masked name; well-formed codes, services in
   priority order, a trail split at a status, prefixes stripped, the latest
   delivery from paired lists.
+- **Q1267-Q1281 and P536-P550** current set, the fourth on the
+  parcel-courier scheme (SEED 1241), prompts naming the tool but not the
+  statement. SQL, two tools per question in task-named tiers, on tools the
+  first three courier sets left out: each bike courier's longest run of
+  delivery days by gaps and islands, a seven-day rolling average by a ROWS
+  frame computed before the filter, a troubled trail in one cell by
+  GROUP_CONCAT with ORDER BY, customers who have sent to every region by
+  relational division, same-region depot pairs by a self-join with <, Old
+  Foundry's months with zeros by a recursive date spine, businesses never
+  billed by a LEFT JOIN anti-join, the top-decile spend by CUME_DIST with
+  a FILTERed MIN, invoiced money as text by printf('$%,.2f'), the median
+  weight by ROW_NUMBER against COUNT, weekend deliveries by AVG of a
+  comparison on strftime('%w'), the couriers with the lowest failure rate
+  by a ratio with a tiebreak -- and three writable: an UPDATE ... FROM
+  moving a closed depot's customers to the hub, an AFTER UPDATE OF trigger
+  with a WHEN clause that writes a scan when a parcel is delivered, and an
+  INSERT ... SELECT with GROUP BY that bills June. Python, everyday tasks in
+  the courier's terms: a rank by counting the heavier, the first mismatch
+  by zip, room left in a van, trails mentioning a status, one depot for a
+  batch; a delivery slot, the time of a stamp, a ratio in lowest terms, a
+  three-line label, early or late in words; trails not lost, codes by
+  depot then number, a case clash, codes split into tuples, numeric order
+  checked.

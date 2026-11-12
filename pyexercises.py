@@ -1,14 +1,14 @@
 """Python practice exercises: fifteen everyday functions over plain values.
 
-The thirty-fifth Python set, at the easy level of the last five -- no
+The thirty-sixth Python set, at the easy level of the last six -- no
 statistics, no dicts -- in the courier's terms, on tasks the earlier sets
-did not cover. Counting and finding: a search that starts part-way along,
-the n-th heaviest, codes numbered above a line, dates before a cut-off,
-whether any trail ends lost. Labels: an invoice number from its parts, a
-summary with a plural and a price, a text bar, a CSV line with quoting, a
-name masked to initials. Checks and filters: the codes that are well
-formed, services in priority order, a trail split at a status, prefixes
-stripped, the latest delivery date from paired lists.
+did not cover. Counting and finding: a parcel's rank by weight, the first
+place two lists disagree, the room left in a van, trails that mention a
+status, whether a batch is all from one depot. Labels: a delivery slot
+from an hour, the time part of a timestamp, a ratio in lowest terms, a
+three-line label, early or late in words. Checks and filters: the trails
+not lost, codes sorted by depot then number, a repeat that differs only in
+case, codes split into pairs, whether codes are in numeric order.
 
 Every question is a `kind="function"`: the editor defines a function named
 `func`. Run calls it once per case in `cases` and shows each call and its
@@ -28,399 +28,389 @@ import pyrun
 EXERCISES = [
     # ================================================= 1 Counting and finding
     dict(
-        id=1, ledger="P521", concept="PY3 index with a start", tier="1 - Counting and finding",
-        title="The next attempt after a point in the trail", kind="function",
-        func="next_after",
-        cases=[(["out_for_delivery", "failed", "out_for_delivery", "delivered"], "out_for_delivery", 1), (["out_for_delivery", "failed"], "out_for_delivery", 1), (["collected"], "collected", 0), ([], "collected", 0)],
+        id=1, ledger="P536", concept="PY3 rank by counting heavier", tier="1 - Counting and finding",
+        title="Where a parcel ranks by weight", kind="function",
+        func="weight_rank",
+        cases=[([2500, 7500, 1200, 3000], 3000), ([2500, 7500, 1200, 3000], 7500), ([500, 500, 500], 500), ([], 100)],
         prompt=(
-            "Write a function `next_after(trail, status, start)` that"
-            " returns the position of the first occurrence of the"
-            " status at or after position `start`, or -1 if there is"
-            " none from there on. index() takes a second argument that"
-            " says where to begin looking; test with `in` on a slice"
-            " first.\n\n"
-            "  next_after([\"out_for_delivery\", \"failed\", \"out_for_delivery\", \"delivered\"], \"out_for_delivery\", 1) -> 2\n\n"
+            "Write a function `weight_rank(weights, w)` that returns the"
+            " rank of weight w among the weights, 1 for the heaviest: one"
+            " more than the number of weights strictly heavier than w."
+            " A sum of comparisons, plus one.\n\n"
+            "  weight_rank([2500, 7500, 1200, 3000], 3000) -> 2\n\n"
             "Return: an int."
         ),
-        solution=("def next_after(trail, status, start):\n"
-                  "    if status not in trail[start:]:\n"
-                  "        return -1\n"
-                  "    return trail.index(status, start)\n"),
-        trap=("def next_after(trail, status, start):\n"
-              "    if status not in trail:\n"
-              "        return -1\n"
-              "    return trail.index(status)\n"),
-        note="index() without a start finds the FIRST occurrence in the"
-             " whole list, which may be before the point you asked from:"
-             " the trap answers 0 for the example, where the attempt"
-             " after position 1 is at 2. index(value, start) begins its"
-             " search at start, and testing membership on the same"
-             " slice, trail[start:], keeps the two in step.",
+        solution=("def weight_rank(weights, w):\n"
+                  "    return sum(x > w for x in weights) + 1\n"),
+        trap=("def weight_rank(weights, w):\n"
+              "    return sorted(weights, reverse=True).index(w) + 1\n"),
+        note="index() finds w in the sorted list, which works only when w"
+             " is actually in it -- the trap raises ValueError for a"
+             " weight that is not -- and sorting is more work than"
+             " counting. Counting the heavier weights ranks any w, present"
+             " or not, and equal weights share a rank, as they should.",
     ),
     dict(
-        id=2, ledger="P522", concept="PY3 nth largest", tier="1 - Counting and finding",
-        title="The second-heaviest parcel", kind="function",
-        func="nth_heaviest",
-        cases=[([2500, 7500, 1200, 3000], 2), ([2500, 7500], 1), ([2500], 2), ([], 1)],
+        id=2, ledger="P537", concept="PY4 first mismatch with zip", tier="1 - Counting and finding",
+        title="Where the manifest and the scans first disagree", kind="function",
+        func="first_mismatch",
+        cases=[(["MB-1", "MB-2", "MB-3"], ["MB-1", "MB-9", "MB-3"]), (["MB-1", "MB-2"], ["MB-1", "MB-2"]), ([], []), (["A", "B"], ["A", "B", "C"]), (["A", "B", "C"], ["A", "B"])],
         prompt=(
-            "Write a function `nth_heaviest(weights, n)` that returns"
-            " the n-th largest weight -- 1 for the heaviest, 2 for the"
-            " next -- or None when there are fewer than n weights."
-            " sorted() largest first, then an index, behind a length"
-            " check.\n\n"
-            "  nth_heaviest([2500, 7500, 1200, 3000], 2) -> 3000\n\n"
-            "Return: an int, or None."
-        ),
-        solution=("def nth_heaviest(weights, n):\n"
-                  "    if n > len(weights):\n"
-                  "        return None\n"
-                  "    return sorted(weights, reverse=True)[n - 1]\n"),
-        trap=("def nth_heaviest(weights, n):\n"
-              "    if n > len(weights):\n"
-              "        return None\n"
-              "    return sorted(weights, reverse=True)[n]\n"),
-        note="The heaviest is at index 0 of a list sorted largest-first,"
-             " so the n-th is at n - 1: the trap's [n] returns the"
-             " third-heaviest for n = 2 and raises IndexError for the"
-             " last one. The length check turns 'not enough weights'"
-             " into None before any indexing happens.",
-    ),
-    dict(
-        id=3, ledger="P523", concept="PY3 filter by a converted part", tier="1 - Counting and finding",
-        title="Codes numbered above a line", kind="function",
-        func="numbered_above",
-        cases=[(["MB-0012", "CH-0100", "WW-0099"], 50), (["MB-0012"], 50), ([], 1), (["A-7", "B-70"], 7)],
-        prompt=(
-            "A parcel code's number follows the hyphen, zero-padded."
-            " Write a function `numbered_above(codes, n)` that returns"
-            " the codes whose number is greater than n, in order. Split"
-            " at the hyphen and convert the part after it inside the"
-            " comprehension's test.\n\n"
-            "  numbered_above([\"MB-0012\", \"CH-0100\", \"WW-0099\"], 50) -> [\"CH-0100\", \"WW-0099\"]\n\n"
-            "Return: a list of str."
-        ),
-        solution=("def numbered_above(codes, n):\n"
-                  "    return [c for c in codes if int(c.split(\"-\")[1]) > n]\n"),
-        trap=("def numbered_above(codes, n):\n"
-              "    return [c for c in codes if c.split(\"-\")[1] > str(n)]\n"),
-        note="Comparing the text '0099' with the text '50' is a"
-             " character-by-character comparison, where '0' comes before"
-             " '5', so the trap says 0099 is NOT above 50 and 7 IS above"
-             " 70. Converting to int before the comparison makes it"
-             " numeric; the zero padding is no trouble to int().",
-    ),
-    dict(
-        id=4, ledger="P524", concept="PY3 count by text date", tier="1 - Counting and finding",
-        title="Deliveries before the cut-off", kind="function",
-        func="before",
-        cases=[(["2026-03-04", "2025-11-30", "2026-01-15"], "2026-01-01"), (["2026-01-01"], "2026-01-01"), ([], "2026-01-01"), (["2025-12-31", "2025-12-31"], "2026-01-01")],
-        prompt=(
-            "Write a function `before(dates, cutoff)` that returns how"
-            " many of the ISO dates fall strictly before the cut-off"
-            " date. ISO dates compare correctly as text, so a sum of"
-            " comparisons does it with no parsing.\n\n"
-            "  before([\"2026-03-04\", \"2025-11-30\", \"2026-01-15\"], \"2026-01-01\") -> 1\n\n"
+            "The manifest lists the codes a van should carry; the scans"
+            " list what was actually loaded, in order. Write a function"
+            " `first_mismatch(expected, actual)` that returns the"
+            " position of the first place the two lists differ, or -1"
+            " when they agree as far as the shorter one goes. enumerate"
+            " over zip; return inside the loop, -1 after it.\n\n"
+            "  first_mismatch([\"MB-1\", \"MB-2\", \"MB-3\"], [\"MB-1\", \"MB-9\", \"MB-3\"]) -> 1\n\n"
             "Return: an int."
         ),
-        solution=("def before(dates, cutoff):\n"
-                  "    return sum(d < cutoff for d in dates)\n"),
-        trap=("def before(dates, cutoff):\n"
-              "    return sum(d <= cutoff for d in dates)\n"),
-        note="'Strictly before' excludes the cut-off day itself: a"
-             " delivery dated 2026-01-01 is not before 2026-01-01, and"
-             " the trap's <= counts it. Text comparison works because"
-             " 'YYYY-MM-DD' puts the biggest unit first; a bool sums as"
-             " 1 or 0, so sum() of the comparisons is the count.",
+        solution=("def first_mismatch(expected, actual):\n"
+                  "    for i, (a, b) in enumerate(zip(expected, actual)):\n"
+                  "        if a != b:\n"
+                  "            return i\n"
+                  "    return -1\n"),
+        trap=("def first_mismatch(expected, actual):\n"
+              "    for i in range(len(expected)):\n"
+              "        if expected[i] != actual[i]:\n"
+              "            return i\n"
+              "    return -1\n"),
+        note="Indexing both lists up to the length of the first raises"
+             " IndexError when the second is shorter; zip stops at the"
+             " shorter list and never reaches past either end. enumerate"
+             " supplies the position, and the tuple in the loop header"
+             " unpacks the zipped pair. The question says lists that"
+             " agree as far as they go are not a mismatch, so a longer"
+             " actual list is -1.",
     ),
     dict(
-        id=5, ledger="P525", concept="PY4 any over last items", tier="1 - Counting and finding",
-        title="Is anything in the batch lost?", kind="function",
-        func="any_lost",
-        cases=[([["collected", "delivered"], ["collected", "out_for_delivery", "failed"]],), ([["collected", "failed", "delivered"]],), ([],), ([[], ["collected"]],)],
+        id=3, ledger="P538", concept="PY3 capacity minus a sum", tier="1 - Counting and finding",
+        title="Room left in the van", kind="function",
+        func="room_left",
+        cases=[(50000, [12000, 7500, 3000]), (50000, []), (50000, [30000, 25000]), (0, [1])],
         prompt=(
-            "A parcel is lost when its trail ENDS on 'failed'. Write a"
-            " function `any_lost(trails)` that returns True when any"
-            " trail in the list ends that way and False otherwise,"
-            " empty trails ignored. any() over a generator that tests"
-            " each trail's last entry behind a non-empty check.\n\n"
-            "  any_lost([[\"collected\", \"delivered\"], [\"collected\", \"out_for_delivery\", \"failed\"]]) -> True\n\n"
+            "A van takes a fixed weight. Write a function `room_left("
+            "capacity, weights)` that returns how much weight can still"
+            " be loaded after the listed parcels -- which may be"
+            " negative if the van is already over. The capacity minus"
+            " the sum.\n\n"
+            "  room_left(50000, [12000, 7500, 3000]) -> 27500\n\n"
+            "Return: an int."
+        ),
+        solution=("def room_left(capacity, weights):\n"
+                  "    return capacity - sum(weights)\n"),
+        trap=("def room_left(capacity, weights):\n"
+              "    return max(0, capacity - sum(weights))\n"),
+        note="The question says the answer may be negative, because an"
+             " overloaded van is information: -5000 says how much to take"
+             " off. The trap clamps at 0 and hides the overload. sum() of"
+             " an empty list is 0, so an empty van has its whole capacity"
+             " left.",
+    ),
+    dict(
+        id=4, ledger="P539", concept="PY4 membership over nested lists", tier="1 - Counting and finding",
+        title="How many trails had a failure anywhere", kind="function",
+        func="trails_with",
+        cases=[([["collected", "failed", "delivered"], ["collected", "delivered"], ["failed"]], "failed"), ([], "failed"), ([["collected"]], "failed"), ([["failed", "failed"]], "failed")],
+        prompt=(
+            "Write a function `trails_with(trails, status)` that returns"
+            " how many of the trails contain the status at least once,"
+            " wherever it appears. A sum over the trails of `status in"
+            " trail`.\n\n"
+            "  trails_with([[\"collected\", \"failed\", \"delivered\"], [\"collected\", \"delivered\"], [\"failed\"]], \"failed\") -> 2\n\n"
+            "Return: an int."
+        ),
+        solution=("def trails_with(trails, status):\n"
+                  "    return sum(status in t for t in trails)\n"),
+        trap=("def trails_with(trails, status):\n"
+              "    return sum(t.count(status) for t in trails)\n"),
+        note="count() adds up every occurrence, so a trail with two"
+             " failures counts twice and the trap answers 2 for a single"
+             " trail. `status in t` is True or False once per trail, and"
+             " a sum of bools is a count of trails. The question is about"
+             " trails, not failures.",
+    ),
+    dict(
+        id=5, ledger="P540", concept="PY3 all share a derived value", tier="1 - Counting and finding",
+        title="Is the whole batch from one depot?", kind="function",
+        func="one_depot",
+        cases=[(["MB-0012", "MB-0031", "MB-0007"],), (["MB-0012", "CH-0007"],), (["WW-1"],), ([],), (["CH-1", "CHB-2"],)],
+        prompt=(
+            "A parcel code starts with its depot code and a hyphen."
+            " Write a function `one_depot(codes)` that returns True"
+            " when every code in the batch has the same depot code, and"
+            " True for an empty batch. Pull the depot codes out, then"
+            " test how many DIFFERENT ones there are.\n\n"
+            "  one_depot([\"MB-0012\", \"MB-0031\", \"MB-0007\"]) -> True\n\n"
             "Return: True or False."
         ),
-        solution=("def any_lost(trails):\n"
-                  "    return any(t and t[-1] == \"failed\" for t in trails)\n"),
-        trap=("def any_lost(trails):\n"
-              "    return any(\"failed\" in t for t in trails)\n"),
-        note="A failure in the MIDDLE of a trail is a parcel that came"
-             " back and was delivered later, not a lost one: the trap"
-             " says True for a trail that ends 'delivered'. Testing the"
-             " last entry is the question's definition, and `t and` in"
-             " front of t[-1] keeps an empty trail from raising. any()"
-             " of nothing is False.",
+        solution=("def one_depot(codes):\n"
+                  "    return len({c.split(\"-\")[0] for c in codes}) <= 1\n"),
+        trap=("def one_depot(codes):\n"
+              "    return len({c[:2] for c in codes}) <= 1\n"),
+        note="Slicing two characters assumes every depot code is two"
+             " letters; split('-') takes whatever is before the hyphen,"
+             " so a three-letter depot is handled too. A set of the depot"
+             " codes has one member when they all agree and none for an"
+             " empty batch, so <= 1 answers both cases.",
     ),
     # ================================================================ 2 Labels
     dict(
-        id=6, ledger="P526", concept="PY3 padded id in a label", tier="2 - Labels",
-        title="An invoice number from its parts", kind="function",
-        func="invoice_number",
-        cases=[(4, "2026-05"), (123, "2025-12"), (8, "2026-01")],
+        id=6, ledger="P541", concept="PY3 bucket to a slot label", tier="2 - Labels",
+        title="The delivery slot for an hour", kind="function",
+        func="slot",
+        cases=[(9,), (12,), (15,), (23,), (0,)],
         prompt=(
-            "Invoices are numbered 'INV-202605-0004': the period with"
-            " its hyphen removed, then the customer id padded with zeros"
-            " to four digits. Write a function `invoice_number("
-            "customer_id, period)` that builds it. replace() for the"
-            " period and a format spec for the padding.\n\n"
-            "  invoice_number(4, \"2026-05\") -> \"INV-202605-0004\"\n\n"
+            "Deliveries are promised in four-hour slots: 08:00-12:00,"
+            " 12:00-16:00, 16:00-20:00 and so on, round the clock. Write"
+            " a function `slot(hour)` that returns the slot label for"
+            " an hour from 0 to 23, both ends zero-padded. Integer"
+            " division by 4 and back finds the slot's start; a format"
+            " spec pads.\n\n"
+            "  slot(9) -> \"08:00-12:00\"\n\n"
             "Return: a str."
         ),
-        solution=("def invoice_number(customer_id, period):\n"
-                  "    return f\"INV-{period.replace('-', '')}-{customer_id:04d}\"\n"),
-        trap=("def invoice_number(customer_id, period):\n"
-              "    return f\"INV-{period}-{customer_id}\"\n"),
-        note="The trap keeps the period's hyphen and leaves the id"
-             " unpadded: 'INV-2026-05-4', which no longer lines up or"
-             " sorts. :04d pads an int with zeros to four places, and"
-             " replace('-', '') takes the hyphen out of the period; both"
-             " happen inside the braces where the values are used.",
+        solution=("def slot(hour):\n"
+                  "    start = hour // 4 * 4\n"
+                  "    return f\"{start:02d}:00-{start + 4:02d}:00\"\n"),
+        trap=("def slot(hour):\n"
+              "    start = hour // 4 * 4\n"
+              "    return f\"{start}:00-{start + 4}:00\"\n"),
+        note="hour // 4 * 4 rounds down to a multiple of four, which is"
+             " the slot's start; add 4 for its end. The trap forgets the"
+             " padding and writes '8:00-12:00' and '0:00-4:00', which is"
+             " not how a clock looks. The last slot runs 20:00-24:00,"
+             " which the arithmetic gives for free.",
     ),
     dict(
-        id=7, ledger="P527", concept="PY3 plural and money together", tier="2 - Labels",
-        title="A one-line summary of the month", kind="function",
-        func="month_summary",
-        cases=[(18, 14820), (1, 350), (0, 0), (2, 1005)],
+        id=7, ledger="P542", concept="PY3 slice of a timestamp", tier="2 - Labels",
+        title="Just the time of a scan", kind="function",
+        func="time_of",
+        cases=[("2026-03-04 08:05",), ("2025-12-31 23:59",), ("2026-01-01 00:00",)],
         prompt=(
-            "Write a function `month_summary(parcels, cents)` that"
-            " returns '18 parcels, $148.20': the count with 'parcel'"
-            " made plural unless it is exactly 1, then the money as"
-            " dollars with two digits of cents. An if for the plural,"
-            " // and % with a :02d for the money.\n\n"
-            "  month_summary(18, 14820) -> \"18 parcels, $148.20\"\n\n"
+            "Scans are stamped 'YYYY-MM-DD HH:MM'. Write a function"
+            " `time_of(stamp)` that returns just the 'HH:MM' part. The"
+            " format is fixed, so a slice does it.\n\n"
+            "  time_of(\"2026-03-04 08:05\") -> \"08:05\"\n\n"
             "Return: a str."
         ),
-        solution=("def month_summary(parcels, cents):\n"
-                  "    word = \"parcel\" if parcels == 1 else \"parcels\"\n"
-                  "    return f\"{parcels} {word}, ${cents // 100}.{cents % 100:02d}\"\n"),
-        trap=("def month_summary(parcels, cents):\n"
-              "    return f\"{parcels} parcels, ${cents / 100}\"\n"),
-        note="Two things in the trap: '1 parcels', and cents / 100 as a"
-             " float prints 10.05 as '10.05' but 350 as '3.5' and 0 as"
-             " '0.0'. The plural is a one-word choice on == 1, and the"
-             " money is whole dollars from // 100 with the remainder"
-             " from % 100 padded to two digits.",
+        solution=("def time_of(stamp):\n"
+                  "    return stamp[11:]\n"),
+        trap=("def time_of(stamp):\n"
+              "    return stamp[10:]\n"),
+        note="Positions start at 0: the date is ten characters, the space"
+             " is at position 10, and the time starts at 11. The trap is"
+             " one short and returns ' 08:05' with the space on the"
+             " front. stamp.split()[1] is another way, and it does not"
+             " depend on counting; either is fine for a fixed format.",
     ),
     dict(
-        id=8, ledger="P528", concept="PY3 text bar", tier="2 - Labels",
-        title="A percentage as a bar of hashes", kind="function",
-        func="bar",
-        cases=[(45, 20), (100, 10), (0, 10), (33, 30)],
+        id=8, ledger="P543", concept="PY3 ratio in lowest terms", tier="2 - Labels",
+        title="Parcels per courier, as a ratio", kind="function",
+        func="ratio",
+        cases=[(24000, 60), (10, 4), (7, 7), (5, 3)],
         prompt=(
-            "Write a function `bar(pct, width)` that returns a bar of"
-            " '#' characters whose length is the percentage of the"
-            " width, rounded to the nearest whole character, padded"
-            " with '.' to the full width: bar(45, 20) is nine hashes"
-            " and eleven dots. round(), then string multiplication for"
-            " each part.\n\n"
-            "  bar(45, 20) -> \"#########...........\"\n\n"
+            "Write a function `ratio(a, b)` that returns 'a:b' with both"
+            " numbers divided by their greatest common divisor, so"
+            " ratio(24000, 60) is '400:1'. math.gcd() finds the divisor;"
+            " write `import math` at the top.\n\n"
+            "  ratio(24000, 60) -> \"400:1\"\n\n"
             "Return: a str."
         ),
-        solution=("def bar(pct, width):\n"
-                  "    filled = round(pct / 100 * width)\n"
-                  "    return \"#\" * filled + \".\" * (width - filled)\n"),
-        trap=("def bar(pct, width):\n"
-              "    filled = pct // 100 * width\n"
-              "    return \"#\" * filled + \".\" * (width - filled)\n"),
-        note="pct // 100 is integer division: 0 for anything under 100,"
-             " so the trap's bar is empty for 45 per cent and full only"
-             " at 100. pct / 100 * width is the filled length as a"
-             " float, round() makes it a whole number of characters, and"
-             " the dots are whatever width is left.",
+        solution=("import math\n\n"
+                  "def ratio(a, b):\n"
+                  "    g = math.gcd(a, b)\n"
+                  "    return f\"{a // g}:{b // g}\"\n"),
+        trap=("def ratio(a, b):\n"
+              "    return f\"{a}:{b}\"\n"),
+        note="A ratio in lowest terms divides both sides by the biggest"
+             " number that goes into both, which is the GCD; the trap"
+             " writes '24000:60' and '10:4'. // keeps the parts as ints"
+             " so they print without a decimal point. Two equal numbers"
+             " reduce to '1:1'.",
     ),
     dict(
-        id=9, ledger="P529", concept="PY3 join with conditional quoting", tier="2 - Labels",
-        title="An address as a CSV line", kind="function",
-        func="csv_line",
-        cases=[(["Flat 2, 14 Harbour Street", "Millbank", "NG1"],), (["Westway"],), ([],), (["a,b", "c,d"],)],
+        id=9, ledger="P544", concept="PY3 multi-line f-string", tier="2 - Labels",
+        title="A three-line address label", kind="function",
+        func="label",
+        cases=[("MB-0012", "Hamid Uddin", "Millbank"), ("CH-7", "Rosa", "Central Hub")],
         prompt=(
-            "Write a function `csv_line(fields)` that joins the fields"
-            " with commas, wrapping in double quotes any field that"
-            " itself contains a comma, so the line can be read back."
-            " A comprehension with a conditional expression, inside"
-            " join().\n\n"
-            "  csv_line([\"Flat 2, 14 Harbour Street\", \"Millbank\", \"NG1\"]) -> '\"Flat 2, 14 Harbour Street\",Millbank,NG1'\n\n"
+            "Write a function `label(code, name, town)` that returns a"
+            " three-line label: the code on the first line, the name on"
+            " the second, the town in capitals on the third, the lines"
+            " separated by newline characters and nothing after the last."
+            "\n\n"
+            "  label(\"MB-0012\", \"Hamid Uddin\", \"Millbank\") -> \"MB-0012\\nHamid Uddin\\nMILLBANK\"\n\n"
             "Return: a str."
         ),
-        solution=("def csv_line(fields):\n"
-                  "    return \",\".join(f'\"{f}\"' if \",\" in f else f for f in fields)\n"),
-        trap=("def csv_line(fields):\n"
-              "    return \",\".join(fields)\n"),
-        note="A comma inside a field is indistinguishable from the"
-             " separator once joined: the trap's line reads back as four"
-             " fields, not three. Quoting the fields that contain a"
-             " comma is what CSV does about it, and a conditional"
-             " expression inside the generator quotes only those. The"
-             " outer quotes are single so the double quotes can go"
-             " inside.",
+        solution=("def label(code, name, town):\n"
+                  "    return f\"{code}\\n{name}\\n{town.upper()}\"\n"),
+        trap=("def label(code, name, town):\n"
+              "    return f\"{code}\\n{name}\\n{town.upper()}\\n\"\n"),
+        note="'\\n' inside a string is one newline character, and the"
+             " question wants two of them, between the lines, with none"
+             " at the end: the trap's trailing newline makes a different"
+             " string, which the grader sees. print() would show the two"
+             " identically, which is exactly why the comparison is on the"
+             " value and not on what prints.",
     ),
     dict(
-        id=10, ledger="P530", concept="PY3 mask each word", tier="2 - Labels",
-        title="A name reduced to initials and stars", kind="function",
-        func="mask_name",
-        cases=[("Hamid Uddin",), ("Ana de la Cruz",), ("Cher",), ("",)],
+        id=10, ledger="P545", concept="PY3 signed difference in words", tier="2 - Labels",
+        title="Early, late, or on time", kind="function",
+        func="timing",
+        cases=[(3, 5), (5, 3), (4, 4), (0, 1)],
         prompt=(
-            "For a screen that must not show a full name, write a"
-            " function `mask_name(name)` that keeps the first letter of"
-            " each word and replaces the rest with stars, one per"
-            " letter: 'H**** U****'. A comprehension over split(),"
-            " joined with spaces.\n\n"
-            "  mask_name(\"Hamid Uddin\") -> \"H**** U****\"\n\n"
+            "A parcel was promised in one number of days and arrived in"
+            " another. Write a function `timing(promised, actual)` that"
+            " returns 'on time' when they match, '2 days late' when it"
+            " took longer, and '2 days early' when it took less -- with"
+            " 'day' for exactly one. Compute the difference, then an"
+            " if/elif/else.\n\n"
+            "  timing(3, 5) -> \"2 days late\"\n\n"
             "Return: a str."
         ),
-        solution=("def mask_name(name):\n"
-                  "    return \" \".join(w[0] + \"*\" * (len(w) - 1) for w in name.split())\n"),
-        trap=("def mask_name(name):\n"
-              "    return \" \".join(w[0] + \"****\" for w in name.split())\n"),
-        note="A fixed four stars gives away nothing about the length"
-             " only by accident: 'de' becomes 'd****' and 'Cher' loses"
-             " its length too. len(w) - 1 stars keeps each word's length."
-             " split() with no argument handles the empty string -- no"
-             " words, so join() returns '' -- and w[0] is always safe"
-             " because split() never yields an empty word.",
+        solution=("def timing(promised, actual):\n"
+                  "    diff = actual - promised\n"
+                  "    if diff == 0:\n"
+                  "        return \"on time\"\n"
+                  "    n = abs(diff)\n"
+                  "    unit = \"day\" if n == 1 else \"days\"\n"
+                  "    return f\"{n} {unit} {'late' if diff > 0 else 'early'}\"\n"),
+        trap=("def timing(promised, actual):\n"
+              "    diff = actual - promised\n"
+              "    if diff == 0:\n"
+              "        return \"on time\"\n"
+              "    return f\"{diff} days {'late' if diff > 0 else 'early'}\"\n"),
+        note="The sign says which word to use, and once the word is"
+             " chosen the number should be positive: the trap writes '-2"
+             " days early'. abs() strips the sign, and the singular is"
+             " its own small case. Three outcomes, three branches, and"
+             " the difference computed once at the top.",
     ),
     # ==================================================== 3 Checks and filters
     dict(
-        id=11, ledger="P531", concept="PY3 filter by a format test", tier="3 - Checks and filters",
-        title="Only the codes that are well formed", kind="function",
-        func="well_formed",
-        cases=[(["MB-0012", "CH0007", "WW-00A2", "HC-7"],), ([],), (["-12", "MB-"],), (["ab-12"],)],
+        id=11, ledger="P546", concept="PY4 filter nested lists by last item", tier="3 - Checks and filters",
+        title="The trails that were not lost", kind="function",
+        func="not_lost",
+        cases=[([["collected", "delivered"], ["collected", "failed"], ["collected"]],), ([],), ([["failed"]],), ([[], ["delivered"]],), ([["collected", "failed", "delivered"]],)],
         prompt=(
-            "A well-formed code is letters, a hyphen, then digits:"
-            " 'MB-0012', 'HC-7'. Write a function `well_formed(codes)`"
-            " that keeps only the codes that have exactly one hyphen"
-            " with letters before it and digits after it. split('-')"
-            " into two parts, then isalpha() and isdigit() on them.\n\n"
-            "  well_formed([\"MB-0012\", \"CH0007\", \"WW-00A2\", \"HC-7\"]) -> [\"MB-0012\", \"HC-7\"]\n\n"
+            "A trail is lost when it ENDS on 'failed'. Write a function"
+            " `not_lost(trails)` that returns the trails that are not"
+            " lost, in order, keeping empty trails. A comprehension whose"
+            " test is 'empty, or last entry not failed'.\n\n"
+            "  not_lost([[\"collected\", \"delivered\"], [\"collected\", \"failed\"], [\"collected\"]]) -> [[\"collected\", \"delivered\"], [\"collected\"]]\n\n"
+            "Return: a list of lists."
+        ),
+        solution=("def not_lost(trails):\n"
+                  "    return [t for t in trails if not t or t[-1] != \"failed\"]\n"),
+        trap=("def not_lost(trails):\n"
+              "    return [t for t in trails if \"failed\" not in t]\n"),
+        note="'failed' anywhere in the trail is not the same as 'failed'"
+             " at the end: a parcel that failed once and was delivered"
+             " later is not lost, and the trap throws it away. The test"
+             " `not t or t[-1] != 'failed'` keeps the empty trail by"
+             " the first half and never indexes it, because `or` stops"
+             " when the first half is true.",
+    ),
+    dict(
+        id=12, ledger="P547", concept="PY3 sort by a tuple key", tier="3 - Checks and filters",
+        title="Codes in depot order, then by number", kind="function",
+        func="by_depot_then_number",
+        cases=[(["MB-100", "CH-7", "MB-23", "CH-100"],), (["WW-9", "WW-10"],), ([],), (["Z-1"],)],
+        prompt=(
+            "Write a function `by_depot_then_number(codes)` that returns"
+            " the codes sorted by depot code alphabetically and, within"
+            " a depot, by the NUMBER after the hyphen. sorted() with a"
+            " key that returns a tuple of the two parts, the number"
+            " converted to int.\n\n"
+            "  by_depot_then_number([\"MB-100\", \"CH-7\", \"MB-23\", \"CH-100\"]) -> [\"CH-7\", \"CH-100\", \"MB-23\", \"MB-100\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def well_formed(codes):\n"
-                  "    out = []\n"
-                  "    for c in codes:\n"
-                  "        parts = c.split(\"-\")\n"
-                  "        if len(parts) == 2 and parts[0].isalpha() and parts[1].isdigit():\n"
-                  "            out.append(c)\n"
-                  "    return out\n"),
-        trap=("def well_formed(codes):\n"
-              "    return [c for c in codes if \"-\" in c]\n"),
-        note="A hyphen alone is not a format: the trap keeps 'WW-00A2',"
-             " '-12' and 'MB-'. Splitting gives the two parts to test"
-             " separately, and the length check first makes parts[1]"
-             " safe to read. isalpha() and isdigit() are both False for"
-             " an empty string, so '-12' and 'MB-' fail on their own;"
-             " 'ab-12' passes, since the question says letters, not"
-             " capitals.",
+        solution=("def by_depot_then_number(codes):\n"
+                  "    return sorted(codes, key=lambda c: (c.split(\"-\")[0], int(c.split(\"-\")[1])))\n"),
+        trap=("def by_depot_then_number(codes):\n"
+              "    return sorted(codes)\n"),
+        note="Plain sorting compares the whole code as text, so 'CH-100'"
+             " comes before 'CH-7' and the trap's order is wrong within"
+             " each depot. A tuple key sorts by its first item and uses"
+             " the second to break ties, so (depot, number) is 'depot,"
+             " then number' in one expression; int() makes the second"
+             " part numeric.",
     ),
     dict(
-        id=12, ledger="P532", concept="PY3 sort by a custom order", tier="3 - Checks and filters",
-        title="Services in priority order", kind="function",
-        func="by_priority",
-        cases=[(["economy", "express", "standard", "express"],), (["standard"],), ([],), (["economy", "economy"],)],
+        id=13, ledger="P548", concept="PY3 duplicates ignoring case", tier="3 - Checks and filters",
+        title="The same code typed two ways", kind="function",
+        func="case_clash",
+        cases=[(["MB-0012", "mb-0012"],), (["MB-0012", "MB-0013"],), ([],), (["ab-1", "AB-1", "Ab-1"],)],
         prompt=(
-            "Parcels are loaded express first, then standard, then"
-            " economy. Write a function `by_priority(services)` that"
-            " returns the services sorted into that order, repeats"
-            " kept. A list of the three names in priority order, and"
-            " sorted() with its index() as the key.\n\n"
-            "  by_priority([\"economy\", \"express\", \"standard\", \"express\"]) -> [\"express\", \"express\", \"standard\", \"economy\"]\n\n"
-            "Return: a list of str."
+            "Scanners sometimes read a code in lower case. Write a"
+            " function `case_clash(codes)` that returns True when two"
+            " codes in the list are the same apart from case, and False"
+            " otherwise. Compare how many codes there are with how many"
+            " DIFFERENT codes there are once every one is lower-cased.\n\n"
+            "  case_clash([\"MB-0012\", \"mb-0012\"]) -> True\n\n"
+            "Return: True or False."
         ),
-        solution=("ORDER = [\"express\", \"standard\", \"economy\"]\n\n"
-                  "def by_priority(services):\n"
-                  "    return sorted(services, key=ORDER.index)\n"),
-        trap=("def by_priority(services):\n"
-              "    return sorted(services)\n"),
-        note="Alphabetical order puts economy first, which is the"
-             " opposite of the loading order: the trap unloads the vans"
-             " backwards. A key function maps each service to its"
-             " position in the priority list, and sorted() orders by"
-             " those positions. ORDER.index is already a function of one"
-             " argument, so no lambda is needed.",
+        solution=("def case_clash(codes):\n"
+                  "    return len({c.lower() for c in codes}) < len(codes)\n"),
+        trap=("def case_clash(codes):\n"
+              "    return len(set(codes)) < len(codes)\n"),
+        note="A set of the codes as typed treats 'MB-0012' and 'mb-0012'"
+             " as different, so the trap never sees the clash. Lower-case"
+             " every code before putting it in the set, and a repeat in"
+             " any case collapses to one member, making the set smaller"
+             " than the list. The empty list has no clash: 0 < 0 is"
+             " False.",
     ),
     dict(
-        id=13, ledger="P533", concept="PY3 split a list at a value", tier="3 - Checks and filters",
-        title="The trail before and after arrival", kind="function",
-        func="split_at",
-        cases=[(["collected", "departed", "arrived", "out_for_delivery", "delivered"], "arrived"), (["collected", "delivered"], "arrived"), (["arrived"], "arrived"), ([], "arrived")],
+        id=14, ledger="P549", concept="PY3 split into tuples", tier="3 - Checks and filters",
+        title="Codes taken apart", kind="function",
+        func="split_codes",
+        cases=[(["MB-0012", "CH-7"],), ([],), (["WW-100"],)],
         prompt=(
-            "Write a function `split_at(trail, status)` that returns"
-            " two lists as a tuple: the entries before the status's"
-            " first appearance, and the entries after it -- the status"
-            " itself in neither. When the status is missing, the first"
-            " list is the whole trail and the second is empty. `in`,"
-            " index() and two slices.\n\n"
-            "  split_at([\"collected\", \"departed\", \"arrived\", \"out_for_delivery\", \"delivered\"], \"arrived\") -> ([\"collected\", \"departed\"], [\"out_for_delivery\", \"delivered\"])\n\n"
-            "Return: a tuple of two lists."
+            "Write a function `split_codes(codes)` that turns each code"
+            " into a pair: the depot code and the number as an int --"
+            " ('MB', 12). A comprehension that splits at the hyphen and"
+            " builds a tuple; the result is a list of tuples.\n\n"
+            "  split_codes([\"MB-0012\", \"CH-7\"]) -> [(\"MB\", 12), (\"CH\", 7)]\n\n"
+            "Return: a list of (str, int) tuples."
         ),
-        solution=("def split_at(trail, status):\n"
-                  "    if status not in trail:\n"
-                  "        return trail[:], []\n"
-                  "    i = trail.index(status)\n"
-                  "    return trail[:i], trail[i + 1:]\n"),
-        trap=("def split_at(trail, status):\n"
-              "    i = trail.index(status)\n"
-              "    return trail[:i], trail[i:]\n"),
-        note="Two slips in the trap: index() raises when the status is"
-             " missing, and trail[i:] starts AT the status, so it ends up"
-             " in the second list. The membership test handles the"
-             " missing case, and i + 1 leaves the status out. Returning"
-             " `a, b` makes a tuple, which is what the question asks for.",
+        solution=("def split_codes(codes):\n"
+                  "    return [(c.split(\"-\")[0], int(c.split(\"-\")[1])) for c in codes]\n"),
+        trap=("def split_codes(codes):\n"
+              "    return [c.split(\"-\") for c in codes]\n"),
+        note="split() returns a LIST of two strings, so the trap's items"
+             " are ['MB', '0012'] -- the wrong container and the number"
+             " still text. The question wants a tuple with the number"
+             " converted, which means building it from the two parts;"
+             " the grader keeps a list apart from a tuple and '0012'"
+             " apart from 12.",
     ),
     dict(
-        id=14, ledger="P534", concept="PY3 removeprefix over a list", tier="3 - Checks and filters",
-        title="Codes with the depot stripped off", kind="function",
-        func="strip_depot",
-        cases=[(["MB-0012", "MB-0031", "CH-0007"], "MB-"), (["CH-0007"], "MB-"), ([], "MB-"), (["MB-MB-1"], "MB-")],
+        id=15, ledger="P550", concept="PY3 sorted check on a derived key", tier="3 - Checks and filters",
+        title="Are the codes in numeric order?", kind="function",
+        func="in_number_order",
+        cases=[(["MB-7", "MB-23", "MB-100"],), (["MB-100", "MB-23", "MB-7"],), (["MB-1"],), ([],), (["A-5", "B-5"],)],
         prompt=(
-            "Write a function `strip_depot(codes, prefix)` that returns"
-            " each code with the prefix removed from its FRONT if it is"
-            " there, and unchanged otherwise. str.removeprefix() does"
-            " exactly that for one string; a comprehension applies it"
-            " to all.\n\n"
-            "  strip_depot([\"MB-0012\", \"MB-0031\", \"CH-0007\"], \"MB-\") -> [\"0012\", \"0031\", \"CH-0007\"]\n\n"
-            "Return: a list of str."
+            "Write a function `in_number_order(codes)` that returns True"
+            " when the numbers after the hyphens never decrease along the"
+            " list, and False otherwise; a list of one or none is in"
+            " order. Pull the numbers out as ints, then compare the list"
+            " with its sorted self.\n\n"
+            "  in_number_order([\"MB-7\", \"MB-23\", \"MB-100\"]) -> True\n\n"
+            "Return: True or False."
         ),
-        solution=("def strip_depot(codes, prefix):\n"
-                  "    return [c.removeprefix(prefix) for c in codes]\n"),
-        trap=("def strip_depot(codes, prefix):\n"
-              "    return [c.replace(prefix, \"\") for c in codes]\n"),
-        note="replace() removes the prefix EVERYWHERE in the code, so"
-             " the trap turns 'MB-MB-1' into '1' where only the front"
-             " should go, and it would strip a depot code that appears"
-             " in the middle of a longer id. removeprefix() takes it off"
-             " the front only, once, and leaves a code that does not"
-             " start with it alone.",
-    ),
-    dict(
-        id=15, ledger="P535", concept="PY3 max over a filtered zip", tier="3 - Checks and filters",
-        title="The latest delivery in the batch", kind="function",
-        func="latest_delivery",
-        cases=[(["2026-03-04", "2026-03-06", "2026-03-05"], ["delivered", "failed", "delivered"]), (["2026-01-01"], ["failed"]), ([], []), (["2025-12-31", "2026-01-01"], ["delivered", "delivered"])],
-        prompt=(
-            "Two lists line up scan by scan: the date and the status."
-            " Write a function `latest_delivery(dates, statuses)` that"
-            " returns the most recent date among the scans whose status"
-            " is 'delivered', or None if there is none. zip() the lists,"
-            " keep the delivered dates, and max() with a default.\n\n"
-            "  latest_delivery([\"2026-03-04\", \"2026-03-06\", \"2026-03-05\"], [\"delivered\", \"failed\", \"delivered\"]) -> \"2026-03-05\"\n\n"
-            "Return: a str, or None."
-        ),
-        solution=("def latest_delivery(dates, statuses):\n"
-                  "    return max((d for d, s in zip(dates, statuses) if s == \"delivered\"), default=None)\n"),
-        trap=("def latest_delivery(dates, statuses):\n"
-              "    return max(dates, default=None)\n"),
-        note="max(dates) is the latest scan of ANY kind -- the trap"
-             " returns the failed attempt of 6 March. Filtering the"
-             " zipped pairs on the status first leaves only the"
-             " delivery dates, and default=None covers a batch with no"
-             " delivery, where max() would otherwise raise. ISO dates"
-             " compare as text, so no parsing is needed.",
+        solution=("def in_number_order(codes):\n"
+                  "    nums = [int(c.split(\"-\")[1]) for c in codes]\n"
+                  "    return nums == sorted(nums)\n"),
+        trap=("def in_number_order(codes):\n"
+              "    return codes == sorted(codes)\n"),
+        note="Sorting the codes as text puts 'MB-100' before 'MB-23', so"
+             " the trap says the numerically ordered list is out of"
+             " order. Convert the numbers first and compare those; a list"
+             " equals its sorted copy exactly when it is already in"
+             " order, repeats included, and an empty or one-item list"
+             " trivially is.",
     ),
 ]
 
