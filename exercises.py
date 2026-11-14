@@ -1,24 +1,23 @@
 """Practice exercises: fifteen questions on the parcel-courier schema.
 
-The fourth set on the courier scheme (SEED 1241), two tools per question,
-the tiers named by task, on tools the first three courier sets left out,
-with prompts that name the tool but do not write the statement. Trails and
-runs -- each bike courier's longest run of consecutive delivery days by the
-gaps-and-islands trick, a seven-day moving average by a ROWS frame
-computed before the filter, a trail packed into one cell by GROUP_CONCAT
-with ORDER BY. Depots and regions -- customers who have sent to every
-region by relational division, same-region depot pairs by a self-join,
-Old Foundry's months with zeros after its closure by a recursive date
-spine. Customers and money -- business customers never invoiced by a LEFT
-JOIN anti-join, the spend at the ninetieth percentile by CUME_DIST,
-money as text by printf with a thousands separator. Weights and days -- a
-median by ROW_NUMBER against COUNT, weekend deliveries by AVG of a
-comparison on strftime, the couriers with the lowest failure rate by a
-ratio with a tiebreak. And three WRITABLE questions:
+The fifth set on the courier scheme (SEED 1241), two tools per question,
+the tiers named by task, on tools the first four courier sets left out,
+with prompts that name the tool but do not write the statement. Sets and
+ties -- customers who have used both ends of the price list by INTERSECT,
+couriers who delivered last year and not this by EXCEPT, depots ranked by
+staff with ties kept by DENSE_RANK. Dates, precisely -- June's deliveries
+by a half-open range where BETWEEN loses a day, parcels collected on the
+last day of a month by chained date modifiers, days employed inside the
+data period by the two-argument MAX and MIN. Text, types and lists --
+words in a customer's name by LENGTH and REPLACE, what postcode_area
+holds by typeof, parcels for a JSON list of depots by json_each. Flags
+and totals -- depots above the average depot by HAVING against a nested
+aggregate, a lorry-driver flag by EXISTS as a column, June postage at
+every depot by TOTAL where SUM gives NULL. And three WRITABLE questions:
 
-  * an UPDATE ... FROM that moves a closed depot's customers to the hub
-  * an AFTER UPDATE OF trigger that writes a scan when a parcel is delivered
-  * an INSERT ... SELECT that bills June
+  * a partial UNIQUE INDEX that allows one delivery scan per parcel
+  * an UPDATE whose SET holds a CASE on region
+  * an AFTER DELETE trigger that logs written-off invoices
 
 Each of those runs in a private in-memory copy of the database, so nothing
 you write can reach the real file. The copy persists across Runs of one
@@ -33,461 +32,425 @@ question itself runs AFTER your script.
 import sqlite3
 
 EXERCISES = [
-    # ====================================================== 1 Trails and runs
+    # ======================================================== 1 Sets and ties
     dict(
-        id=1, ledger="Q1267", concept="STREAK", tier="1 - Trails and runs",
-        title="Each bike courier's longest unbroken run of days",
+        id=1, ledger="Q1282", concept="INTERSECT", tier="1 - Sets and ties",
+        title="Customers who have used both ends of the price list",
         prompt=(
-            "For each courier on a bike: the most CONSECUTIVE days on"
-            " which they delivered at least one parcel. The"
-            " gaps-and-islands trick: a CTE of DISTINCT courier-and-day"
-            " pairs, a group key made by subtracting each day's row"
-            " number (within the courier) from the day, so a run of"
-            " consecutive days shares one key; count per key, MAX per"
-            " courier.\n\n"
-            "Return: name, longest_run"
+            "For each kind of customer: how many have sent at least one"
+            " EXPRESS parcel and at least one ECONOMY parcel. Two lists"
+            " of customer ids, one per service, combined with the set"
+            " operator that keeps only what is in both.\n\n"
+            "Return: kind, both_services"
         ),
-        solution=("WITH d AS (SELECT DISTINCT courier_id, date(delivered_at) AS day FROM parcels WHERE courier_id IS NOT NULL),"
-                  " g AS (SELECT courier_id, date(day, '-' || ROW_NUMBER() OVER (PARTITION BY courier_id ORDER BY day) || ' days') AS grp FROM d),"
-                  " s AS (SELECT courier_id, COUNT(*) AS len FROM g GROUP BY courier_id, grp)"
-                  " SELECT c.name, MAX(s.len) FROM s JOIN couriers c ON c.courier_id = s.courier_id WHERE c.vehicle = 'bike' GROUP BY c.courier_id"),
-        trap_sql=("WITH d AS (SELECT courier_id, date(delivered_at) AS day FROM parcels WHERE courier_id IS NOT NULL),"
-                  " g AS (SELECT courier_id, date(day, '-' || ROW_NUMBER() OVER (PARTITION BY courier_id ORDER BY day) || ' days') AS grp FROM d),"
-                  " s AS (SELECT courier_id, COUNT(*) AS len FROM g GROUP BY courier_id, grp)"
-                  " SELECT c.name, MAX(s.len) FROM s JOIN couriers c ON c.courier_id = s.courier_id WHERE c.vehicle = 'bike' GROUP BY c.courier_id"),
-        note="Subtract a row number from a run of consecutive dates and"
-             " every date in the run gives the same result -- that shared"
-             " value is the island's key. It only works on one row per"
-             " day: with two deliveries on one day the row numbers jump"
-             " twice while the date does not, the keys drift, and the"
-             " trap's runs come out too long. DISTINCT in the first CTE"
-             " is the whole difference. The best bike courier managed"
-             " twenty days in a row.",
-        claims=[("nineteen bike couriers, the best run twenty days",
-                 lambda rows, c: len(rows) == 19 and max(r[1] for r in rows) == 20),
-                ("Farouk Baxter holds it",
-                 lambda rows, c: ("Farouk Baxter", 20) in rows)],
+        solution=("SELECT kind, COUNT(*) FROM customers WHERE customer_id IN"
+                  " (SELECT customer_id FROM parcels WHERE service = 'express'"
+                  " INTERSECT SELECT customer_id FROM parcels WHERE service = 'economy') GROUP BY kind"),
+        trap_sql=("SELECT kind, COUNT(*) FROM customers WHERE customer_id IN"
+                  " (SELECT customer_id FROM parcels WHERE service = 'express'"
+                  " UNION SELECT customer_id FROM parcels WHERE service = 'economy') GROUP BY kind"),
+        note="INTERSECT keeps the rows that appear in BOTH queries and"
+             " removes duplicates, so each customer is listed once"
+             " however many parcels they sent. UNION, the trap, is"
+             " 'either': everyone who has sent an express OR an economy"
+             " parcel, which is nearly every sender. The walk-ins' NULL"
+             " customer_id is in both lists too, but no customer row has"
+             " a NULL id for IN to match.",
+        claims=[("two kinds, 223 businesses",
+                 lambda rows, c: len(rows) == 2 and ("business", 223) in rows),
+                ("605 customers in all",
+                 lambda rows, c: sum(r[1] for r in rows) == 605)],
     ),
     dict(
-        id=2, ledger="Q1268", concept="MA7", tier="1 - Trails and runs",
-        title="A week's collections, rolling",
+        id=2, ledger="Q1283", concept="EXCEPT", tier="1 - Sets and ties",
+        title="Couriers who delivered last year and not this",
         prompt=(
-            "For each day of June 2026: the parcels collected that day,"
-            " and the average over that day and the six before it, to"
-            " one decimal. Count per day in a CTE, a window AVG with a"
-            " ROWS frame reaching six rows back, and the June filter"
-            " applied AFTER the window -- 1 June's week reaches into"
-            " May.\n\n"
-            "Return: day, parcels, rolling_avg"
+            "The couriers who delivered at least one parcel in 2025 and"
+            " none in 2026: name and vehicle. Two lists of courier ids"
+            " by delivery year, subtracted with the set operator whose"
+            " order of operands matters.\n\n"
+            "Return: name, vehicle"
         ),
-        solution=("WITH d AS (SELECT date(collected_at) AS day, COUNT(*) AS n FROM parcels GROUP BY day),"
-                  " w AS (SELECT day, n, ROUND(AVG(n) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW), 1) AS ma FROM d)"
-                  " SELECT day, n, ma FROM w WHERE day >= '2026-06-01'"),
-        trap_sql=("WITH d AS (SELECT date(collected_at) AS day, COUNT(*) AS n FROM parcels WHERE collected_at >= '2026-06-01' GROUP BY day)"
-                  " SELECT day, n, ROUND(AVG(n) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW), 1) FROM d"),
-        note="ROWS BETWEEN 6 PRECEDING AND CURRENT ROW is a frame of"
-             " seven rows, and since every day has a collection, seven"
-             " rows is seven days. Window functions run after WHERE, so"
-             " the trap's filter removes May before the window looks"
-             " for it and the first six averages are over too few days"
-             " -- 1 June averages only itself. Filter in the outer query"
-             " and the frame can see back into May.",
-        claims=[("thirty days, 1 June's average 46.4",
-                 lambda rows, c: len(rows) == 30 and ("2026-06-01", 41, 46.4) in rows),
-                ("every rolling average between 40 and 60",
-                 lambda rows, c: all(40 <= r[2] <= 60 for r in rows))],
+        solution=("SELECT name, vehicle FROM couriers WHERE courier_id IN"
+                  " (SELECT courier_id FROM parcels WHERE delivered_at < '2026-01-01'"
+                  " EXCEPT SELECT courier_id FROM parcels WHERE delivered_at >= '2026-01-01')"),
+        trap_sql=("SELECT name, vehicle FROM couriers WHERE courier_id IN"
+                  " (SELECT courier_id FROM parcels WHERE delivered_at >= '2026-01-01'"
+                  " EXCEPT SELECT courier_id FROM parcels WHERE delivered_at < '2026-01-01')"),
+        note="EXCEPT keeps the rows of the first query that are not in"
+             " the second, so the order of the two is the question: 2025"
+             " EXCEPT 2026 is 'stopped delivering', and the trap's 2026"
+             " EXCEPT 2025 is 'started this year', which is nobody."
+             " Thirteen couriers stopped, and every one of them has a"
+             " left_on date in 2025 -- the set arithmetic finds them"
+             " without looking at that column.",
+        claims=[("thirteen couriers",
+                 lambda rows, c: len(rows) == 13),
+                ("every one of them has left",
+                 lambda rows, c: all(c.execute("SELECT COUNT(*) FROM couriers WHERE name = ? AND vehicle = ? AND left_on IS NOT NULL", r).fetchone()[0] >= 1 for r in rows))],
     ),
     dict(
-        id=3, ledger="Q1269", concept="GC", tier="1 - Trails and runs",
-        title="A troubled trail in one line",
+        id=3, ledger="Q1284", concept="DRK", tier="1 - Sets and ties",
+        title="Depots ranked by staff, ties sharing a place",
         prompt=(
-            "For parcels 40, 44, 67, 71 and 72 -- the first five that"
-            " failed an attempt: the whole trail as ONE text cell, the"
-            " statuses in time order joined by ' > '. GROUP_CONCAT with"
-            " its own separator and its own ORDER BY; a status that"
-            " appears twice must appear twice.\n\n"
-            "Return: parcel_id, trail"
+            "Every depot with the number of couriers based there, and"
+            " its rank by that number, most couriers first -- depots"
+            " with the same number share a rank, and the next rank"
+            " follows straight on with no gap. Count per depot in a CTE,"
+            " then the ranking window function that does not skip.\n\n"
+            "Return: name, couriers, rank"
         ),
-        solution=("SELECT parcel_id, GROUP_CONCAT(status, ' > ' ORDER BY scanned_at) FROM scans"
-                  " WHERE parcel_id IN (40, 44, 67, 71, 72) GROUP BY parcel_id"),
-        trap_sql=("SELECT parcel_id, GROUP_CONCAT(DISTINCT status) FROM scans"
-                  " WHERE parcel_id IN (40, 44, 67, 71, 72) GROUP BY parcel_id"),
-        note="GROUP_CONCAT builds one string from a group, with the"
-             " separator between items, and since SQLite 3.44 it takes"
-             " an ORDER BY inside the brackets so the order is fixed. The"
-             " trap's DISTINCT removes the repeats -- parcel 44's two"
-             " failed attempts become one -- and loses the separator too."
-             " Parcel 40 is a lost one: its trail ends on the failure.",
-        claims=[("five trails, parcel 40 ending on a failure",
-                 lambda rows, c: len(rows) == 5 and any(r[0] == 40 and r[1].endswith("failed") for r in rows)),
-                ("parcel 44 failed twice",
-                 lambda rows, c: any(r[0] == 44 and r[1].count("failed") == 2 for r in rows))],
+        solution=("WITH per AS (SELECT d.name, COUNT(c.courier_id) AS n FROM depots d LEFT JOIN couriers c ON c.depot_id = d.depot_id GROUP BY d.depot_id)"
+                  " SELECT name, n, DENSE_RANK() OVER (ORDER BY n DESC) FROM per"),
+        trap_sql=("WITH per AS (SELECT d.name, COUNT(c.courier_id) AS n FROM depots d LEFT JOIN couriers c ON c.depot_id = d.depot_id GROUP BY d.depot_id)"
+                  " SELECT name, n, RANK() OVER (ORDER BY n DESC) FROM per"),
+        note="RANK and DENSE_RANK both give ties the same number; they"
+             " differ in what comes next. RANK counts the rows ahead --"
+             " 1, 2, 3, 4, 4, 4, 4, 8 -- so after four depots tied in"
+             " fourth place the next is eighth, which is the trap."
+             " DENSE_RANK counts the distinct VALUES ahead: 4, 4, 4, 4,"
+             " then 5. Ten depots, six different staff sizes, six ranks.",
+        claims=[("ten depots, six ranks with no gap",
+                 lambda rows, c: len(rows) == 10 and {r[2] for r in rows} == {1, 2, 3, 4, 5, 6}),
+                ("four depots tie on six couriers",
+                 lambda rows, c: sum(r[1] == 6 for r in rows) == 4 and len({r[2] for r in rows if r[1] == 6}) == 1)],
     ),
-    # =================================================== 2 Depots and regions
+    # ==================================================== 2 Dates, precisely
     dict(
-        id=4, ledger="Q1270", concept="DIV", tier="2 - Depots and regions",
-        title="Customers who have sent to every region",
+        id=4, ledger="Q1285", concept="BTW", tier="2 - Dates, precisely",
+        title="June's deliveries, and the day BETWEEN loses",
         prompt=(
-            "For each kind of customer: how many have sent parcels to"
-            " EVERY one of the five regions. Relational division: per"
-            " customer, the number of DIFFERENT destination regions,"
-            " compared with the number of regions there are; then a"
-            " count per kind.\n\n"
-            "Return: kind, everywhere"
+            "For each vehicle type: the parcels its couriers delivered"
+            " in June 2026. delivered_at carries a time of day, so a"
+            " range that ends at '2026-06-30' stops at midnight on the"
+            " 30th; use a half-open range, up to but not including the"
+            " first of July.\n\n"
+            "Return: vehicle, deliveries"
         ),
-        solution=("SELECT c.kind, COUNT(*) FROM customers c"
-                  " WHERE (SELECT COUNT(DISTINCT d.region) FROM parcels p JOIN depots d ON d.depot_id = p.dest_depot_id WHERE p.customer_id = c.customer_id)"
-                  " = (SELECT COUNT(DISTINCT region) FROM depots) GROUP BY c.kind"),
-        trap_sql=("SELECT c.kind, COUNT(*) FROM customers c"
-                  " WHERE (SELECT COUNT(DISTINCT d.region) FROM parcels p JOIN depots d ON d.depot_id = p.dest_depot_id WHERE p.customer_id = c.customer_id)"
-                  " >= 1 GROUP BY c.kind"),
-        note="'Every region' is a count compared with a count: the"
-             " distinct regions a customer has reached against the"
-             " regions that exist. 'Some region', the trap, is anyone who"
-             " has sent anything -- 620 customers. Five regions is not"
-             " many to cover: 509 customers have, and only nine have"
-             " stuck to three.",
-        claims=[("two kinds, 509 customers in all",
-                 lambda rows, c: len(rows) == 2 and sum(r[1] for r in rows) == 509),
-                ("196 of them businesses",
-                 lambda rows, c: ("business", 196) in rows)],
+        solution=("SELECT c.vehicle, COUNT(*) FROM parcels p JOIN couriers c ON c.courier_id = p.courier_id"
+                  " WHERE p.delivered_at >= '2026-06-01' AND p.delivered_at < '2026-07-01' GROUP BY c.vehicle"),
+        trap_sql=("SELECT c.vehicle, COUNT(*) FROM parcels p JOIN couriers c ON c.courier_id = p.courier_id"
+                  " WHERE p.delivered_at BETWEEN '2026-06-01' AND '2026-06-30' GROUP BY c.vehicle"),
+        note="BETWEEN is inclusive, but '2026-06-30' as text is the very"
+             " start of that day, so every delivery later on the 30th is"
+             " above the upper bound: the trap loses sixty deliveries."
+             " >= the first day and < the day AFTER the last is right"
+             " for dates, timestamps and anything finer than the bound,"
+             " and needs no knowledge of how long the month is.",
+        claims=[("three vehicles, 885 by van",
+                 lambda rows, c: len(rows) == 3 and ("van", 885) in rows),
+                ("1492 June deliveries in all",
+                 lambda rows, c: sum(r[1] for r in rows) == 1492)],
     ),
     dict(
-        id=5, ledger="Q1271", concept="SELF", tier="2 - Depots and regions",
-        title="Neighbours in the same region",
+        id=5, ledger="Q1286", concept="EOM", tier="2 - Dates, precisely",
+        title="Handed in on the last day of the month",
         prompt=(
-            "Every pair of depots that share a region, each pair once"
-            " with the lower depot_id first, and the parcels that"
-            " travelled between them in EITHER direction. A self-join of"
-            " depots on region with a strict inequality on the ids, and"
-            " a count of the parcels whose two depots are the pair,"
-            " either way round.\n\n"
-            "Return: depot_a, depot_b, between"
+            "For each service: its parcels, and how many were collected"
+            " on the LAST day of a calendar month -- the 31st of"
+            " January, the 28th of February 2025, the 30th of April."
+            " The last day of any date's month comes from chaining date"
+            " modifiers: back to the start of the month, forward a"
+            " month, back a day.\n\n"
+            "Return: service, parcels, month_end"
         ),
-        solution=("SELECT a.name, b.name,"
-                  " (SELECT COUNT(*) FROM parcels p WHERE (p.origin_depot_id = a.depot_id AND p.dest_depot_id = b.depot_id)"
-                  " OR (p.origin_depot_id = b.depot_id AND p.dest_depot_id = a.depot_id))"
-                  " FROM depots a JOIN depots b ON b.region = a.region AND a.depot_id < b.depot_id"),
-        trap_sql=("SELECT a.name, b.name,"
-                  " (SELECT COUNT(*) FROM parcels p WHERE (p.origin_depot_id = a.depot_id AND p.dest_depot_id = b.depot_id)"
-                  " OR (p.origin_depot_id = b.depot_id AND p.dest_depot_id = a.depot_id))"
-                  " FROM depots a JOIN depots b ON b.region = a.region AND a.depot_id <> b.depot_id"),
-        note="A self-join on region pairs each depot with the others in"
-             " its region; < keeps each pair once, <> keeps both"
-             " orderings and the trap returns ten rows for five pairs."
-             " The subquery counts the pair's traffic in both directions"
-             " with an OR of the two orderings. Every region has exactly"
-             " two depots, so there are exactly five pairs; Southfield"
-             " and Millbank exchange the most.",
-        claims=[("five pairs, Southfield and Millbank the busiest",
-                 lambda rows, c: len(rows) == 5 and max(rows, key=lambda r: r[2]) == ("Southfield", "Millbank", 547)),
-                ("lower id first in every pair",
-                 lambda rows, c: all(c.execute("SELECT depot_id FROM depots WHERE name = ?", (r[0],)).fetchone()[0] < c.execute("SELECT depot_id FROM depots WHERE name = ?", (r[1],)).fetchone()[0] for r in rows))],
+        solution=("SELECT service, COUNT(*), SUM(date(collected_at) = date(collected_at, 'start of month', '+1 month', '-1 day'))"
+                  " FROM parcels GROUP BY service"),
+        trap_sql=("SELECT service, COUNT(*), SUM(strftime('%d', collected_at) = '31')"
+                  " FROM parcels GROUP BY service"),
+        note="'start of month', '+1 month', '-1 day' walks to the first"
+             " of the month, on to the first of the next, and back one"
+             " day: the last day, whatever the month's length. Testing"
+             " for day 31, the trap, finds the last day of seven months"
+             " and misses the other five. date(collected_at) on the left"
+             " cuts the timestamp to its day so the two sides compare"
+             " like with like.",
+        claims=[("three services, about one parcel in thirty",
+                 lambda rows, c: len(rows) == 3 and all(0.02 <= r[2] / r[1] <= 0.05 for r in rows)),
+                ("the count matches the eighteen month-ends",
+                 lambda rows, c: sum(r[2] for r in rows) == c.execute("SELECT COUNT(*) FROM parcels WHERE date(collected_at) IN ('2025-01-31','2025-02-28','2025-03-31','2025-04-30','2025-05-31','2025-06-30','2025-07-31','2025-08-31','2025-09-30','2025-10-31','2025-11-30','2025-12-31','2026-01-31','2026-02-28','2026-03-31','2026-04-30','2026-05-31','2026-06-30')").fetchone()[0])],
     ),
     dict(
-        id=6, ledger="Q1272", concept="SPINE", tier="2 - Depots and regions",
-        title="Old Foundry, month by month, to the end",
+        id=6, ledger="Q1287", concept="CLAMP", tier="2 - Dates, precisely",
+        title="Days on the payroll inside the data",
         prompt=(
-            "Old Foundry's collections for every month from January"
-            " 2025 to June 2026 -- eighteen rows, with 0 for the months"
-            " after it closed. Generate the months with a recursive CTE"
-            " that adds a month each step, then LEFT JOIN the depot's"
-            " parcels onto them.\n\n"
-            "Return: month, parcels"
+            "For each vehicle type: its couriers, and the average"
+            " number of days they were employed INSIDE the data period,"
+            " 2025-01-01 to 2026-06-30, to one decimal. A courier hired"
+            " in 2019 counts from the period's start; one who left counts"
+            " to their leaving date. The two-argument MAX and MIN pick"
+            " the later of two dates and the earlier.\n\n"
+            "Return: vehicle, couriers, avg_days"
         ),
-        solution=("WITH RECURSIVE m(mo) AS (SELECT '2025-01' UNION ALL SELECT strftime('%Y-%m', date(mo || '-01', '+1 month')) FROM m WHERE mo < '2026-06')"
-                  " SELECT m.mo, COUNT(p.parcel_id) FROM m LEFT JOIN parcels p ON p.origin_depot_id = 2 AND strftime('%Y-%m', p.collected_at) = m.mo GROUP BY m.mo"),
-        trap_sql=("SELECT strftime('%Y-%m', collected_at), COUNT(*) FROM parcels WHERE origin_depot_id = 2 GROUP BY 1"),
-        note="A GROUP BY over the parcels can only report the months"
-             " that have parcels, so the trap stops at January 2026 with"
-             " thirteen rows and the closure is invisible. The recursive"
-             " CTE manufactures the eighteen months from nothing -- an"
-             " anchor row and a step that adds a month until the stop --"
-             " and the LEFT JOIN hangs the parcels on them, leaving the"
-             " five closed months at zero. Note the depot condition sits"
-             " in ON, not WHERE.",
-        claims=[("eighteen months, five of them zero",
-                 lambda rows, c: len(rows) == 18 and sum(r[1] == 0 for r in rows) == 5),
-                ("the zeros are February 2026 onwards",
-                 lambda rows, c: all(r[0] >= "2026-02" for r in rows if r[1] == 0))],
+        solution=("SELECT vehicle, COUNT(*), ROUND(AVG(julianday(MIN(COALESCE(left_on, '2026-06-30'), '2026-06-30'))"
+                  " - julianday(MAX(hired_on, '2025-01-01'))), 1) FROM couriers GROUP BY vehicle"),
+        trap_sql=("SELECT vehicle, COUNT(*), ROUND(AVG(julianday(COALESCE(left_on, '2026-06-30'))"
+                  " - julianday(hired_on)), 1) FROM couriers GROUP BY vehicle"),
+        note="MAX(a, b) with two arguments is a scalar function, not the"
+             " aggregate: it compares two values in one row, and it is"
+             " how a date is clamped to a range. Most couriers were hired"
+             " years before the data begins, so without the clamp the"
+             " trap counts service the data cannot see and the averages"
+             " run to four and five years. Inside the period's 545 days,"
+             " bike couriers were on the payroll for 490 on average.",
+        claims=[("three vehicles, sixty couriers",
+                 lambda rows, c: len(rows) == 3 and sum(r[1] for r in rows) == 60),
+                ("no average longer than the period",
+                 lambda rows, c: all(r[2] <= 546 for r in rows))],
     ),
-    # ================================================ 3 Customers and money
+    # ============================================== 3 Text, types and lists
     dict(
-        id=7, ledger="Q1273", concept="ANTI", tier="3 - Customers and money",
-        title="Businesses that have never been billed",
+        id=7, ledger="Q1288", concept="WRD", tier="3 - Text, types and lists",
+        title="How many words in a customer's name",
         prompt=(
-            "Every business customer with no invoice at all: name, date"
-            " joined, and how many parcels they have sent. An anti-join"
-            " with LEFT JOIN: join invoices and keep the customers whose"
-            " side of the join came back empty. The parcel count is a"
-            " separate scalar subquery.\n\n"
-            "Return: name, joined_on, parcels"
+            "For each kind of customer and each number of words a name"
+            " has: how many customers. Words are spaces plus one, and"
+            " the spaces are counted by measuring the name with and"
+            " without them -- LENGTH and REPLACE.\n\n"
+            "Return: kind, words, customers"
         ),
-        solution=("SELECT c.name, c.joined_on, (SELECT COUNT(*) FROM parcels p WHERE p.customer_id = c.customer_id)"
-                  " FROM customers c LEFT JOIN invoices i ON i.customer_id = c.customer_id"
-                  " WHERE c.kind = 'business' AND i.invoice_id IS NULL"),
-        trap_sql=("SELECT c.name, c.joined_on, (SELECT COUNT(*) FROM parcels p WHERE p.customer_id = c.customer_id)"
-                  " FROM customers c LEFT JOIN invoices i ON i.customer_id = c.customer_id AND i.invoice_id IS NULL"
-                  " WHERE c.kind = 'business'"),
-        note="A LEFT JOIN with WHERE right-side IS NULL keeps exactly the"
-             " rows that found no match -- the anti-join. Put the IS NULL"
-             " in ON instead, the trap, and it is a join condition that"
-             " no invoice can meet, so every business comes back"
-             " unmatched and all 247 appear. Twenty-four businesses have"
-             " never been billed: twenty-two never sent, and two joined"
-             " in June 2026, whose first bill is not out yet.",
-        claims=[("24 businesses, 22 of them never sent",
-                 lambda rows, c: len(rows) == 24 and sum(r[2] == 0 for r in rows) == 22),
-                ("the two who did send joined in June 2026",
-                 lambda rows, c: all(r[1] >= "2026-06-01" for r in rows if r[2] > 0))],
+        solution=("SELECT kind, LENGTH(name) - LENGTH(REPLACE(name, ' ', '')) + 1, COUNT(*)"
+                  " FROM customers GROUP BY kind, LENGTH(name) - LENGTH(REPLACE(name, ' ', '')) + 1"),
+        trap_sql=("SELECT kind, LENGTH(name) - LENGTH(REPLACE(name, ' ', '')), COUNT(*)"
+                  " FROM customers GROUP BY kind, LENGTH(name) - LENGTH(REPLACE(name, ' ', ''))"),
+        note="SQLite has no function that counts occurrences, but REPLACE"
+             " removes them all and LENGTH measures what is left, so the"
+             " difference is the number of spaces -- and words are one"
+             " more than that, which the trap forgets. Every person has"
+             " two words; businesses run from three ('Achebe Bakery"
+             " Ltd') to five ('Iqbal Garden Supplies & Sons').",
+        claims=[("four rows, every person two words",
+                 lambda rows, c: len(rows) == 4 and ("personal", 2, 453) in rows),
+                ("700 customers in all",
+                 lambda rows, c: sum(r[2] for r in rows) == 700)],
     ),
     dict(
-        id=8, ledger="Q1274", concept="DST", tier="3 - Customers and money",
-        title="What it takes to be a top-ten-per-cent sender",
+        id=8, ledger="Q1289", concept="TYP", tier="3 - Text, types and lists",
+        title="What the postcode area column actually holds",
         prompt=(
-            "For each kind of customer: the senders, the postage total"
-            " that puts a customer in the top ten per cent of that"
-            " kind's senders, and the kind's maximum. A CTE of postage"
-            " per customer, CUME_DIST over it partitioned by kind in"
-            " ascending order, then the smallest total whose CUME_DIST"
-            " is at least 0.9 -- MIN with a FILTER -- and MAX.\n\n"
-            "Return: kind, senders, top_decile_cents, max_cents"
+            "For each kind of customer: the storage types found in"
+            " postcode_area and how many customers have each. typeof()"
+            " names a value's type, and NULL is one of them.\n\n"
+            "Return: kind, storage_type, customers"
         ),
-        solution=("WITH s AS (SELECT c.kind, c.customer_id, SUM(p.postage_cents) AS spent FROM parcels p JOIN customers c ON c.customer_id = p.customer_id GROUP BY c.customer_id),"
-                  " d AS (SELECT kind, spent, CUME_DIST() OVER (PARTITION BY kind ORDER BY spent) AS cd FROM s)"
-                  " SELECT kind, COUNT(*), MIN(spent) FILTER (WHERE cd >= 0.9), MAX(spent) FROM d GROUP BY kind"),
-        trap_sql=("WITH s AS (SELECT c.kind, c.customer_id, SUM(p.postage_cents) AS spent FROM parcels p JOIN customers c ON c.customer_id = p.customer_id GROUP BY c.customer_id),"
-                  " d AS (SELECT kind, spent, CUME_DIST() OVER (PARTITION BY kind ORDER BY spent DESC) AS cd FROM s)"
-                  " SELECT kind, COUNT(*), MIN(spent) FILTER (WHERE cd >= 0.9), MAX(spent) FROM d GROUP BY kind"),
-        note="CUME_DIST is the share of the partition at or below the"
-             " row in the window's order, so ascending puts the big"
-             " spenders at 0.9 and above. Ordered descending, the trap,"
-             " 0.9 is reached by the SMALLEST spenders and the threshold"
-             " collapses to a few dollars. A business needs about 1,876"
-             " dollars of postage to be in its top tenth; a person about"
-             " 183.",
-        claims=[("two kinds, 225 business senders",
-                 lambda rows, c: len(rows) == 2 and ("business", 225, 187570, 230910) in rows),
-                ("the threshold below the maximum on both",
-                 lambda rows, c: all(r[2] < r[3] for r in rows))],
+        solution="SELECT kind, typeof(postcode_area), COUNT(*) FROM customers GROUP BY kind, typeof(postcode_area)",
+        trap_sql="SELECT kind, typeof(postcode_area), COUNT(postcode_area) FROM customers GROUP BY kind, typeof(postcode_area)",
+        note="SQLite stores each VALUE with its own type -- integer,"
+             " real, text, blob or null -- whatever the column was"
+             " declared as, and typeof() reports it; grouping on it"
+             " shows at a glance how much of a column is missing."
+             " COUNT(postcode_area) skips NULLs, so the trap reports"
+             " zero customers of type null. One customer in ten has no"
+             " area recorded, businesses and people alike.",
+        claims=[("four rows, 31 businesses with no area",
+                 lambda rows, c: len(rows) == 4 and ("business", "null", 31) in rows),
+                ("73 NULLs in all",
+                 lambda rows, c: sum(r[2] for r in rows if r[1] == "null") == 73)],
     ),
     dict(
-        id=9, ledger="Q1275", concept="FMT", tier="3 - Customers and money",
-        title="Invoiced money, printed as money",
+        id=9, ledger="Q1290", concept="JSE", tier="3 - Text, types and lists",
+        title="Parcels bound for the depots on a list",
         prompt=(
-            "For every depot, of the customer's home: the invoice money"
-            " issued, as TEXT the way an accountant writes it -- a"
-            " dollar sign, thousands separated by commas, two decimals:"
-            " '$8,574.70'. printf has a flag for the separator.\n\n"
-            "Return: name, invoiced"
+            "A caller hands you depot ids as a JSON array, '[3, 6, 10,"
+            " 42]'. For each depot on the list that exists: its name and"
+            " how many parcels were addressed to it. json_each() turns"
+            " the array into rows you can join on.\n\n"
+            "Return: name, parcels"
         ),
-        solution=("SELECT d.name, printf('$%,.2f', SUM(i.amount_cents) / 100.0)"
-                  " FROM invoices i JOIN customers c ON c.customer_id = i.customer_id JOIN depots d ON d.depot_id = c.depot_id GROUP BY d.name"),
-        trap_sql=("SELECT d.name, printf('$%.2f', SUM(i.amount_cents) / 100.0)"
-                  " FROM invoices i JOIN customers c ON c.customer_id = i.customer_id JOIN depots d ON d.depot_id = c.depot_id GROUP BY d.name"),
-        note="printf('%,.2f') is a floating-point conversion with the"
-             " comma flag, which groups the thousands; without the flag,"
-             " the trap, the number is right but reads '$8574.70'. The"
-             " division by 100.0 has to be real, or the cents are lost"
-             " before printf sees them. Formatting belongs at the edge:"
-             " the sums stay as cents everywhere else.",
-        claims=[("ten depots, Central Hub at $8,574.70",
-                 lambda rows, c: len(rows) == 10 and ("Central Hub", "$8,574.70") in rows),
-                ("every value starts with a dollar sign and has a comma",
-                 lambda rows, c: all(r[1].startswith("$") and "," in r[1] for r in rows))],
+        solution=("SELECT d.name, COUNT(p.parcel_id) FROM json_each('[3, 6, 10, 42]') j"
+                  " JOIN depots d ON d.depot_id = j.value"
+                  " LEFT JOIN parcels p ON p.dest_depot_id = d.depot_id GROUP BY d.name"),
+        trap_sql=("SELECT d.name, COUNT(p.parcel_id) FROM depots d"
+                  " LEFT JOIN parcels p ON p.dest_depot_id = d.depot_id"
+                  " WHERE d.depot_id IN ('[3, 6, 10, 42]') GROUP BY d.name"),
+        note="json_each is a table-valued function: given JSON text it"
+             " returns one row per element, in a column called value,"
+             " and FROM can read it like a table. That is how a list"
+             " arrives from an application without building SQL text."
+             " IN ('[3, 6, 10, 42]'), the trap, compares each id with"
+             " one string and matches nothing. Depot 42 does not exist"
+             " and the inner join drops it.",
+        claims=[("three depots, Northgate with 2357",
+                 lambda rows, c: len(rows) == 3 and ("Northgate", 2357) in rows),
+                ("depot 42 not among them",
+                 lambda rows, c: {r[0] for r in rows} == {"Northgate", "Harbour Point", "Hillcrest"})],
     ),
-    # ==================================================== 4 Weights and days
+    # ==================================================== 4 Flags and totals
     dict(
-        id=10, ledger="Q1276", concept="MED", tier="4 - Weights and days",
-        title="The middle parcel of each service",
+        id=10, ledger="Q1291", concept="HAV", tier="4 - Flags and totals",
+        title="Depots busier than the average depot",
         prompt=(
-            "For each service: the MEDIAN weight in grams. No MEDIAN"
-            " function: number each service's parcels by weight with"
-            " ROW_NUMBER and count them with COUNT(*) OVER, both"
-            " partitioned by service, in a CTE; keep the rows numbered"
-            " (n + 1) / 2 and (n + 2) / 2 -- one row when n is odd, the"
-            " two middle rows when it is even -- and AVG them.\n\n"
-            "Return: service, median_g"
+            "The depots where more parcels have been collected than at"
+            " the AVERAGE depot, with their count. The average is an"
+            " aggregate of an aggregate -- the mean of the per-depot"
+            " counts, the closed depot included -- compared with in"
+            " HAVING.\n\n"
+            "Return: name, parcels"
         ),
-        solution=("WITH r AS (SELECT service, weight_g, ROW_NUMBER() OVER (PARTITION BY service ORDER BY weight_g) AS rn,"
-                  " COUNT(*) OVER (PARTITION BY service) AS n FROM parcels)"
-                  " SELECT service, AVG(weight_g) FROM r WHERE rn IN ((n + 1) / 2, (n + 2) / 2) GROUP BY service"),
-        trap_sql="SELECT service, AVG(weight_g) FROM parcels GROUP BY service",
-        note="The mean is pulled up by the heavy tail: economy's mean is"
-             " 2,243 grams but its median 1,532, so half of all economy"
-             " parcels weigh under a kilo and a half. (n + 1) / 2 and"
-             " (n + 2) / 2 are integer divisions, which is what lands them"
-             " on the middle row for odd n and the two middle rows for"
-             " even n. The three services weigh much the same; people"
-             " choose speed, not size.",
-        claims=[("three services, economy's median 1532",
-                 lambda rows, c: len(rows) == 3 and ("economy", 1532.0) in rows),
-                ("every median below its mean",
-                 lambda rows, c: all(r[1] < c.execute("SELECT AVG(weight_g) FROM parcels WHERE service = ?", (r[0],)).fetchone()[0] for r in rows))],
-    ),
-    dict(
-        id=11, ledger="Q1277", concept="WKND", tier="4 - Weights and days",
-        title="Weekend deliveries, by vehicle",
-        prompt=(
-            "For each vehicle type: its deliveries, how many were made"
-            " on a Saturday or Sunday, and that as a percentage to one"
-            " decimal. The day of the week comes from strftime on the"
-            " DELIVERY timestamp, '0' for Sunday to '6' for Saturday;"
-            " the average of a true-or-false test is a share.\n\n"
-            "Return: vehicle, deliveries, weekend, weekend_pct"
-        ),
-        solution=("SELECT c.vehicle, COUNT(*), SUM(strftime('%w', p.delivered_at) IN ('0', '6')),"
-                  " ROUND(100.0 * AVG(strftime('%w', p.delivered_at) IN ('0', '6')), 1)"
-                  " FROM parcels p JOIN couriers c ON c.courier_id = p.courier_id GROUP BY c.vehicle"),
-        trap_sql=("SELECT c.vehicle, COUNT(*), SUM(strftime('%w', p.collected_at) IN ('0', '6')),"
-                  " ROUND(100.0 * AVG(strftime('%w', p.collected_at) IN ('0', '6')), 1)"
-                  " FROM parcels p JOIN couriers c ON c.courier_id = p.courier_id GROUP BY c.vehicle"),
-        note="%w gives the weekday as a text digit, Sunday first, so the"
-             " weekend is IN ('0', '6') -- quoted, because it is text."
-             " The trap asks the question of the COLLECTION date, which"
-             " is the customer's weekend, not the courier's. Two days in"
-             " seven is 28.6 per cent, and deliveries land within a point"
-             " of it: the depots work seven days.",
-        claims=[("three vehicles, each between 27 and 30 per cent",
-                 lambda rows, c: len(rows) == 3 and all(27 <= r[3] <= 30 for r in rows)),
-                ("23729 deliveries in all",
-                 lambda rows, c: sum(r[1] for r in rows) == 23729)],
+        solution=("SELECT d.name, COUNT(*) FROM parcels p JOIN depots d ON d.depot_id = p.origin_depot_id"
+                  " GROUP BY d.name HAVING COUNT(*) > (SELECT AVG(n) FROM (SELECT COUNT(*) AS n FROM parcels GROUP BY origin_depot_id))"),
+        trap_sql=("SELECT d.name, COUNT(*) FROM parcels p JOIN depots d ON d.depot_id = p.origin_depot_id"
+                  " GROUP BY d.name HAVING COUNT(*) > (SELECT COUNT(*) FROM parcels) / (SELECT COUNT(*) FROM depots WHERE closed_on IS NULL)"),
+        note="HAVING can compare a group's aggregate with a scalar"
+             " subquery, and that subquery can itself average a grouped"
+             " result: 24,000 parcels over ten depots is 2,400. The trap"
+             " divides by the nine OPEN depots, but Old Foundry's parcels"
+             " are in the total, so its bar is 2,666 and Westway, at"
+             " 2,621, drops off the list. Four depots are above average.",
+        claims=[("four depots, Westway among them",
+                 lambda rows, c: len(rows) == 4 and any(r[0] == "Westway" for r in rows)),
+                ("every count above 2400",
+                 lambda rows, c: all(r[1] > 2400 for r in rows))],
     ),
     dict(
-        id=12, ledger="Q1278", concept="RATE", tier="4 - Weights and days",
-        title="The couriers whose attempts most often succeed",
+        id=11, ledger="Q1292", concept="EXS", tier="4 - Flags and totals",
+        title="Which depots can take a lorry load",
         prompt=(
-            "The five couriers with the LOWEST failure rate: name,"
-            " vehicle, attempts ('out_for_delivery' scans), failures"
-            " ('failed' scans), and the failures as a percentage of the"
-            " attempts to one decimal. Two conditional sums per courier,"
-            " a ratio of them, ORDER BY the rate then courier_id, LIMIT"
-            " 5.\n\n"
-            "Return: name, vehicle, attempts, failures, fail_pct"
+            "For every depot: a 1 or 0 saying whether it has a lorry"
+            " driver still working there, and how many. EXISTS is an"
+            " expression, so it can sit in the SELECT list as a column;"
+            " a scalar subquery gives the count.\n\n"
+            "Return: name, has_lorry, lorry_drivers"
         ),
-        solution=("SELECT c.name, c.vehicle, SUM(s.status = 'out_for_delivery'), SUM(s.status = 'failed'),"
-                  " ROUND(100.0 * SUM(s.status = 'failed') / SUM(s.status = 'out_for_delivery'), 1)"
-                  " FROM scans s JOIN couriers c ON c.courier_id = s.courier_id GROUP BY c.courier_id"
-                  " ORDER BY ROUND(100.0 * SUM(s.status = 'failed') / SUM(s.status = 'out_for_delivery'), 1), c.courier_id LIMIT 5"),
-        trap_sql=("SELECT c.name, c.vehicle, SUM(s.status = 'out_for_delivery'), SUM(s.status = 'failed'),"
-                  " ROUND(100.0 * SUM(s.status = 'failed') / SUM(s.status = 'delivered'), 1)"
-                  " FROM scans s JOIN couriers c ON c.courier_id = s.courier_id GROUP BY c.courier_id"
-                  " ORDER BY ROUND(100.0 * SUM(s.status = 'failed') / SUM(s.status = 'delivered'), 1), c.courier_id LIMIT 5"),
-        note="A rate needs the right denominator: failures over ATTEMPTS"
-             " is the share of attempts that failed, which is what the"
-             " question asks. Failures over deliveries, the trap, is a"
-             " different ratio -- bigger, since a courier has fewer"
-             " deliveries than attempts -- and it reorders the list. Two"
-             " conditional sums from one scan of the scans table give"
-             " both counts at once. Every courier fails about one"
-             " attempt in ten; the best fail one in eleven or twelve.",
-        claims=[("five couriers, Kwame Tremblay first at 8.7",
-                 lambda rows, c: len(rows) == 5 and ("Kwame Tremblay", "van", 173, 15, 8.7) in rows),
-                ("every rate under 10.1 per cent",
-                 lambda rows, c: all(r[4] <= 10.0 for r in rows))],
+        solution=("SELECT d.name,"
+                  " EXISTS (SELECT 1 FROM couriers c WHERE c.depot_id = d.depot_id AND c.vehicle = 'lorry' AND c.left_on IS NULL),"
+                  " (SELECT COUNT(*) FROM couriers c WHERE c.depot_id = d.depot_id AND c.vehicle = 'lorry' AND c.left_on IS NULL)"
+                  " FROM depots d"),
+        trap_sql=("SELECT d.name, COUNT(*) > 0, COUNT(*)"
+                  " FROM depots d LEFT JOIN couriers c ON c.depot_id = d.depot_id AND c.vehicle = 'lorry' AND c.left_on IS NULL"
+                  " GROUP BY d.name"),
+        note="EXISTS returns 1 or 0 and can be used wherever an"
+             " expression can: as a flag column it answers 'is there"
+             " any?' without a join. The trap's LEFT JOIN keeps a row for"
+             " every depot even when nothing matched, and COUNT(*) counts"
+             " that row, so every depot shows 1 and one driver. Five"
+             " depots have no lorry driver, Central Hub among them.",
+        claims=[("ten depots, five with a lorry driver",
+                 lambda rows, c: len(rows) == 10 and sum(r[1] for r in rows) == 5),
+                ("the flag agrees with the count",
+                 lambda rows, c: all((r[1] == 1) == (r[2] > 0) for r in rows))],
+    ),
+    dict(
+        id=12, ledger="Q1293", concept="TTL", tier="4 - Flags and totals",
+        title="June's postage at every depot, zero included",
+        prompt=(
+            "For every depot, the closed one included: the postage of"
+            " the parcels collected there in June 2026, in dollars. A"
+            " LEFT JOIN from depots with the June condition in ON, and"
+            " TOTAL rather than SUM: SUM of no rows is NULL, TOTAL of no"
+            " rows is 0.0.\n\n"
+            "Return: name, june_postage"
+        ),
+        solution=("SELECT d.name, TOTAL(p.postage_cents) / 100.0 FROM depots d"
+                  " LEFT JOIN parcels p ON p.origin_depot_id = d.depot_id AND p.collected_at >= '2026-06-01' GROUP BY d.name"),
+        trap_sql=("SELECT d.name, SUM(p.postage_cents) / 100.0 FROM depots d"
+                  " LEFT JOIN parcels p ON p.origin_depot_id = d.depot_id AND p.collected_at >= '2026-06-01' GROUP BY d.name"),
+        note="TOTAL is SQLite's SUM that always returns a real number:"
+             " 0.0 for an empty group, where SUM returns NULL. Old"
+             " Foundry closed in February and collected nothing in June,"
+             " so the LEFT JOIN keeps its row with nothing attached and"
+             " the trap's SUM leaves a blank where a report should read"
+             " zero. The June condition has to be in ON: in WHERE, Old"
+             " Foundry's row would be gone before TOTAL saw it.",
+        claims=[("ten depots, Old Foundry at zero",
+                 lambda rows, c: len(rows) == 10 and ("Old Foundry", 0.0) in rows),
+                ("Central Hub took the most",
+                 lambda rows, c: max(rows, key=lambda r: r[1])[0] == "Central Hub")],
     ),
     # =================================================== 5 Changing the data
     dict(
-        id=13, ledger="Q1279", concept="UPDFROM", tier="5 - Changing the data",
+        id=13, ledger="Q1294", concept="UNQ", tier="5 - Changing the data",
         kind="script",
-        title="A closed depot's customers move to the hub",
+        title="One delivery scan per parcel, enforced",
         prompt=(
-            "Every customer whose home depot has closed should now"
-            " belong to Central Hub, depot 1. ONE UPDATE of customers"
-            " that joins depots into it -- UPDATE ... FROM -- so that"
-            " the test on closed_on can be written against the depot"
-            " row rather than a subquery.\n\n"
-            "Checked: how many customers belong to depot 1, how many to"
-            " depot 2, and how many there are"
+            "A parcel may have many scans but only ONE with status"
+            " 'delivered'. Create a UNIQUE index on scans that enforces"
+            " exactly that and nothing more -- a partial index, with a"
+            " WHERE of its own. The question then inserts a second"
+            " 'delivered' scan for parcel 1, a first one for parcel 40,"
+            " and a 'failed' scan for parcel 1.\n\n"
+            "Checked: how many scans dated July got in, and how many of"
+            " them are deliveries"
         ),
-        solution=("UPDATE customers SET depot_id = 1 FROM depots d"
-                  " WHERE customers.depot_id = d.depot_id AND d.closed_on IS NOT NULL;"),
-        trap_sql=("UPDATE customers SET depot_id = 1 FROM depots d"
-                  " WHERE customers.depot_id = d.depot_id;"),
-        probe_sql="SELECT SUM(depot_id = 1), SUM(depot_id = 2), COUNT(*) FROM customers",
-        note="UPDATE ... FROM (SQLite 3.33 and later) is a join inside an"
-             " UPDATE: the FROM table's columns are available in WHERE and"
-             " in SET. The trap joins the depots and forgets to ask"
-             " whether they are closed, so every customer in the city"
-             " moves to the hub. Old Foundry's 53 customers join Central"
-             " Hub's 73; the depot itself stays in the table, with its"
-             " history.",
-        claims=[("126 customers at the hub, none left at Old Foundry",
-                 lambda rows, c: rows == [(126, 0, 700)])],
+        solution="CREATE UNIQUE INDEX one_delivery ON scans(parcel_id) WHERE status = 'delivered';",
+        trap_sql="CREATE INDEX one_delivery ON scans(parcel_id) WHERE status = 'delivered';",
+        driver_sql=("INSERT INTO scans (parcel_id, depot_id, courier_id, scanned_at, status) VALUES (1, 1, 1, '2026-07-01 10:00', 'delivered');\n"
+                    "INSERT INTO scans (parcel_id, depot_id, courier_id, scanned_at, status) VALUES (40, 5, 7, '2026-07-01 10:00', 'delivered');\n"
+                    "INSERT INTO scans (parcel_id, depot_id, courier_id, scanned_at, status) VALUES (1, 1, 1, '2026-07-01 11:00', 'failed');"),
+        probe_sql="SELECT COUNT(*), SUM(status = 'delivered') FROM scans WHERE scanned_at >= '2026-07-01'",
+        note="A UNIQUE index is a constraint, and a WHERE on the index"
+             " makes it partial: only the rows that match are indexed,"
+             " so only they must be unique. Without the WHERE the index"
+             " could not even be created -- every parcel has several"
+             " scans -- and without UNIQUE, the trap, it speeds up"
+             " lookups and refuses nothing. The refusal is reported in"
+             " the status bar, not treated as an error.",
+        claims=[("two scans in, one of them a delivery",
+                 lambda rows, c: rows == [(2, 1)])],
     ),
     dict(
-        id=14, ledger="Q1280", concept="UPDTRG", tier="5 - Changing the data",
+        id=14, ledger="Q1295", concept="UPC", tier="5 - Changing the data",
         kind="script",
-        title="Marking a parcel delivered writes its last scan",
+        title="More loading bays, more in the centre",
         prompt=(
-            "When a parcel's delivered_at is set -- changed from NULL to"
-            " a time -- a 'delivered' scan should appear in its trail:"
-            " at the destination depot, by the parcel's courier, at"
-            " that time. Write an AFTER UPDATE trigger on parcels that"
-            " fires only for that column and only for that change (a"
-            " WHEN clause with OLD and NEW). The question then marks"
-            " parcel 40 delivered and changes parcel 41's postage.\n\n"
-            "Checked: parcel 40's delivered scans, any scan for parcel"
-            " 41 dated July, and the total number of scans"
+            "Every depot still open gets more loading bays: ten more in"
+            " the central region, four more elsewhere. ONE UPDATE whose"
+            " SET adds a CASE on region, with a WHERE that leaves the"
+            " closed depot alone.\n\n"
+            "Checked: each region's bays added up"
         ),
-        solution=("CREATE TRIGGER scan_on_delivery AFTER UPDATE OF delivered_at ON parcels\n"
-                  "WHEN NEW.delivered_at IS NOT NULL AND OLD.delivered_at IS NULL\n"
-                  "BEGIN\n"
-                  "  INSERT INTO scans (parcel_id, depot_id, courier_id, scanned_at, status)\n"
-                  "  VALUES (NEW.parcel_id, NEW.dest_depot_id, NEW.courier_id, NEW.delivered_at, 'delivered');\n"
-                  "END;"),
-        trap_sql=("CREATE TRIGGER scan_on_delivery AFTER UPDATE ON parcels\n"
-                  "BEGIN\n"
-                  "  INSERT INTO scans (parcel_id, depot_id, courier_id, scanned_at, status)\n"
-                  "  VALUES (NEW.parcel_id, NEW.dest_depot_id, NEW.courier_id, COALESCE(NEW.delivered_at, '2026-07-01 00:00'), 'delivered');\n"
-                  "END;"),
-        driver_sql=("UPDATE parcels SET delivered_at = '2026-07-01 10:00', courier_id = 7 WHERE parcel_id = 40;\n"
-                    "UPDATE parcels SET postage_cents = postage_cents + 100 WHERE parcel_id = 41;"),
-        probe_sql=("SELECT (SELECT COUNT(*) FROM scans WHERE parcel_id = 40 AND status = 'delivered'),"
-                   " (SELECT COUNT(*) FROM scans WHERE parcel_id = 41 AND scanned_at >= '2026-07-01'),"
-                   " (SELECT COUNT(*) FROM scans)"),
-        note="AFTER UPDATE OF column narrows a trigger to changes of one"
-             " column, and the WHEN clause narrows it further: OLD and"
-             " NEW are the row before and after, so 'NULL became a time'"
-             " is a condition the trigger can test. The trap fires on"
-             " every update of any column and writes a bogus delivered"
-             " scan when parcel 41's postage changes. This is the mirror"
-             " of the first set's trigger, which went from scan to"
-             " parcel.",
-        claims=[("one scan for 40, none for 41",
-                 lambda rows, c: rows == [(1, 0, 112379)])],
+        solution="UPDATE depots SET bays = bays + CASE region WHEN 'central' THEN 10 ELSE 4 END WHERE closed_on IS NULL;",
+        trap_sql="UPDATE depots SET bays = bays + CASE region WHEN 'central' THEN 10 ELSE 4 END;",
+        probe_sql="SELECT region, SUM(bays) FROM depots GROUP BY region",
+        note="A SET expression can read the row's other columns, and a"
+             " CASE inside it makes one statement do what would otherwise"
+             " be two UPDATEs with different WHEREs. The ELSE matters:"
+             " without it a depot in no listed region would get NULL,"
+             " and bays is NOT NULL. The trap forgets the WHERE and gives"
+             " Old Foundry, closed since February, ten bays it will"
+             " never use.",
+        claims=[("the centre up ten, the other regions up eight",
+                 lambda rows, c: sorted(rows) == [("central", 70), ("east", 52), ("north", 48), ("south", 46), ("west", 44)])],
     ),
     dict(
-        id=15, ledger="Q1281", concept="INSSEL", tier="5 - Changing the data",
+        id=15, ledger="Q1296", concept="AUD", tier="5 - Changing the data",
         kind="script",
-        title="Billing June",
+        title="A record of every invoice written off",
         prompt=(
-            "Issue June 2026's invoices: one per BUSINESS customer who"
-            " sent a parcel in June, for the period '2026-06', issued"
-            " on 2026-07-01, for the sum of their June postage. ONE"
-            " INSERT whose rows come from a SELECT with a GROUP BY.\n\n"
-            "Checked: how many June invoices there are, their amounts"
-            " added up, and the earliest issue date"
+            "No invoice should vanish without a trace. Create a table"
+            " written_off with invoice_id as its primary key, customer_id"
+            " and amount_cents, all required; then an AFTER DELETE"
+            " trigger on invoices that copies the removed row's three"
+            " values into it. The question then deletes every unpaid"
+            " invoice issued before July 2025.\n\n"
+            "Checked: how many rows the log has, the cents added up, and"
+            " its lowest invoice_id"
         ),
-        solution=("INSERT INTO invoices (customer_id, period, amount_cents, issued_on)"
-                  " SELECT c.customer_id, '2026-06', SUM(p.postage_cents), '2026-07-01'"
-                  " FROM parcels p JOIN customers c ON c.customer_id = p.customer_id"
-                  " WHERE c.kind = 'business' AND p.collected_at >= '2026-06-01' GROUP BY c.customer_id;"),
-        trap_sql=("INSERT INTO invoices (customer_id, period, amount_cents, issued_on)"
-                  " SELECT c.customer_id, '2026-06', SUM(p.postage_cents), '2026-07-01'"
-                  " FROM parcels p JOIN customers c ON c.customer_id = p.customer_id"
-                  " WHERE p.collected_at >= '2026-06-01' GROUP BY c.customer_id;"),
-        probe_sql="SELECT COUNT(*), SUM(amount_cents), MIN(issued_on) FROM invoices WHERE period = '2026-06'",
-        note="INSERT ... SELECT writes one row per row the SELECT"
-             " returns, and a GROUP BY makes that one per customer with"
-             " the month's postage summed; literals supply the columns"
-             " that are the same on every row. The trap bills everyone"
-             " who sent in June, 424 customers, when only businesses are"
-             " invoiced -- people pay at the counter. The UNIQUE"
-             " (customer_id, period) constraint would refuse a second"
-             " run.",
-        claims=[("163 invoices for 458,560 cents",
-                 lambda rows, c: rows == [(163, 458560, "2026-07-01")])],
+        solution=("CREATE TABLE written_off (\n"
+                  "  invoice_id   INTEGER PRIMARY KEY,\n"
+                  "  customer_id  INTEGER NOT NULL,\n"
+                  "  amount_cents INTEGER NOT NULL\n"
+                  ");\n"
+                  "CREATE TRIGGER log_write_off AFTER DELETE ON invoices\n"
+                  "BEGIN\n"
+                  "  INSERT INTO written_off (invoice_id, customer_id, amount_cents)\n"
+                  "  VALUES (OLD.invoice_id, OLD.customer_id, OLD.amount_cents);\n"
+                  "END;"),
+        trap_sql=("CREATE TABLE written_off (\n"
+                  "  invoice_id   INTEGER PRIMARY KEY,\n"
+                  "  customer_id  INTEGER NOT NULL,\n"
+                  "  amount_cents INTEGER NOT NULL\n"
+                  ");"),
+        driver_sql="DELETE FROM invoices WHERE paid_on IS NULL AND issued_on < '2025-07-01';",
+        probe_sql="SELECT COUNT(*), SUM(amount_cents), MIN(invoice_id) FROM written_off",
+        note="In a DELETE trigger, OLD is the row being removed, and an"
+             " AFTER trigger fires once per row, so a single DELETE that"
+             " takes out 84 invoices logs all 84. The trap builds the"
+             " log table and never writes to it. This is the audit-table"
+             " pattern: the application deletes as it always did, and"
+             " the database keeps the history on its own.",
+        claims=[("84 invoices logged, 280,410 cents",
+                 lambda rows, c: rows == [(84, 280410, 3)])],
     ),
 ]
 
