@@ -1,14 +1,14 @@
 """Python practice exercises: fifteen everyday functions over plain values.
 
-The thirty-seventh Python set, at the easy level of the last seven -- no
+The thirty-eighth Python set, at the easy level of the last eight -- no
 statistics, no dicts -- in the courier's terms, on tasks the earlier sets
-did not cover. Counting and finding: times inside a window, a code found
-by its number with a fallback, whether most of a batch was delivered, how
-many codes two lists share, the numbers in a batch added up. Labels: a
-change with its sign, the minutes between two clock times, a weight range,
-a price-list line with dots, a date the British way round. Checks and
-filters: repeats dropped whatever their case, a flat list paired up, a
-code moved to the front, weights strictly rising, a trail padded out.
+did not cover. Finding and counting: the longest word on a label, how
+often a status changed, the code seen most, the lowest free bay, how many
+positions of two lists agree. Labels and text: a line cut to fit, 1st 2nd
+3rd, a numbered list of steps, a depot's initials, the letters of a
+postcode. Working with lists: two loads interleaved, a code swapped for
+another throughout, who is next on the rota, names sorted whatever their
+case, whether two vans carry the same load.
 
 Every question is a `kind="function"`: the editor defines a function named
 `func`. Run calls it once per case in `cases` and shows each call and its
@@ -26,389 +26,425 @@ The code runs in a separate interpreter with a time limit (see pyrun.py).
 import pyrun
 
 EXERCISES = [
-    # ================================================= 1 Counting and finding
+    # ================================================== 1 Finding and counting
     dict(
-        id=1, ledger="P551", concept="PY3 count in a half-open window", tier="1 - Counting and finding",
-        title="Scans inside a time window", kind="function",
-        func="in_window",
-        cases=[(["08:05", "09:00", "09:59", "10:00", "11:30"], "09:00", "10:00"), (["08:00"], "08:00", "08:00"), ([], "09:00", "10:00"), (["23:59", "00:00"], "00:00", "12:00")],
+        id=1, ledger="P566", concept="PY3 max with a key", tier="1 - Finding and counting",
+        title="The longest word on the label", kind="function",
+        func="longest_word",
+        cases=[("Yilmaz Garden Supplies Ltd",), ("Old Foundry",), ("Hub",), ("",), ("to be or not",)],
         prompt=(
-            "Scan times are 'HH:MM' strings. Write a function"
-            " `in_window(times, start, end)` that returns how many fall"
-            " in the window that includes its start and EXCLUDES its"
-            " end. Zero-padded clock text compares correctly, so a"
-            " chained comparison inside sum() does it.\n\n"
-            "  in_window([\"08:05\", \"09:00\", \"09:59\", \"10:00\", \"11:30\"], \"09:00\", \"10:00\") -> 2\n\n"
-            "Return: an int."
+            "Write a function `longest_word(label)` that returns the"
+            " longest word in a label, the words being whatever split()"
+            " gives. If several are equally long, the first of them; if"
+            " the label has no words, the empty string. max() takes a"
+            " key, and a default.\n\n"
+            "  longest_word(\"Yilmaz Garden Supplies Ltd\") -> \"Supplies\"\n\n"
+            "Return: a str."
         ),
-        solution=("def in_window(times, start, end):\n"
-                  "    return sum(start <= t < end for t in times)\n"),
-        trap=("def in_window(times, start, end):\n"
-              "    return sum(start <= t <= end for t in times)\n"),
-        note="A window that includes both ends counts a scan at exactly"
-             " 10:00 in the nine o'clock window AND in the ten o'clock"
-             " one; the trap double-books every boundary. Start"
-             " included, end excluded is the shape that lets windows sit"
-             " side by side. Python's chained comparison start <= t <"
-             " end reads like the maths, and the text compares in time"
-             " order because it is zero-padded.",
+        solution=("def longest_word(label):\n"
+                  "    return max(label.split(), key=len, default=\"\")\n"),
+        trap=("def longest_word(label):\n"
+              "    return max(label.split(), default=\"\")\n"),
+        note="max(words, key=len) compares the words by what len gives"
+             " and returns the word itself, not its length; on a tie it"
+             " keeps the first it met. Without the key, the trap, max"
+             " compares the strings themselves and returns the one that"
+             " is last in alphabetical order -- 'Yilmaz', which happens"
+             " to be long enough to look plausible. default= is what"
+             " max returns for an empty list instead of raising.",
     ),
     dict(
-        id=2, ledger="P552", concept="PY3 next with a default", tier="1 - Counting and finding",
-        title="The code with a given number", kind="function",
-        func="find_code",
-        cases=[(["MB-0012", "CH-0007", "WW-0100"], 7), (["MB-0012"], 99), ([], 1), (["A-5", "B-5"], 5)],
+        id=2, ledger="P567", concept="PY3 count changes with zip", tier="1 - Finding and counting",
+        title="How often the status changed", kind="function",
+        func="count_changes",
+        cases=[(["depot", "depot", "van", "van", "depot", "door"],), (["van"],), ([],), (["a", "b", "a", "b"],), (["x", "x", "x"],)],
         prompt=(
-            "Write a function `find_code(codes, n)` that returns the"
-            " first code whose number after the hyphen equals n, or None"
-            " if no code has that number. next() over a generator, with"
-            " a second argument for the nothing-found case.\n\n"
-            "  find_code([\"MB-0012\", \"CH-0007\", \"WW-0100\"], 7) -> \"CH-0007\"\n\n"
+            "Write a function `count_changes(statuses)` that returns"
+            " how many times an item differs from the one just before"
+            " it. zip the list with itself, one step along.\n\n"
+            "  count_changes([\"depot\", \"depot\", \"van\", \"van\", \"depot\", \"door\"]) -> 3\n\n"
+            "Return: an int."
+        ),
+        solution=("def count_changes(statuses):\n"
+                  "    return sum(a != b for a, b in zip(statuses, statuses[1:]))\n"),
+        trap=("def count_changes(statuses):\n"
+              "    return max(len(set(statuses)) - 1, 0)\n"),
+        note="zip(items, items[1:]) pairs every item with its"
+             " neighbour, and zip stops at the shorter list, so an empty"
+             " list or a single item gives no pairs and a count of 0"
+             " with no special case. Counting the different values and"
+             " subtracting one, the trap, misses a status that comes"
+             " back: depot, van, depot is two changes between two"
+             " values.",
+    ),
+    dict(
+        id=3, ledger="P568", concept="PY3 most common by count", tier="1 - Finding and counting",
+        title="The code scanned most often", kind="function",
+        func="most_scanned",
+        cases=[(["MB-2", "CH-7", "MB-2", "WW-1", "CH-7", "MB-2"],), (["WW-1", "CH-7", "CH-7", "WW-1"],), (["A-1"],), ([],), (["b", "a", "a", "c", "c", "c", "z"],)],
+        prompt=(
+            "Write a function `most_scanned(codes)` that returns the"
+            " code that appears most often in the list. On a tie, the"
+            " one that appears FIRST in the list; for an empty list,"
+            " None. max() again, with the list's own count method as"
+            " the key.\n\n"
+            "  most_scanned([\"MB-2\", \"CH-7\", \"MB-2\", \"WW-1\", \"CH-7\", \"MB-2\"]) -> \"MB-2\"\n\n"
             "Return: a str, or None."
         ),
-        solution=("def find_code(codes, n):\n"
-                  "    return next((c for c in codes if int(c.split(\"-\")[1]) == n), None)\n"),
-        trap=("def find_code(codes, n):\n"
-              "    return next(c for c in codes if int(c.split(\"-\")[1]) == n)\n"),
-        note="next() takes the first item a generator produces and stops"
-             " looking, which is 'the first match' in one call. With"
-             " nothing to produce it raises StopIteration -- the trap"
-             " crashes when the number is not there -- unless it is"
-             " given a default as its second argument. The generator"
-             " needs its own brackets when next() has two arguments.",
+        solution=("def most_scanned(codes):\n"
+                  "    return max(codes, key=codes.count, default=None)\n"),
+        trap=("def most_scanned(codes):\n"
+              "    return max(codes, default=None)\n"),
+        note="key=codes.count asks, for each code, how many times the"
+             " list holds it, and max returns the code with the biggest"
+             " answer -- the first such code, because max only replaces"
+             " its choice for something strictly bigger. That is what"
+             " makes the tie rule free. Going through set(codes) first"
+             " would be faster on a long list and would lose it, since"
+             " a set has no order. The trap returns the code that sorts"
+             " last, whatever its count.",
     ),
     dict(
-        id=3, ledger="P553", concept="PY3 strict majority", tier="1 - Counting and finding",
-        title="Was most of the batch delivered?", kind="function",
-        func="mostly_delivered",
-        cases=[(["delivered", "delivered", "failed"],), (["delivered", "failed"],), ([],), (["failed", "failed", "delivered"],)],
+        id=4, ledger="P569", concept="PY3 first number not in a list", tier="1 - Finding and counting",
+        title="The lowest free loading bay", kind="function",
+        func="first_free",
+        cases=[([1, 2, 4, 5],), ([2, 3],), ([],), ([1, 2, 3],), ([3, 1, 2, 7],)],
         prompt=(
-            "Write a function `mostly_delivered(statuses)` that returns"
-            " True when MORE than half of the statuses are 'delivered',"
-            " and False otherwise -- exactly half is not more than half,"
-            " and an empty batch is False. count(), doubled, against"
-            " the length.\n\n"
-            "  mostly_delivered([\"delivered\", \"delivered\", \"failed\"]) -> True\n\n"
-            "Return: True or False."
-        ),
-        solution=("def mostly_delivered(statuses):\n"
-                  "    return statuses.count(\"delivered\") * 2 > len(statuses)\n"),
-        trap=("def mostly_delivered(statuses):\n"
-              "    return statuses.count(\"delivered\") * 2 >= len(statuses)\n"),
-        note="'More than half' is a strict comparison: one delivered out"
-             " of two is half, not most, and the trap's >= calls it a"
-             " majority -- and calls an empty batch one too, since 0 >="
-             " 0. Doubling the count instead of halving the length keeps"
-             " everything in whole numbers.",
-    ),
-    dict(
-        id=4, ledger="P554", concept="PY3 size of an intersection", tier="1 - Counting and finding",
-        title="How many codes two vans share", kind="function",
-        func="shared",
-        cases=[(["MB-1", "MB-2", "MB-2", "CH-3"], ["MB-2", "CH-3", "WW-4"]), (["MB-1"], ["CH-3"]), ([], ["MB-1"]), (["A", "A"], ["A"])],
-        prompt=(
-            "Two vans' manifests are lists of parcel codes, and a code"
-            " may have been scanned twice. Write a function `shared("
-            "first, second)` that returns how many DIFFERENT codes"
-            " appear on both. Two sets, intersected, measured.\n\n"
-            "  shared([\"MB-1\", \"MB-2\", \"MB-2\", \"CH-3\"], [\"MB-2\", \"CH-3\", \"WW-4\"]) -> 2\n\n"
+            "Bays are numbered from 1. Write a function"
+            " `first_free(taken)` that returns the lowest bay number"
+            " that is not in the list. The list is in no particular"
+            " order. A while loop that counts up until `not in`.\n\n"
+            "  first_free([1, 2, 4, 5]) -> 3\n\n"
             "Return: an int."
         ),
-        solution=("def shared(first, second):\n"
-                  "    return len(set(first) & set(second))\n"),
-        trap=("def shared(first, second):\n"
-              "    return sum(1 for c in first if c in second)\n"),
-        note="Looping over the first list counts a code once for every"
-             " time it was scanned, so the trap says 3 for the example:"
-             " MB-2 twice and CH-3 once. Sets hold each code once, &"
-             " keeps what is in both, and len() counts the different"
-             " codes, which is what was asked.",
+        solution=("def first_free(taken):\n"
+                  "    n = 1\n"
+                  "    while n in taken:\n"
+                  "        n += 1\n"
+                  "    return n\n"),
+        trap=("def first_free(taken):\n"
+              "    return max(taken, default=0) + 1\n"),
+        note="A while loop is the right tool when you do not know how"
+             " far you will have to go: start at 1 and step past every"
+             " number that is taken. One past the highest, the trap, is"
+             " free but not the LOWEST free: it answers 6 for [1, 2, 4,"
+             " 5] and walks past the gap at 3. With every bay taken the"
+             " two agree, which is why a test list needs a hole in it.",
     ),
     dict(
-        id=5, ledger="P555", concept="PY3 sum of converted parts", tier="1 - Counting and finding",
-        title="The numbers in a batch, added up", kind="function",
-        func="number_total",
-        cases=[(["MB-0012", "CHB-0007", "WW-100"],), (["MB-0001"],), ([],), (["LONG-5", "X-5"],)],
+        id=5, ledger="P570", concept="PY3 count matching positions", tier="1 - Finding and counting",
+        title="How much of the manifest matches the van", kind="function",
+        func="matches",
+        cases=[(["A-1", "B-2", "C-3", "D-4"], ["A-1", "C-3", "B-2", "D-4"]), (["A-1"], ["A-1"]), ([], []), (["A-1", "B-2"], ["B-2", "A-1"]), (["A-1", "B-2", "C-3"], ["A-1", "B-2"])],
         prompt=(
-            "As a quick check on a batch, the numbers after the hyphens"
-            " are added up. Write a function `number_total(codes)` that"
-            " returns that sum. The depot code can be any length, so"
-            " split at the hyphen rather than slicing.\n\n"
-            "  number_total([\"MB-0012\", \"CHB-0007\", \"WW-100\"]) -> 119\n\n"
+            "Write a function `matches(manifest, loaded)` that returns"
+            " how many POSITIONS hold the same code in both lists:"
+            " first against first, second against second. If one list"
+            " is longer, its extra items match nothing.\n\n"
+            "  matches([\"A-1\", \"B-2\", \"C-3\", \"D-4\"], [\"A-1\", \"C-3\", \"B-2\", \"D-4\"]) -> 2\n\n"
             "Return: an int."
         ),
-        solution=("def number_total(codes):\n"
-                  "    return sum(int(c.split(\"-\")[1]) for c in codes)\n"),
-        trap=("def number_total(codes):\n"
-              "    return sum(int(c[3:]) for c in codes)\n"),
-        note="Slicing from position 3 assumes a two-letter depot and a"
-             " hyphen: 'CHB-0007' slices to '-0007', which int() reads as"
-             " MINUS seven, and 'LONG-5' slices to 'G-5' and crashes."
-             " split('-') finds the hyphen wherever it is. sum() of an"
-             " empty generator is 0.",
+        solution=("def matches(manifest, loaded):\n"
+                  "    return sum(a == b for a, b in zip(manifest, loaded))\n"),
+        trap=("def matches(manifest, loaded):\n"
+              "    return len(set(manifest) & set(loaded))\n"),
+        note="zip walks the two lists side by side, so a == b compares"
+             " the same position in each, and sum counts the Trues. The"
+             " trap counts the codes the two lists SHARE, wherever they"
+             " sit: 4 for the example, because every code is on the van"
+             " somewhere. Same position and same contents are different"
+             " questions; sets answer only the second.",
     ),
-    # ================================================================ 2 Labels
+    # ====================================================== 2 Labels and text
     dict(
-        id=6, ledger="P556", concept="PY3 signed percentage", tier="2 - Labels",
-        title="A change with its sign showing", kind="function",
-        func="change_label",
-        cases=[(1099, 1523), (200, 190), (50, 50), (0, 10)],
+        id=6, ledger="P571", concept="PY3 truncate with an ellipsis", tier="2 - Labels and text",
+        title="A line cut to fit the label", kind="function",
+        func="fit",
+        cases=[("Okonjo Garden Supplies & Sons", 16), ("Northgate", 16), ("Northgate", 9), ("Central Hub", 6), ("abcd", 3)],
         prompt=(
-            "Write a function `change_label(before, after)` that returns"
-            " the change as a whole-number percentage of before with its"
-            " sign: '+39%' for a rise, '-5%' for a fall, '0%' for no"
-            " change, and 'n/a' when before is 0. The format spec '+'"
-            " shows a plus on positive numbers.\n\n"
-            "  change_label(1099, 1523) -> \"+39%\"\n\n"
+            "Write a function `fit(text, width)` for a label `width`"
+            " characters wide. Text that fits is returned unchanged."
+            " Text that is too long is cut and ended with three dots,"
+            " so that the result is EXACTLY width characters, dots"
+            " included. width is always 3 or more.\n\n"
+            "  fit(\"Okonjo Garden Supplies & Sons\", 16) -> \"Okonjo Garden...\"\n\n"
             "Return: a str."
         ),
-        solution=("def change_label(before, after):\n"
-                  "    if before == 0:\n"
-                  "        return \"n/a\"\n"
-                  "    pct = round(100 * (after - before) / before)\n"
-                  "    if pct == 0:\n"
-                  "        return \"0%\"\n"
-                  "    return f\"{pct:+d}%\"\n"),
-        trap=("def change_label(before, after):\n"
-              "    if before == 0:\n"
-              "        return \"n/a\"\n"
-              "    pct = round(100 * (after - before) / before)\n"
-              "    return f\"{pct}%\"\n"),
-        note="A negative number prints its own minus, but a positive one"
-             " prints bare: the trap writes '39%', which reads as a level,"
-             " not a change. The format spec :+d puts a sign on both."
-             " Zero is its own case, because '+0%' is odd, and the guard"
-             " for before == 0 comes first so the division never sees"
-             " it.",
+        solution=("def fit(text, width):\n"
+                  "    if len(text) <= width:\n"
+                  "        return text\n"
+                  "    return text[:width - 3] + \"...\"\n"),
+        trap=("def fit(text, width):\n"
+              "    if len(text) <= width:\n"
+              "        return text\n"
+              "    return text[:width] + \"...\"\n"),
+        note="The dots take up room too, so the slice stops three"
+             " short: width - 3 characters of text and 3 of dots make"
+             " width. The trap cuts at width and then adds the dots, a"
+             " line three characters too long for the label it was"
+             " meant to fit. The <= matters as well: text of exactly"
+             " the width fits, and should not lose its last three"
+             " letters to dots.",
     ),
     dict(
-        id=7, ledger="P557", concept="PY3 minutes between clock times", tier="2 - Labels",
-        title="Minutes from one scan to the next", kind="function",
-        func="minutes_between",
-        cases=[("08:05", "09:20"), ("09:50", "10:10"), ("12:00", "12:00"), ("00:00", "23:59")],
+        id=7, ledger="P572", concept="PY4 ordinal suffix", tier="2 - Labels and text",
+        title="1st, 2nd, 3rd, 4th", kind="function",
+        func="ordinal",
+        cases=[(1,), (2,), (3,), (4,), (11,), (12,), (13,), (21,), (102,), (111,)],
         prompt=(
-            "Write a function `minutes_between(start, end)` that takes"
-            " two 'HH:MM' times on the same day, the second not before"
-            " the first, and returns the minutes between them. Turn each"
-            " into minutes since midnight -- hours times 60 plus"
-            " minutes -- and subtract.\n\n"
-            "  minutes_between(\"08:05\", \"09:20\") -> 75\n\n"
-            "Return: an int."
-        ),
-        solution=("def minutes_between(start, end):\n"
-                  "    def mins(t):\n"
-                  "        h, m = t.split(\":\")\n"
-                  "        return int(h) * 60 + int(m)\n"
-                  "    return mins(end) - mins(start)\n"),
-        trap=("def minutes_between(start, end):\n"
-              "    return (int(end[:2]) - int(start[:2])) * 60\n"),
-        note="Subtracting the hours alone, the trap, says an hour for"
-             " 08:05 to 09:20 and an hour for 09:50 to 10:10, which is"
-             " twenty minutes. Converting both times to minutes since"
-             " midnight first makes the subtraction honest whatever the"
-             " minutes are. A small helper function inside the function"
-             " saves writing the conversion twice.",
-    ),
-    dict(
-        id=8, ledger="P558", concept="PY3 range or single value", tier="2 - Labels",
-        title="A weight band as a label", kind="function",
-        func="band_label",
-        cases=[(2, 5), (3, 3), (0, 1), (10, 30)],
-        prompt=(
-            "Write a function `band_label(low, high)` that returns a"
-            " weight band in kilograms as '2-5 kg', or as just '3 kg'"
-            " when the two ends are the same. A conditional expression"
-            " between two f-strings.\n\n"
-            "  band_label(2, 5) -> \"2-5 kg\"\n\n"
+            "Write a function `ordinal(n)` that returns a positive"
+            " whole number with its ending: 1st, 2nd, 3rd, then th."
+            " The last digit decides -- 21st, 32nd, 103rd -- except"
+            " that anything ending in 11, 12 or 13 takes th.\n\n"
+            "  ordinal(22) -> \"22nd\"\n"
+            "  ordinal(12) -> \"12th\"\n\n"
             "Return: a str."
         ),
-        solution=("def band_label(low, high):\n"
-                  "    return f\"{low} kg\" if low == high else f\"{low}-{high} kg\"\n"),
-        trap=("def band_label(low, high):\n"
-              "    return f\"{low}-{high} kg\"\n"),
-        note="'3-3 kg' is a range with nothing in it, and the question"
-             " asks for the plain '3 kg' instead. The special case is one"
-             " comparison, and a conditional expression puts the two"
-             " labels side by side on a single line.",
+        solution=("def ordinal(n):\n"
+                  "    if n % 100 in (11, 12, 13):\n"
+                  "        return f\"{n}th\"\n"
+                  "    if n % 10 == 1:\n"
+                  "        return f\"{n}st\"\n"
+                  "    if n % 10 == 2:\n"
+                  "        return f\"{n}nd\"\n"
+                  "    if n % 10 == 3:\n"
+                  "        return f\"{n}rd\"\n"
+                  "    return f\"{n}th\"\n"),
+        trap=("def ordinal(n):\n"
+              "    if n % 10 == 1:\n"
+              "        return f\"{n}st\"\n"
+              "    if n % 10 == 2:\n"
+              "        return f\"{n}nd\"\n"
+              "    if n % 10 == 3:\n"
+              "        return f\"{n}rd\"\n"
+              "    return f\"{n}th\"\n"),
+        note="n % 10 is the last digit and n % 100 the last two. The"
+             " exception has to be tested FIRST: once a rule has"
+             " returned, the ones below it never run, so the order of"
+             " the ifs is the logic. The trap has no exception and"
+             " prints 11st, 12nd and 13rd -- and 111st, which is why"
+             " the test is on the last two digits and not on n itself.",
     ),
     dict(
-        id=9, ledger="P559", concept="PY3 dotted leader", tier="2 - Labels",
-        title="A line of the price list", kind="function",
-        func="price_line",
-        cases=[("Economy", 350, 12), ("Express", 1050, 12), ("Standard", 590, 8), ("A", 5, 3)],
+        id=8, ledger="P573", concept="PY3 enumerate from one", tier="2 - Labels and text",
+        title="The steps of a delivery, numbered", kind="function",
+        func="numbered",
+        cases=[(["Collect", "Sort", "Deliver"],), (["Scan"],), ([],), (["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],)],
         prompt=(
-            "Write a function `price_line(name, cents, width)` that"
-            " returns the name padded on the right with dots to the"
-            " width, then the price as '$3.50': 'Economy.....$3.50'."
-            " str.ljust() takes a fill character; the price is whole"
-            " dollars and two-digit cents.\n\n"
-            "  price_line(\"Economy\", 350, 12) -> \"Economy.....$3.50\"\n\n"
-            "Return: a str."
-        ),
-        solution=("def price_line(name, cents, width):\n"
-                  "    return name.ljust(width, \".\") + f\"${cents // 100}.{cents % 100:02d}\"\n"),
-        trap=("def price_line(name, cents, width):\n"
-              "    return name.ljust(width) + f\"${cents // 100}.{cents % 100:02d}\"\n"),
-        note="ljust(width) pads with spaces unless told otherwise, so the"
-             " trap's line has a gap where the dots should lead the eye"
-             " across. The second argument is the fill character. A name"
-             " already as long as the width gets no padding at all, and"
-             " the price follows straight on.",
-    ),
-    dict(
-        id=10, ledger="P560", concept="PY3 reorder a date", tier="2 - Labels",
-        title="A date the British way round", kind="function",
-        func="uk_date",
-        cases=[("2026-03-04",), ("2025-12-31",), ("2026-01-01",)],
-        prompt=(
-            "Write a function `uk_date(iso)` that turns 'YYYY-MM-DD'"
-            " into 'DD/MM/YYYY': the three parts in the opposite order,"
-            " joined by slashes. split(), reverse, join().\n\n"
-            "  uk_date(\"2026-03-04\") -> \"04/03/2026\"\n\n"
-            "Return: a str."
-        ),
-        solution=("def uk_date(iso):\n"
-                  "    return \"/\".join(reversed(iso.split(\"-\")))\n"),
-        trap=("def uk_date(iso):\n"
-              "    return iso.replace(\"-\", \"/\")\n"),
-        note="Swapping the separator changes the punctuation and not the"
-             " order: the trap returns '2026/03/04'. The parts have to be"
-             " split apart, reversed and joined again. reversed() gives"
-             " an iterator, which join() is happy to take; the parts stay"
-             " text, so their leading zeros survive.",
-    ),
-    # ==================================================== 3 Checks and filters
-    dict(
-        id=11, ledger="P561", concept="PY4 dedupe ignoring case", tier="3 - Checks and filters",
-        title="Repeats dropped, whatever their case", kind="function",
-        func="unique_codes",
-        cases=[(["MB-12", "mb-12", "CH-7", "Mb-12"],), (["a", "A"],), ([],), (["X-1", "Y-2"],)],
-        prompt=(
-            "A scanner reads the same code in different cases. Write a"
-            " function `unique_codes(codes)` that keeps the FIRST"
-            " spelling of each code and drops later ones that differ"
-            " only in case, order otherwise unchanged. A loop with a set"
-            " of the lower-cased codes seen so far.\n\n"
-            "  unique_codes([\"MB-12\", \"mb-12\", \"CH-7\", \"Mb-12\"]) -> [\"MB-12\", \"CH-7\"]\n\n"
+            "Write a function `numbered(steps)` that returns a new list"
+            " with each step's number in front of it, counting from 1,"
+            " then a full stop and a space. enumerate can be told where"
+            " to start.\n\n"
+            "  numbered([\"Collect\", \"Sort\", \"Deliver\"]) -> [\"1. Collect\", \"2. Sort\", \"3. Deliver\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def unique_codes(codes):\n"
-                  "    seen = set()\n"
+        solution=("def numbered(steps):\n"
+                  "    return [f\"{i}. {step}\" for i, step in enumerate(steps, 1)]\n"),
+        trap=("def numbered(steps):\n"
+              "    return [f\"{i}. {step}\" for i, step in enumerate(steps)]\n"),
+        note="enumerate hands out each item with a counter, and its"
+             " second argument is where the counter starts. Left out,"
+             " the trap, it starts at 0, because it is usually wanted"
+             " as an index -- and a list for people that begins '0."
+             " Collect' is the result. enumerate(steps, 1) is tidier"
+             " than writing i + 1 inside the f-string, and much tidier"
+             " than range(len(steps)).",
+    ),
+    dict(
+        id=9, ledger="P574", concept="PY3 initials of words", tier="2 - Labels and text",
+        title="A depot's initials", kind="function",
+        func="initials",
+        cases=[("Central Hub",), ("old foundry",), ("Harbour  Point",), ("Westway",), ("",), ("north gate depot",)],
+        prompt=(
+            "Write a function `initials(name)` that returns the first"
+            " letter of each word, joined together and in capitals,"
+            " whatever case the name was typed in. Extra spaces between"
+            " words do not matter.\n\n"
+            "  initials(\"Central Hub\") -> \"CH\"\n"
+            "  initials(\"old foundry\") -> \"OF\"\n\n"
+            "Return: a str."
+        ),
+        solution=("def initials(name):\n"
+                  "    return \"\".join(word[0] for word in name.split()).upper()\n"),
+        trap=("def initials(name):\n"
+              "    return \"\".join(word[0] for word in name.split())\n"),
+        note="split() with no argument breaks on any run of spaces and"
+             " never produces an empty word, so word[0] is always safe"
+             " -- split(' ') would give '' for a doubled space and"
+             " word[0] would raise. join glues the letters with nothing"
+             " between, and one upper() at the end covers them all. The"
+             " trap forgets it and returns 'of' for a name typed in"
+             " lower case.",
+    ),
+    dict(
+        id=10, ledger="P575", concept="PY3 strip characters from the right", tier="2 - Labels and text",
+        title="The letters of a postcode area", kind="function",
+        func="town",
+        cases=[("NG5",), ("DE22",), ("S1",), ("LE4",), ("B",), ("",)],
+        prompt=(
+            "A postcode area is one or two letters and then digits."
+            " Write a function `town(area)` that returns the letters"
+            " alone. rstrip takes an argument: the characters to"
+            " strip.\n\n"
+            "  town(\"DE22\") -> \"DE\"\n"
+            "  town(\"S1\") -> \"S\"\n\n"
+            "Return: a str."
+        ),
+        solution=("def town(area):\n"
+                  "    return area.rstrip(\"0123456789\")\n"),
+        trap=("def town(area):\n"
+              "    return area[:2]\n"),
+        note="rstrip(chars) removes from the right-hand end every"
+             " character that is in chars, in any order, and stops at"
+             " the first that is not -- so it does not matter how many"
+             " digits there are, or how many letters. The first two"
+             " characters, the trap, are right for NG5 and wrong for"
+             " S1, where the second character is already a digit. This"
+             " is the same tool as RTRIM with a second argument in SQL.",
+    ),
+    # =================================================== 3 Working with lists
+    dict(
+        id=11, ledger="P576", concept="PY4 interleave two lists", tier="3 - Working with lists",
+        title="Two loads, taken turn about", kind="function",
+        func="interleave",
+        cases=[(["A-1", "A-2", "A-3"], ["B-1", "B-2", "B-3"]), (["A-1", "A-2", "A-3", "A-4"], ["B-1"]), ([], ["B-1", "B-2"]), ([], []), (["x"], ["y", "z", "w"])],
+        prompt=(
+            "Write a function `interleave(first, second)` that returns"
+            " one list taking items from the two in turn: first's"
+            " first, second's first, first's second, and so on. When"
+            " one list runs out, the rest of the other follows in"
+            " order.\n\n"
+            "  interleave([\"A-1\", \"A-2\", \"A-3\", \"A-4\"], [\"B-1\"]) -> [\"A-1\", \"B-1\", \"A-2\", \"A-3\", \"A-4\"]\n\n"
+            "Return: a list."
+        ),
+        solution=("def interleave(first, second):\n"
                   "    out = []\n"
-                  "    for c in codes:\n"
-                  "        if c.lower() not in seen:\n"
-                  "            seen.add(c.lower())\n"
-                  "            out.append(c)\n"
-                  "    return out\n"),
-        trap=("def unique_codes(codes):\n"
-              "    return list(dict.fromkeys(c.lower() for c in codes))\n"),
-        note="Lower-casing everything does remove the repeats, but it"
-             " also changes the codes that are kept: the trap returns"
-             " 'mb-12' where the first spelling was 'MB-12'. The set"
-             " remembers the lower-case form for COMPARING while the"
-             " output list keeps each code as it first arrived.",
+                  "    for a, b in zip(first, second):\n"
+                  "        out.append(a)\n"
+                  "        out.append(b)\n"
+                  "    n = min(len(first), len(second))\n"
+                  "    return out + first[n:] + second[n:]\n"),
+        trap=("def interleave(first, second):\n"
+              "    out = []\n"
+              "    for a, b in zip(first, second):\n"
+              "        out.append(a)\n"
+              "        out.append(b)\n"
+              "    return out\n"),
+        note="zip pairs the lists up for as long as both have items and"
+             " then stops without a word, so the trap silently loses"
+             " A-2, A-3 and A-4. The leftovers are whatever lies past"
+             " the shorter length: one of the two slices is always"
+             " empty, so adding both is safe and needs no if. A slice"
+             " past the end of a list is an empty list, never an"
+             " error.",
     ),
     dict(
-        id=12, ledger="P562", concept="PY3 pair up a flat list", tier="3 - Checks and filters",
-        title="A flat list of scans, paired up", kind="function",
-        func="pair_up",
-        cases=[(["MB-1", "collected", "MB-2", "delivered"],), (["MB-1", "collected", "MB-2"],), ([],), (["a", "b"],)],
+        id=12, ledger="P577", concept="PY3 replace a value throughout", tier="3 - Working with lists",
+        title="A relabelled parcel, corrected everywhere", kind="function",
+        func="relabel",
+        cases=[(["MB-2", "CH-7", "MB-2", "WW-1"], "MB-2", "MB-9"), (["CH-7"], "MB-2", "MB-9"), ([], "a", "b"), (["a", "a", "a"], "a", "b")],
         prompt=(
-            "A scanner sends one flat list: a code, its status, the next"
-            " code, its status, and so on. Write a function `pair_up("
-            "items)` that returns a list of (code, status) tuples; a"
-            " code left over at the end with no status is dropped. zip"
-            " the even positions with the odd ones, each a slice with a"
-            " step.\n\n"
-            "  pair_up([\"MB-1\", \"collected\", \"MB-2\", \"delivered\"]) -> [(\"MB-1\", \"collected\"), (\"MB-2\", \"delivered\")]\n\n"
-            "Return: a list of tuples."
+            "Write a function `relabel(codes, old, new)` that returns a"
+            " NEW list in which every item equal to old has become new,"
+            " and everything else is as it was. The list passed in is"
+            " not changed. A comprehension with a conditional"
+            " expression.\n\n"
+            "  relabel([\"MB-2\", \"CH-7\", \"MB-2\", \"WW-1\"], \"MB-2\", \"MB-9\") -> [\"MB-9\", \"CH-7\", \"MB-9\", \"WW-1\"]\n\n"
+            "Return: a list."
         ),
-        solution=("def pair_up(items):\n"
-                  "    return list(zip(items[::2], items[1::2]))\n"),
-        trap=("def pair_up(items):\n"
-              "    return list(zip(items, items[1:]))\n"),
-        note="zip(items, items[1:]) pairs every item with its neighbour,"
-             " overlapping: the trap returns three pairs for four items,"
-             " the middle one ('collected', 'MB-2'). items[::2] is"
-             " positions 0, 2, 4 and items[1::2] is 1, 3, 5, so zipping"
-             " those gives pairs that do not overlap, and zip stops at"
-             " the shorter slice, which drops an unpaired last code.",
+        solution=("def relabel(codes, old, new):\n"
+                  "    return [new if c == old else c for c in codes]\n"),
+        trap=("def relabel(codes, old, new):\n"
+              "    out = list(codes)\n"
+              "    if old in out:\n"
+              "        out[out.index(old)] = new\n"
+              "    return out\n"),
+        note="`new if c == old else c` is an expression with a value,"
+             " so it can sit at the front of a comprehension and decide"
+             " each item as it goes by. That is different from an `if`"
+             " at the END of a comprehension, which filters items out."
+             " The trap uses index(), which finds only the first match:"
+             " one MB-2 corrected and the other still on the list."
+             " Lists have no replace method of their own; strings do.",
     ),
     dict(
-        id=13, ledger="P563", concept="PY3 move to the front", tier="3 - Checks and filters",
-        title="An urgent parcel moved to the front", kind="function",
-        func="to_front",
-        cases=[(["MB-1", "CH-2", "WW-3"], "CH-2"), (["MB-1", "CH-2"], "ZZ-9"), ([], "MB-1"), (["MB-1"], "MB-1")],
+        id=13, ledger="P578", concept="PY3 next item, wrapping round", tier="3 - Working with lists",
+        title="Who is next on the rota", kind="function",
+        func="next_up",
+        cases=[(["Grace", "Samir", "Nadia"], "Grace"), (["Grace", "Samir", "Nadia"], "Nadia"), (["Grace"], "Grace"), (["a", "b", "c", "d"], "c"), (["a", "b"], "b")],
         prompt=(
-            "Write a function `to_front(codes, urgent)` that returns a"
-            " new list with the urgent code first and the others in"
-            " their original order -- or an unchanged copy if the urgent"
-            " code is not in the list at all. A membership test, then"
-            " the code plus everything that is not it.\n\n"
-            "  to_front([\"MB-1\", \"CH-2\", \"WW-3\"], \"CH-2\") -> [\"CH-2\", \"MB-1\", \"WW-3\"]\n\n"
+            "The rota is a list of names, each appearing once, and it"
+            " goes round: after the last name comes the first again."
+            " Write a function `next_up(rota, name)` that returns the"
+            " name after the given one. name is always on the rota."
+            " index(), and the remainder operator to wrap.\n\n"
+            "  next_up([\"Grace\", \"Samir\", \"Nadia\"], \"Nadia\") -> \"Grace\"\n\n"
+            "Return: a str."
+        ),
+        solution=("def next_up(rota, name):\n"
+                  "    return rota[(rota.index(name) + 1) % len(rota)]\n"),
+        trap=("def next_up(rota, name):\n"
+              "    return rota[min(rota.index(name) + 1, len(rota) - 1)]\n"),
+        note="index(name) + 1 is the next position, and % len(rota)"
+             " turns the one position that does not exist -- one past"
+             " the end -- into 0, leaving every other position alone."
+             " That is all the remainder is doing here: wrapping. The"
+             " trap stops at the end instead of going round, so the"
+             " last person on the rota is followed by themselves."
+             " Without either guard, rota[index + 1] raises IndexError"
+             " for the last name.",
+    ),
+    dict(
+        id=14, ledger="P579", concept="PY3 sort ignoring case", tier="3 - Working with lists",
+        title="Names in order, whatever their capitals", kind="function",
+        func="in_order",
+        cases=[(["westway", "Central Hub", "Millbank", "docklands"],), (["b", "A", "c"],), ([],), (["Zed", "apple", "Mango", "berry"],)],
+        prompt=(
+            "Write a function `in_order(names)` that returns the names"
+            " in alphabetical order as a reader would expect it, taking"
+            " no notice of capital letters. Each name comes back"
+            " spelled exactly as it went in. sorted() with a key.\n\n"
+            "  in_order([\"westway\", \"Central Hub\", \"Millbank\", \"docklands\"]) -> [\"Central Hub\", \"docklands\", \"Millbank\", \"westway\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def to_front(codes, urgent):\n"
-                  "    if urgent not in codes:\n"
-                  "        return codes[:]\n"
-                  "    return [urgent] + [c for c in codes if c != urgent]\n"),
-        trap=("def to_front(codes, urgent):\n"
-              "    return [urgent] + [c for c in codes if c != urgent]\n"),
-        note="Without the membership test the trap ADDS a parcel that"
-             " was never on the van: asked to move ZZ-9 to the front of a"
-             " list that does not hold it, it returns a list that does."
-             " The test first, then the rebuild. codes[:] is a copy, so"
-             " the caller's list is never the one handed back.",
+        solution=("def in_order(names):\n"
+                  "    return sorted(names, key=str.lower)\n"),
+        trap=("def in_order(names):\n"
+              "    return sorted(names)\n"),
+        note="Plain sorted, the trap, compares characters by their"
+             " code, and every capital letter comes before every small"
+             " one: Central Hub, Millbank, docklands, westway. A key is"
+             " used only for comparing -- sorted puts the names in the"
+             " order their lower-case versions would take and returns"
+             " the originals, untouched. Lower-casing the list first"
+             " would sort correctly and hand back names that are no"
+             " longer spelled the way they were.",
     ),
     dict(
-        id=14, ledger="P564", concept="PY3 strictly increasing", tier="3 - Checks and filters",
-        title="Are the weights strictly rising?", kind="function",
-        func="rising",
-        cases=[([500, 750, 1200],), ([500, 500, 1200],), ([1200, 750],), ([],), ([42],)],
+        id=15, ledger="P580", concept="PY3 same items in any order", tier="3 - Working with lists",
+        title="Do the two vans carry the same load?", kind="function",
+        func="same_load",
+        cases=[(["A-1", "B-2", "A-1"], ["B-2", "A-1", "A-1"]), (["A-1", "B-2", "A-1"], ["A-1", "B-2", "B-2"]), (["A-1", "B-2"], ["B-2", "A-1"]), ([], []), (["A-1"], ["A-1", "A-1"])],
         prompt=(
-            "Parcels are stacked lightest on top. Write a function"
-            " `rising(weights)` that returns True when each weight is"
-            " STRICTLY greater than the one before -- two equal weights"
-            " in a row do not count -- and True for a list of one or"
-            " none. all() over the neighbouring pairs from zip.\n\n"
-            "  rising([500, 750, 1200]) -> True\n\n"
-            "Return: True or False."
+            "Write a function `same_load(van_a, van_b)` that returns"
+            " True if the two lists hold the same codes the same number"
+            " of times, in any order. A code that is on one van twice"
+            " must be on the other twice.\n\n"
+            "  same_load([\"A-1\", \"B-2\", \"A-1\"], [\"B-2\", \"A-1\", \"A-1\"]) -> True\n"
+            "  same_load([\"A-1\", \"B-2\", \"A-1\"], [\"A-1\", \"B-2\", \"B-2\"]) -> False\n\n"
+            "Return: a bool."
         ),
-        solution=("def rising(weights):\n"
-                  "    return all(a < b for a, b in zip(weights, weights[1:]))\n"),
-        trap=("def rising(weights):\n"
-              "    return weights == sorted(weights)\n"),
-        note="A list equal to its sorted self is in NON-DECREASING order,"
-             " which allows equal neighbours: the trap says True for 500,"
-             " 500, 1200. 'Strictly' needs a < between each pair, and"
-             " zip(weights, weights[1:]) supplies the pairs. With fewer"
-             " than two weights there are no pairs, and all() of nothing"
-             " is True.",
-    ),
-    dict(
-        id=15, ledger="P565", concept="PY3 pad a list", tier="3 - Checks and filters",
-        title="A trail padded to a fixed length", kind="function",
-        func="pad_to",
-        cases=[(["collected", "delivered"], 4, "-"), (["a", "b", "c"], 2, "-"), ([], 2, "?"), (["x"], 1, "-")],
-        prompt=(
-            "A report needs every trail to have at least n entries."
-            " Write a function `pad_to(trail, n, filler)` that returns"
-            " the trail with the filler added on the end until it is n"
-            " long -- and a trail already n long or longer unchanged,"
-            " nothing cut off. A list times a number, added on.\n\n"
-            "  pad_to([\"collected\", \"delivered\"], 4, \"-\") -> [\"collected\", \"delivered\", \"-\", \"-\"]\n\n"
-            "Return: a list of str."
-        ),
-        solution=("def pad_to(trail, n, filler):\n"
-                  "    return trail + [filler] * (n - len(trail))\n"),
-        trap=("def pad_to(trail, n, filler):\n"
-              "    return (trail + [filler] * n)[:n]\n"),
-        note="Padding generously and slicing back to n looks tidy, but"
-             " the slice also CUTS a trail that was longer than n: the"
-             " trap loses the third entry of a three-entry trail padded"
-             " 'to 2'. A list times a negative number is the empty list,"
-             " so [filler] * (n - len(trail)) adds exactly what is"
-             " missing and nothing when nothing is.",
+        solution=("def same_load(van_a, van_b):\n"
+                  "    return sorted(van_a) == sorted(van_b)\n"),
+        trap=("def same_load(van_a, van_b):\n"
+              "    return set(van_a) == set(van_b)\n"),
+        note="Two lists are equal when they hold the same items in the"
+             " same order, so sorting both removes the one difference"
+             " that is not supposed to count and keeps the repeats."
+             " Sets, the trap, throw the repeats away: two A-1s and a"
+             " B-2 look the same as one A-1 and two B-2s, and one"
+             " parcel looks the same as two. sorted() returns new"
+             " lists, so neither van's list is disturbed by the check.",
     ),
 ]
 
