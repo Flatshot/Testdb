@@ -1,26 +1,27 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the parcel-courier scheme,
-the fifth set on it, at two tools per question with the tiers named by
-task, on tools the first four courier sets left out, and three writable
-questions; the prompts name the tool but do not write the statement.
-**Fifteen Python** at the easy level of the last seven sets: everyday
-tasks over plain lists and strings in the courier's terms, with no maths
-and no dicts.
+the sixth set on it, at two tools per question with the tiers named by
+task, on tools the first five courier sets left out. Nine read the data
+and **six change it**, twice as many as before: three single statements
+and three procedures of several steps. The prompts name the tool but do
+not write the statement. **Fifteen Python** at the easy level of the last
+eight sets: everyday tasks over plain lists and strings in the courier's
+terms, with no maths and no dicts.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Sets and ties | 1-3 |
-| 2 - Dates, precisely | 4-6 |
-| 3 - Text, types and lists | 7-9 |
-| 4 - Flags and totals | 10-12 |
-| 5 - Changing the data | 13-15 |
+| 1 - Text and patterns | 1-3 |
+| 2 - Windows and shares | 4-6 |
+| 3 - Rows as values | 7-9 |
+| 4 - Changing rows | 10-12 |
+| 5 - Procedures | 13-15 |
 
 | Stage | Python questions |
 |---|---|
-| 1 - Counting and finding | 1-5 |
-| 2 - Labels | 6-10 |
-| 3 - Checks and filters | 11-15 |
+| 1 - Finding and counting | 1-5 |
+| 2 - Labels and text | 6-10 |
+| 3 - Working with lists | 11-15 |
 
 ## The schema
 
@@ -53,9 +54,11 @@ which end to supply.
 
 ## The writable stage
 
-SQLite has no stored procedures, variables, loops or TRY/CATCH. What it has
-instead is constraints, indexes, triggers and plain DML -- and each of
-questions 13 to 15 is one of those.
+Questions 10 to 15 change the data. 10 to 12 are one statement each, an
+UPDATE, an INSERT and a DELETE. 13 to 15 are **procedures**. SQLite has no
+CREATE PROCEDURE, variables, loops or TRY/CATCH; what it has instead is
+the transaction, whose steps all happen or none do, and the trigger body,
+which is stored in the database and runs when something calls it.
 
 **How they run.** Press Run and your script executes, statement by statement,
 in a private in-memory copy of the database. Nothing you write can reach the
@@ -68,44 +71,61 @@ otherwise it shows the question's *probe* query, which is what **Check answer**
 compares. Check always grades a fresh copy, so nothing you ran earlier can
 affect the grade.
 
-**Driver statements.** Question 13 inserts three scans *after* your
-script: a second 'delivered' scan for parcel 1, which the index must
-refuse, a first one for parcel 40 and a 'failed' scan for parcel 1, which
-it must let through. Question 15 deletes every unpaid invoice issued
-before July 2025, which the trigger must log. Question 14 is graded on
-what your script leaves behind.
+**Start each statement on a new line.** The script is split where a line
+ends a complete statement, so `BEGIN;` and `COMMIT;` get lines of their
+own. A CREATE TRIGGER, with the semicolons inside its body, is kept whole.
+
+**Transactions.** `BEGIN;` opens one and `COMMIT;` makes everything since
+permanent. The sandbox does not commit for you. After a script that
+creates a table or a view, a second Run fails because the first one's is
+still there: press Reset.
+
+**Driver statements.** Question 13 issues a `ROLLBACK` *after* your
+script. If your work was committed, there is nothing of yours left to
+roll back and it stands. If your transaction was left open, everything it
+did is undone and the check query shows the data as it was. Question 15 inserts two rows into your view, delivering parcels 40
+and 122, which is how the procedure in the trigger gets called. Questions
+10, 11, 12 and 14 are graded on what your script leaves behind.
 
 | # | Construct |
 |---|---|
-| 13 | `CREATE UNIQUE INDEX one_delivery ON scans(parcel_id) WHERE status = 'delivered'` |
-| 14 | `UPDATE depots SET bays = bays + CASE region WHEN 'central' THEN 10 ELSE 4 END WHERE closed_on IS NULL` |
-| 15 | `CREATE TABLE written_off (...); CREATE TRIGGER log_write_off AFTER DELETE ON invoices BEGIN INSERT INTO written_off (...) VALUES (OLD.invoice_id, OLD.customer_id, OLD.amount_cents); END` |
+| 10 | `UPDATE invoices SET (paid_on, method) = (...) WHERE paid_on IS NULL AND customer_id IN (SELECT ...)` |
+| 11 | `INSERT OR IGNORE INTO invoices (...) SELECT ... FROM customers WHERE ...` |
+| 12 | `DELETE FROM scans WHERE status = 'failed' AND scan_id NOT IN (SELECT MIN(scan_id) ... GROUP BY parcel_id)` |
+| 13 | `BEGIN; UPDATE depots ...; UPDATE couriers ...; UPDATE customers ...; COMMIT;` |
+| 14 | `BEGIN; CREATE TABLE lost_parcels AS SELECT ...; DELETE FROM scans ...; DELETE FROM parcels ...; COMMIT;` |
+| 15 | `CREATE VIEW deliveries AS ...; CREATE TRIGGER deliver INSTEAD OF INSERT ON deliveries BEGIN UPDATE parcels ...; INSERT INTO scans ...; END` |
 
 ## Things the data does on purpose
 
-- **605 of the 620 senders have used both express and economy**, question 1's
-  intersection; with UNION it would be all of them.
-- **13 couriers delivered in 2025 and not in 2026**, question 2's set
-  difference, and every one has a leaving date; the other way round there is
-  nobody.
-- **4 depots tie on six couriers each**, the tie question 3's DENSE_RANK steps
-  over without a gap and RANK does not.
-- **1,492 parcels were delivered in June 2026, 60 of them on the 30th**, the
-  day a BETWEEN ending at '2026-06-30' loses in question 4.
-- **793 parcels were collected on the last day of a month, against 415 on a
-  31st**, the gap question 5's date modifiers close.
-- **51 of the 60 couriers were hired before the data begins**, so question 6's
-  clamp to 2025-01-01 is what keeps their days inside the period.
-- **10 business names run to five words**, question 7's longest; 73 customers
-  have a NULL postcode area, the rows typeof labels 'null' in question 8.
-- **4 depots collect more than the average depot's 2,400**, question 10's
-  list, which dividing by the nine open depots would cut to three; 5 depots
-  have a lorry driver still working, question 11's flags.
-- **Old Foundry collected nothing in June 2026**, so question 12's SUM for it
-  is NULL and its TOTAL 0.0; 84 unpaid invoices were issued before July 2025,
-  the ones question 15's driver deletes.
-- **The data ends at 2026-06-30 23:59**, with 271 parcels still moving and 332
-  invoices unpaid.
+- **41 customers have a name that ends in Supplies and 64 have one that
+  contains it**, the difference being the Garden Supplies businesses that
+  question 1's pattern must not catch.
+- **The commonest surname among personal customers has 27 holders**, question
+  2's top row; business names begin with the family name instead, which is why
+  they are left out.
+- **106 customers have a postcode area of one letter and a digit**, S1 or S8,
+  the ones the first two characters split in question 3; 73 have no area at
+  all.
+- **Every depot has exactly one first hire**, so question 4 has ten zeros;
+  measured from the company's first hire it has one.
+- **3 depots have two customers tied as June's biggest sender**, the extra
+  rows RANK keeps in question 6.
+- **115 parcels have made parcel 1's journey from Docklands to Old Foundry**,
+  question 8's total; 85 of the 620 senders have touched all ten depots,
+  question 9's last row.
+- **38 of the 332 unpaid invoices belong to Old Foundry's customers**, the
+  ones question 10 settles; 10 of Northgate's 27 businesses have no invoice
+  for May, the ones question 11 adds.
+- **72 parcels have a second failed scan**, the rows question 12 deletes out
+  of 3,345 parcels with any.
+- **4 of Southfield's nine couriers have already left**, and stay on its books
+  in question 13 when the other five and its 63 customers move to Millbank.
+- **113 of the 271 undelivered parcels are lost**, with 523 scans between
+  them, question 14's archive; parcels 40 and 122 are two of them, which
+  question 15 delivers.
+- **The data ends at 2026-06-30 23:59**, so a date in July 2026 is always
+  after everything already there.
 
 ## How the Python questions are graded
 
@@ -116,8 +136,9 @@ result with the reference function's. Values are compared, not their printed
 form -- but the type counts: a tuple is not a list, and 0 is not False. A
 function that prints its answer instead of returning it returns None, and
 None matches nothing. The inputs are everyday values in the courier's terms:
-clock times, codes and statuses for questions 1 to 5, counts, times,
-weights and dates for 6 to 10, codes, weights and trails for 11 to 15.
+labels, statuses, codes and bay numbers for questions 1 to 5, names,
+numbers and postcode areas for 6 to 10, lists of codes and names for 11
+to 15.
 Each prompt shows one example call with its answer, and Run adds a few
 more, including the empty list or the edge the question warns about.
 
@@ -128,378 +149,394 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Sets and ties (3)
+## 1 - Text and patterns (3)
 
-INTERSECT for 'both' where UNION is 'either', EXCEPT whose operand order is the
-question, and DENSE_RANK, which counts the distinct values ahead where RANK
-counts the rows.
+LIKE with the wildcard on one side only, so the word must end the name; INSTR
+for where the space is and SUBSTR from one past it; RTRIM with a list of
+characters to strip, however many there are.
 
-1. **Customers who have used both ends of the price list** (Q1282)
+1. **Businesses whose name ends in Supplies** (Q1297)
 
-   For each kind of customer: how many have sent at least one EXPRESS parcel
-   and at least one ECONOMY parcel. Two lists of customer ids, one per
-   service, combined with the set operator that keeps only what is in both.
+   Some businesses trade in 'Garden Supplies' and are called '... Garden
+   Supplies Ltd'; others are simply '... Supplies'. For each depot, by name:
+   how many of its customers have a name that ENDS with the word Supplies.
+   LIKE, with a wildcard on one side only.
 
-   *Return: kind, both_services*
+   *Return: depot, customers*
 
-2. **Couriers who delivered last year and not this** (Q1283)
+2. **The surnames with the most customers** (Q1298)
 
-   The couriers who delivered at least one parcel in 2025 and none in 2026:
-   name and vehicle. Two lists of courier ids by delivery year, subtracted
-   with the set operator whose order of operands matters.
+   A personal customer's name is a first name, one space, and a surname. For
+   each surname: how many personal customers carry it. Keep the surnames with
+   20 customers or more. INSTR to find the space, SUBSTR to cut.
 
-   *Return: name, vehicle*
+   *Return: surname, customers*
 
-3. **Depots ranked by staff, ties sharing a place** (Q1284)
+3. **Customers by postcode town** (Q1299)
 
-   Every depot with the number of couriers based there, and its rank by that
-   number, most couriers first -- depots with the same number share a rank,
-   and the next rank follows straight on with no gap. Count per depot in a
-   CTE, then the ranking window function that does not skip.
+   A postcode_area is one or two letters and then digits: NG5, DE22, S1. The
+   letters alone name the town. For each town: how many customers, and how
+   many of them are businesses. Customers with no postcode_area are a group of
+   their own. RTRIM takes a second argument.
 
-   *Return: name, couriers, rank*
+   *Return: town, customers, businesses*
 
-## 2 - Dates, precisely (3)
+## 2 - Windows and shares (3)
 
->= the first day and < the day after instead of BETWEEN, 'start of month', '+1
-month', '-1 day' for a month's last day whatever its length, and scalar MAX and
-MIN to clamp a span to the period.
+FIRST_VALUE with PARTITION BY so each depot has its own first hire, a window
+over rows that are already grouped for a share of the grand total, and RANK = 1
+where ROW_NUMBER = 1 would pick between equals.
 
-4. **June's deliveries, and the day BETWEEN loses** (Q1285)
+4. **How long after the depot's first hire** (Q1300)
 
-   For each vehicle type: the parcels its couriers delivered in June 2026.
-   delivered_at carries a time of day, so a range that ends at '2026-06-30'
-   stops at midnight on the 30th; use a half-open range, up to but not
-   including the first of July.
+   For every courier: how many days after their depot's FIRST hire they were
+   taken on, as a whole number -- 0 for the first hire itself. Couriers who
+   have left count like anyone else. FIRST_VALUE over a window per depot, and
+   julianday for the gap.
 
-   *Return: vehicle, deliveries*
+   *Return: courier, depot, days_after_first*
 
-5. **Handed in on the last day of the month** (Q1286)
+5. **Each region's share of the postage** (Q1301)
 
-   For each service: its parcels, and how many were collected on the LAST day
-   of a calendar month -- the 31st of January, the 28th of February 2025, the
-   30th of April. The last day of any date's month comes from chaining date
-   modifiers: back to the start of the month, forward a month, back a day.
+   For each region -- the region of the depot where a parcel was collected:
+   its parcels, and its share of ALL postage as a percentage to one decimal
+   place. The grand total can sit beside the grouped rows: a window function
+   over the whole result, its OVER left empty.
 
-   *Return: service, parcels, month_end*
+   *Return: region, parcels, pct_of_postage*
 
-6. **Days on the payroll inside the data** (Q1287)
+6. **June's biggest sender at each depot, ties included** (Q1302)
 
-   For each vehicle type: its couriers, and the average number of days they
-   were employed INSIDE the data period, 2025-01-01 to 2026-06-30, to one
-   decimal. A courier hired in 2019 counts from the period's start; one who
-   left counts to their leaving date. The two-argument MAX and MIN pick the
-   later of two dates and the earlier.
+   For each depot: the customer who sent the most parcels collected in June
+   2026, the depot being the customer's HOME depot. Where two customers tie
+   for first, list both. RANK, partitioned, in a subquery so its result can be
+   filtered.
 
-   *Return: vehicle, couriers, avg_days*
+   *Return: depot, customer, parcels*
 
-## 3 - Text, types and lists (3)
+## 3 - Rows as values (3)
 
-Spaces counted by LENGTH minus LENGTH(REPLACE(...)) and one added for the words,
-typeof with COUNT(*) so the NULLs are counted, and json_each to join a list that
-arrives as text.
+VALUES as a table written on the spot and named by a CTE, two columns compared
+as one row with a two-column subquery, and UNION, which drops the duplicates
+UNION ALL keeps.
 
-7. **How many words in a customer's name** (Q1288)
+7. **How much of the postage is the weight surcharge** (Q1303)
 
-   For each kind of customer and each number of words a name has: how many
-   customers. Words are spaces plus one, and the spaces are counted by
-   measuring the name with and without them -- LENGTH and REPLACE.
+   Postage is a base price for the service plus a surcharge for weight. The
+   base prices are in no table: economy 350, standard 500, express 900 cents.
+   For each service: its parcels, and the surcharge collected in total --
+   postage above the base. Write the price list as an inline table with
+   VALUES, named in a CTE, and join to it.
 
-   *Return: kind, words, customers*
+   *Return: service, parcels, surcharge_cents*
 
-8. **What the postcode area column actually holds** (Q1289)
+8. **Every parcel on parcel 1's route** (Q1304)
 
-   For each kind of customer: the storage types found in postcode_area and how
-   many customers have each. typeof() names a value's type, and NULL is one of
-   them.
+   Parcel 1 went from one depot to another. For each service: how many parcels
+   have made exactly that journey -- the same origin AND the same destination,
+   parcel 1 included. Compare the two columns as ONE row value with a subquery
+   that returns two columns.
 
-   *Return: kind, storage_type, customers*
+   *Return: service, parcels*
 
-9. **Parcels bound for the depots on a list** (Q1290)
+9. **How many depots a customer's post has touched** (Q1305)
 
-   A caller hands you depot ids as a JSON array, '[3, 6, 10, 42]'. For each
-   depot on the list that exists: its name and how many parcels were addressed
-   to it. json_each() turns the array into rows you can join on.
+   A parcel touches two depots, where it was collected and where it was
+   delivered to. For each customer, count the DIFFERENT depots their parcels
+   have touched at either end; then say how many customers there are for each
+   count. Walk-ins are left out. Two lists of (customer, depot) stacked by the
+   set operator that drops duplicates.
 
-   *Return: name, parcels*
+   *Return: depots_touched, customers*
 
-## 4 - Flags and totals (3)
-
-HAVING compared with the average of the per-depot counts, EXISTS as a 1-or-0
-column where a LEFT JOIN's COUNT(*) counts the empty match, and TOTAL for the
-depot with nothing in June.
-
-10. **Depots busier than the average depot** (Q1291)
-
-    The depots where more parcels have been collected than at the AVERAGE
-    depot, with their count. The average is an aggregate of an aggregate --
-    the mean of the per-depot counts, the closed depot included -- compared
-    with in HAVING.
-
-    *Return: name, parcels*
-
-11. **Which depots can take a lorry load** (Q1292)
-
-    For every depot: a 1 or 0 saying whether it has a lorry driver still
-    working there, and how many. EXISTS is an expression, so it can sit in the
-    SELECT list as a column; a scalar subquery gives the count.
-
-    *Return: name, has_lorry, lorry_drivers*
-
-12. **June's postage at every depot, zero included** (Q1293)
-
-    For every depot, the closed one included: the postage of the parcels
-    collected there in June 2026, in dollars. A LEFT JOIN from depots with the
-    June condition in ON, and TOTAL rather than SUM: SUM of no rows is NULL,
-    TOTAL of no rows is 0.0.
-
-    *Return: name, june_postage*
-
-## 5 - Changing the data (3)
+## 4 - Changing rows (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. A UNIQUE index with a WHERE of its own,
-a CASE inside SET with a WHERE on the UPDATE, and OLD in an AFTER DELETE
-trigger.
+question's probe query reads the result. One statement each: SET (a, b) = (x, y)
+where a CHECK ties two columns together, INSERT OR IGNORE against a UNIQUE
+constraint, and a DELETE that keeps MIN(id) per group.
 
-13. **One delivery scan per parcel, enforced** (Q1294)
+10. **Old Foundry's debts, settled** (Q1306)
 
-    A parcel may have many scans but only ONE with status 'delivered'. Create
-    a UNIQUE index on scans that enforces exactly that and nothing more -- a
-    partial index, with a WHERE of its own. The question then inserts a second
-    'delivered' scan for parcel 1, a first one for parcel 40, and a 'failed'
-    scan for parcel 1.
+    The customers of the closed depot have settled up. Mark every UNPAID
+    invoice of a customer whose home depot is Old Foundry as paid on
+    2026-07-01 by transfer. The table's CHECK refuses an invoice that has only
+    one of paid_on and method, so both are set in ONE UPDATE; which customers
+    is a subquery's business.
 
-    *Checked: how many scans dated July got in, and how many of them are deliveries*
+    *Checked: invoices and cents for each method, the unpaid included*
 
-14. **More loading bays, more in the centre** (Q1295)
+11. **A minimum charge for the quiet accounts** (Q1307)
 
-    Every depot still open gets more loading bays: ten more in the central
-    region, four more elsewhere. ONE UPDATE whose SET adds a CASE on region,
-    with a WHERE that leaves the closed depot alone.
+    Every business customer whose home depot is Northgate (depot 3) must have
+    an invoice for period 2026-05. Those without one get a minimum charge: 500
+    cents, issued 2026-06-01, not yet paid. Those who already have one keep it
+    exactly as it is. One INSERT ... SELECT that offers a row for every such
+    business and lets the table's UNIQUE (customer_id, period) turn away the
+    ones already there: INSERT has a conflict clause for that.
 
-    *Checked: each region's bays added up*
+    *Checked: the invoices for 2026-05: how many, their cents added up, how many unpaid*
 
-15. **A record of every invoice written off** (Q1296)
+12. **One failed attempt per parcel is enough** (Q1308)
 
-    No invoice should vanish without a trace. Create a table written_off with
-    invoice_id as its primary key, customer_id and amount_cents, all required;
-    then an AFTER DELETE trigger on invoices that copies the removed row's
-    three values into it. The question then deletes every unpaid invoice
-    issued before July 2025.
+    Some parcels have two 'failed' scans. For each parcel keep the failed scan
+    with the lowest scan_id and delete its other failed scans. Scans of every
+    other status stay. A DELETE whose WHERE holds a grouped subquery: the ids
+    to keep.
 
-    *Checked: how many rows the log has, the cents added up, and its lowest invoice_id*
+    *Checked: scans left, and how many of them are failures*
+
+## 5 - Procedures (3)
+
+Writable questions of several steps. SQLite has no CREATE PROCEDURE: a
+transaction makes steps stand or fall together, the order of the steps is the
+procedure, and an INSTEAD OF trigger on a view is a stored body you call with
+INSERT.
+
+13. **Closing Southfield, all or nothing** (Q1309)
+
+    SQLite has no stored procedures; the nearest thing is a script whose steps
+    stand or fall together. Southfield (depot 7) closes on 2026-07-01. In ONE
+    transaction: record the closing date on the depot; move its couriers who
+    are still employed to Millbank (depot 8); move every customer whose home
+    depot it is to Millbank. Couriers who have already left stay on
+    Southfield's books. The question then issues a ROLLBACK: committed work
+    survives it, work left in an open transaction does not.
+
+    *Checked: Southfield's closing date, couriers still listed there, couriers at Millbank, customers at Millbank*
+
+14. **Lost parcels, archived and then removed** (Q1310)
+
+    A parcel is LOST when it was never delivered and has a 'failed' scan.
+    Write the procedure that clears the lost parcels out, as one transaction,
+    in an order that works: create a table lost_parcels holding the parcel_id,
+    customer_id and postage_cents of every lost parcel (CREATE TABLE ... AS);
+    delete those parcels' scans; delete the parcels. Foreign keys are on, so a
+    parcel that still has scans cannot be deleted -- and once its scans are
+    gone, they can no longer say it was lost.
+
+    *Checked: rows in lost_parcels and their postage added up, parcels left, scans left*
+
+15. **A delivery procedure you call with INSERT** (Q1311)
+
+    A trigger body is the one place SQLite stores a procedure. Create a view
+    deliveries showing the parcel_id, courier_id and delivered_at of every
+    delivered parcel, and an INSTEAD OF INSERT trigger on it that does two
+    things with the row it is offered: records the courier and the time on
+    that parcel, and adds a 'delivered' scan for it at the parcel's
+    DESTINATION depot, with the same courier and time. The question then
+    delivers two lost parcels, 40 and 122, by inserting into the view.
+
+    *Checked: for parcels 40 and 122: the courier, the delivery time, and the depot and status of any scan dated July*
 
 # Python
 
-## 1 - Counting and finding (5)
+## 1 - Finding and counting (5)
 
-start <= t < end so windows sit side by side, next() with a default, count * 2 >
-len for a strict majority, sets before len() so repeats count once, and
-split('-') before int().
+max with key=len or key=list.count and a default for the empty case, zip of a
+list with itself one step along, a while loop past everything taken, and zip of
+two lists to compare position by position.
 
-1. **Scans inside a time window** (P551)
+1. **The longest word on the label** (P566)
 
-   Scan times are 'HH:MM' strings. Write a function `in_window(times, start,
-   end)` that returns how many fall in the window that includes its start and
-   EXCLUDES its end. Zero-padded clock text compares correctly, so a chained
-   comparison inside sum() does it.
+   Write a function `longest_word(label)` that returns the longest word in a
+   label, the words being whatever split() gives. If several are equally long,
+   the first of them; if the label has no words, the empty string. max() takes
+   a key, and a default.
 
    ```
-   in_window(["08:05", "09:00", "09:59", "10:00", "11:30"], "09:00", "10:00") -> 2
+   longest_word("Yilmaz Garden Supplies Ltd") -> "Supplies"
+   ```
+
+   *Return: a str.*
+
+2. **How often the status changed** (P567)
+
+   Write a function `count_changes(statuses)` that returns how many times an
+   item differs from the one just before it. zip the list with itself, one
+   step along.
+
+   ```
+   count_changes(["depot", "depot", "van", "van", "depot", "door"]) -> 3
    ```
 
    *Return: an int.*
 
-2. **The code with a given number** (P552)
+3. **The code scanned most often** (P568)
 
-   Write a function `find_code(codes, n)` that returns the first code whose
-   number after the hyphen equals n, or None if no code has that number.
-   next() over a generator, with a second argument for the nothing-found case.
+   Write a function `most_scanned(codes)` that returns the code that appears
+   most often in the list. On a tie, the one that appears FIRST in the list;
+   for an empty list, None. max() again, with the list's own count method as
+   the key.
 
    ```
-   find_code(["MB-0012", "CH-0007", "WW-0100"], 7) -> "CH-0007"
+   most_scanned(["MB-2", "CH-7", "MB-2", "WW-1", "CH-7", "MB-2"]) -> "MB-2"
    ```
 
    *Return: a str, or None.*
 
-3. **Was most of the batch delivered?** (P553)
+4. **The lowest free loading bay** (P569)
 
-   Write a function `mostly_delivered(statuses)` that returns True when MORE
-   than half of the statuses are 'delivered', and False otherwise -- exactly
-   half is not more than half, and an empty batch is False. count(), doubled,
-   against the length.
-
-   ```
-   mostly_delivered(["delivered", "delivered", "failed"]) -> True
-   ```
-
-   *Return: True or False.*
-
-4. **How many codes two vans share** (P554)
-
-   Two vans' manifests are lists of parcel codes, and a code may have been
-   scanned twice. Write a function `shared(first, second)` that returns how
-   many DIFFERENT codes appear on both. Two sets, intersected, measured.
+   Bays are numbered from 1. Write a function `first_free(taken)` that returns
+   the lowest bay number that is not in the list. The list is in no particular
+   order. A while loop that counts up until `not in`.
 
    ```
-   shared(["MB-1", "MB-2", "MB-2", "CH-3"], ["MB-2", "CH-3", "WW-4"]) -> 2
+   first_free([1, 2, 4, 5]) -> 3
    ```
 
    *Return: an int.*
 
-5. **The numbers in a batch, added up** (P555)
+5. **How much of the manifest matches the van** (P570)
 
-   As a quick check on a batch, the numbers after the hyphens are added up.
-   Write a function `number_total(codes)` that returns that sum. The depot
-   code can be any length, so split at the hyphen rather than slicing.
-
-   ```
-   number_total(["MB-0012", "CHB-0007", "WW-100"]) -> 119
-   ```
-
-   *Return: an int.*
-
-## 2 - Labels (5)
-
-:+d for a sign on both directions with zero as its own case, both times in
-minutes before subtracting, a single value when the range is empty, ljust with a
-fill character, and reversed parts joined with slashes.
-
-6. **A change with its sign showing** (P556)
-
-   Write a function `change_label(before, after)` that returns the change as a
-   whole-number percentage of before with its sign: '+39%' for a rise, '-5%'
-   for a fall, '0%' for no change, and 'n/a' when before is 0. The format spec
-   '+' shows a plus on positive numbers.
+   Write a function `matches(manifest, loaded)` that returns how many
+   POSITIONS hold the same code in both lists: first against first, second
+   against second. If one list is longer, its extra items match nothing.
 
    ```
-   change_label(1099, 1523) -> "+39%"
-   ```
-
-   *Return: a str.*
-
-7. **Minutes from one scan to the next** (P557)
-
-   Write a function `minutes_between(start, end)` that takes two 'HH:MM' times
-   on the same day, the second not before the first, and returns the minutes
-   between them. Turn each into minutes since midnight -- hours times 60 plus
-   minutes -- and subtract.
-
-   ```
-   minutes_between("08:05", "09:20") -> 75
+   matches(["A-1", "B-2", "C-3", "D-4"], ["A-1", "C-3", "B-2", "D-4"]) -> 2
    ```
 
    *Return: an int.*
 
-8. **A weight band as a label** (P558)
+## 2 - Labels and text (5)
 
-   Write a function `band_label(low, high)` that returns a weight band in
-   kilograms as '2-5 kg', or as just '3 kg' when the two ends are the same. A
-   conditional expression between two f-strings.
+A slice three short to leave room for the dots, the exception tested before the
+rule, enumerate told to start at 1, split() then word[0] then one upper(), and
+rstrip with the characters to remove.
 
-   ```
-   band_label(2, 5) -> "2-5 kg"
-   ```
+6. **A line cut to fit the label** (P571)
 
-   *Return: a str.*
-
-9. **A line of the price list** (P559)
-
-   Write a function `price_line(name, cents, width)` that returns the name
-   padded on the right with dots to the width, then the price as '$3.50':
-   'Economy.....$3.50'. str.ljust() takes a fill character; the price is whole
-   dollars and two-digit cents.
+   Write a function `fit(text, width)` for a label `width` characters wide.
+   Text that fits is returned unchanged. Text that is too long is cut and
+   ended with three dots, so that the result is EXACTLY width characters, dots
+   included. width is always 3 or more.
 
    ```
-   price_line("Economy", 350, 12) -> "Economy.....$3.50"
+   fit("Okonjo Garden Supplies & Sons", 16) -> "Okonjo Garden..."
    ```
 
    *Return: a str.*
 
-10. **A date the British way round** (P560)
+7. **1st, 2nd, 3rd, 4th** (P572)
 
-    Write a function `uk_date(iso)` that turns 'YYYY-MM-DD' into 'DD/MM/YYYY':
-    the three parts in the opposite order, joined by slashes. split(),
-    reverse, join().
+   Write a function `ordinal(n)` that returns a positive whole number with its
+   ending: 1st, 2nd, 3rd, then th. The last digit decides -- 21st, 32nd, 103rd
+   -- except that anything ending in 11, 12 or 13 takes th.
+
+   ```
+   ordinal(22) -> "22nd"
+   ordinal(12) -> "12th"
+   ```
+
+   *Return: a str.*
+
+8. **The steps of a delivery, numbered** (P573)
+
+   Write a function `numbered(steps)` that returns a new list with each step's
+   number in front of it, counting from 1, then a full stop and a space.
+   enumerate can be told where to start.
+
+   ```
+   numbered(["Collect", "Sort", "Deliver"]) -> ["1. Collect", "2. Sort", "3. Deliver"]
+   ```
+
+   *Return: a list of str.*
+
+9. **A depot's initials** (P574)
+
+   Write a function `initials(name)` that returns the first letter of each
+   word, joined together and in capitals, whatever case the name was typed in.
+   Extra spaces between words do not matter.
+
+   ```
+   initials("Central Hub") -> "CH"
+   initials("old foundry") -> "OF"
+   ```
+
+   *Return: a str.*
+
+10. **The letters of a postcode area** (P575)
+
+    A postcode area is one or two letters and then digits. Write a function
+    `town(area)` that returns the letters alone. rstrip takes an argument: the
+    characters to strip.
 
     ```
-    uk_date("2026-03-04") -> "04/03/2026"
+    town("DE22") -> "DE"
+    town("S1") -> "S"
     ```
 
     *Return: a str.*
 
-## 3 - Checks and filters (5)
+## 3 - Working with lists (5)
 
-A set of lower-cased codes beside a list of originals, zip of [::2] with [1::2],
-a membership test before rebuilding, < on every neighbouring pair, and a list
-times a number that may be negative.
+zip and then the slices past the shorter length, a conditional expression at the
+front of a comprehension, % len to wrap round, sorted with key=str.lower, and
+sorted on both sides of ==.
 
-11. **Repeats dropped, whatever their case** (P561)
+11. **Two loads, taken turn about** (P576)
 
-    A scanner reads the same code in different cases. Write a function
-    `unique_codes(codes)` that keeps the FIRST spelling of each code and drops
-    later ones that differ only in case, order otherwise unchanged. A loop
-    with a set of the lower-cased codes seen so far.
-
-    ```
-    unique_codes(["MB-12", "mb-12", "CH-7", "Mb-12"]) -> ["MB-12", "CH-7"]
-    ```
-
-    *Return: a list of str.*
-
-12. **A flat list of scans, paired up** (P562)
-
-    A scanner sends one flat list: a code, its status, the next code, its
-    status, and so on. Write a function `pair_up(items)` that returns a list
-    of (code, status) tuples; a code left over at the end with no status is
-    dropped. zip the even positions with the odd ones, each a slice with a
-    step.
+    Write a function `interleave(first, second)` that returns one list taking
+    items from the two in turn: first's first, second's first, first's second,
+    and so on. When one list runs out, the rest of the other follows in order.
 
     ```
-    pair_up(["MB-1", "collected", "MB-2", "delivered"]) -> [("MB-1", "collected"), ("MB-2", "delivered")]
+    interleave(["A-1", "A-2", "A-3", "A-4"], ["B-1"]) -> ["A-1", "B-1", "A-2", "A-3", "A-4"]
     ```
 
-    *Return: a list of tuples.*
+    *Return: a list.*
 
-13. **An urgent parcel moved to the front** (P563)
+12. **A relabelled parcel, corrected everywhere** (P577)
 
-    Write a function `to_front(codes, urgent)` that returns a new list with
-    the urgent code first and the others in their original order -- or an
-    unchanged copy if the urgent code is not in the list at all. A membership
-    test, then the code plus everything that is not it.
-
-    ```
-    to_front(["MB-1", "CH-2", "WW-3"], "CH-2") -> ["CH-2", "MB-1", "WW-3"]
-    ```
-
-    *Return: a list of str.*
-
-14. **Are the weights strictly rising?** (P564)
-
-    Parcels are stacked lightest on top. Write a function `rising(weights)`
-    that returns True when each weight is STRICTLY greater than the one before
-    -- two equal weights in a row do not count -- and True for a list of one
-    or none. all() over the neighbouring pairs from zip.
+    Write a function `relabel(codes, old, new)` that returns a NEW list in
+    which every item equal to old has become new, and everything else is as it
+    was. The list passed in is not changed. A comprehension with a conditional
+    expression.
 
     ```
-    rising([500, 750, 1200]) -> True
+    relabel(["MB-2", "CH-7", "MB-2", "WW-1"], "MB-2", "MB-9") -> ["MB-9", "CH-7", "MB-9", "WW-1"]
     ```
 
-    *Return: True or False.*
+    *Return: a list.*
 
-15. **A trail padded to a fixed length** (P565)
+13. **Who is next on the rota** (P578)
 
-    A report needs every trail to have at least n entries. Write a function
-    `pad_to(trail, n, filler)` that returns the trail with the filler added on
-    the end until it is n long -- and a trail already n long or longer
-    unchanged, nothing cut off. A list times a number, added on.
+    The rota is a list of names, each appearing once, and it goes round: after
+    the last name comes the first again. Write a function `next_up(rota,
+    name)` that returns the name after the given one. name is always on the
+    rota. index(), and the remainder operator to wrap.
 
     ```
-    pad_to(["collected", "delivered"], 4, "-") -> ["collected", "delivered", "-", "-"]
+    next_up(["Grace", "Samir", "Nadia"], "Nadia") -> "Grace"
+    ```
+
+    *Return: a str.*
+
+14. **Names in order, whatever their capitals** (P579)
+
+    Write a function `in_order(names)` that returns the names in alphabetical
+    order as a reader would expect it, taking no notice of capital letters.
+    Each name comes back spelled exactly as it went in. sorted() with a key.
+
+    ```
+    in_order(["westway", "Central Hub", "Millbank", "docklands"]) -> ["Central Hub", "docklands", "Millbank", "westway"]
     ```
 
     *Return: a list of str.*
+
+15. **Do the two vans carry the same load?** (P580)
+
+    Write a function `same_load(van_a, van_b)` that returns True if the two
+    lists hold the same codes the same number of times, in any order. A code
+    that is on one van twice must be on the other twice.
+
+    ```
+    same_load(["A-1", "B-2", "A-1"], ["B-2", "A-1", "A-1"]) -> True
+    same_load(["A-1", "B-2", "A-1"], ["A-1", "B-2", "B-2"]) -> False
+    ```
+
+    *Return: a bool.*
 
 ## The one concept with no question here
 
@@ -510,7 +547,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,831 retired ones.
+1,861 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
