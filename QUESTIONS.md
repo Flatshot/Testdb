@@ -27,22 +27,23 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the sixth set on the parcel-courier scheme
-(6 tables, SEED 1241). **Fifteen SQL** at two tools per question, with the
-tiers named by task -- text and patterns; windows and shares; rows as
-values; changing rows; procedures -- on tools the first five courier sets
-left out: LIKE that must END in a word, INSTR with SUBSTR, RTRIM with a
-character list, FIRST_VALUE, a window over grouped rows for a share of
-the total, RANK keeping ties, an inline VALUES table, a row-value
-comparison, UNION. Prompts name the tool but do not write the statement.
-**Six writable**, twice as many as before. Three change rows in one
-statement: an UPDATE setting two columns at once, an INSERT OR IGNORE,
-a DELETE that keeps one row per group. Three are procedures, scripts of
-several steps: a depot closed in one transaction, lost parcels archived
-and removed in the only order that works, and an INSTEAD OF trigger that
-makes a view callable. **Fifteen Python** at the easy level of the last
-eight sets: everyday tasks over plain lists and strings in the courier's
-terms, no maths, no dicts.
+Thirty questions in two tracks, the seventh set on the parcel-courier
+scheme (6 tables, SEED 1241). **Fifteen SQL** at two tools per question,
+with the tiers named by task -- joins and lookups; calendar buckets; whole
+groups; changing rows; procedures -- on tools the first six courier sets
+left out: FULL OUTER JOIN, aggregating before a join that would multiply,
+a correlated ORDER BY ... LIMIT 1, quarters by integer division, weeks by
+the 'weekday' modifier, a first-parcel cohort, a row against a window
+AVG, COUNT(*) against COUNT(column) in HAVING, MIN = MAX. Prompts name
+the tool but do not write the statement. **Six writable**, as in the
+last set. Three change rows in one statement: an INSERT ... SELECT that
+copies a row, an UPDATE whose rows a window function picks, a DELETE
+matching row-value pairs. Three are procedures, scripts of several
+steps: two depots swapping rosters through a TEMP table, two customer
+records merged in the order the foreign keys allow, and a summary table
+created, filled and kept current by a trigger. **Fifteen Python** at the
+easy level of the last nine sets: everyday tasks over plain lists and
+strings in the courier's terms, no maths, no dicts.
 
 ### The writable stage
 
@@ -52,49 +53,49 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 10 | `UPDATE invoices SET (paid_on, method) = (...) WHERE ... IN (SELECT ...)` | invoices and cents for each method |
-| 11 | `INSERT OR IGNORE INTO invoices (...) SELECT ... FROM customers` | May's invoices: count, cents, unpaid |
-| 12 | `DELETE FROM scans WHERE ... NOT IN (SELECT MIN(scan_id) ... GROUP BY parcel_id)` | scans left, failures left |
-| 13 | `BEGIN; UPDATE depots ...; UPDATE couriers ...; UPDATE customers ...; COMMIT;` | the closing date and who is listed where |
-| 14 | `BEGIN; CREATE TABLE lost_parcels AS SELECT ...; DELETE FROM scans ...; DELETE FROM parcels ...; COMMIT;` | the archive's rows and postage, parcels and scans left |
-| 15 | `CREATE VIEW deliveries ...; CREATE TRIGGER ... INSTEAD OF INSERT ON deliveries BEGIN UPDATE ...; INSERT ...; END` | the two parcels' courier, time and July scan |
+| 10 | `INSERT INTO depots (...) SELECT 'new name', region, bays, 'new date' FROM depots WHERE name = ...` | the Harbour Point depots |
+| 11 | `UPDATE couriers SET vehicle = 'van' WHERE courier_id IN (SELECT ... ROW_NUMBER() OVER (PARTITION BY depot_id ...) ...)` | couriers and current couriers per vehicle |
+| 12 | `DELETE FROM invoices WHERE paid_on IS NULL AND (customer_id, period) IN (SELECT ... GROUP BY 1, 2 HAVING COUNT(*) = 1)` | invoices left, cents, unpaid |
+| 13 | `BEGIN; CREATE TEMP TABLE ... AS SELECT ...; UPDATE couriers ...; UPDATE couriers ...; COMMIT;` | couriers at depots 3 and 4 |
+| 14 | `BEGIN; UPDATE parcels ...; UPDATE customers SET joined_on = (SELECT MIN ...) ...; DELETE FROM customers ...; COMMIT;` | the merged customer and their parcels |
+| 15 | `CREATE TABLE depot_load (...); INSERT ... SELECT ... GROUP BY; CREATE TRIGGER ... AFTER INSERT ON parcels BEGIN UPDATE depot_load ...; END` | every row of the tally |
 
-13 and 15 carry a `driver_sql`, run after your script: a ROLLBACK, which
-undoes anything not committed, and two INSERTs into the view, which call
-the procedure.
+14 and 15 carry a `driver_sql`, run after your script: a ROLLBACK, which
+undoes anything not committed, and three new parcels, which the trigger
+must count.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1297 | LIKE ends-with pattern | Businesses whose name ends in Supplies | ex 1 | 1 - Text and patterns |
-| Q1298 | INSTR with SUBSTR | The surnames with the most customers | ex 2 | 1 - Text and patterns |
-| Q1299 | RTRIM with a character list | Customers by postcode town | ex 3 | 1 - Text and patterns |
-| Q1300 | FIRSTV FIRST_VALUE per partition | How long after the depot's first hire | ex 4 | 2 - Windows and shares |
-| Q1301 | SHARE window over grouped rows | Each region's share of the postage | ex 5 | 2 - Windows and shares |
-| Q1302 | RANK top of group with ties | June's biggest sender at each depot, ties included | ex 6 | 2 - Windows and shares |
-| Q1303 | VALUES inline table in a CTE | How much of the postage is the weight surcharge | ex 7 | 3 - Rows as values |
-| Q1304 | ROWVAL row-value comparison | Every parcel on parcel 1's route | ex 8 | 3 - Rows as values |
-| Q1305 | UNION distinct stack | How many depots a customer's post has touched | ex 9 | 3 - Rows as values |
-| Q1306 | SETROW multi-column SET | Old Foundry's debts, settled **(script)** | ex 10 | 4 - Changing rows |
-| Q1307 | IGNORE INSERT OR IGNORE | A minimum charge for the quiet accounts **(script)** | ex 11 | 4 - Changing rows |
-| Q1308 | DEDUPE DELETE keeping one per group | One failed attempt per parcel is enough **(script)** | ex 12 | 4 - Changing rows |
-| Q1309 | TXN transaction of three UPDATEs | Closing Southfield, all or nothing **(script)** | ex 13 | 5 - Procedures |
-| Q1310 | ORDER archive then delete in order | Lost parcels, archived and then removed **(script)** | ex 14 | 5 - Procedures |
-| Q1311 | INSTEAD OF trigger on a view | A delivery procedure you call with INSERT **(script)** | ex 15 | 5 - Procedures |
-| P566 | PY3 max with a key | The longest word on the label | py 1 | 1 - Finding and counting |
-| P567 | PY3 count changes with zip | How often the status changed | py 2 | 1 - Finding and counting |
-| P568 | PY3 most common by count | The code scanned most often | py 3 | 1 - Finding and counting |
-| P569 | PY3 first number not in a list | The lowest free loading bay | py 4 | 1 - Finding and counting |
-| P570 | PY3 count matching positions | How much of the manifest matches the van | py 5 | 1 - Finding and counting |
-| P571 | PY3 truncate with an ellipsis | A line cut to fit the label | py 6 | 2 - Labels and text |
-| P572 | PY4 ordinal suffix | 1st, 2nd, 3rd, 4th | py 7 | 2 - Labels and text |
-| P573 | PY3 enumerate from one | The steps of a delivery, numbered | py 8 | 2 - Labels and text |
-| P574 | PY3 initials of words | A depot's initials | py 9 | 2 - Labels and text |
-| P575 | PY3 strip characters from the right | The letters of a postcode area | py 10 | 2 - Labels and text |
-| P576 | PY4 interleave two lists | Two loads, taken turn about | py 11 | 3 - Working with lists |
-| P577 | PY3 replace a value throughout | A relabelled parcel, corrected everywhere | py 12 | 3 - Working with lists |
-| P578 | PY3 next item, wrapping round | Who is next on the rota | py 13 | 3 - Working with lists |
-| P579 | PY3 sort ignoring case | Names in order, whatever their capitals | py 14 | 3 - Working with lists |
-| P580 | PY3 same items in any order | Do the two vans carry the same load? | py 15 | 3 - Working with lists |
+| Q1312 | FULL OUTER JOIN of two aggregates | Hires and leavers, depot by depot | ex 1 | 1 - Joins and lookups |
+| Q1313 | FANOUT aggregate before joining | Postage and invoices, side by side | ex 2 | 1 - Joins and lookups |
+| Q1314 | LATEST correlated ORDER BY LIMIT 1 | Each depot's newest courier | ex 3 | 1 - Joins and lookups |
+| Q1315 | QTR quarter by integer division | Parcels and postage by quarter | ex 4 | 2 - Calendar buckets |
+| Q1316 | WEEK weekday modifier to a Monday | June, week by week | ex 5 | 2 - Calendar buckets |
+| Q1317 | COHORT month of first parcel | The month each sender first sent | ex 6 | 2 - Calendar buckets |
+| Q1318 | WAVG row against a window AVG | Parcels that cost twice their service's average | ex 7 | 3 - Whole groups |
+| Q1319 | CNTCOL COUNT(*) vs COUNT(column) in HAVING | Customers with nothing outstanding | ex 8 | 3 - Whole groups |
+| Q1320 | MINMAX HAVING MIN = MAX | Customers who always pay the same way | ex 9 | 3 - Whole groups |
+| Q1321 | CLONE INSERT SELECT copying a row | A second depot, copied from the first **(script)** | ex 10 | 4 - Changing rows |
+| Q1322 | UPWIN UPDATE chosen by a window function | The longest-serving bike courier gets a van **(script)** | ex 11 | 4 - Changing rows |
+| Q1323 | DELROW DELETE by row-value IN | Invoices not worth chasing **(script)** | ex 12 | 4 - Changing rows |
+| Q1324 | SWAP exchange with a TEMP table | Two depots swap their couriers **(script)** | ex 13 | 5 - Procedures |
+| Q1325 | MERGE two records in FK order | One customer, registered twice **(script)** | ex 14 | 5 - Procedures |
+| Q1326 | TALLY summary table kept by a trigger | A running tally the database keeps itself **(script)** | ex 15 | 5 - Procedures |
+| P581 | PY3 collapse runs of spaces | A label with its spacing put right | py 1 | 1 - Text, tidied |
+| P582 | PY3 capitalise the first letter only | A first letter capitalised, the rest left alone | py 2 | 1 - Text, tidied |
+| P583 | PY3 keep only the digits | Just the digits of a phone number | py 3 | 1 - Text, tidied |
+| P584 | PY3 text between two markers | The note in brackets | py 4 | 1 - Text, tidied |
+| P585 | PY3 repeat a character to a length | A heading, underlined | py 5 | 1 - Text, tidied |
+| P586 | PY3 startswith a tuple | Does the code belong to one of our depots? | py 6 | 2 - Checks and searches |
+| P587 | PY3 search ignoring case | Names that contain the search term | py 7 | 2 - Checks and searches |
+| P588 | PY4 validate a clock time | Is that really a time? | py 8 | 2 - Checks and searches |
+| P589 | PY4 last position of a value | The last time the parcel was on a van | py 9 | 2 - Checks and searches |
+| P590 | PY3 any with strip | Is any field on the form blank? | py 10 | 2 - Checks and searches |
+| P591 | PY3 expand a text range | Bay numbers from a range on the rota | py 11 | 3 - Lists, built and reshaped |
+| P592 | PY3 pairs into two lists | Codes in one list, postage in another | py 12 | 3 - Lists, built and reshaped |
+| P593 | PY4 merge two lists without repeats | Two manifests, merged | py 13 | 3 - Lists, built and reshaped |
+| P594 | PY3 remove every occurrence | A status struck from the trail, everywhere | py 14 | 3 - Lists, built and reshaped |
+| P595 | PY3 every nth item by a stepped slice | Every third parcel is spot-checked | py 15 | 3 - Lists, built and reshaped |
 
 ## Retired
 
@@ -403,6 +404,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1297 | LIKE ends-with pattern | Businesses whose name ends in Supplies | - | retired |
+| Q1298 | INSTR with SUBSTR | The surnames with the most customers | - | retired |
+| Q1299 | RTRIM with a character list | Customers by postcode town | - | retired |
+| Q1300 | FIRSTV FIRST_VALUE per partition | How long after the depot's first hire | - | retired |
+| Q1301 | SHARE window over grouped rows | Each region's share of the postage | - | retired |
+| Q1302 | RANK top of group with ties | June's biggest sender at each depot, ties included | - | retired |
+| Q1303 | VALUES inline table in a CTE | How much of the postage is the weight surcharge | - | retired |
+| Q1304 | ROWVAL row-value comparison | Every parcel on parcel 1's route | - | retired |
+| Q1305 | UNION distinct stack | How many depots a customer's post has touched | - | retired |
+| Q1306 | SETROW multi-column SET | Old Foundry's debts, settled **(script)** | - | retired |
+| Q1307 | IGNORE INSERT OR IGNORE | A minimum charge for the quiet accounts **(script)** | - | retired |
+| Q1308 | DEDUPE DELETE keeping one per group | One failed attempt per parcel is enough **(script)** | - | retired |
+| Q1309 | TXN transaction of three UPDATEs | Closing Southfield, all or nothing **(script)** | - | retired |
+| Q1310 | ORDER archive then delete in order | Lost parcels, archived and then removed **(script)** | - | retired |
+| Q1311 | INSTEAD OF trigger on a view | A delivery procedure you call with INSERT **(script)** | - | retired |
+| P566 | PY3 max with a key | The longest word on the label | - | retired |
+| P567 | PY3 count changes with zip | How often the status changed | - | retired |
+| P568 | PY3 most common by count | The code scanned most often | - | retired |
+| P569 | PY3 first number not in a list | The lowest free loading bay | - | retired |
+| P570 | PY3 count matching positions | How much of the manifest matches the van | - | retired |
+| P571 | PY3 truncate with an ellipsis | A line cut to fit the label | - | retired |
+| P572 | PY4 ordinal suffix | 1st, 2nd, 3rd, 4th | - | retired |
+| P573 | PY3 enumerate from one | The steps of a delivery, numbered | - | retired |
+| P574 | PY3 initials of words | A depot's initials | - | retired |
+| P575 | PY3 strip characters from the right | The letters of a postcode area | - | retired |
+| P576 | PY4 interleave two lists | Two loads, taken turn about | - | retired |
+| P577 | PY3 replace a value throughout | A relabelled parcel, corrected everywhere | - | retired |
+| P578 | PY3 next item, wrapping round | Who is next on the rota | - | retired |
+| P579 | PY3 sort ignoring case | Names in order, whatever their capitals | - | retired |
+| P580 | PY3 same items in any order | Do the two vans carry the same load? | - | retired |
 | Q1282 | INTERSECT set intersection | Customers who have used both ends of the price list | - | retired |
 | Q1283 | EXCEPT set difference | Couriers who delivered last year and not this | - | retired |
 | Q1284 | DRK DENSE_RANK against RANK | Depots ranked by staff, ties sharing a place | - | retired |
@@ -2672,7 +2703,7 @@ they still count as asked.
   weight band label, a dotted price line, a date reordered; repeats
   dropped ignoring case, a flat list paired up by stepped slices, a code
   moved to the front, strictly rising weights, a trail padded out.
-- **Q1297-Q1311 and P566-P580** current set, the sixth on the
+- **Q1297-Q1311 and P566-P580** retired set, the sixth on the
   parcel-courier scheme (SEED 1241), and the first with SIX writable
   questions: nine that read, three that change rows, three procedures.
   Prompts name the tool but not the statement. SQL, two tools per question
@@ -2699,3 +2730,32 @@ they still count as asked.
   list by enumerate, initials, a postcode's letters by rstrip; two lists
   interleaved, a value replaced throughout, the next name on a rota
   wrapping round, a sort ignoring case, the same load in any order.
+- **Q1312-Q1326 and P581-P595** current set, the seventh on the
+  parcel-courier scheme (SEED 1241), nine reading and six writable as in
+  the sixth, prompts naming the tool but not the statement. SQL, two tools
+  per question in task-named tiers, on tools the first six courier sets
+  left out: hires beside leavers per depot by a FULL OUTER JOIN of two
+  grouped subqueries, business postage beside invoiced money by
+  aggregating each before the join, each depot's newest courier by a
+  correlated ORDER BY ... LIMIT 1, parcels per quarter by (month + 2) / 3,
+  June by weeks labelled with their Monday through 'weekday 0', '-6
+  days', senders by the month of their first parcel, parcels over double
+  their own service's average by AVG ... OVER (PARTITION BY), customers
+  with every invoice paid by HAVING COUNT(*) = COUNT(paid_on), customers
+  with one payment method by MIN = MAX. Changing rows: a depot cloned by
+  INSERT ... SELECT with two literals, each depot's longest-serving
+  current bike courier promoted by an UPDATE reading ROW_NUMBER from a
+  subquery, unpaid single-parcel invoices deleted by (customer_id,
+  period) IN a grouped subquery. Procedures: Northgate and Moorside swap
+  couriers with a TEMP table holding one side; customers 67 and 201
+  merged -- parcels repointed, the earlier joined_on kept, the duplicate
+  deleted, in that order, proved by a ROLLBACK afterwards; and a
+  depot_load table created, filled from history and kept current by an
+  AFTER INSERT trigger. Python, everyday tasks in the courier's terms:
+  spacing tidied by split and join, a first letter capitalised by
+  slices, digits kept by isdigit, text between brackets by find, a
+  heading underlined; startswith a tuple, a search ignoring case, a clock
+  time validated, the last position of a value, any blank field; a text
+  range expanded, pairs unzipped into two lists, two lists merged without
+  repeats, a value removed everywhere, every nth item by a stepped
+  slice.
