@@ -1,27 +1,27 @@
 # SQL and Python practice exercises
 
 Thirty questions in two tabs. **Fifteen SQL** on the parcel-courier scheme,
-the seventh set on it, at two tools per question with the tiers named by
-task, on tools the first six courier sets left out. Nine read the data
+the eighth set on it, at two tools per question with the tiers named by
+task, on tools the first seven courier sets left out. Nine read the data
 and **six change it**: three single statements and three procedures of
 several steps. The prompts name the tool but do not write the statement.
-**Fifteen Python** at the easy level of the last nine sets: everyday
+**Fifteen Python** at the easy level of the last ten sets: everyday
 tasks over plain lists and strings in the courier's terms, with no maths
 and no dicts.
 
 | Stage | SQL questions |
 |---|---|
-| 1 - Joins and lookups | 1-3 |
-| 2 - Calendar buckets | 4-6 |
-| 3 - Whole groups | 7-9 |
+| 1 - Text, matched and built | 1-3 |
+| 2 - More from windows | 4-6 |
+| 3 - Positions, years and thresholds | 7-9 |
 | 4 - Changing rows | 10-12 |
 | 5 - Procedures | 13-15 |
 
 | Stage | Python questions |
 |---|---|
-| 1 - Text, tidied | 1-5 |
-| 2 - Checks and searches | 6-10 |
-| 3 - Lists, built and reshaped | 11-15 |
+| 1 - Text checks and fixes | 1-5 |
+| 2 - Safe values and labels | 6-10 |
+| 3 - Lists, split and combined | 11-15 |
 
 ## The schema
 
@@ -80,52 +80,55 @@ permanent. The sandbox does not commit for you. After a script that
 creates a table or a view, a second Run fails because the first one's is
 still there: press Reset.
 
-**Driver statements.** Question 14 issues a `ROLLBACK` *after* your
-script. If your work was committed, there is nothing of yours left to
-roll back and it stands. If your transaction was left open, everything it
-did is undone and the check query shows the data as it was. Question 15
-collects three new parcels, two at depot 3 and one at depot 10, which is
-what makes the trigger fire. Questions 10 to 13 are graded on what your
-script leaves behind.
+**Driver statements.** Question 13 tries three inserts into your
+rebuilt table: an invoice paid before it was issued, which the new CHECK
+must refuse; a valid one, which must get in; and a second invoice for a
+customer and period already there, which the old UNIQUE must still
+refuse. Question 14 issues a `ROLLBACK`: committed work stands, and a
+transaction left open is undone. Question 15 deletes parcels 40 and 122,
+which is what fires the trigger. Questions 10 to 12 are graded on what
+your script leaves behind.
+
+**The definition of a table** is in `schema.sql`. Question 13 needs the
+whole of the `invoices` one.
 
 | # | Construct |
 |---|---|
-| 10 | `INSERT INTO depots (name, region, bays, opened_on) SELECT '...', region, bays, '...' FROM depots WHERE name = ...` |
-| 11 | `UPDATE couriers SET vehicle = 'van' WHERE courier_id IN (SELECT courier_id FROM (SELECT ..., ROW_NUMBER() OVER (PARTITION BY depot_id ORDER BY hired_on) ...) WHERE rn = 1)` |
-| 12 | `DELETE FROM invoices WHERE paid_on IS NULL AND (customer_id, period) IN (SELECT ... GROUP BY 1, 2 HAVING COUNT(*) = 1)` |
-| 13 | `BEGIN; CREATE TEMP TABLE ... AS SELECT courier_id ...; UPDATE couriers ...; UPDATE couriers ... IN (SELECT ...); COMMIT;` |
-| 14 | `BEGIN; UPDATE parcels ...; UPDATE customers SET joined_on = (SELECT MIN(joined_on) ...) ...; DELETE FROM customers ...; COMMIT;` |
-| 15 | `CREATE TABLE depot_load (...); INSERT INTO depot_load SELECT ... GROUP BY ...; CREATE TRIGGER ... AFTER INSERT ON parcels BEGIN UPDATE depot_load ...; END` |
+| 10 | `INSERT INTO couriers (name, depot_id, vehicle, hired_on) VALUES ('...', (SELECT depot_id FROM depots WHERE name = '...'), ...), (...)` |
+| 11 | `UPDATE depots SET bays = 4 * (SELECT COUNT(*) FROM couriers c WHERE c.depot_id = depots.depot_id AND c.left_on IS NULL) WHERE closed_on IS NULL` |
+| 12 | `DELETE FROM scans WHERE status NOT IN ('collected', 'delivered') AND parcel_id IN (SELECT parcel_id FROM parcels WHERE delivered_at < '...')` |
+| 13 | `BEGIN; CREATE TABLE invoices_new (... CHECK (paid_on >= issued_on)); INSERT INTO invoices_new SELECT * FROM invoices; DROP TABLE invoices; ALTER TABLE invoices_new RENAME TO invoices; COMMIT;` |
+| 14 | `BEGIN; INSERT INTO depots (...) VALUES (...); UPDATE couriers SET depot_id = last_insert_rowid() WHERE ...; UPDATE customers SET depot_id = last_insert_rowid() WHERE ...; COMMIT;` |
+| 15 | `CREATE TABLE removed (...); CREATE TRIGGER ... BEFORE DELETE ON parcels BEGIN INSERT INTO removed SELECT OLD.parcel_id, COUNT(*) FROM scans ...; DELETE FROM scans ...; END` |
 
 ## Things the data does on purpose
 
-- **8 depots have hired since 2025 and 7 have lost a courier, but only 9 are
-  in one list or the other**: Millbank only lost, two depots only hired, and
-  Central Hub did neither, which is question 1's full join.
-- **Business customers have 10,683 parcels and 2,298 invoices**, the two child
-  tables that multiply each other in question 2 if they are joined before they
-  are added up.
-- **No two couriers at a depot were hired on the same day**, so question 3's
-  most recent hire is never a tie.
-- **The second quarter of 2026 is the busiest, with 4,455 parcels**, question
-  4's last row; 1 June 2026 was a Monday, and the week of the 29th has only
-  two days in June and 101 parcels, question 5's last.
-- **283 of the 620 senders sent their first parcel in January 2025**, question
-  6's first and biggest cohort.
-- **The average express parcel costs 1,316 cents and the average economy one
-  514**, which is why question 7 compares a parcel with its own service and
-  not with everything.
-- **49 customers have paid every invoice, against 221 who have paid at least
-  one**, question 8's gap; 22 have only ever paid one way, question 9's total.
-- **8 of the ten depots have a bike courier still employed**, the promotions
-  in question 11; 156 unpaid invoices are for a month with a single parcel,
-  the ones question 12 deletes.
-- **Northgate lists 5 couriers and Moorside 6**, the numbers that change
-  places in question 13.
-- **There are 3 customers called Dmitri Sowerby**, two of them at depot 5 and
-  merged in question 14; the third is someone else.
-- **Northgate has collected 1,900 parcels**, the tally question 15's trigger
-  moves on by two.
+- **46 personal customers have a first name of four letters**, three names
+  between them, question 1's rows; 42 customers have a postcode area ending in
+  two digits, all of them DE22, question 2's total.
+- **76 invoices for May 2026 are unpaid**, the references question 3 builds,
+  for customer ids from one digit to three.
+- **7 months set a record, though 9 improved on the month before**, the
+  difference between question 4's frame and a plain LAG.
+- **June 2025 had 1,202 parcels and June 2026 1,523**, question 5's last row;
+  every one of the eighteen months has parcels, which is what lets an offset
+  of twelve mean a year.
+- **235 customers share their name with another, but only 20 with one at their
+  own depot**, question 6's partition.
+- **The fourth-busiest courier has delivered 643 parcels**, where question 7
+  starts; no two of the top ten are tied.
+- **4 of the 45 current couriers have not reached their first anniversary**,
+  question 8's zero row, which a plain difference of years cannot produce.
+- **613 customers have sent ten parcels or more and 25 a hundred or more**,
+  the ends of question 9's table.
+- **Central Hub has 48 bays and 2 couriers**, so question 11 cuts it to eight;
+  3,083 parcels were delivered before April 2025, with 8,251 scans between
+  their first and last, the ones question 12 deletes.
+- **No invoice in the data was paid before it was issued**, so question 13's
+  new CHECK has nothing to object to in the existing rows.
+- **Docklands has 2 lorry drivers and 16 customers with an LE postcode, out of
+  126 in the company**, the moves in question 14; parcels 40 and 122 are lost
+  parcels with five and three scans, question 15's deletes.
 - **The data ends at 2026-06-30 23:59**, so a date in July 2026 is always
   after everything already there.
 
@@ -138,9 +141,8 @@ result with the reference function's. Values are compared, not their printed
 form -- but the type counts: a tuple is not a list, and 0 is not False. A
 function that prints its answer instead of returning it returns None, and
 None matches nothing. The inputs are everyday values in the courier's terms:
-labels, messages and phone numbers for questions 1 to 5, codes, names,
-times and form fields for 6 to 10, ranges, pairs and lists of codes for
-11 to 15.
+codes, addresses and names for questions 1 to 5, form fields, numbers
+and days for 6 to 10, lists of codes, stops and numbers for 11 to 15.
 Each prompt shows one example call with its answer, and Run adds a few
 more, including the empty list or the edge the question warns about.
 
@@ -151,386 +153,391 @@ indentation of the line above.
 
 # SQL
 
-## 1 - Joins and lookups (3)
+## 1 - Text, matched and built (3)
 
-FULL OUTER JOIN for a row wherever either side has one, aggregating each child
-table before joining so the two do not multiply, and ORDER BY ... LIMIT 1 in a
-correlated subquery so the name and the date come from one row.
+An underscore in LIKE for exactly one character, GLOB's [0-9] for one character
+out of a set with * for the rest, and printf('%05d') to pad a number before ||
+joins it into a reference.
 
-1. **Hires and leavers, depot by depot** (Q1312)
+1. **First names of exactly four letters** (Q1327)
 
-   For each depot, by name: how many couriers it has hired since 2025-01-01,
-   and how many of its couriers have left. Some depots hired and lost nobody,
-   some lost and hired nobody; a depot with neither is not listed, and a
-   missing count is 0. Two grouped subqueries, and the join that keeps the
-   unmatched rows of BOTH sides.
+   A personal customer's name is a first name, one space, and a surname. For
+   each first name of exactly FOUR letters: how many personal customers have
+   it. In a LIKE pattern % is any run of characters; there is a second
+   wildcard that stands for exactly one.
 
-   *Return: depot, hired, left*
+   *Return: first_name, customers*
 
-2. **Postage and invoices, side by side** (Q1313)
+2. **Postcode areas that end in two digits** (Q1328)
 
-   For each depot, by name, and its BUSINESS customers only: the postage on
-   all their parcels, and the amount on all their invoices. A customer has
-   many parcels and many invoices, so joining both tables to the customer at
-   once pairs every parcel with every invoice. Add each one up on its own
-   first, then join the totals.
-
-   *Return: depot, postage_cents, invoiced_cents*
-
-3. **Each depot's newest courier** (Q1314)
-
-   For each depot, by name: the courier it hired most recently, and the date.
-   Couriers who have since left count. The name and the date must belong to
-   the SAME courier: a correlated subquery that sorts that depot's couriers
-   and takes one.
-
-   *Return: depot, courier, hired_on*
-
-## 2 - Calendar buckets (3)
-
-(month + 2) / 3 for the quarter and || for its label, 'weekday 0' forward to
-Sunday then '-6 days' back to Monday, and MIN per customer before grouping by
-month so each sender is counted once.
-
-4. **Parcels and postage by quarter** (Q1315)
-
-   For each calendar quarter of collection, labelled like '2025-Q1': the
-   parcels collected and their postage. January to March is Q1. strftime has
-   no code for the quarter; it comes from the month number by integer
-   arithmetic, and the label is put together with ||.
-
-   *Return: quarter, parcels, postage_cents*
-
-5. **June, week by week** (Q1316)
-
-   Parcels collected in June 2026, counted by week. A week runs Monday to
-   Sunday and is labelled with the DATE of its Monday. The 'weekday N' date
-   modifier only ever moves a date forward, to the next such weekday or not at
-   all, so reaching the Monday behind you takes a second modifier after it.
-
-   *Return: week_starting, parcels*
-
-6. **The month each sender first sent** (Q1317)
-
-   For each month, as 'YYYY-MM': how many customers sent their FIRST parcel in
-   it. A customer is counted once, in the month of their earliest collection;
-   walk-ins are left out. An aggregate per customer, then a second grouping on
-   what it found.
-
-   *Return: month, new_senders*
-
-## 3 - Whole groups (3)
-
-AVG ... OVER (PARTITION BY) beside every row of its group, COUNT(*) =
-COUNT(column) for 'none of them is NULL', and MIN = MAX for 'there is only one
-value'.
-
-7. **Parcels that cost twice their service's average** (Q1318)
-
-   For each service: how many parcels paid MORE THAN DOUBLE the average
-   postage of their own service. A window AVG puts the group's average beside
-   every row; the comparison then needs an outer query.
-
-   *Return: service, parcels*
-
-8. **Customers with nothing outstanding** (Q1319)
-
-   For each depot, by name: how many of its customers have been invoiced and
-   have paid EVERY invoice. A depot with no such customer is not listed.
-   COUNT(*) counts rows and COUNT(column) counts the rows where the column is
-   not NULL; HAVING can compare the two.
+   For each depot, by name: how many of its customers have a postcode_area
+   that ENDS IN TWO DIGITS, like DE22. LIKE has no way to say 'a digit'. GLOB
+   has: a character class in square brackets. Its wildcard for 'anything' is *
+   and not %.
 
    *Return: depot, customers*
 
-9. **Customers who always pay the same way** (Q1320)
+3. **A reference number for the reminder letters** (Q1329)
 
-   Some customers have paid every invoice they have paid by the same method.
-   For each method: how many customers have only ever used that one. Unpaid
-   invoices have no method and do not count either way. A group holds a single
-   value exactly when its smallest and its largest are the same.
+   Every UNPAID invoice for period 2026-05 needs a reference: 'INV-', the
+   period, a hyphen, and the customer_id padded with zeros to FIVE digits --
+   INV-2026-05-00004 for customer 4. printf pads a number; || joins the
+   pieces.
 
-   *Return: method, customers*
+   *Return: reference, amount_cents*
+
+## 2 - More from windows (3)
+
+A frame that ends at 1 PRECEDING so MAX is the best BEFORE this row, LAG with an
+offset of twelve for the same month last year, and COUNT(*) OVER (PARTITION BY
+name) to see a group's size without collapsing it.
+
+4. **The months that set a record** (Q1330)
+
+   A record month is one in which more parcels were collected than in ANY
+   earlier month. List the record months, each with the best figure it had to
+   beat. The first month of the data has nothing to beat and is not listed. A
+   window MAX whose frame stops one row BEFORE the current one.
+
+   *Return: month, parcels, previous_best*
+
+5. **This month against the same month last year** (Q1331)
+
+   For each month that has one: the parcels collected, and the parcels
+   collected in the SAME month a year earlier. Months with no such earlier
+   month are not listed. No month is missing from the data. LAG takes a second
+   argument.
+
+   *Return: month, parcels, a_year_earlier*
+
+6. **Customers who share their name with another** (Q1332)
+
+   Some customers have exactly the same name as another customer, anywhere in
+   the company. For each depot, by name: how many of its customers have such a
+   namesake. A window COUNT partitioned by name puts the size of each name's
+   group on every row, without collapsing the rows.
+
+   *Return: depot, customers*
+
+## 3 - Positions, years and thresholds (3)
+
+OFFSET as the number of rows to skip, a year difference less one where the
+anniversary has not come, and a join on >= so one row can match several levels.
+
+7. **Fourth, fifth and sixth place** (Q1333)
+
+   Rank the couriers by parcels delivered, most first. Return the three in
+   4th, 5th and 6th place. No two of the top ten are tied. LIMIT has a partner
+   that skips rows first.
+
+   *Return: courier, deliveries*
+
+8. **Completed years of service** (Q1334)
+
+   For couriers still employed: their COMPLETED years of service on
+   2026-06-30, counted the way a birthday is -- a year counts only once its
+   anniversary has come -- and how many couriers have each number. Subtracting
+   the years is one too many for anyone whose anniversary falls later in the
+   year; comparing the 'MM-DD' parts as text says who.
+
+   *Return: years, couriers*
+
+9. **How many customers reach each level** (Q1335)
+
+   How many customers have sent AT LEAST 10 parcels? At least 15, 20, 25, 30,
+   100? One row per level; a customer with 40 parcels is counted at five of
+   them. Walk-ins are left out. A join does not have to be on equality: put
+   the six levels in an inline table and join on >=.
+
+   *Return: at_least, customers*
 
 ## 4 - Changing rows (3)
 
 Writable questions: your script runs in a sandbox copy of the database and the
-question's probe query reads the result. One statement each: INSERT ... SELECT
-mixing columns with literals, an UPDATE whose WHERE reads a window function
-through a subquery, and a DELETE matching pairs as row values.
+question's probe query reads the result. One statement each: VALUES with two
+rows and a scalar subquery for the foreign key, a correlated subquery in SET,
+and NOT IN where OR would be true of everything.
 
-10. **A second depot, copied from the first** (Q1321)
+10. **Two new starters at Hillcrest** (Q1336)
 
-    A new depot opens on 2026-07-01, called 'Harbour Point East'. It is in the
-    same region as Harbour Point and has the same number of bays, whatever
-    those are -- read them, do not type them in. One INSERT ... SELECT whose
-    SELECT reads the row being copied and supplies the new name and date
-    itself.
+    Two couriers start at the Hillcrest depot on 2026-07-01: Ada Whitlock on a
+    bike and Tom Reyes in a van. Add them in ONE INSERT with two rows. The
+    depot is known by its name, so its id is looked up, not typed: a subquery
+    in brackets can stand wherever a value can.
 
-    *Checked: name, region, bays, opening and closing dates of every depot whose name starts 'Harbour Point'*
+    *Checked: name, depot name, vehicle, hiring and leaving dates of every courier hired from July 2026 on*
 
-11. **The longest-serving bike courier gets a van** (Q1322)
+11. **Bays to match the people** (Q1337)
 
-    At each depot, the bike courier who has been there longest and is STILL
-    EMPLOYED moves up to a van. A depot with no such courier promotes nobody.
-    One UPDATE; which couriers is decided by a subquery that numbers the
-    candidates within their depot with a window function.
+    The bays are re-planned: every depot still open is to have FOUR bays for
+    each courier currently working there, no more and no fewer. The closed
+    depot keeps what it has. One UPDATE; the SET holds a subquery that counts
+    the couriers of the depot being updated.
 
-    *Checked: for each vehicle, the couriers listed and how many of them are still employed*
+    *Checked: every depot's name and bays*
 
-12. **Invoices not worth chasing** (Q1323)
+12. **Old trails, thinned to their two ends** (Q1338)
 
-    An invoice for a single parcel is not worth chasing. Cancel -- delete --
-    every UNPAID invoice whose period saw that customer send exactly ONE
-    parcel. An invoice's period is the 'YYYY-MM' in which its parcels were
-    collected. A DELETE whose WHERE matches (customer, period) PAIRS, as a row
-    value, against a grouped subquery.
+    Trails of old parcels are thinned to save space. For every parcel
+    DELIVERED before 2025-04-01, delete the scans that are neither its
+    'collected' scan nor its 'delivered' scan. Every other parcel keeps its
+    whole trail. Take care how 'neither ... nor' is written: NOT IN says it
+    safely.
 
-    *Checked: invoices left, their cents added up, how many are unpaid*
+    *Checked: scans left, for each status*
 
 ## 5 - Procedures (3)
 
 Writable questions of several steps. SQLite has no CREATE PROCEDURE: a
 transaction makes steps stand or fall together, the order of the steps is the
-procedure, and a trigger is a stored body that runs on its own from then on.
+procedure, and a trigger body is a procedure the database runs for you.
 
-13. **Two depots swap their couriers** (Q1324)
+13. **A new rule for a table that already exists** (Q1339)
 
-    Northgate (depot 3) and Moorside (depot 4) exchange their entire courier
-    lists: everyone listed at one becomes listed at the other, leavers
-    included. Two plain UPDATEs in a row will not do it -- after the first,
-    the two groups cannot be told apart -- and the foreign key will not let
-    anyone be parked at a depot that does not exist. Remember who was where
-    before moving anyone; a TEMP table is one place to keep it. One
-    transaction.
+    New rule: an invoice cannot be paid before it was issued. SQLite's ALTER
+    TABLE cannot add a CHECK to an existing table, so the table is rebuilt, in
+    one transaction, by the standard procedure: create invoices_new with
+    everything invoices has PLUS the new CHECK; copy every row across; drop
+    invoices; rename invoices_new to invoices. The present definition is in
+    schema.sql -- start from it, so that no existing rule is lost. The
+    question then tries three inserts: one paid before it was issued, one that
+    is fine, and one repeating a customer and period already there.
 
-    *Checked: for depots 3 and 4: couriers listed, and the lowest courier_id among them*
+    *Checked: invoices in the table, how many are for 2026-06, and the cents added up*
 
-14. **One customer, registered twice** (Q1325)
+14. **Riverside opens, with staff and customers** (Q1340)
 
-    Customers 67 and 201 are the same person, Dmitri Sowerby, registered twice
-    at depot 5. (A third customer of that name, at another depot, is someone
-    else.) Merge them into 67, in one transaction: 201's parcels become 67's;
-    67 takes whichever joined_on of the two is EARLIER; then 201 is deleted.
-    The order is part of the answer -- foreign keys are on, and a deleted row
-    can no longer be read. The question then issues a ROLLBACK: committed work
-    survives it.
+    A new depot, Riverside, opens in the east region on 2026-07-01 with 12
+    bays. In ONE transaction: add the depot; move the lorry drivers of
+    Docklands (depot 5) to it; move to it every Docklands customer whose
+    postcode_area begins LE. The new depot's id is whatever the table gives it
+    -- do not assume a number: last_insert_rowid() reports the id of the row
+    an INSERT has just made. The question then issues a ROLLBACK: committed
+    work survives it.
 
-    *Checked: customers of that name at depot 5, 67's joined_on, 67's parcels, and parcels with no customer*
+    *Checked: for Docklands and Riverside: region, bays, couriers listed, customers listed*
 
-15. **A running tally the database keeps itself** (Q1326)
+15. **A parcel that takes its trail with it** (Q1341)
 
-    Counting 24,000 parcels every time someone asks is wasteful. Set up a
-    tally in three steps: create a table depot_load with depot_id as its
-    primary key and a required whole number parcels; fill it with the number
-    of parcels each depot has COLLECTED so far; then create an AFTER INSERT
-    trigger on parcels that adds one to the origin depot's row. The question
-    then collects three new parcels, two at depot 3 and one at depot 10.
+    Deleting a parcel is refused while it has scans: the foreign key protects
+    the trail. Store the procedure that makes it possible. Create a table
+    removed with parcel_id as its primary key and a required whole number
+    scans_removed, and a BEFORE DELETE trigger on parcels whose body does two
+    things for the parcel about to go: records in removed how many scans it
+    has, and deletes those scans. The question then deletes parcels 40 and
+    122.
 
-    *Checked: every row of depot_load*
+    *Checked: each row of removed, with the parcels and scans left in the database*
 
 # Python
 
-## 1 - Text, tidied (5)
+## 1 - Text checks and fixes (5)
 
-split() then join for spacing, two slices where capitalize() would lower the
-rest, a generator that keeps what isdigit() approves, find() checked for -1
-before it is used, and a character times len().
+strip() and lower() on both sides of ==, isdigit() before int(), a slice of
+len(ending) where rstrip would strip characters, stars times len - 4, and
+lower() before count().
 
-1. **A label with its spacing put right** (P581)
+1. **The same code, typed two ways** (P596)
 
-   Write a function `tidy_spaces(label)` that returns the label with no spaces
-   at either end and exactly one space between words, however many were typed.
-   split() with no argument, then join.
-
-   ```
-   tidy_spaces("  Central   Hub ") -> "Central Hub"
-   ```
-
-   *Return: a str.*
-
-2. **A first letter capitalised, the rest left alone** (P582)
-
-   Write a function `start_capital(text)` that returns the text with its first
-   character in upper case and every other character exactly as it was. The
-   empty string comes back empty. Two slices.
+   Write a function `same_code(a, b)` that returns True if the two codes are
+   the same once spaces at either end are removed and capitals are ignored.
+   Spaces INSIDE a code still count as a difference.
 
    ```
-   start_capital("deliver to Central Hub") -> "Deliver to Central Hub"
-   ```
-
-   *Return: a str.*
-
-3. **Just the digits of a phone number** (P583)
-
-   Phone numbers arrive with spaces, hyphens and brackets. Write a function
-   `digits_only(text)` that returns only the digits, in order, as one string.
-   A string has a method that says whether it is a digit.
-
-   ```
-   digits_only("0115 496-0123") -> "01154960123"
-   ```
-
-   *Return: a str.*
-
-4. **The note in brackets** (P584)
-
-   Write a function `in_brackets(text)` that returns what is between the first
-   '(' and the ')' that follows it, not including the brackets. If there is no
-   '(' the answer is the empty string. find() returns a position, or -1.
-
-   ```
-   in_brackets("Parcel 12 (fragile) for Northgate") -> "fragile"
-   ```
-
-   *Return: a str.*
-
-5. **A heading, underlined** (P585)
-
-   Write a function `underlined(title)` that returns the title, a newline, and
-   then a row of '=' signs exactly as long as the title. A string times a
-   number repeats it.
-
-   ```
-   underlined("Northgate") -> "Northgate\n========="
-   ```
-
-   *Return: a str, with one newline in it (written \n above).*
-
-## 2 - Checks and searches (5)
-
-startswith given a tuple, lower() on both sides of `in`, shape before numbers so
-int() cannot raise, a range that counts down, and any() over strip().
-
-6. **Does the code belong to one of our depots?** (P586)
-
-   Write a function `has_prefix(code, prefixes)` that returns True if the code
-   starts with ANY of the prefixes in the list. The prefixes are not all the
-   same length. startswith accepts several candidates at once, as a tuple.
-
-   ```
-   has_prefix("NGT-0042", ["MB", "NGT", "CH"]) -> True
-   has_prefix("NG-0042", ["MB", "NGT", "CH"]) -> False
+   same_code("MB-0012", " mb-0012 ") -> True
+   same_code("MB-12", "MB -12") -> False
    ```
 
    *Return: a bool.*
 
-7. **Names that contain the search term** (P587)
+2. **The house number at the start of an address** (P597)
 
-   Write a function `matching(names, term)` that returns the names containing
-   the search term, in their original order and spelling. Capitals make no
-   difference, in the names or in the term.
-
-   ```
-   matching(["Yilmaz Bicycles", "Achebe Bakery Direct", "Okonjo BAKERY Ltd"], "bakery") -> ["Achebe Bakery Direct", "Okonjo BAKERY Ltd"]
-   ```
-
-   *Return: a list of str.*
-
-8. **Is that really a time?** (P588)
-
-   Write a function `valid_time(text)` that returns True only for a real
-   24-hour clock time written 'HH:MM': five characters, a colon in the middle,
-   two digits either side, hours 00 to 23 and minutes 00 to 59. Check the
-   shape first, the numbers second.
+   Write a function `house_number(address)` that returns the house number as
+   an int when the FIRST word of the address is made of digits only, and None
+   otherwise.
 
    ```
-   valid_time("23:59") -> True
-   valid_time("14:65") -> False
-   valid_time("9:30") -> False
+   house_number("12 High Street") -> 12
+   house_number("Flat 3, 12 High Street") -> None
    ```
 
-   *Return: a bool.*
+   *Return: an int, or None.*
 
-9. **The last time the parcel was on a van** (P589)
+3. **A company name without its ending** (P598)
 
-   Write a function `last_position(items, value)` that returns the position,
-   counting from 0, of the LAST item equal to value, or -1 if there is none. A
-   range can count downwards.
+   Write a function `without_ending(name, endings)` that returns the name with
+   its ending cut off, if it ends with one of the endings in the list, and
+   unchanged if it ends with none of them. Each ending in the list begins with
+   a space.
 
    ```
-   last_position(["van", "depot", "van", "door"], "van") -> 2
+   without_ending("Okonjo Books Ltd", [" Ltd", " & Co", " & Sons"]) -> "Okonjo Books"
+   ```
+
+   *Return: a str.*
+
+4. **An account number with its last four showing** (P599)
+
+   Write a function `masked(number)` that returns the string with every
+   character except the last four replaced by a star. The result is the same
+   length as the original; a string of four characters or fewer comes back
+   unchanged.
+
+   ```
+   masked("12345678") -> "****5678"
+   ```
+
+   *Return: a str.*
+
+5. **How many times a letter appears** (P600)
+
+   Write a function `count_letter(text, letter)` that returns how many times
+   the letter appears in the text, counting capitals and small letters as the
+   same, whichever way the letter itself was given.
+
+   ```
+   count_letter("Bartholomew Baxter", "b") -> 2
    ```
 
    *Return: an int.*
 
-10. **Is any field on the form blank?** (P590)
+## 2 - Safe values and labels (5)
 
-    Write a function `any_blank(fields)` that returns True if any field in the
-    list is blank. A field holding only spaces is as blank as an empty one. An
-    empty form has no blank fields. any(), over a test on each field.
+strip then isdigit then int, min inside max, a comma after the colon in an
+f-string, :02d over a range, and one normal form before `in`.
+
+6. **A quantity typed into a form** (P601)
+
+   Write a function `quantity(text)` that returns the whole number typed into
+   a form field, ignoring spaces around it, or 0 if what was typed is not made
+   of digits only. Nothing here should ever raise an error.
+
+   ```
+   quantity(" 12 ") -> 12
+   quantity("abc") -> 0
+   ```
+
+   *Return: an int.*
+
+7. **A bay number kept within the depot** (P602)
+
+   Write a function `within(n, low, high)` that returns n if it lies between
+   low and high, low if it is below, and high if it is above. low is never
+   greater than high. min() and max(), one inside the other.
+
+   ```
+   within(15, 1, 10) -> 10
+   within(0, 1, 10) -> 1
+   ```
+
+   *Return: an int.*
+
+8. **A parcel count with commas** (P603)
+
+   Write a function `count_label(n)` that returns the number with commas
+   between the thousands, a space, and the word parcel -- or parcels for
+   anything but exactly 1. An f-string's format can put the commas in.
+
+   ```
+   count_label(24000) -> "24,000 parcels"
+   count_label(1) -> "1 parcel"
+   ```
+
+   *Return: a str.*
+
+9. **Delivery slots, on the hour** (P604)
+
+   Write a function `slots(first, last)` that returns the start time of every
+   one-hour delivery slot from the hour `first` up to but not including the
+   hour `last`, as 'HH:00' strings with two digits for the hour.
+
+   ```
+   slots(9, 12) -> ["09:00", "10:00", "11:00"]
+   ```
+
+   *Return: a list of str.*
+
+10. **Is it the weekend?** (P605)
+
+    A day arrives as its full name or its first three letters, in any mix of
+    capitals, perhaps with spaces around it. Write a function
+    `is_weekend(day)` that returns True for Saturday and Sunday. Reduce every
+    way of writing a day to one form, then test with `in`.
 
     ```
-    any_blank(["Rosa Baxter", "  ", "NG7"]) -> True
+    is_weekend("Saturday") -> True
+    is_weekend(" Sat ") -> True
+    is_weekend("MONDAY") -> False
     ```
 
     *Return: a bool.*
 
-## 3 - Lists, built and reshaped (5)
+## 3 - Lists, split and combined (5)
 
-range to last + 1, one comprehension per column, `not in` against the list being
-built, a filter that says what stays, and a slice that starts at n - 1.
+range with a step and a slice to i + n, (len + 1) // 2, insert at index + 1,
+all() where any() would let one bad item through, and rjust to the widest.
 
-11. **Bay numbers from a range on the rota** (P591)
+11. **Parcels shelved so many to a shelf** (P606)
 
-    The rota gives bays as text: either one number, '4', or a first and a last
-    with a hyphen, '3-6'. Write a function `bay_numbers(text)` that returns
-    every bay meant, as a list of ints, both ends included.
-
-    ```
-    bay_numbers("3-6") -> [3, 4, 5, 6]
-    bay_numbers("4") -> [4]
-    ```
-
-    *Return: a list of int.*
-
-12. **Codes in one list, postage in another** (P592)
-
-    A batch is a list of [code, cents] pairs. Write a function `unzip(pairs)`
-    that returns two LISTS, the codes and the cents, each in the original
-    order. An empty batch gives two empty lists.
+    Write a function `shelves(items, n)` that returns the items as a list of
+    lists, n to a shelf in order, with whatever is left over on a last,
+    shorter shelf. No items means no shelves. range takes a step.
 
     ```
-    unzip([["MB-2", 410], ["CH-7", 1200]]) -> (["MB-2", "CH-7"], [410, 1200])
+    shelves(["a", "b", "c", "d", "e", "f", "g"], 3) -> [["a", "b", "c"], ["d", "e", "f"], ["g"]]
+    ```
+
+    *Return: a list of lists.*
+
+12. **One load between two vans** (P607)
+
+    Write a function `halves(items)` that splits the list into a first half
+    and a second half, in order, and returns the two lists. When the number of
+    items is odd, the FIRST half gets the extra one.
+
+    ```
+    halves(["a", "b", "c", "d", "e"]) -> (["a", "b", "c"], ["d", "e"])
     ```
 
     *Return: a tuple of two lists.*
 
-13. **Two manifests, merged** (P593)
+13. **An extra stop, straight after another** (P608)
 
-    Write a function `merged(first, second)` that returns one list holding
-    every code from both lists exactly once: first's codes in order, then any
-    from second not seen yet. A code repeated inside either list still appears
-    once.
-
-    ```
-    merged(["A-1", "B-2"], ["B-2", "C-3", "A-1", "D-4"]) -> ["A-1", "B-2", "C-3", "D-4"]
-    ```
-
-    *Return: a list.*
-
-14. **A status struck from the trail, everywhere** (P594)
-
-    Write a function `without(items, value)` that returns a NEW list with
-    every item equal to value left out, and the rest in order. The list passed
-    in is not changed.
+    Write a function `insert_after(stops, stop, new)` that returns a NEW list
+    with `new` placed immediately after the first occurrence of `stop`. If
+    `stop` is not in the list, the result is an unchanged copy. The list
+    passed in is not altered.
 
     ```
-    without(["van", "depot", "van", "door"], "van") -> ["depot", "door"]
+    insert_after(["Northgate", "Moorside", "Westway"], "Moorside", "Hillcrest") -> ["Northgate", "Moorside", "Hillcrest", "Westway"]
     ```
 
     *Return: a list.*
 
-15. **Every third parcel is spot-checked** (P595)
+14. **Is every status one we know?** (P609)
 
-    Write a function `every_nth(items, n)` that returns every nth item,
-    starting with the nth itself: for n = 3, the 3rd, 6th, 9th and so on.
-    Fewer than n items gives an empty list. A slice takes a start and a step.
+    Write a function `all_known(statuses, allowed)` that returns True if EVERY
+    status in the first list appears in the list of allowed ones. A trail with
+    no statuses has nothing wrong with it.
 
     ```
-    every_nth(["a", "b", "c", "d", "e", "f", "g"], 3) -> ["c", "f"]
+    all_known(["collected", "lost"], ["collected", "departed", "arrived", "delivered"]) -> False
     ```
 
-    *Return: a list.*
+    *Return: a bool.*
+
+15. **Numbers lined up on the right** (P610)
+
+    Write a function `lined_up(numbers)` that returns the numbers as strings,
+    all the same length -- as wide as the longest -- with spaces added on the
+    LEFT so that the last digits line up in a column. An empty list gives an
+    empty list.
+
+    ```
+    lined_up([5, 120, 34]) -> ["  5", "120", " 34"]
+    ```
+
+    *Return: a list of str.*
 
 ## The one concept with no question here
 
@@ -541,7 +548,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-1,891 retired ones.
+1,921 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.

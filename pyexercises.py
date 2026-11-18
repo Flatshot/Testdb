@@ -1,16 +1,15 @@
 """Python practice exercises: fifteen everyday functions over plain values.
 
-The thirty-ninth Python set, at the easy level of the last nine -- no
+The fortieth Python set, at the easy level of the last ten -- no
 statistics, no dicts -- in the courier's terms, on tasks the earlier sets
-did not cover. Text, tidied: spacing put right, a first letter
-capitalised and nothing else touched, the digits of a phone number, a
-note in brackets, a heading underlined. Checks and searches: a code that
-starts with any of several prefixes, names containing a search term in
-any case, a clock time that is really a time, the last place a value
-appears, a form with a blank field. Lists, built and reshaped: bay
-numbers from a range written as text, pairs separated into two lists,
-two lists merged without repeats, a value removed everywhere, every nth
-item.
+did not cover. Text checks and fixes: two codes that are the same once
+tidied, a house number at the start of an address, a company name without
+its ending, an account number with only its last four showing, a letter
+counted in either case. Safe values and labels: a quantity typed into a
+form, a number kept within limits, a count with commas, hourly slots,
+weekend or not. Lists, split and combined: parcels shelved so many to a
+shelf, a load split in two, an item inserted after another, a check that
+every status is a known one, numbers lined up on the right.
 
 Every question is a `kind="function"`: the editor defines a function named
 `func`. Run calls it once per case in `cases` and shows each call and its
@@ -28,420 +27,429 @@ The code runs in a separate interpreter with a time limit (see pyrun.py).
 import pyrun
 
 EXERCISES = [
-    # ========================================================= 1 Text, tidied
+    # ================================================ 1 Text checks and fixes
     dict(
-        id=1, ledger="P581", concept="PY3 collapse runs of spaces", tier="1 - Text, tidied",
-        title="A label with its spacing put right", kind="function",
-        func="tidy_spaces",
-        cases=[("  Central   Hub ",), ("Old Foundry",), ("",), ("a  b   c",), ("   ",)],
+        id=1, ledger="P596", concept="PY3 compare after tidying", tier="1 - Text checks and fixes",
+        title="The same code, typed two ways", kind="function",
+        func="same_code",
+        cases=[("MB-0012", " mb-0012 "), ("MB-0012", "MB-0021"), ("ch-7", "CH-7"), ("", "  "), ("MB-12", "MB -12")],
         prompt=(
-            "Write a function `tidy_spaces(label)` that returns the"
-            " label with no spaces at either end and exactly one space"
-            " between words, however many were typed. split() with no"
-            " argument, then join.\n\n"
-            "  tidy_spaces(\"  Central   Hub \") -> \"Central Hub\"\n\n"
-            "Return: a str."
-        ),
-        solution=("def tidy_spaces(label):\n"
-                  "    return \" \".join(label.split())\n"),
-        trap=("def tidy_spaces(label):\n"
-              "    return label.strip()\n"),
-        note="split() with no argument breaks on any run of whitespace"
-             " and ignores it at the ends, so what comes back is just"
-             " the words; joining them with one space rebuilds the"
-             " label the way it should have been typed. strip(), the"
-             " trap, only cleans the two ends and leaves 'Central   Hub'"
-             " with its three spaces. replace('  ', ' ') is no better:"
-             " it halves a run of spaces, it does not remove it.",
-    ),
-    dict(
-        id=2, ledger="P582", concept="PY3 capitalise the first letter only", tier="1 - Text, tidied",
-        title="A first letter capitalised, the rest left alone", kind="function",
-        func="start_capital",
-        cases=[("deliver to Central Hub",), ("urgent: call NG5 depot",), ("",), ("a",), ("Already fine",)],
-        prompt=(
-            "Write a function `start_capital(text)` that returns the"
-            " text with its first character in upper case and every"
-            " other character exactly as it was. The empty string"
-            " comes back empty. Two slices.\n\n"
-            "  start_capital(\"deliver to Central Hub\") -> \"Deliver to Central Hub\"\n\n"
-            "Return: a str."
-        ),
-        solution=("def start_capital(text):\n"
-                  "    return text[:1].upper() + text[1:]\n"),
-        trap=("def start_capital(text):\n"
-              "    return text.capitalize()\n"),
-        note="capitalize(), the trap, sounds like the answer and does"
-             " two things: it raises the first letter and LOWERS all"
-             " the rest, so 'Central Hub' becomes 'central hub' and"
-             " 'NG5' becomes 'ng5'. Slicing touches only what you"
-             " name. text[:1] rather than text[0] is what makes the"
-             " empty string safe: a slice of nothing is an empty"
-             " string, where an index would raise.",
-    ),
-    dict(
-        id=3, ledger="P583", concept="PY3 keep only the digits", tier="1 - Text, tidied",
-        title="Just the digits of a phone number", kind="function",
-        func="digits_only",
-        cases=[("0115 496-0123",), ("(020) 7946 0018",), ("",), ("no digits",), ("42",)],
-        prompt=(
-            "Phone numbers arrive with spaces, hyphens and brackets."
-            " Write a function `digits_only(text)` that returns only"
-            " the digits, in order, as one string. A string has a"
-            " method that says whether it is a digit.\n\n"
-            "  digits_only(\"0115 496-0123\") -> \"01154960123\"\n\n"
-            "Return: a str."
-        ),
-        solution=("def digits_only(text):\n"
-                  "    return \"\".join(ch for ch in text if ch.isdigit())\n"),
-        trap=("def digits_only(text):\n"
-              "    return text.replace(\" \", \"\")\n"),
-        note="Say what to KEEP, not what to remove: a loop over the"
-             " characters that keeps the ones where isdigit() is true"
-             " copes with any punctuation anyone ever types. The trap"
-             " removes spaces and leaves the hyphen and the brackets;"
-             " adding a replace for each of those only waits for the"
-             " next surprise, a dot or a plus. The result stays a"
-             " string on purpose: as a number, the leading 0 would be"
-             " lost.",
-    ),
-    dict(
-        id=4, ledger="P584", concept="PY3 text between two markers", tier="1 - Text, tidied",
-        title="The note in brackets", kind="function",
-        func="in_brackets",
-        cases=[("Parcel 12 (fragile) for Northgate",), ("No note here",), ("(urgent)",), ("Leave with neighbour (no. 4) or (shed)",), ("()",)],
-        prompt=(
-            "Write a function `in_brackets(text)` that returns what is"
-            " between the first '(' and the ')' that follows it, not"
-            " including the brackets. If there is no '(' the answer is"
-            " the empty string. find() returns a position, or -1.\n\n"
-            "  in_brackets(\"Parcel 12 (fragile) for Northgate\") -> \"fragile\"\n\n"
-            "Return: a str."
-        ),
-        solution=("def in_brackets(text):\n"
-                  "    start = text.find(\"(\")\n"
-                  "    if start == -1:\n"
-                  "        return \"\"\n"
-                  "    end = text.find(\")\", start)\n"
-                  "    return text[start + 1:end]\n"),
-        trap=("def in_brackets(text):\n"
-              "    return text[text.find(\"(\") + 1:text.find(\")\")]\n"),
-        note="find() does not raise when it finds nothing; it returns"
-             " -1, and -1 is a perfectly good index, which is the"
-             " danger. With no brackets the trap slices from -1 + 1 to"
-             " -1 and returns the whole text minus its last character:"
-             " 'No note her'. Test for -1 before using the position."
-             " The second find starts looking at `start`, so it cannot"
-             " be fooled by a ')' that comes before the '('.",
-    ),
-    dict(
-        id=5, ledger="P585", concept="PY3 repeat a character to a length", tier="1 - Text, tidied",
-        title="A heading, underlined", kind="function",
-        func="underlined",
-        cases=[("Northgate",), ("Old Foundry",), ("",), ("A",)],
-        prompt=(
-            "Write a function `underlined(title)` that returns the"
-            " title, a newline, and then a row of '=' signs exactly as"
-            " long as the title. A string times a number repeats"
-            " it.\n\n"
-            "  underlined(\"Northgate\") -> \"Northgate\\n=========\"\n\n"
-            "Return: a str, with one newline in it (written \\n above)."
-        ),
-        solution=("def underlined(title):\n"
-                  "    return title + \"\\n\" + \"=\" * len(title)\n"),
-        trap=("def underlined(title):\n"
-              "    return title + \"\\n\" + \"=\" * 10\n"),
-        note="\"=\" * len(title) makes the rule as long as the text"
-             " above it, whatever the text is; the trap's fixed ten is"
-             " right for exactly one length of title. Return the"
-             " string rather than printing it: whoever calls the"
-             " function decides where it goes, and \\n inside a"
-             " string becomes a line break only when it is printed."
-             " An empty title gives an empty underline, with no"
-             " special case.",
-    ),
-    # ================================================ 2 Checks and searches
-    dict(
-        id=6, ledger="P586", concept="PY3 startswith a tuple", tier="2 - Checks and searches",
-        title="Does the code belong to one of our depots?", kind="function",
-        func="has_prefix",
-        cases=[("NGT-0042", ["MB", "NGT", "CH"]), ("NG-0042", ["MB", "NGT", "CH"]), ("CH-7", ["MB", "NGT", "CH"]), ("CH-7", []), ("X", ["XY"])],
-        prompt=(
-            "Write a function `has_prefix(code, prefixes)` that"
-            " returns True if the code starts with ANY of the prefixes"
-            " in the list. The prefixes are not all the same length."
-            " startswith accepts several candidates at once, as a"
-            " tuple.\n\n"
-            "  has_prefix(\"NGT-0042\", [\"MB\", \"NGT\", \"CH\"]) -> True\n"
-            "  has_prefix(\"NG-0042\", [\"MB\", \"NGT\", \"CH\"]) -> False\n\n"
+            "Write a function `same_code(a, b)` that returns True if"
+            " the two codes are the same once spaces at either end are"
+            " removed and capitals are ignored. Spaces INSIDE a code"
+            " still count as a difference.\n\n"
+            "  same_code(\"MB-0012\", \" mb-0012 \") -> True\n"
+            "  same_code(\"MB-12\", \"MB -12\") -> False\n\n"
             "Return: a bool."
         ),
-        solution=("def has_prefix(code, prefixes):\n"
-                  "    return code.startswith(tuple(prefixes))\n"),
-        trap=("def has_prefix(code, prefixes):\n"
-              "    return code[:2] in prefixes\n"),
-        note="startswith takes a tuple and answers True if any member"
-             " matches, each at its own length -- it will not take a"
-             " list, hence tuple(). The trap cuts two characters off"
-             " the code and looks them up, which works until a prefix"
-             " is three letters long: 'NGT-0042' is cut to 'NG', which"
-             " is on nobody's list. any(code.startswith(p) for p in"
-             " prefixes) is the same answer spelled out.",
+        solution=("def same_code(a, b):\n"
+                  "    return a.strip().lower() == b.strip().lower()\n"),
+        trap=("def same_code(a, b):\n"
+              "    return a.lower() == b.lower()\n"),
+        note="Tidy both sides the same way, then compare: strip() for"
+             " the stray spaces a form or a scanner adds, lower() for"
+             " the case. The methods chain because each returns a new"
+             " string. The trap lowers and forgets to strip, so the"
+             " code somebody typed with a space after it never"
+             " matches. Neither argument is changed -- strings cannot"
+             " be -- so the caller still has what was typed.",
     ),
     dict(
-        id=7, ledger="P587", concept="PY3 search ignoring case", tier="2 - Checks and searches",
-        title="Names that contain the search term", kind="function",
-        func="matching",
-        cases=[(["Yilmaz Bicycles", "Achebe Bakery Direct", "Okonjo BAKERY Ltd"], "bakery"), (["Northgate"], "GATE"), ([], "x"), (["abc", "ABC", "xyz"], "B"), (["abc"], "")],
+        id=2, ledger="P597", concept="PY3 leading number or None", tier="1 - Text checks and fixes",
+        title="The house number at the start of an address", kind="function",
+        func="house_number",
+        cases=[("12 High Street",), ("Flat 3, 12 High Street",), ("",), ("12a High Street",), ("  7 Mill Lane",)],
         prompt=(
-            "Write a function `matching(names, term)` that returns the"
-            " names containing the search term, in their original"
-            " order and spelling. Capitals make no difference, in the"
-            " names or in the term.\n\n"
-            "  matching([\"Yilmaz Bicycles\", \"Achebe Bakery Direct\", \"Okonjo BAKERY Ltd\"], \"bakery\") -> [\"Achebe Bakery Direct\", \"Okonjo BAKERY Ltd\"]\n\n"
-            "Return: a list of str."
+            "Write a function `house_number(address)` that returns the"
+            " house number as an int when the FIRST word of the"
+            " address is made of digits only, and None otherwise.\n\n"
+            "  house_number(\"12 High Street\") -> 12\n"
+            "  house_number(\"Flat 3, 12 High Street\") -> None\n\n"
+            "Return: an int, or None."
         ),
-        solution=("def matching(names, term):\n"
-                  "    return [name for name in names if term.lower() in name.lower()]\n"),
-        trap=("def matching(names, term):\n"
-              "    return [name for name in names if term in name]\n"),
-        note="`in` between two strings asks whether one appears inside"
-             " the other, and it is exact about case: 'bakery' is not"
-             " in 'Achebe Bakery Direct'. Lower both sides for the"
-             " comparison only -- the list is built from `name`, not"
-             " from the lowered copy, so every match comes back as it"
-             " was written. The trap compares as typed and finds"
-             " nothing at all for a lower-case search.",
+        solution=("def house_number(address):\n"
+                  "    words = address.split()\n"
+                  "    if words and words[0].isdigit():\n"
+                  "        return int(words[0])\n"
+                  "    return None\n"),
+        trap=("def house_number(address):\n"
+              "    words = address.split()\n"
+              "    if words and words[0].isdigit():\n"
+              "        return words[0]\n"
+              "    return None\n"),
+        note="isdigit() says the text is all digits; it does not turn"
+             " it into a number. The trap returns the word itself,"
+             " \"12\", which prints the same as 12 and is a different"
+             " thing: it will not add, and it sorts \"100\" before"
+             " \"12\". int() does the conversion, and is safe here"
+             " because isdigit() has already been asked. `words and"
+             " ...` covers the empty address, where there is no first"
+             " word to look at.",
     ),
     dict(
-        id=8, ledger="P588", concept="PY4 validate a clock time", tier="2 - Checks and searches",
-        title="Is that really a time?", kind="function",
-        func="valid_time",
-        cases=[("23:59",), ("00:00",), ("24:00",), ("14:65",), ("9:30",), ("ab:cd",), ("1234",), ("12:3x",)],
+        id=3, ledger="P598", concept="PY3 remove a known ending", tier="1 - Text checks and fixes",
+        title="A company name without its ending", kind="function",
+        func="without_ending",
+        cases=[("Okonjo Books Ltd", [" Ltd", " & Co", " & Sons"]), ("Brandt Ltd", [" Ltd", " & Co", " & Sons"]), ("Yilmaz Bicycles & Sons", [" Ltd", " & Co", " & Sons"]), ("Achebe Bakery Direct", [" Ltd", " & Co", " & Sons"]), ("Ltd", [" Ltd"])],
         prompt=(
-            "Write a function `valid_time(text)` that returns True"
-            " only for a real 24-hour clock time written 'HH:MM': five"
-            " characters, a colon in the middle, two digits either"
-            " side, hours 00 to 23 and minutes 00 to 59. Check the"
-            " shape first, the numbers second.\n\n"
-            "  valid_time(\"23:59\") -> True\n"
-            "  valid_time(\"14:65\") -> False\n"
-            "  valid_time(\"9:30\") -> False\n\n"
-            "Return: a bool."
+            "Write a function `without_ending(name, endings)` that"
+            " returns the name with its ending cut off, if it ends"
+            " with one of the endings in the list, and unchanged if it"
+            " ends with none of them. Each ending in the list begins"
+            " with a space.\n\n"
+            "  without_ending(\"Okonjo Books Ltd\", [\" Ltd\", \" & Co\", \" & Sons\"]) -> \"Okonjo Books\"\n\n"
+            "Return: a str."
         ),
-        solution=("def valid_time(text):\n"
-                  "    if len(text) != 5 or text[2] != \":\":\n"
-                  "        return False\n"
-                  "    hours, minutes = text[:2], text[3:]\n"
-                  "    if not (hours.isdigit() and minutes.isdigit()):\n"
-                  "        return False\n"
-                  "    return int(hours) < 24 and int(minutes) < 60\n"),
-        trap=("def valid_time(text):\n"
-              "    if len(text) != 5 or text[2] != \":\":\n"
-              "        return False\n"
-              "    return text[:2].isdigit() and text[3:].isdigit()\n"),
-        note="Each check makes the next one safe: the length test"
-             " means text[2] exists, the isdigit tests mean int()"
-             " cannot raise, and only then are the numbers compared."
-             " The trap stops after the shape, so anything that LOOKS"
-             " like a time passes: 24:00, 14:65, 99:99. Returning"
-             " False early, one reason at a time, reads better than"
-             " one long condition and fails in the right order.",
+        solution=("def without_ending(name, endings):\n"
+                  "    for ending in endings:\n"
+                  "        if name.endswith(ending):\n"
+                  "            return name[:-len(ending)]\n"
+                  "    return name\n"),
+        trap=("def without_ending(name, endings):\n"
+              "    for ending in endings:\n"
+              "        if name.endswith(ending):\n"
+              "            return name.rstrip(ending)\n"
+              "    return name\n"),
+        note="rstrip(\" Ltd\") does not remove the word ' Ltd'. Its"
+             " argument is a SET of characters -- space, L, t, d --"
+             " and it strips any of them from the end for as long as"
+             " it can: 'Brandt Ltd' loses its ending and then the 'dt'"
+             " of Brandt as well. A slice cuts exactly len(ending)"
+             " characters. Python 3.9 added removesuffix() because so"
+             " many people made this mistake; it does what the slice"
+             " does.",
     ),
     dict(
-        id=9, ledger="P589", concept="PY4 last position of a value", tier="2 - Checks and searches",
-        title="The last time the parcel was on a van", kind="function",
-        func="last_position",
-        cases=[(["van", "depot", "van", "door"], "van"), (["van"], "van"), (["van", "depot"], "door"), ([], "x"), (["a", "a", "a"], "a")],
+        id=4, ledger="P599", concept="PY3 mask all but the last four", tier="1 - Text checks and fixes",
+        title="An account number with its last four showing", kind="function",
+        func="masked",
+        cases=[("40127766411",), ("12345678",), ("6411",), ("77",), ("",)],
         prompt=(
-            "Write a function `last_position(items, value)` that"
-            " returns the position, counting from 0, of the LAST item"
-            " equal to value, or -1 if there is none. A range can"
-            " count downwards.\n\n"
-            "  last_position([\"van\", \"depot\", \"van\", \"door\"], \"van\") -> 2\n\n"
+            "Write a function `masked(number)` that returns the string"
+            " with every character except the last four replaced by a"
+            " star. The result is the same length as the original; a"
+            " string of four characters or fewer comes back"
+            " unchanged.\n\n"
+            "  masked(\"12345678\") -> \"****5678\"\n\n"
+            "Return: a str."
+        ),
+        solution=("def masked(number):\n"
+                  "    return \"*\" * (len(number) - 4) + number[-4:]\n"),
+        trap=("def masked(number):\n"
+              "    return \"****\" + number[-4:]\n"),
+        note="The number of stars depends on the length: len - 4 of"
+             " them, then the last four characters. A string times a"
+             " negative number is the empty string, and a slice of the"
+             " last four from a shorter string is the whole string, so"
+             " short inputs need no special case. The trap always"
+             " writes four stars, which is right for eight characters"
+             " only: an eleven-digit number comes back three short,"
+             " and '77' comes back as '****77'.",
+    ),
+    dict(
+        id=5, ledger="P600", concept="PY3 count a letter in either case", tier="1 - Text checks and fixes",
+        title="How many times a letter appears", kind="function",
+        func="count_letter",
+        cases=[("Bartholomew Baxter", "b"), ("Bartholomew Baxter", "B"), ("Northgate", "z"), ("", "a"), ("AaAa", "a")],
+        prompt=(
+            "Write a function `count_letter(text, letter)` that returns"
+            " how many times the letter appears in the text, counting"
+            " capitals and small letters as the same, whichever way"
+            " the letter itself was given.\n\n"
+            "  count_letter(\"Bartholomew Baxter\", \"b\") -> 2\n\n"
             "Return: an int."
         ),
-        solution=("def last_position(items, value):\n"
-                  "    for i in range(len(items) - 1, -1, -1):\n"
-                  "        if items[i] == value:\n"
-                  "            return i\n"
-                  "    return -1\n"),
-        trap=("def last_position(items, value):\n"
-              "    if value in items:\n"
-              "        return items.index(value)\n"
-              "    return -1\n"),
-        note="range(len(items) - 1, -1, -1) starts at the last"
-             " position and steps down to 0 -- the stop value, -1, is"
-             " never reached -- so the first match met is the last one"
-             " in the list, and the function can return at once."
-             " index(), the trap, always finds the FIRST match: 0"
-             " instead of 2. Lists have no rindex; strings do, which"
-             " is why this one has to be written out.",
+        solution=("def count_letter(text, letter):\n"
+                  "    return text.lower().count(letter.lower())\n"),
+        trap=("def count_letter(text, letter):\n"
+              "    return text.count(letter)\n"),
+        note="count() on a string counts exact matches, so 'b' finds"
+             " no capital B: the trap answers 0 for a name with two of"
+             " them. Lowering BOTH the text and the letter makes the"
+             " comparison fair whichever case either arrives in --"
+             " lowering only the text would break the call that passes"
+             " a capital. No loop is needed; count() is the loop.",
+    ),
+    # ============================================== 2 Safe values and labels
+    dict(
+        id=6, ledger="P601", concept="PY3 safe int with a fallback", tier="2 - Safe values and labels",
+        title="A quantity typed into a form", kind="function",
+        func="quantity",
+        cases=[("12",), (" 12 ",), ("abc",), ("",), ("3.5",), ("-2",)],
+        prompt=(
+            "Write a function `quantity(text)` that returns the whole"
+            " number typed into a form field, ignoring spaces around"
+            " it, or 0 if what was typed is not made of digits only."
+            " Nothing here should ever raise an error.\n\n"
+            "  quantity(\" 12 \") -> 12\n"
+            "  quantity(\"abc\") -> 0\n\n"
+            "Return: an int."
+        ),
+        solution=("def quantity(text):\n"
+                  "    text = text.strip()\n"
+                  "    if text.isdigit():\n"
+                  "        return int(text)\n"
+                  "    return 0\n"),
+        trap=("def quantity(text):\n"
+              "    if text.isdigit():\n"
+              "        return int(text)\n"
+              "    return 0\n"),
+        note="int() raises on anything that is not a number, so ask"
+             " first: isdigit() is True only for a non-empty string of"
+             " digits, which rules out 'abc', '', '3.5' and '-2' in"
+             " one test. A space is not a digit either -- the trap"
+             " skips the strip and turns a perfectly good ' 12 ' into"
+             " 0. int() itself would have accepted the spaces; it is"
+             " the check in front of it that is strict.",
     ),
     dict(
-        id=10, ledger="P590", concept="PY3 any with strip", tier="2 - Checks and searches",
-        title="Is any field on the form blank?", kind="function",
-        func="any_blank",
-        cases=[(["Rosa Baxter", "  ", "NG7"],), (["Rosa Baxter", "NG7"],), ([],), ([""],), (["a", "\t"],)],
+        id=7, ledger="P602", concept="PY3 clamp to a range", tier="2 - Safe values and labels",
+        title="A bay number kept within the depot", kind="function",
+        func="within",
+        cases=[(5, 1, 10), (0, 1, 10), (15, 1, 10), (1, 1, 10), (10, 1, 10), (-3, 0, 0)],
         prompt=(
-            "Write a function `any_blank(fields)` that returns True if"
-            " any field in the list is blank. A field holding only"
-            " spaces is as blank as an empty one. An empty form has"
-            " no blank fields. any(), over a test on each field.\n\n"
-            "  any_blank([\"Rosa Baxter\", \"  \", \"NG7\"]) -> True\n\n"
+            "Write a function `within(n, low, high)` that returns n if"
+            " it lies between low and high, low if it is below, and"
+            " high if it is above. low is never greater than high."
+            " min() and max(), one inside the other.\n\n"
+            "  within(15, 1, 10) -> 10\n"
+            "  within(0, 1, 10) -> 1\n\n"
+            "Return: an int."
+        ),
+        solution=("def within(n, low, high):\n"
+                  "    return max(low, min(n, high))\n"),
+        trap=("def within(n, low, high):\n"
+              "    return min(low, max(n, high))\n"),
+        note="min(n, high) pulls anything too big down to high, and"
+             " max(low, ...) then lifts anything too small up to low."
+             " It reads backwards at first -- min is used for the"
+             " UPPER limit, because the smaller of n and high is what"
+             " you want -- and the trap is what happens when the two"
+             " are swapped to match the words: it returns low for"
+             " everything. An if/elif with two comparisons says the"
+             " same and is just as good.",
+    ),
+    dict(
+        id=8, ledger="P603", concept="PY3 thousands separator", tier="2 - Safe values and labels",
+        title="A parcel count with commas", kind="function",
+        func="count_label",
+        cases=[(24000,), (1,), (0,), (999,), (1234567,)],
+        prompt=(
+            "Write a function `count_label(n)` that returns the number"
+            " with commas between the thousands, a space, and the word"
+            " parcel -- or parcels for anything but exactly 1. An"
+            " f-string's format can put the commas in.\n\n"
+            "  count_label(24000) -> \"24,000 parcels\"\n"
+            "  count_label(1) -> \"1 parcel\"\n\n"
+            "Return: a str."
+        ),
+        solution=("def count_label(n):\n"
+                  "    word = \"parcel\" if n == 1 else \"parcels\"\n"
+                  "    return f\"{n:,} {word}\"\n"),
+        trap=("def count_label(n):\n"
+              "    word = \"parcel\" if n == 1 else \"parcels\"\n"
+              "    return f\"{n} {word}\"\n"),
+        note="Inside the braces of an f-string, whatever follows the"
+             " colon is a format: a comma there groups the digits in"
+             " threes. The trap prints 24000 as it comes, which is"
+             " readable, and 1234567, which is not. Working out the"
+             " word on its own line first keeps the f-string simple,"
+             " and 0 takes the plural like every number that is not"
+             " 1.",
+    ),
+    dict(
+        id=9, ledger="P604", concept="PY3 labels from a range", tier="2 - Safe values and labels",
+        title="Delivery slots, on the hour", kind="function",
+        func="slots",
+        cases=[(9, 12), (8, 9), (14, 14), (0, 3), (22, 24)],
+        prompt=(
+            "Write a function `slots(first, last)` that returns the"
+            " start time of every one-hour delivery slot from the hour"
+            " `first` up to but not including the hour `last`, as"
+            " 'HH:00' strings with two digits for the hour.\n\n"
+            "  slots(9, 12) -> [\"09:00\", \"10:00\", \"11:00\"]\n\n"
+            "Return: a list of str."
+        ),
+        solution=("def slots(first, last):\n"
+                  "    return [f\"{hour:02d}:00\" for hour in range(first, last)]\n"),
+        trap=("def slots(first, last):\n"
+              "    return [f\"{hour}:00\" for hour in range(first, last)]\n"),
+        note="range(first, last) already stops before `last`, which is"
+             " exactly the slots wanted, and :02d in the f-string"
+             " writes each hour two digits wide with a leading zero."
+             " The trap leaves the format out and gives '9:00', which"
+             " sorts after '10:00' as text and will not line up in a"
+             " column. An empty range, slots(14, 14), gives an empty"
+             " list with no special case.",
+    ),
+    dict(
+        id=10, ledger="P605", concept="PY3 membership after normalising", tier="2 - Safe values and labels",
+        title="Is it the weekend?", kind="function",
+        func="is_weekend",
+        cases=[("Saturday",), ("sun",), ("MONDAY",), (" Sat ",), ("Fri",), ("sunday",)],
+        prompt=(
+            "A day arrives as its full name or its first three"
+            " letters, in any mix of capitals, perhaps with spaces"
+            " around it. Write a function `is_weekend(day)` that"
+            " returns True for Saturday and Sunday. Reduce every way"
+            " of writing a day to one form, then test with `in`.\n\n"
+            "  is_weekend(\"Saturday\") -> True\n"
+            "  is_weekend(\" Sat \") -> True\n"
+            "  is_weekend(\"MONDAY\") -> False\n\n"
             "Return: a bool."
         ),
-        solution=("def any_blank(fields):\n"
-                  "    return any(not field.strip() for field in fields)\n"),
-        trap=("def any_blank(fields):\n"
-              "    return \"\" in fields\n"),
-        note="strip() removes spaces from both ends, so a field of"
-             " nothing but spaces becomes the empty string, and an"
-             " empty string counts as False: `not field.strip()` is"
-             " the whole test for blank. any() stops at the first True"
-             " and gives False for an empty list. The trap looks for a"
-             " field that is exactly empty and lets through the one"
-             " somebody filled in with the space bar.",
+        solution=("def is_weekend(day):\n"
+                  "    return day.strip().lower()[:3] in (\"sat\", \"sun\")\n"),
+        trap=("def is_weekend(day):\n"
+              "    return day in (\"Saturday\", \"Sunday\")\n"),
+        note="There are many ways to write Saturday and only one way"
+             " to test for it, so bring the input to the test: strip"
+             " the spaces, lower the case, keep three letters. Every"
+             " spelling then lands on 'sat' or 'sun'. The trap lists"
+             " the two spellings it thought of and says False to"
+             " 'sun', ' Sat ' and 'sunday'. Order matters in the"
+             " chain: strip before slicing, or the three characters"
+             " kept from ' Sat ' would be ' sa'.",
     ),
-    # ============================================ 3 Lists, built and reshaped
+    # ============================================ 3 Lists, split and combined
     dict(
-        id=11, ledger="P591", concept="PY3 expand a text range", tier="3 - Lists, built and reshaped",
-        title="Bay numbers from a range on the rota", kind="function",
-        func="bay_numbers",
-        cases=[("3-6",), ("4",), ("10-12",), ("7-7",)],
+        id=11, ledger="P606", concept="PY3 chunks of n", tier="3 - Lists, split and combined",
+        title="Parcels shelved so many to a shelf", kind="function",
+        func="shelves",
+        cases=[(["a", "b", "c", "d", "e", "f", "g"], 3), (["a", "b", "c", "d"], 2), (["a"], 5), ([], 3), (["a", "b", "c"], 1)],
         prompt=(
-            "The rota gives bays as text: either one number, '4', or a"
-            " first and a last with a hyphen, '3-6'. Write a function"
-            " `bay_numbers(text)` that returns every bay meant, as a"
-            " list of ints, both ends included.\n\n"
-            "  bay_numbers(\"3-6\") -> [3, 4, 5, 6]\n"
-            "  bay_numbers(\"4\") -> [4]\n\n"
-            "Return: a list of int."
+            "Write a function `shelves(items, n)` that returns the"
+            " items as a list of lists, n to a shelf in order, with"
+            " whatever is left over on a last, shorter shelf. No items"
+            " means no shelves. range takes a step.\n\n"
+            "  shelves([\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\"], 3) -> [[\"a\", \"b\", \"c\"], [\"d\", \"e\", \"f\"], [\"g\"]]\n\n"
+            "Return: a list of lists."
         ),
-        solution=("def bay_numbers(text):\n"
-                  "    parts = text.split(\"-\")\n"
-                  "    first, last = int(parts[0]), int(parts[-1])\n"
-                  "    return list(range(first, last + 1))\n"),
-        trap=("def bay_numbers(text):\n"
-              "    parts = text.split(\"-\")\n"
-              "    first, last = int(parts[0]), int(parts[-1])\n"
-              "    return list(range(first, last))\n"),
-        note="range stops BEFORE its second argument, so a range that"
-             " includes its last number needs last + 1. The trap"
-             " leaves bay 6 out of '3-6' and returns nothing at all"
-             " for a single bay. parts[0] and parts[-1] are the same"
-             " item when there is no hyphen, which is how one line"
-             " handles both ways of writing it without an if.",
+        solution=("def shelves(items, n):\n"
+                  "    return [items[i:i + n] for i in range(0, len(items), n)]\n"),
+        trap=("def shelves(items, n):\n"
+              "    return [items[i:n] for i in range(0, len(items), n)]\n"),
+        note="range(0, len(items), n) gives the position where each"
+             " shelf starts -- 0, 3, 6 -- and items[i:i + n] takes n"
+             " items from there. The slice's end is a POSITION, not a"
+             " length, which is the trap's mistake: items[i:n] is"
+             " right for the first shelf, where i is 0, and empty for"
+             " every one after it. A slice that runs past the end"
+             " just stops, so the short last shelf needs no extra"
+             " code.",
     ),
     dict(
-        id=12, ledger="P592", concept="PY3 pairs into two lists", tier="3 - Lists, built and reshaped",
-        title="Codes in one list, postage in another", kind="function",
-        func="unzip",
-        cases=[([["MB-2", 410], ["CH-7", 1200], ["WW-1", 590]],), ([],), ([["A-1", 5]],)],
+        id=12, ledger="P607", concept="PY3 split a list in half", tier="3 - Lists, split and combined",
+        title="One load between two vans", kind="function",
+        func="halves",
+        cases=[(["a", "b", "c", "d", "e"],), (["a", "b", "c", "d"],), (["a"],), ([],)],
         prompt=(
-            "A batch is a list of [code, cents] pairs. Write a"
-            " function `unzip(pairs)` that returns two LISTS, the"
-            " codes and the cents, each in the original order. An"
-            " empty batch gives two empty lists.\n\n"
-            "  unzip([[\"MB-2\", 410], [\"CH-7\", 1200]]) -> ([\"MB-2\", \"CH-7\"], [410, 1200])\n\n"
+            "Write a function `halves(items)` that splits the list"
+            " into a first half and a second half, in order, and"
+            " returns the two lists. When the number of items is odd,"
+            " the FIRST half gets the extra one.\n\n"
+            "  halves([\"a\", \"b\", \"c\", \"d\", \"e\"]) -> ([\"a\", \"b\", \"c\"], [\"d\", \"e\"])\n\n"
             "Return: a tuple of two lists."
         ),
-        solution=("def unzip(pairs):\n"
-                  "    codes = [pair[0] for pair in pairs]\n"
-                  "    cents = [pair[1] for pair in pairs]\n"
-                  "    return codes, cents\n"),
-        trap=("def unzip(pairs):\n"
-              "    return list(zip(*pairs))\n"),
-        note="Two comprehensions, one per column, and `return a, b`"
-             " hands both back as a tuple the caller can unpack:"
-             " codes, cents = unzip(batch). zip(*pairs), the trap, is"
-             " the well-known shortcut and has two catches: it gives"
-             " tuples where lists were asked for, and for an empty"
-             " batch it gives nothing at all -- no columns, so no two"
-             " lists to unpack, and the caller's line raises.",
+        solution=("def halves(items):\n"
+                  "    middle = (len(items) + 1) // 2\n"
+                  "    return items[:middle], items[middle:]\n"),
+        trap=("def halves(items):\n"
+              "    middle = len(items) // 2\n"
+              "    return items[:middle], items[middle:]\n"),
+        note="// divides and rounds DOWN, so len // 2 of five items is"
+             " 2 and the extra item falls into the second half, the"
+             " trap. Adding 1 before dividing rounds up instead: 5"
+             " gives 3, and an even 4 still gives 2, because the"
+             " extra half is thrown away. items[:middle] and"
+             " items[middle:] always fit together with nothing lost"
+             " and nothing repeated, whatever middle is.",
     ),
     dict(
-        id=13, ledger="P593", concept="PY4 merge two lists without repeats", tier="3 - Lists, built and reshaped",
-        title="Two manifests, merged", kind="function",
-        func="merged",
-        cases=[(["A-1", "B-2"], ["B-2", "C-3", "A-1", "D-4"]), (["A-1", "A-1"], ["A-1"]), ([], ["x", "x", "y"]), ([], []), (["a"], [])],
+        id=13, ledger="P608", concept="PY3 insert after a value", tier="3 - Lists, split and combined",
+        title="An extra stop, straight after another", kind="function",
+        func="insert_after",
+        cases=[(["Northgate", "Moorside", "Westway"], "Moorside", "Hillcrest"), (["Northgate", "Moorside"], "Moorside", "Hillcrest"), (["Northgate"], "Docklands", "Hillcrest"), ([], "a", "b"), (["a", "b", "a"], "a", "x")],
         prompt=(
-            "Write a function `merged(first, second)` that returns one"
-            " list holding every code from both lists exactly once:"
-            " first's codes in order, then any from second not seen"
-            " yet. A code repeated inside either list still appears"
-            " once.\n\n"
-            "  merged([\"A-1\", \"B-2\"], [\"B-2\", \"C-3\", \"A-1\", \"D-4\"]) -> [\"A-1\", \"B-2\", \"C-3\", \"D-4\"]\n\n"
+            "Write a function `insert_after(stops, stop, new)` that"
+            " returns a NEW list with `new` placed immediately after"
+            " the first occurrence of `stop`. If `stop` is not in the"
+            " list, the result is an unchanged copy. The list passed"
+            " in is not altered.\n\n"
+            "  insert_after([\"Northgate\", \"Moorside\", \"Westway\"], \"Moorside\", \"Hillcrest\") -> [\"Northgate\", \"Moorside\", \"Hillcrest\", \"Westway\"]\n\n"
             "Return: a list."
         ),
-        solution=("def merged(first, second):\n"
-                  "    out = []\n"
-                  "    for code in first + second:\n"
-                  "        if code not in out:\n"
-                  "            out.append(code)\n"
+        solution=("def insert_after(stops, stop, new):\n"
+                  "    out = list(stops)\n"
+                  "    if stop in out:\n"
+                  "        out.insert(out.index(stop) + 1, new)\n"
                   "    return out\n"),
-        trap=("def merged(first, second):\n"
-              "    return first + [code for code in second if code not in first]\n"),
-        note="Testing each code against `out`, the list being built,"
-             " catches every kind of repeat: across the two lists and"
-             " inside either one. The trap tests second's codes"
-             " against first only, so a code that appears twice in"
-             " second gets in twice, and first's own repeats are never"
-             " looked at. first + second makes a new list, so neither"
-             " argument is changed. A set would remove the repeats and"
-             " the order with them.",
-    ),
-    dict(
-        id=14, ledger="P594", concept="PY3 remove every occurrence", tier="3 - Lists, built and reshaped",
-        title="A status struck from the trail, everywhere", kind="function",
-        func="without",
-        cases=[(["van", "depot", "van", "door"], "van"), (["depot"], "van"), ([], "van"), (["van", "van"], "van")],
-        prompt=(
-            "Write a function `without(items, value)` that returns a"
-            " NEW list with every item equal to value left out, and"
-            " the rest in order. The list passed in is not changed.\n\n"
-            "  without([\"van\", \"depot\", \"van\", \"door\"], \"van\") -> [\"depot\", \"door\"]\n\n"
-            "Return: a list."
-        ),
-        solution=("def without(items, value):\n"
-                  "    return [item for item in items if item != value]\n"),
-        trap=("def without(items, value):\n"
-              "    out = list(items)\n"
-              "    if value in out:\n"
-              "        out.remove(value)\n"
+        trap=("def insert_after(stops, stop, new):\n"
+              "    out = list(stops)\n"
+              "    if stop in out:\n"
+              "        out.insert(out.index(stop), new)\n"
               "    return out\n"),
-        note="A comprehension with an if at the end is a filter: it"
-             " builds a new list from the items that pass, so there is"
-             " no question of how many to remove or of changing the"
-             " original. remove(), the trap, takes out the FIRST match"
-             " and stops, leaving the second 'van' in place; calling"
-             " it in a loop while you walk the same list skips items."
-             " Say what stays, and let the rest fall away.",
+        note="insert(position, item) puts the item BEFORE whatever is"
+             " at that position now, so inserting at the stop's own"
+             " index, the trap, puts the new stop in front of it."
+             " After it means index + 1 -- and when the stop is the"
+             " last item that is one past the end, which insert"
+             " accepts as 'at the end'. list(stops) makes the copy,"
+             " so the caller's route is not rearranged behind their"
+             " back.",
     ),
     dict(
-        id=15, ledger="P595", concept="PY3 every nth item by a stepped slice", tier="3 - Lists, built and reshaped",
-        title="Every third parcel is spot-checked", kind="function",
-        func="every_nth",
-        cases=[(["a", "b", "c", "d", "e", "f", "g"], 3), (["a", "b"], 3), (["a", "b", "c"], 1), ([], 2), (["a", "b", "c", "d"], 2)],
+        id=14, ledger="P609", concept="PY3 all against an allowed list", tier="3 - Lists, split and combined",
+        title="Is every status one we know?", kind="function",
+        func="all_known",
+        cases=[(["collected", "delivered"], ["collected", "departed", "arrived", "delivered"]), (["collected", "lost"], ["collected", "departed", "arrived", "delivered"]), ([], ["collected"]), (["lost", "found"], ["collected"]), (["collected", "collected"], ["collected"])],
         prompt=(
-            "Write a function `every_nth(items, n)` that returns every"
-            " nth item, starting with the nth itself: for n = 3, the"
-            " 3rd, 6th, 9th and so on. Fewer than n items gives an"
-            " empty list. A slice takes a start and a step.\n\n"
-            "  every_nth([\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\"], 3) -> [\"c\", \"f\"]\n\n"
-            "Return: a list."
+            "Write a function `all_known(statuses, allowed)` that"
+            " returns True if EVERY status in the first list appears"
+            " in the list of allowed ones. A trail with no statuses"
+            " has nothing wrong with it.\n\n"
+            "  all_known([\"collected\", \"lost\"], [\"collected\", \"departed\", \"arrived\", \"delivered\"]) -> False\n\n"
+            "Return: a bool."
         ),
-        solution=("def every_nth(items, n):\n"
-                  "    return items[n - 1::n]\n"),
-        trap=("def every_nth(items, n):\n"
-              "    return items[::n]\n"),
-        note="A slice is [start:stop:step]. The 3rd item is at"
-             " position 2, so the start is n - 1, and the step n then"
-             " lands on every nth after it. items[::n], the trap,"
-             " starts at position 0: the 1st, 4th and 7th, the right"
-             " spacing on the wrong parcels. Slices never raise for"
-             " being out of range, so a list shorter than n simply"
-             " gives an empty one.",
+        solution=("def all_known(statuses, allowed):\n"
+                  "    return all(status in allowed for status in statuses)\n"),
+        trap=("def all_known(statuses, allowed):\n"
+              "    return any(status in allowed for status in statuses)\n"),
+        note="all() is True when no item fails the test; any(), the"
+             " trap, is True as soon as one passes, so a trail with"
+             " one good status and one unknown one is waved through."
+             " They also disagree about nothing at all: all() of an"
+             " empty list is True -- there is no counter-example --"
+             " and any() is False. 'Is everything valid' is all();"
+             " 'is anything valid' is a different question.",
+    ),
+    dict(
+        id=15, ledger="P610", concept="PY3 right-align to the widest", tier="3 - Lists, split and combined",
+        title="Numbers lined up on the right", kind="function",
+        func="lined_up",
+        cases=[([5, 120, 34],), ([7],), ([],), ([1000, 1, 10, 100],), ([0, 0],)],
+        prompt=(
+            "Write a function `lined_up(numbers)` that returns the"
+            " numbers as strings, all the same length -- as wide as"
+            " the longest -- with spaces added on the LEFT so that the"
+            " last digits line up in a column. An empty list gives an"
+            " empty list.\n\n"
+            "  lined_up([5, 120, 34]) -> [\"  5\", \"120\", \" 34\"]\n\n"
+            "Return: a list of str."
+        ),
+        solution=("def lined_up(numbers):\n"
+                  "    width = max((len(str(n)) for n in numbers), default=0)\n"
+                  "    return [str(n).rjust(width) for n in numbers]\n"),
+        trap=("def lined_up(numbers):\n"
+              "    width = max((len(str(n)) for n in numbers), default=0)\n"
+              "    return [str(n).ljust(width) for n in numbers]\n"),
+        note="Two passes: one to find the width of the widest number,"
+             " one to pad each to it. rjust pads on the left, pushing"
+             " the text to the right, which is how numbers are read;"
+             " ljust, the trap, pads on the right and lines up the"
+             " FIRST digits, so 5 sits above the 1 of 120. Names take"
+             " ljust, numbers take rjust. default=0 is what keeps"
+             " max() from raising on an empty list.",
     ),
 ]
 
