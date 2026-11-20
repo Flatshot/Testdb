@@ -1,15 +1,14 @@
 """Python practice exercises: fifteen everyday functions over plain values.
 
-The fortieth Python set, at the easy level of the last ten -- no
-statistics, no dicts -- in the courier's terms, on tasks the earlier sets
-did not cover. Text checks and fixes: two codes that are the same once
-tidied, a house number at the start of an address, a company name without
-its ending, an account number with only its last four showing, a letter
-counted in either case. Safe values and labels: a quantity typed into a
-form, a number kept within limits, a count with commas, hourly slots,
-weekend or not. Lists, split and combined: parcels shelved so many to a
-shelf, a load split in two, an item inserted after another, a check that
-every status is a known one, numbers lined up on the right.
+The forty-first Python set, at the easy level of the last eleven -- no
+statistics, no dicts -- and the first in a hotel's terms, to go with the
+new SQL schema. Dates, with the datetime module: the nights between two
+dates, the date so many nights on, the day of the week, every night of a
+stay, whether two stays collide. Guests and bills: a bill split to the
+cent, a party counted into adults and children, a booking's guests on one
+line, something shaped like an email address, a long list cut short.
+Rooms and floors: the floor from a room number, the next room type up,
+the odd-numbered rooms, every room on every floor, two guests swapped.
 
 Every question is a `kind="function"`: the editor defines a function named
 `func`. Run calls it once per case in `cases` and shows each call and its
@@ -27,429 +26,468 @@ The code runs in a separate interpreter with a time limit (see pyrun.py).
 import pyrun
 
 EXERCISES = [
-    # ================================================ 1 Text checks and fixes
+    # ======================================== 1 Dates, with the datetime module
     dict(
-        id=1, ledger="P596", concept="PY3 compare after tidying", tier="1 - Text checks and fixes",
-        title="The same code, typed two ways", kind="function",
-        func="same_code",
-        cases=[("MB-0012", " mb-0012 "), ("MB-0012", "MB-0021"), ("ch-7", "CH-7"), ("", "  "), ("MB-12", "MB -12")],
+        id=1, ledger="P611", concept="PY3 days between two dates", tier="1 - Dates, with datetime",
+        title="How many nights is the stay?", kind="function",
+        func="nights",
+        cases=[("2026-03-06", "2026-03-13"), ("2026-01-30", "2026-02-02"), ("2025-12-31", "2026-01-01"), ("2024-02-27", "2024-03-01"), ("2026-06-01", "2026-06-02")],
         prompt=(
-            "Write a function `same_code(a, b)` that returns True if"
-            " the two codes are the same once spaces at either end are"
-            " removed and capitals are ignored. Spaces INSIDE a code"
-            " still count as a difference.\n\n"
-            "  same_code(\"MB-0012\", \" mb-0012 \") -> True\n"
-            "  same_code(\"MB-12\", \"MB -12\") -> False\n\n"
-            "Return: a bool."
-        ),
-        solution=("def same_code(a, b):\n"
-                  "    return a.strip().lower() == b.strip().lower()\n"),
-        trap=("def same_code(a, b):\n"
-              "    return a.lower() == b.lower()\n"),
-        note="Tidy both sides the same way, then compare: strip() for"
-             " the stray spaces a form or a scanner adds, lower() for"
-             " the case. The methods chain because each returns a new"
-             " string. The trap lowers and forgets to strip, so the"
-             " code somebody typed with a space after it never"
-             " matches. Neither argument is changed -- strings cannot"
-             " be -- so the caller still has what was typed.",
-    ),
-    dict(
-        id=2, ledger="P597", concept="PY3 leading number or None", tier="1 - Text checks and fixes",
-        title="The house number at the start of an address", kind="function",
-        func="house_number",
-        cases=[("12 High Street",), ("Flat 3, 12 High Street",), ("",), ("12a High Street",), ("  7 Mill Lane",)],
-        prompt=(
-            "Write a function `house_number(address)` that returns the"
-            " house number as an int when the FIRST word of the"
-            " address is made of digits only, and None otherwise.\n\n"
-            "  house_number(\"12 High Street\") -> 12\n"
-            "  house_number(\"Flat 3, 12 High Street\") -> None\n\n"
-            "Return: an int, or None."
-        ),
-        solution=("def house_number(address):\n"
-                  "    words = address.split()\n"
-                  "    if words and words[0].isdigit():\n"
-                  "        return int(words[0])\n"
-                  "    return None\n"),
-        trap=("def house_number(address):\n"
-              "    words = address.split()\n"
-              "    if words and words[0].isdigit():\n"
-              "        return words[0]\n"
-              "    return None\n"),
-        note="isdigit() says the text is all digits; it does not turn"
-             " it into a number. The trap returns the word itself,"
-             " \"12\", which prints the same as 12 and is a different"
-             " thing: it will not add, and it sorts \"100\" before"
-             " \"12\". int() does the conversion, and is safe here"
-             " because isdigit() has already been asked. `words and"
-             " ...` covers the empty address, where there is no first"
-             " word to look at.",
-    ),
-    dict(
-        id=3, ledger="P598", concept="PY3 remove a known ending", tier="1 - Text checks and fixes",
-        title="A company name without its ending", kind="function",
-        func="without_ending",
-        cases=[("Okonjo Books Ltd", [" Ltd", " & Co", " & Sons"]), ("Brandt Ltd", [" Ltd", " & Co", " & Sons"]), ("Yilmaz Bicycles & Sons", [" Ltd", " & Co", " & Sons"]), ("Achebe Bakery Direct", [" Ltd", " & Co", " & Sons"]), ("Ltd", [" Ltd"])],
-        prompt=(
-            "Write a function `without_ending(name, endings)` that"
-            " returns the name with its ending cut off, if it ends"
-            " with one of the endings in the list, and unchanged if it"
-            " ends with none of them. Each ending in the list begins"
-            " with a space.\n\n"
-            "  without_ending(\"Okonjo Books Ltd\", [\" Ltd\", \" & Co\", \" & Sons\"]) -> \"Okonjo Books\"\n\n"
-            "Return: a str."
-        ),
-        solution=("def without_ending(name, endings):\n"
-                  "    for ending in endings:\n"
-                  "        if name.endswith(ending):\n"
-                  "            return name[:-len(ending)]\n"
-                  "    return name\n"),
-        trap=("def without_ending(name, endings):\n"
-              "    for ending in endings:\n"
-              "        if name.endswith(ending):\n"
-              "            return name.rstrip(ending)\n"
-              "    return name\n"),
-        note="rstrip(\" Ltd\") does not remove the word ' Ltd'. Its"
-             " argument is a SET of characters -- space, L, t, d --"
-             " and it strips any of them from the end for as long as"
-             " it can: 'Brandt Ltd' loses its ending and then the 'dt'"
-             " of Brandt as well. A slice cuts exactly len(ending)"
-             " characters. Python 3.9 added removesuffix() because so"
-             " many people made this mistake; it does what the slice"
-             " does.",
-    ),
-    dict(
-        id=4, ledger="P599", concept="PY3 mask all but the last four", tier="1 - Text checks and fixes",
-        title="An account number with its last four showing", kind="function",
-        func="masked",
-        cases=[("40127766411",), ("12345678",), ("6411",), ("77",), ("",)],
-        prompt=(
-            "Write a function `masked(number)` that returns the string"
-            " with every character except the last four replaced by a"
-            " star. The result is the same length as the original; a"
-            " string of four characters or fewer comes back"
-            " unchanged.\n\n"
-            "  masked(\"12345678\") -> \"****5678\"\n\n"
-            "Return: a str."
-        ),
-        solution=("def masked(number):\n"
-                  "    return \"*\" * (len(number) - 4) + number[-4:]\n"),
-        trap=("def masked(number):\n"
-              "    return \"****\" + number[-4:]\n"),
-        note="The number of stars depends on the length: len - 4 of"
-             " them, then the last four characters. A string times a"
-             " negative number is the empty string, and a slice of the"
-             " last four from a shorter string is the whole string, so"
-             " short inputs need no special case. The trap always"
-             " writes four stars, which is right for eight characters"
-             " only: an eleven-digit number comes back three short,"
-             " and '77' comes back as '****77'.",
-    ),
-    dict(
-        id=5, ledger="P600", concept="PY3 count a letter in either case", tier="1 - Text checks and fixes",
-        title="How many times a letter appears", kind="function",
-        func="count_letter",
-        cases=[("Bartholomew Baxter", "b"), ("Bartholomew Baxter", "B"), ("Northgate", "z"), ("", "a"), ("AaAa", "a")],
-        prompt=(
-            "Write a function `count_letter(text, letter)` that returns"
-            " how many times the letter appears in the text, counting"
-            " capitals and small letters as the same, whichever way"
-            " the letter itself was given.\n\n"
-            "  count_letter(\"Bartholomew Baxter\", \"b\") -> 2\n\n"
+            "Dates arrive as 'YYYY-MM-DD' text. Write a function"
+            " `nights(check_in, check_out)` that returns the number of"
+            " nights between them. `from datetime import date` gives"
+            " you date.fromisoformat(text); one date minus another is"
+            " a length of time with a .days.\n\n"
+            "  nights(\"2026-03-06\", \"2026-03-13\") -> 7\n"
+            "  nights(\"2026-01-30\", \"2026-02-02\") -> 3\n\n"
             "Return: an int."
         ),
-        solution=("def count_letter(text, letter):\n"
-                  "    return text.lower().count(letter.lower())\n"),
-        trap=("def count_letter(text, letter):\n"
-              "    return text.count(letter)\n"),
-        note="count() on a string counts exact matches, so 'b' finds"
-             " no capital B: the trap answers 0 for a name with two of"
-             " them. Lowering BOTH the text and the letter makes the"
-             " comparison fair whichever case either arrives in --"
-             " lowering only the text would break the call that passes"
-             " a capital. No loop is needed; count() is the loop.",
-    ),
-    # ============================================== 2 Safe values and labels
-    dict(
-        id=6, ledger="P601", concept="PY3 safe int with a fallback", tier="2 - Safe values and labels",
-        title="A quantity typed into a form", kind="function",
-        func="quantity",
-        cases=[("12",), (" 12 ",), ("abc",), ("",), ("3.5",), ("-2",)],
-        prompt=(
-            "Write a function `quantity(text)` that returns the whole"
-            " number typed into a form field, ignoring spaces around"
-            " it, or 0 if what was typed is not made of digits only."
-            " Nothing here should ever raise an error.\n\n"
-            "  quantity(\" 12 \") -> 12\n"
-            "  quantity(\"abc\") -> 0\n\n"
-            "Return: an int."
-        ),
-        solution=("def quantity(text):\n"
-                  "    text = text.strip()\n"
-                  "    if text.isdigit():\n"
-                  "        return int(text)\n"
-                  "    return 0\n"),
-        trap=("def quantity(text):\n"
-              "    if text.isdigit():\n"
-              "        return int(text)\n"
-              "    return 0\n"),
-        note="int() raises on anything that is not a number, so ask"
-             " first: isdigit() is True only for a non-empty string of"
-             " digits, which rules out 'abc', '', '3.5' and '-2' in"
-             " one test. A space is not a digit either -- the trap"
-             " skips the strip and turns a perfectly good ' 12 ' into"
-             " 0. int() itself would have accepted the spaces; it is"
-             " the check in front of it that is strict.",
+        solution=("from datetime import date\n"
+                  "\n"
+                  "def nights(check_in, check_out):\n"
+                  "    return (date.fromisoformat(check_out) - date.fromisoformat(check_in)).days\n"),
+        trap=("def nights(check_in, check_out):\n"
+              "    return int(check_out[8:]) - int(check_in[8:])\n"),
+        note="A date is not a number, and the day of the month is not"
+             " the date. Subtracting the last two digits, the trap,"
+             " works inside one month and gives -28 for a stay from 30"
+             " January to 2 February. date.fromisoformat turns the"
+             " text into a real date, and subtracting two dates gives"
+             " a timedelta whose .days already knows how long each"
+             " month is, and that 2024 had a 29th of February.",
     ),
     dict(
-        id=7, ledger="P602", concept="PY3 clamp to a range", tier="2 - Safe values and labels",
-        title="A bay number kept within the depot", kind="function",
-        func="within",
-        cases=[(5, 1, 10), (0, 1, 10), (15, 1, 10), (1, 1, 10), (10, 1, 10), (-3, 0, 0)],
+        id=2, ledger="P612", concept="PY3 add days to a date", tier="1 - Dates, with datetime",
+        title="The morning they leave", kind="function",
+        func="check_out_date",
+        cases=[("2026-03-06", 7), ("2026-01-30", 3), ("2025-12-31", 1), ("2026-06-10", 1), ("2024-02-28", 2)],
         prompt=(
-            "Write a function `within(n, low, high)` that returns n if"
-            " it lies between low and high, low if it is below, and"
-            " high if it is above. low is never greater than high."
-            " min() and max(), one inside the other.\n\n"
-            "  within(15, 1, 10) -> 10\n"
-            "  within(0, 1, 10) -> 1\n\n"
-            "Return: an int."
-        ),
-        solution=("def within(n, low, high):\n"
-                  "    return max(low, min(n, high))\n"),
-        trap=("def within(n, low, high):\n"
-              "    return min(low, max(n, high))\n"),
-        note="min(n, high) pulls anything too big down to high, and"
-             " max(low, ...) then lifts anything too small up to low."
-             " It reads backwards at first -- min is used for the"
-             " UPPER limit, because the smaller of n and high is what"
-             " you want -- and the trap is what happens when the two"
-             " are swapped to match the words: it returns low for"
-             " everything. An if/elif with two comparisons says the"
-             " same and is just as good.",
-    ),
-    dict(
-        id=8, ledger="P603", concept="PY3 thousands separator", tier="2 - Safe values and labels",
-        title="A parcel count with commas", kind="function",
-        func="count_label",
-        cases=[(24000,), (1,), (0,), (999,), (1234567,)],
-        prompt=(
-            "Write a function `count_label(n)` that returns the number"
-            " with commas between the thousands, a space, and the word"
-            " parcel -- or parcels for anything but exactly 1. An"
-            " f-string's format can put the commas in.\n\n"
-            "  count_label(24000) -> \"24,000 parcels\"\n"
-            "  count_label(1) -> \"1 parcel\"\n\n"
+            "Write a function `check_out_date(check_in, nights)` that"
+            " returns the date so many nights after check_in, as"
+            " 'YYYY-MM-DD' text. From datetime, a timedelta(days=n)"
+            " can be added to a date, and a date has .isoformat() to"
+            " turn it back into text.\n\n"
+            "  check_out_date(\"2026-01-30\", 3) -> \"2026-02-02\"\n\n"
             "Return: a str."
         ),
-        solution=("def count_label(n):\n"
-                  "    word = \"parcel\" if n == 1 else \"parcels\"\n"
-                  "    return f\"{n:,} {word}\"\n"),
-        trap=("def count_label(n):\n"
-              "    word = \"parcel\" if n == 1 else \"parcels\"\n"
-              "    return f\"{n} {word}\"\n"),
-        note="Inside the braces of an f-string, whatever follows the"
-             " colon is a format: a comma there groups the digits in"
-             " threes. The trap prints 24000 as it comes, which is"
-             " readable, and 1234567, which is not. Working out the"
-             " word on its own line first keeps the f-string simple,"
-             " and 0 takes the plural like every number that is not"
-             " 1.",
+        solution=("from datetime import date, timedelta\n"
+                  "\n"
+                  "def check_out_date(check_in, nights):\n"
+                  "    return (date.fromisoformat(check_in) + timedelta(days=nights)).isoformat()\n"),
+        trap=("def check_out_date(check_in, nights):\n"
+              "    return check_in[:8] + f\"{int(check_in[8:]) + nights:02d}\"\n"),
+        note="Text in, date arithmetic in the middle, text out:"
+             " fromisoformat and isoformat are the two doors, and"
+             " timedelta is the only thing you may add to a date. The"
+             " trap does the sum on the day digits and cheerfully"
+             " returns 2026-01-33; it has no idea where a month ends."
+             " The real version rolls 31 December into the next year"
+             " and gets the leap day right without being told.",
     ),
     dict(
-        id=9, ledger="P604", concept="PY3 labels from a range", tier="2 - Safe values and labels",
-        title="Delivery slots, on the hour", kind="function",
-        func="slots",
-        cases=[(9, 12), (8, 9), (14, 14), (0, 3), (22, 24)],
+        id=3, ledger="P613", concept="PY3 weekday of a date", tier="1 - Dates, with datetime",
+        title="What day of the week is that?", kind="function",
+        func="day_name",
+        cases=[("2026-06-01",), ("2025-12-31",), ("2026-03-08",), ("2026-03-07",), ("2026-06-30",)],
         prompt=(
-            "Write a function `slots(first, last)` that returns the"
-            " start time of every one-hour delivery slot from the hour"
-            " `first` up to but not including the hour `last`, as"
-            " 'HH:00' strings with two digits for the hour.\n\n"
-            "  slots(9, 12) -> [\"09:00\", \"10:00\", \"11:00\"]\n\n"
+            "Write a function `day_name(day)` that returns the English"
+            " name of the weekday for a 'YYYY-MM-DD' date. A date has"
+            " a .weekday() method that gives a number: 0 for Monday up"
+            " to 6 for Sunday. Use it to pick from a list of names.\n\n"
+            "  day_name(\"2026-06-01\") -> \"Monday\"\n"
+            "  day_name(\"2026-03-08\") -> \"Sunday\"\n\n"
+            "Return: a str."
+        ),
+        solution=("from datetime import date\n"
+                  "\n"
+                  "DAYS = [\"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\", \"Sunday\"]\n"
+                  "\n"
+                  "def day_name(day):\n"
+                  "    return DAYS[date.fromisoformat(day).weekday()]\n"),
+        trap=("from datetime import date\n"
+              "\n"
+              "DAYS = [\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"]\n"
+              "\n"
+              "def day_name(day):\n"
+              "    return DAYS[date.fromisoformat(day).weekday()]\n"),
+        note="weekday() counts from Monday as 0, so the list of names"
+             " has to start with Monday as well. The trap's list"
+             " starts on Sunday, the way a wall calendar often does,"
+             " and every answer comes out a day early. A list is the"
+             " simplest lookup there is when the keys are 0, 1, 2...:"
+             " the number IS the position. SQLite's strftime('%w')"
+             " counts the other way, from Sunday as 0.",
+    ),
+    dict(
+        id=4, ledger="P614", concept="PY3 list of dates from a range", tier="1 - Dates, with datetime",
+        title="Every night of the stay", kind="function",
+        func="stay_nights",
+        cases=[("2026-03-06", "2026-03-09"), ("2026-01-30", "2026-02-02"), ("2026-06-01", "2026-06-02"), ("2025-12-30", "2026-01-01")],
+        prompt=(
+            "Write a function `stay_nights(check_in, check_out)` that"
+            " returns the date of every night of the stay as"
+            " 'YYYY-MM-DD' text, in order. The first night is"
+            " check_in; check_out is the morning of departure and is"
+            " NOT a night. range, and a timedelta for each step.\n\n"
+            "  stay_nights(\"2026-03-06\", \"2026-03-09\") -> [\"2026-03-06\", \"2026-03-07\", \"2026-03-08\"]\n\n"
             "Return: a list of str."
         ),
-        solution=("def slots(first, last):\n"
-                  "    return [f\"{hour:02d}:00\" for hour in range(first, last)]\n"),
-        trap=("def slots(first, last):\n"
-              "    return [f\"{hour}:00\" for hour in range(first, last)]\n"),
-        note="range(first, last) already stops before `last`, which is"
-             " exactly the slots wanted, and :02d in the f-string"
-             " writes each hour two digits wide with a leading zero."
-             " The trap leaves the format out and gives '9:00', which"
-             " sorts after '10:00' as text and will not line up in a"
-             " column. An empty range, slots(14, 14), gives an empty"
-             " list with no special case.",
+        solution=("from datetime import date, timedelta\n"
+                  "\n"
+                  "def stay_nights(check_in, check_out):\n"
+                  "    first = date.fromisoformat(check_in)\n"
+                  "    count = (date.fromisoformat(check_out) - first).days\n"
+                  "    return [(first + timedelta(days=n)).isoformat() for n in range(count)]\n"),
+        trap=("from datetime import date, timedelta\n"
+              "\n"
+              "def stay_nights(check_in, check_out):\n"
+              "    first = date.fromisoformat(check_in)\n"
+              "    count = (date.fromisoformat(check_out) - first).days\n"
+              "    return [(first + timedelta(days=n)).isoformat() for n in range(count + 1)]\n"),
+        note="range(count) gives 0 up to count - 1, which is exactly"
+             " the nights: the first is 0 days after check-in and the"
+             " last is the day before check-out. The trap's + 1"
+             " 'includes the end' and lists the morning of departure"
+             " as a night, so a three-night stay is billed for four."
+             " A stay is a half-open range, start included and end"
+             " not, and range() is half-open the same way.",
     ),
     dict(
-        id=10, ledger="P605", concept="PY3 membership after normalising", tier="2 - Safe values and labels",
-        title="Is it the weekend?", kind="function",
-        func="is_weekend",
-        cases=[("Saturday",), ("sun",), ("MONDAY",), (" Sat ",), ("Fri",), ("sunday",)],
+        id=5, ledger="P615", concept="PY3 overlap of two ranges", tier="1 - Dates, with datetime",
+        title="Do the two stays collide?", kind="function",
+        func="collide",
+        cases=[("2026-08-04", "2026-08-05", "2026-08-05", "2026-08-09"), ("2026-08-05", "2026-08-09", "2026-08-08", "2026-08-10"),
+               ("2026-08-01", "2026-08-10", "2026-08-03", "2026-08-04"), ("2026-08-09", "2026-08-11", "2026-08-05", "2026-08-09"),
+               ("2026-08-01", "2026-08-02", "2026-09-01", "2026-09-02"), ("2026-08-01", "2026-08-03", "2026-08-01", "2026-08-03")],
         prompt=(
-            "A day arrives as its full name or its first three"
-            " letters, in any mix of capitals, perhaps with spaces"
-            " around it. Write a function `is_weekend(day)` that"
-            " returns True for Saturday and Sunday. Reduce every way"
-            " of writing a day to one form, then test with `in`.\n\n"
-            "  is_weekend(\"Saturday\") -> True\n"
-            "  is_weekend(\" Sat \") -> True\n"
-            "  is_weekend(\"MONDAY\") -> False\n\n"
+            "Two stays in the same room, each a check-in and a"
+            " check-out as 'YYYY-MM-DD' text. Write a function"
+            " `collide(in_a, out_a, in_b, out_b)` that returns True if"
+            " they share at least one night. One guest leaving on the"
+            " morning the other arrives is NOT a collision. Dates in"
+            " this form compare correctly as plain text, so no"
+            " conversion is needed.\n\n"
+            "  collide(\"2026-08-05\", \"2026-08-09\", \"2026-08-08\", \"2026-08-10\") -> True\n"
+            "  collide(\"2026-08-04\", \"2026-08-05\", \"2026-08-05\", \"2026-08-09\") -> False\n\n"
             "Return: a bool."
         ),
-        solution=("def is_weekend(day):\n"
-                  "    return day.strip().lower()[:3] in (\"sat\", \"sun\")\n"),
-        trap=("def is_weekend(day):\n"
-              "    return day in (\"Saturday\", \"Sunday\")\n"),
-        note="There are many ways to write Saturday and only one way"
-             " to test for it, so bring the input to the test: strip"
-             " the spaces, lower the case, keep three letters. Every"
-             " spelling then lands on 'sat' or 'sun'. The trap lists"
-             " the two spellings it thought of and says False to"
-             " 'sun', ' Sat ' and 'sunday'. Order matters in the"
-             " chain: strip before slicing, or the three characters"
-             " kept from ' Sat ' would be ' sa'.",
+        solution=("def collide(in_a, out_a, in_b, out_b):\n"
+                  "    return in_a < out_b and in_b < out_a\n"),
+        trap=("def collide(in_a, out_a, in_b, out_b):\n"
+              "    return in_a <= out_b and in_b <= out_a\n"),
+        note="Two ranges overlap when each starts before the other"
+             " ends. That one line covers every arrangement -- one"
+             " inside the other, either end sticking out, identical --"
+             " where listing the cases one by one always misses some."
+             " The comparisons are strict because check-out is a"
+             " morning: with <=, the trap, a room could never be let"
+             " to a new guest on the day the last one leaves. Year"
+             " first, zero-padded text sorts in date order.",
     ),
-    # ============================================ 3 Lists, split and combined
+    # ==================================================== 2 Guests and bills
     dict(
-        id=11, ledger="P606", concept="PY3 chunks of n", tier="3 - Lists, split and combined",
-        title="Parcels shelved so many to a shelf", kind="function",
-        func="shelves",
-        cases=[(["a", "b", "c", "d", "e", "f", "g"], 3), (["a", "b", "c", "d"], 2), (["a"], 5), ([], 3), (["a", "b", "c"], 1)],
+        id=6, ledger="P616", concept="PY3 split an amount exactly", tier="2 - Guests and bills",
+        title="A bill split so that it adds up", kind="function",
+        func="split_bill",
+        cases=[(10000, 3), (9000, 3), (100, 1), (5, 4), (0, 2)],
         prompt=(
-            "Write a function `shelves(items, n)` that returns the"
-            " items as a list of lists, n to a shelf in order, with"
-            " whatever is left over on a last, shorter shelf. No items"
-            " means no shelves. range takes a step.\n\n"
-            "  shelves([\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\"], 3) -> [[\"a\", \"b\", \"c\"], [\"d\", \"e\", \"f\"], [\"g\"]]\n\n"
-            "Return: a list of lists."
+            "Write a function `split_bill(total_cents, people)` that"
+            " returns a list of what each person pays, in whole cents."
+            " The shares must add up to the total exactly: everyone"
+            " pays the same, except that the first few pay one cent"
+            " more when the total does not divide evenly. // and %"
+            " give the share and what is left over.\n\n"
+            "  split_bill(10000, 3) -> [3334, 3333, 3333]\n\n"
+            "Return: a list of int."
         ),
-        solution=("def shelves(items, n):\n"
-                  "    return [items[i:i + n] for i in range(0, len(items), n)]\n"),
-        trap=("def shelves(items, n):\n"
-              "    return [items[i:n] for i in range(0, len(items), n)]\n"),
-        note="range(0, len(items), n) gives the position where each"
-             " shelf starts -- 0, 3, 6 -- and items[i:i + n] takes n"
-             " items from there. The slice's end is a POSITION, not a"
-             " length, which is the trap's mistake: items[i:n] is"
-             " right for the first shelf, where i is 0, and empty for"
-             " every one after it. A slice that runs past the end"
-             " just stops, so the short last shelf needs no extra"
-             " code.",
+        solution=("def split_bill(total_cents, people):\n"
+                  "    share = total_cents // people\n"
+                  "    extra = total_cents % people\n"
+                  "    return [share + 1 if i < extra else share for i in range(people)]\n"),
+        trap=("def split_bill(total_cents, people):\n"
+              "    return [total_cents // people] * people\n"),
+        note="// throws the remainder away, so three shares of 3333"
+             " come to 9999 and a cent has gone missing -- the trap."
+             " % says how many cents were left over, and that many"
+             " people pay one more: the remainder is always smaller"
+             " than the number of people, so nobody pays two extra."
+             " Money is kept in whole cents so that this can be exact;"
+             " dividing 100.00 by 3 as a decimal never is.",
     ),
     dict(
-        id=12, ledger="P607", concept="PY3 split a list in half", tier="3 - Lists, split and combined",
-        title="One load between two vans", kind="function",
-        func="halves",
-        cases=[(["a", "b", "c", "d", "e"],), (["a", "b", "c", "d"],), (["a"],), ([],)],
+        id=7, ledger="P617", concept="PY3 two counts returned together", tier="2 - Guests and bills",
+        title="Adults and children in the party", kind="function",
+        func="party",
+        cases=[([34, 36, 8, 5],), ([18],), ([17, 18, 19],), ([],), ([4, 6],)],
         prompt=(
-            "Write a function `halves(items)` that splits the list"
-            " into a first half and a second half, in order, and"
-            " returns the two lists. When the number of items is odd,"
-            " the FIRST half gets the extra one.\n\n"
-            "  halves([\"a\", \"b\", \"c\", \"d\", \"e\"]) -> ([\"a\", \"b\", \"c\"], [\"d\", \"e\"])\n\n"
-            "Return: a tuple of two lists."
+            "Write a function `party(ages)` that takes the ages of the"
+            " guests in a booking and returns two numbers: how many"
+            " are adults and how many are children. Anyone aged 18 or"
+            " over is an adult.\n\n"
+            "  party([34, 36, 8, 5]) -> (2, 2)\n"
+            "  party([18]) -> (1, 0)\n\n"
+            "Return: a tuple of two ints, adults first."
         ),
-        solution=("def halves(items):\n"
-                  "    middle = (len(items) + 1) // 2\n"
-                  "    return items[:middle], items[middle:]\n"),
-        trap=("def halves(items):\n"
-              "    middle = len(items) // 2\n"
-              "    return items[:middle], items[middle:]\n"),
-        note="// divides and rounds DOWN, so len // 2 of five items is"
-             " 2 and the extra item falls into the second half, the"
-             " trap. Adding 1 before dividing rounds up instead: 5"
-             " gives 3, and an even 4 still gives 2, because the"
-             " extra half is thrown away. items[:middle] and"
-             " items[middle:] always fit together with nothing lost"
-             " and nothing repeated, whatever middle is.",
+        solution=("def party(ages):\n"
+                  "    adults = sum(age >= 18 for age in ages)\n"
+                  "    return adults, len(ages) - adults\n"),
+        trap=("def party(ages):\n"
+              "    adults = sum(age > 18 for age in ages)\n"
+              "    return adults, len(ages) - adults\n"),
+        note="'18 or over' is >=, and the difference from > is exactly"
+             " one age: the trap turns every eighteen-year-old into a"
+             " child. The boundary value is the one to test. Counting"
+             " the adults and subtracting from the total guarantees"
+             " the two numbers add up to the party, where two separate"
+             " counts could disagree. `return a, b` builds a tuple, so"
+             " the caller can write adults, children = party(ages).",
     ),
     dict(
-        id=13, ledger="P608", concept="PY3 insert after a value", tier="3 - Lists, split and combined",
-        title="An extra stop, straight after another", kind="function",
-        func="insert_after",
-        cases=[(["Northgate", "Moorside", "Westway"], "Moorside", "Hillcrest"), (["Northgate", "Moorside"], "Moorside", "Hillcrest"), (["Northgate"], "Docklands", "Hillcrest"), ([], "a", "b"), (["a", "b", "a"], "a", "x")],
+        id=8, ledger="P618", concept="PY4 first name plus a count", tier="2 - Guests and bills",
+        title="A booking's guests on one line", kind="function",
+        func="guest_line",
+        cases=[(["Agnes Devlin", "Hugo Devlin", "Mei Devlin"],), (["Agnes Devlin"],), ([],), (["Agnes Devlin", "Hugo Devlin"],)],
         prompt=(
-            "Write a function `insert_after(stops, stop, new)` that"
-            " returns a NEW list with `new` placed immediately after"
-            " the first occurrence of `stop`. If `stop` is not in the"
-            " list, the result is an unchanged copy. The list passed"
-            " in is not altered.\n\n"
-            "  insert_after([\"Northgate\", \"Moorside\", \"Westway\"], \"Moorside\", \"Hillcrest\") -> [\"Northgate\", \"Moorside\", \"Hillcrest\", \"Westway\"]\n\n"
+            "The arrivals list has room for one line per booking."
+            " Write a function `guest_line(names)` that returns the"
+            " first guest's name, followed by ' + ' and the number of"
+            " OTHER guests when there are any. A single guest is just"
+            " their name; no guests is the empty string.\n\n"
+            "  guest_line([\"Agnes Devlin\", \"Hugo Devlin\", \"Mei Devlin\"]) -> \"Agnes Devlin + 2\"\n"
+            "  guest_line([\"Agnes Devlin\"]) -> \"Agnes Devlin\"\n\n"
+            "Return: a str."
+        ),
+        solution=("def guest_line(names):\n"
+                  "    if not names:\n"
+                  "        return \"\"\n"
+                  "    if len(names) == 1:\n"
+                  "        return names[0]\n"
+                  "    return f\"{names[0]} + {len(names) - 1}\"\n"),
+        trap=("def guest_line(names):\n"
+              "    if not names:\n"
+              "        return \"\"\n"
+              "    return f\"{names[0]} + {len(names) - 1}\"\n"),
+        note="Three cases, each with its own return: nothing, one,"
+             " several. The empty list has to be dealt with first,"
+             " because names[0] raises on it. The trap forgets the"
+             " middle case and prints 'Agnes Devlin + 0', which is"
+             " true and looks like a mistake to everyone who reads it."
+             " When a label describes a count, zero and one nearly"
+             " always need words of their own.",
+    ),
+    dict(
+        id=9, ledger="P619", concept="PY4 shape of an email address", tier="2 - Guests and bills",
+        title="Does that look like an email address?", kind="function",
+        func="looks_like_email",
+        cases=[("agnes.devlin7@example.org",), ("agnes.devlin",), ("@example.org",), ("agnes@example",), ("a@b@example.org",), ("agnes@.org",), ("agnes@example.",), ("",)],
+        prompt=(
+            "Write a function `looks_like_email(text)` for a first"
+            " check on a form. It returns True only if the text has"
+            " exactly ONE '@', something before it, and after it a"
+            " part that contains a dot which is neither its first nor"
+            " its last character.\n\n"
+            "  looks_like_email(\"agnes.devlin7@example.org\") -> True\n"
+            "  looks_like_email(\"@example.org\") -> False\n"
+            "  looks_like_email(\"agnes@example\") -> False\n\n"
+            "Return: a bool."
+        ),
+        solution=("def looks_like_email(text):\n"
+                  "    if text.count(\"@\") != 1:\n"
+                  "        return False\n"
+                  "    name, domain = text.split(\"@\")\n"
+                  "    if not name:\n"
+                  "        return False\n"
+                  "    return \".\" in domain and not domain.startswith(\".\") and not domain.endswith(\".\")\n"),
+        trap=("def looks_like_email(text):\n"
+              "    return \"@\" in text and \".\" in text\n"),
+        note="The trap asks whether the two characters are there at"
+             " all, and says yes to '@example.org' and to"
+             " 'agnes.devlin@example', where the dot is on the wrong"
+             " side. Checking that there is exactly one @ first makes"
+             " the split safe to unpack into two names, and each rule"
+             " after that is one short test. This is a check of"
+             " shape, not of truth: only sending a message shows"
+             " whether an address exists.",
+    ),
+    dict(
+        id=10, ledger="P620", concept="PY3 truncate a list with a count", tier="2 - Guests and bills",
+        title="A long guest list, cut short", kind="function",
+        func="short_list",
+        cases=[(["Agnes", "Hugo", "Mei", "Niall", "Pavel"], 3), (["Agnes", "Hugo"], 3), (["Agnes", "Hugo", "Mei"], 3), ([], 2), (["Agnes", "Hugo"], 1)],
+        prompt=(
+            "Write a function `short_list(names, limit)` that returns"
+            " the names unchanged if there are no more than `limit` of"
+            " them. If there are more, it returns the first `limit`"
+            " names followed by one extra item saying how many were"
+            " left off: 'and 2 more'.\n\n"
+            "  short_list([\"Agnes\", \"Hugo\", \"Mei\", \"Niall\", \"Pavel\"], 3) -> [\"Agnes\", \"Hugo\", \"Mei\", \"and 2 more\"]\n"
+            "  short_list([\"Agnes\", \"Hugo\"], 3) -> [\"Agnes\", \"Hugo\"]\n\n"
+            "Return: a list of str."
+        ),
+        solution=("def short_list(names, limit):\n"
+                  "    if len(names) <= limit:\n"
+                  "        return list(names)\n"
+                  "    return names[:limit] + [f\"and {len(names) - limit} more\"]\n"),
+        trap=("def short_list(names, limit):\n"
+              "    return names[:limit] + [f\"and {len(names) - limit} more\"]\n"),
+        note="The slice is safe on a short list -- names[:3] of two"
+             " names is those two -- but the count is not: without"
+             " the first test, the trap, a list that fits ends with"
+             " 'and 0 more', and one shorter still with 'and -1 more'."
+             " Decide first whether anything is being cut. The"
+             " comparison is <=, since a list of exactly the limit"
+             " fits and needs no footnote.",
+    ),
+    # ==================================================== 3 Rooms and floors
+    dict(
+        id=11, ledger="P621", concept="PY3 slice from the end", tier="3 - Rooms and floors",
+        title="Which floor is the room on?", kind="function",
+        func="floor_of",
+        cases=[("204",), ("1204",), ("101",), ("312",), ("1001",)],
+        prompt=(
+            "A room number is the floor followed by a two-digit room:"
+            " '204' is floor 2, room 4, and in a tall hotel '1204' is"
+            " floor 12. Write a function `floor_of(room_no)` that"
+            " returns the floor as an int. Count from the END of the"
+            " string, where the layout is fixed.\n\n"
+            "  floor_of(\"204\") -> 2\n"
+            "  floor_of(\"1204\") -> 12\n\n"
+            "Return: an int."
+        ),
+        solution=("def floor_of(room_no):\n"
+                  "    return int(room_no[:-2])\n"),
+        trap=("def floor_of(room_no):\n"
+              "    return int(room_no[0])\n"),
+        note="The room part is always the last two characters; the"
+             " floor is everything in front of them, however long."
+             " room_no[:-2] says exactly that: all but the last two."
+             " The first character alone, the trap, is right for"
+             " every hotel under ten storeys and puts room 1204 on"
+             " floor 1. When one end of a string has a fixed width,"
+             " measure from that end.",
+    ),
+    dict(
+        id=12, ledger="P622", concept="PY3 next in a list, stopping at the top", tier="3 - Rooms and floors",
+        title="An upgrade, if there is one", kind="function",
+        func="upgrade",
+        cases=[("twin", ["single", "twin", "double", "family", "suite"]), ("suite", ["single", "twin", "double", "family", "suite"]),
+               ("single", ["single", "twin", "double", "family", "suite"]), ("family", ["single", "twin", "double", "family", "suite"]), ("a", ["a"])],
+        prompt=(
+            "Room types run from the plainest to the best in a list."
+            " Write a function `upgrade(kind, ladder)` that returns"
+            " the type one step up from `kind`. A guest already in the"
+            " best type stays where they are. kind is always in the"
+            " list.\n\n"
+            "  upgrade(\"twin\", [\"single\", \"twin\", \"double\", \"family\", \"suite\"]) -> \"double\"\n"
+            "  upgrade(\"suite\", [\"single\", \"twin\", \"double\", \"family\", \"suite\"]) -> \"suite\"\n\n"
+            "Return: a str."
+        ),
+        solution=("def upgrade(kind, ladder):\n"
+                  "    position = ladder.index(kind)\n"
+                  "    return ladder[min(position + 1, len(ladder) - 1)]\n"),
+        trap=("def upgrade(kind, ladder):\n"
+              "    position = ladder.index(kind)\n"
+              "    return ladder[(position + 1) % len(ladder)]\n"),
+        note="min(position + 1, last) moves up one and stops at the"
+             " top: the one position that does not exist is replaced"
+             " by the last that does. The trap uses the remainder,"
+             " which is right for a rota that goes round and wrong"
+             " for a ladder -- it 'upgrades' a guest from the suite to"
+             " a single. Both are one-line ways of handling the end of"
+             " a list; which one depends on whether the end joins up"
+             " with the beginning.",
+    ),
+    dict(
+        id=13, ledger="P623", concept="PY3 filter by odd or even", tier="3 - Rooms and floors",
+        title="The rooms that face the sea", kind="function",
+        func="sea_view",
+        cases=[(["201", "202", "203", "210", "215"],), (["312", "104"],), ([],), (["120", "121", "301"],), (["1205", "1206"],)],
+        prompt=(
+            "At Harbour Lights the odd-numbered rooms face the sea."
+            " Write a function `sea_view(rooms)` that takes room"
+            " numbers as strings and returns the odd-numbered ones, in"
+            " order, still as strings. A whole number is odd when the"
+            " remainder on dividing by 2 is 1.\n\n"
+            "  sea_view([\"201\", \"202\", \"203\", \"210\", \"215\"]) -> [\"201\", \"203\", \"215\"]\n\n"
+            "Return: a list of str."
+        ),
+        solution=("def sea_view(rooms):\n"
+                  "    return [room for room in rooms if int(room) % 2 == 1]\n"),
+        trap=("def sea_view(rooms):\n"
+              "    return [room for room in rooms if int(room[0]) % 2 == 1]\n"),
+        note="The test needs a number, so int(room) is used inside the"
+             " condition, while the list is built from `room`, the"
+             " original string: convert to decide, keep what you were"
+             " given. The trap tests the first digit, which is the"
+             " floor, and returns every room on floors 1 and 3."
+             " Whether a number is odd depends only on its last digit;"
+             " int(room) % 2 looks at the whole number and cannot get"
+             " that wrong.",
+    ),
+    dict(
+        id=14, ledger="P624", concept="PY3 flatten a list of lists", tier="3 - Rooms and floors",
+        title="Every room on every floor", kind="function",
+        func="all_rooms",
+        cases=[([["101", "102"], ["201"], ["301", "302", "303"]],), ([[], ["201"]],), ([],), ([["101"]],)],
+        prompt=(
+            "The housekeeping sheet lists rooms floor by floor: a list"
+            " of lists. Write a function `all_rooms(floors)` that"
+            " returns every room number in ONE flat list, in the same"
+            " order. A list has two ways of adding to itself, and they"
+            " differ on exactly this.\n\n"
+            "  all_rooms([[\"101\", \"102\"], [\"201\"], [\"301\", \"302\", \"303\"]]) -> [\"101\", \"102\", \"201\", \"301\", \"302\", \"303\"]\n\n"
+            "Return: a list of str."
+        ),
+        solution=("def all_rooms(floors):\n"
+                  "    rooms = []\n"
+                  "    for floor in floors:\n"
+                  "        rooms.extend(floor)\n"
+                  "    return rooms\n"),
+        trap=("def all_rooms(floors):\n"
+              "    rooms = []\n"
+              "    for floor in floors:\n"
+              "        rooms.append(floor)\n"
+              "    return rooms\n"),
+        note="append adds ONE item to the end, whatever it is; given a"
+             " list, it adds that list as a single item, and the trap"
+             " hands back the same list of lists it started with."
+             " extend adds each item of what it is given, which is the"
+             " flattening. rooms += floor is extend spelled another"
+             " way, and [room for floor in floors for room in floor]"
+             " does it in one line, reading the two fors in the order"
+             " you would nest them.",
+    ),
+    dict(
+        id=15, ledger="P625", concept="PY3 swap two positions on a copy", tier="3 - Rooms and floors",
+        title="Two guests swap rooms", kind="function",
+        func="swap_guests",
+        cases=[(["Agnes", "Hugo", "Mei", "Niall"], 0, 2), (["Agnes", "Hugo"], 0, 1), (["Agnes", "Hugo", "Mei"], 1, 1), (["Agnes", "Hugo", "Mei"], 2, 0)],
+        prompt=(
+            "A list holds the guest in each room, room by room. Write"
+            " a function `swap_guests(guests, i, j)` that returns a"
+            " NEW list in which the guests at positions i and j have"
+            " changed places. The list passed in is not altered."
+            " Python can assign to two things at once.\n\n"
+            "  swap_guests([\"Agnes\", \"Hugo\", \"Mei\", \"Niall\"], 0, 2) -> [\"Mei\", \"Hugo\", \"Agnes\", \"Niall\"]\n\n"
             "Return: a list."
         ),
-        solution=("def insert_after(stops, stop, new):\n"
-                  "    out = list(stops)\n"
-                  "    if stop in out:\n"
-                  "        out.insert(out.index(stop) + 1, new)\n"
+        solution=("def swap_guests(guests, i, j):\n"
+                  "    out = list(guests)\n"
+                  "    out[i], out[j] = out[j], out[i]\n"
                   "    return out\n"),
-        trap=("def insert_after(stops, stop, new):\n"
-              "    out = list(stops)\n"
-              "    if stop in out:\n"
-              "        out.insert(out.index(stop), new)\n"
+        trap=("def swap_guests(guests, i, j):\n"
+              "    out = list(guests)\n"
+              "    out[i] = out[j]\n"
+              "    out[j] = out[i]\n"
               "    return out\n"),
-        note="insert(position, item) puts the item BEFORE whatever is"
-             " at that position now, so inserting at the stop's own"
-             " index, the trap, puts the new stop in front of it."
-             " After it means index + 1 -- and when the stop is the"
-             " last item that is one past the end, which insert"
-             " accepts as 'at the end'. list(stops) makes the copy,"
-             " so the caller's route is not rearranged behind their"
-             " back.",
-    ),
-    dict(
-        id=14, ledger="P609", concept="PY3 all against an allowed list", tier="3 - Lists, split and combined",
-        title="Is every status one we know?", kind="function",
-        func="all_known",
-        cases=[(["collected", "delivered"], ["collected", "departed", "arrived", "delivered"]), (["collected", "lost"], ["collected", "departed", "arrived", "delivered"]), ([], ["collected"]), (["lost", "found"], ["collected"]), (["collected", "collected"], ["collected"])],
-        prompt=(
-            "Write a function `all_known(statuses, allowed)` that"
-            " returns True if EVERY status in the first list appears"
-            " in the list of allowed ones. A trail with no statuses"
-            " has nothing wrong with it.\n\n"
-            "  all_known([\"collected\", \"lost\"], [\"collected\", \"departed\", \"arrived\", \"delivered\"]) -> False\n\n"
-            "Return: a bool."
-        ),
-        solution=("def all_known(statuses, allowed):\n"
-                  "    return all(status in allowed for status in statuses)\n"),
-        trap=("def all_known(statuses, allowed):\n"
-              "    return any(status in allowed for status in statuses)\n"),
-        note="all() is True when no item fails the test; any(), the"
-             " trap, is True as soon as one passes, so a trail with"
-             " one good status and one unknown one is waved through."
-             " They also disagree about nothing at all: all() of an"
-             " empty list is True -- there is no counter-example --"
-             " and any() is False. 'Is everything valid' is all();"
-             " 'is anything valid' is a different question.",
-    ),
-    dict(
-        id=15, ledger="P610", concept="PY3 right-align to the widest", tier="3 - Lists, split and combined",
-        title="Numbers lined up on the right", kind="function",
-        func="lined_up",
-        cases=[([5, 120, 34],), ([7],), ([],), ([1000, 1, 10, 100],), ([0, 0],)],
-        prompt=(
-            "Write a function `lined_up(numbers)` that returns the"
-            " numbers as strings, all the same length -- as wide as"
-            " the longest -- with spaces added on the LEFT so that the"
-            " last digits line up in a column. An empty list gives an"
-            " empty list.\n\n"
-            "  lined_up([5, 120, 34]) -> [\"  5\", \"120\", \" 34\"]\n\n"
-            "Return: a list of str."
-        ),
-        solution=("def lined_up(numbers):\n"
-                  "    width = max((len(str(n)) for n in numbers), default=0)\n"
-                  "    return [str(n).rjust(width) for n in numbers]\n"),
-        trap=("def lined_up(numbers):\n"
-              "    width = max((len(str(n)) for n in numbers), default=0)\n"
-              "    return [str(n).ljust(width) for n in numbers]\n"),
-        note="Two passes: one to find the width of the widest number,"
-             " one to pad each to it. rjust pads on the left, pushing"
-             " the text to the right, which is how numbers are read;"
-             " ljust, the trap, pads on the right and lines up the"
-             " FIRST digits, so 5 sits above the 1 of 120. Names take"
-             " ljust, numbers take rjust. default=0 is what keeps"
-             " max() from raising on an empty list.",
+        note="Two assignments one after the other, the trap, lose a"
+             " guest: once out[i] has been overwritten, its old value"
+             " is gone, and the second line copies the new one back --"
+             " Mei is in both rooms and Agnes in neither. The paired"
+             " assignment reads both right-hand values BEFORE storing"
+             " either, so nothing is lost. It is the same problem as"
+             " swapping two rows' values in SQL, and Python's answer"
+             " needs no third place to stand.",
     ),
 ]
 

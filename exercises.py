@@ -1,32 +1,35 @@
-"""Practice exercises: fifteen questions on the parcel-courier schema.
+"""Practice exercises: fifteen questions on the hotel-group schema.
 
-The eighth set on the courier scheme (SEED 1241), nine questions that
-read and six that change the data, the last three of them procedures. The
-tiers are named by task, the tools are ones the first seven courier sets
-left out, and the prompts name the tool but do not write the statement.
-Text, matched and built -- a first name of exactly four letters by LIKE's
-one-character wildcard, a postcode ending in two digits by GLOB's
-character class, a reference padded with zeros by printf. More from
-windows -- record months by a MAX whose frame stops short of the current
-row, the same month a year earlier by LAG with an offset, customers with
-a namesake by COUNT(*) OVER a partition. Positions, years and thresholds
--- fourth to sixth place by LIMIT with OFFSET, completed years of service
-by anniversary arithmetic, customers at or above several levels by a
-join on >=.
+The first set on a NEW schema (SEED 1356): a small group of eight hotels,
+their rooms, guests, bookings, the extras charged to a stay, the payments
+made against it and the reviews left afterwards. Nine questions read and
+six change the data, the last three of them procedures. Because the
+tables are new the tools are the central ones, asked where a hotel makes
+them matter, and the prompts name the tool but do not write the
+statement. Finding your way around -- rooms and prices per hotel by a
+join and GROUP BY, guests who never booked by LEFT JOIN, room-nights sold
+by subtracting dates. Nights and dates -- who was in the house on a given
+night by a half-open range, how far ahead each channel books by date()
+on a timestamp, cancelled nights sold again by an overlap test. Money and
+scores -- takings and refunds apart by conditional sums, extras per stay
+with the stays that had none by a LEFT JOIN to an aggregate, the share of
+stays reviewed by COUNT(column).
 
 Changing rows, three single statements:
 
-  * an INSERT of two rows whose foreign key is looked up, not typed
-  * an UPDATE whose SET holds a correlated subquery
-  * a DELETE whose WHERE says 'neither of these' the right way
+  * an INSERT ... SELECT that charges everyone in the house on one night
+  * an UPDATE whose rows come from a grouped subquery with HAVING
+  * a DELETE with NOT EXISTS and a date
 
 Procedures, three scripts of several steps. SQLite has no CREATE
 PROCEDURE; what it has is a transaction, whose steps stand or fall
 together, and a trigger body, which is stored and runs when called:
 
-  * a table rebuilt to add a CHECK: create, copy, drop, rename
-  * a depot opened and staffed, its new id read by last_insert_rowid()
-  * a BEFORE DELETE trigger that records a parcel's trail and clears it
+  * a booking cancelled and its deposit refunded, two tables in one
+    transaction
+  * a stay split in two when the guest moved room, in the only order
+    that works
+  * a BEFORE INSERT trigger that refuses a double booking
 
 Each writable question runs in a private in-memory copy of the database,
 so nothing you write can reach the real file. The copy persists across
@@ -41,546 +44,552 @@ question itself runs AFTER your script.
 import sqlite3
 
 EXERCISES = [
-    # ============================================== 1 Text, matched and built
+    # ============================================ 1 Finding your way around
     dict(
-        id=1, ledger="Q1327", concept="LIKE1", tier="1 - Text, matched and built",
-        title="First names of exactly four letters",
+        id=1, ledger="Q1342", concept="ROOMS", tier="1 - Finding your way around",
+        title="What each hotel has to sell",
         prompt=(
-            "A personal customer's name is a first name, one space, and"
-            " a surname. For each first name of exactly FOUR letters:"
-            " how many personal customers have it. In a LIKE pattern %"
-            " is any run of characters; there is a second wildcard that"
-            " stands for exactly one.\n\n"
-            "Return: first_name, customers"
+            "For each hotel, by name: how many rooms it has, and the"
+            " lowest and highest list price (rack_cents) among them."
+            " Two hotels can share a town, so group by the hotel. One"
+            " join and three aggregates.\n\n"
+            "Return: hotel, rooms, cheapest_cents, dearest_cents"
         ),
-        solution=("SELECT SUBSTR(name, 1, 4) AS first_name, COUNT(*) FROM customers"
-                  " WHERE kind = 'personal' AND name LIKE '____ %' GROUP BY first_name"),
-        trap_sql=("SELECT SUBSTR(name, 1, 4) AS first_name, COUNT(*) FROM customers"
-                  " WHERE kind = 'personal' AND name LIKE '____%' GROUP BY first_name"),
-        note="An underscore in a LIKE pattern matches exactly one"
-             " character, any character. Four of them and then a space"
-             " pin the space to the fifth position, which is what"
-             " 'four letters' means; the % takes the surname. Without"
-             " the space, the trap, the pattern is 'at least four"
-             " characters' -- nearly everybody -- and the first four"
-             " letters of Dmitri and Imogen are counted as names."
-             " LENGTH and INSTR could do it too; the pattern says it"
-             " in one go.",
-        claims=[("three names: Rosa, Umar and Zara",
-                 lambda rows, c: sorted(r[0] for r in rows) == ["Rosa", "Umar", "Zara"]),
-                ("17 customers called Zara",
-                 lambda rows, c: ("Zara", 17) in rows)],
+        solution=("SELECT h.name, COUNT(*), MIN(r.rack_cents), MAX(r.rack_cents) FROM hotels h"
+                  " JOIN rooms r ON r.hotel_id = h.hotel_id GROUP BY h.hotel_id"),
+        trap_sql=("SELECT h.name, COUNT(*), MIN(r.rack_cents), MAX(r.rack_cents) FROM hotels h"
+                  " JOIN rooms r ON r.hotel_id = h.hotel_id GROUP BY h.town"),
+        note="The join gives one row per room with its hotel beside it,"
+             " and GROUP BY folds those back to one row per hotel, with"
+             " COUNT, MIN and MAX each looking at that hotel's rooms"
+             " only. Group by town, the trap, and the four towns each"
+             " merge two hotels: York becomes one 48-room hotel under"
+             " whichever name SQLite happens to show. Grouping by the"
+             " key, hotel_id, is safer than by name, though here the"
+             " names are unique too.",
+        claims=[("eight hotels, Spa Gardens the biggest with 36 rooms",
+                 lambda rows, c: len(rows) == 8 and ("Spa Gardens", 36, 10000, 24500) in rows),
+                ("Abbey Steps has twelve rooms from 4,550 to 6,700 cents",
+                 lambda rows, c: ("Abbey Steps", 12, 4550, 6700) in rows)],
     ),
     dict(
-        id=2, ledger="Q1328", concept="GLOB", tier="1 - Text, matched and built",
-        title="Postcode areas that end in two digits",
+        id=2, ledger="Q1343", concept="NEVER", tier="1 - Finding your way around",
+        title="Guests on the books who have never booked",
         prompt=(
-            "For each depot, by name: how many of its customers have a"
-            " postcode_area that ENDS IN TWO DIGITS, like DE22. LIKE"
-            " has no way to say 'a digit'. GLOB has: a character class"
-            " in square brackets. Its wildcard for 'anything' is * and"
-            " not %.\n\n"
-            "Return: depot, customers"
+            "For each country: how many guests are on the books, and"
+            " how many of them have never made a booking of any kind."
+            " Start from guests and keep every one, booked or not: the"
+            " outer join, whose unmatched rows carry NULLs you can"
+            " count.\n\n"
+            "Return: country, guests, never_booked"
         ),
-        solution=("SELECT d.name, COUNT(*) FROM customers c JOIN depots d ON d.depot_id = c.depot_id"
-                  " WHERE c.postcode_area GLOB '*[0-9][0-9]' GROUP BY d.name"),
-        trap_sql=("SELECT d.name, COUNT(*) FROM customers c JOIN depots d ON d.depot_id = c.depot_id"
-                  " WHERE c.postcode_area GLOB '*[0-9]' GROUP BY d.name"),
-        note="GLOB uses the shell's wildcards: * for any run, ? for one"
-             " character, and [0-9] for one character out of a set."
-             " Two classes at the end demand two digits; one, the"
-             " trap, is satisfied by every area there is, since they"
-             " all end in a digit. Unlike LIKE, GLOB is case-sensitive,"
-             " so [A-Z] means capitals only. The customers with no"
-             " postcode_area drop out by themselves: NULL matches no"
-             " pattern.",
-        claims=[("ten depots, 42 customers in all",
-                 lambda rows, c: len(rows) == 10 and sum(r[1] for r in rows) == 42),
-                ("Hillcrest has the most, seven",
-                 lambda rows, c: max(rows, key=lambda r: r[1]) == ("Hillcrest", 7))],
+        solution=("SELECT g.country, COUNT(DISTINCT g.guest_id), SUM(b.booking_id IS NULL) FROM guests g"
+                  " LEFT JOIN bookings b ON b.guest_id = g.guest_id GROUP BY g.country"),
+        trap_sql=("SELECT g.country, COUNT(DISTINCT g.guest_id), SUM(b.booking_id IS NULL) FROM guests g"
+                  " JOIN bookings b ON b.guest_id = g.guest_id GROUP BY g.country"),
+        note="A LEFT JOIN keeps every guest: one row per booking for"
+             " those who have any, and a single row with NULLs in the"
+             " booking columns for those who have none. Counting those"
+             " NULL rows counts the guests who never booked, and"
+             " COUNT(DISTINCT guest_id) counts people where COUNT(*)"
+             " would count bookings. The inner join of the trap drops"
+             " the never-booked before anything is counted: 96 guests"
+             " vanish from the first column and the second is zero"
+             " everywhere.",
+        claims=[("eight countries, 1,089 guests from GB and 62 of them never booked",
+                 lambda rows, c: len(rows) == 8 and ("GB", 1089, 62) in rows),
+                ("96 guests in all have never booked, of 1,600",
+                 lambda rows, c: sum(r[2] for r in rows) == 96 and sum(r[1] for r in rows) == 1600)],
     ),
     dict(
-        id=3, ledger="Q1329", concept="PAD", tier="1 - Text, matched and built",
-        title="A reference number for the reminder letters",
+        id=3, ledger="Q1344", concept="NIGHTS", tier="1 - Finding your way around",
+        title="Room-nights sold in 2025",
         prompt=(
-            "Every UNPAID invoice for period 2026-05 needs a reference:"
-            " 'INV-', the period, a hyphen, and the customer_id padded"
-            " with zeros to FIVE digits -- INV-2026-05-00004 for"
-            " customer 4. printf pads a number; || joins the pieces.\n\n"
-            "Return: reference, amount_cents"
+            "A stay of three nights sells three room-nights. For each"
+            " hotel, by name: the stays that BEGAN in 2025 and the"
+            " room-nights they sold, as a whole number. Count only"
+            " bookings whose status is 'stayed' -- the guest arrived."
+            " check_out is the morning of departure, so the nights are"
+            " the difference of the two dates; julianday turns a date"
+            " into a number of days.\n\n"
+            "Return: hotel, stays, room_nights"
         ),
-        solution=("SELECT 'INV-' || period || '-' || printf('%05d', customer_id), amount_cents"
-                  " FROM invoices WHERE period = '2026-05' AND paid_on IS NULL"),
-        trap_sql=("SELECT 'INV-' || period || '-' || customer_id, amount_cents"
-                  " FROM invoices WHERE period = '2026-05' AND paid_on IS NULL"),
-        note="In a printf format %d is a whole number, 5 is the"
-             " minimum width, and the 0 in front says fill the width"
-             " with zeros and not spaces. Fixed-width references sort"
-             " correctly as text and are hard to misread; the trap's"
-             " INV-2026-05-4 sorts after INV-2026-05-12. || turns a"
-             " number into text as it joins, which is why the unpadded"
-             " version runs at all. SUBSTR('00000' || id, -5) is the"
-             " same trick without printf.",
-        claims=[("76 references, every one seventeen characters long",
-                 lambda rows, c: len(rows) == 76 and all(len(r[0]) == 17 for r in rows)),
-                ("customer 4 owes 2,000 cents under INV-2026-05-00004",
-                 lambda rows, c: ("INV-2026-05-00004", 2000) in rows)],
+        solution=("SELECT h.name, COUNT(*), CAST(SUM(julianday(b.check_out) - julianday(b.check_in)) AS INTEGER)"
+                  " FROM bookings b JOIN rooms r ON r.room_id = b.room_id JOIN hotels h ON h.hotel_id = r.hotel_id"
+                  " WHERE b.status = 'stayed' AND b.check_in >= '2025-01-01' AND b.check_in < '2026-01-01'"
+                  " GROUP BY h.hotel_id"),
+        trap_sql=("SELECT h.name, COUNT(*), CAST(SUM(julianday(b.check_out) - julianday(b.check_in)) AS INTEGER)"
+                  " FROM bookings b JOIN rooms r ON r.room_id = b.room_id JOIN hotels h ON h.hotel_id = r.hotel_id"
+                  " WHERE b.check_in >= '2025-01-01' AND b.check_in < '2026-01-01'"
+                  " GROUP BY h.hotel_id"),
+        note="Dates are text and cannot be subtracted; julianday() of"
+             " each can. A booking has no hotel of its own -- it is"
+             " reached through the room -- so the join runs bookings to"
+             " rooms to hotels. The trap forgets the status and counts"
+             " nights that were cancelled or never turned up for,"
+             " about one booking in eight. Fellfoot Inn opened in"
+             " September 2025, which is why its year is so short.",
+        claims=[("eight hotels, Spa Gardens 1,969 stays and 6,187 room-nights",
+                 lambda rows, c: len(rows) == 8 and ("Spa Gardens", 1969, 6187) in rows),
+                ("Fellfoot Inn, open four months, 225 stays and 672 nights",
+                 lambda rows, c: ("Fellfoot Inn", 225, 672) in rows)],
     ),
-    # ==================================================== 2 More from windows
+    # ====================================================== 2 Nights and dates
     dict(
-        id=4, ledger="Q1330", concept="RECORD", tier="2 - More from windows",
-        title="The months that set a record",
+        id=4, ledger="Q1345", concept="INHOUSE", tier="2 - Nights and dates",
+        title="Who was in the house on New Year's Eve",
         prompt=(
-            "A record month is one in which more parcels were collected"
-            " than in ANY earlier month. List the record months, each"
-            " with the best figure it had to beat. The first month of"
-            " the data has nothing to beat and is not listed. A window"
-            " MAX whose frame stops one row BEFORE the current one.\n\n"
-            "Return: month, parcels, previous_best"
+            "For the NIGHT of 2025-12-31, each hotel by name: the rooms"
+            " occupied and the people sleeping in them, adults and"
+            " children together. Status 'stayed' only. A guest who"
+            " checks out on the 31st left that morning and is not"
+            " there that night; a guest who checks in on the 31st is."
+            " The range is closed at one end and open at the other.\n\n"
+            "Return: hotel, rooms_occupied, people"
         ),
-        solution=("SELECT m, n, best FROM (SELECT m, n, MAX(n) OVER (ORDER BY m"
-                  " ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS best"
-                  " FROM (SELECT strftime('%Y-%m', collected_at) AS m, COUNT(*) AS n FROM parcels GROUP BY m))"
-                  " WHERE n > best"),
-        trap_sql=("SELECT m, n, best FROM (SELECT m, n, LAG(n) OVER (ORDER BY m) AS best"
-                  " FROM (SELECT strftime('%Y-%m', collected_at) AS m, COUNT(*) AS n FROM parcels GROUP BY m))"
-                  " WHERE n > best"),
-        note="A frame says which rows around the current one a window"
-             " function may see. UNBOUNDED PRECEDING AND 1 PRECEDING is"
-             " everything before this row and not this row, so MAX is"
-             " the best so far and the comparison is honest; with the"
-             " default frame the current month is included and nothing"
-             " ever beats itself. LAG, the trap, looks back one month"
-             " only and reports every month that improved on the last,"
-             " record or not. The first month's frame is empty, its"
-             " MAX is NULL, and n > NULL filters it out.",
-        claims=[("seven record months, the last 2026-03 beating 1,543",
-                 lambda rows, c: len(rows) == 7 and max(rows) == ("2026-03", 1565, 1543)),
-                ("2025-03 was the first, beating January's 1,099",
-                 lambda rows, c: min(rows) == ("2025-03", 1120, 1099))],
-    ),
-    dict(
-        id=5, ledger="Q1331", concept="YOY", tier="2 - More from windows",
-        title="This month against the same month last year",
-        prompt=(
-            "For each month that has one: the parcels collected, and"
-            " the parcels collected in the SAME month a year earlier."
-            " Months with no such earlier month are not listed. No"
-            " month is missing from the data. LAG takes a second"
-            " argument.\n\n"
-            "Return: month, parcels, a_year_earlier"
-        ),
-        solution=("SELECT m, n, last_year FROM (SELECT m, n, LAG(n, 12) OVER (ORDER BY m) AS last_year"
-                  " FROM (SELECT strftime('%Y-%m', collected_at) AS m, COUNT(*) AS n FROM parcels GROUP BY m))"
-                  " WHERE last_year IS NOT NULL"),
-        trap_sql=("SELECT m, n, last_year FROM (SELECT m, n, LAG(n) OVER (ORDER BY m) AS last_year"
-                  " FROM (SELECT strftime('%Y-%m', collected_at) AS m, COUNT(*) AS n FROM parcels GROUP BY m))"
-                  " WHERE last_year IS NOT NULL"),
-        note="LAG(x, 12) reads the row twelve places back, which is the"
-             " same month last year as long as every month has a row"
-             " -- the promise the question makes, and the thing to"
-             " check on real data. Plain LAG, the trap, is last month:"
-             " seventeen rows of month-on-month where six of"
-             " year-on-year were asked for. A third argument would"
-             " supply a default where there is nothing to look back"
-             " to; here those rows are simply filtered out.",
-        claims=[("six months, January to June 2026",
-                 lambda rows, c: [r[0] for r in sorted(rows)] == ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"]),
-                ("June 2026 had 1,523 against 1,202 a year before",
-                 lambda rows, c: ("2026-06", 1523, 1202) in rows)],
+        solution=("SELECT h.name, COUNT(*), SUM(b.adults + b.children)"
+                  " FROM bookings b JOIN rooms r ON r.room_id = b.room_id JOIN hotels h ON h.hotel_id = r.hotel_id"
+                  " WHERE b.status = 'stayed' AND b.check_in <= '2025-12-31' AND b.check_out > '2025-12-31'"
+                  " GROUP BY h.hotel_id"),
+        trap_sql=("SELECT h.name, COUNT(*), SUM(b.adults + b.children)"
+                  " FROM bookings b JOIN rooms r ON r.room_id = b.room_id JOIN hotels h ON h.hotel_id = r.hotel_id"
+                  " WHERE b.status = 'stayed' AND '2025-12-31' BETWEEN b.check_in AND b.check_out"
+                  " GROUP BY h.hotel_id"),
+        note="A stay covers the nights from check_in up to but not"
+             " including check_out, so 'in the house on night d' is"
+             " check_in <= d AND check_out > d. BETWEEN, the trap,"
+             " includes both ends and counts everyone who left that"
+             " morning as well: 102 rooms where 81 were occupied, and"
+             " at some hotels more guests than beds. The same"
+             " half-open test, with two ranges, is how you ask whether"
+             " two bookings collide.",
+        claims=[("eight hotels, 81 rooms occupied in all",
+                 lambda rows, c: len(rows) == 8 and sum(r[1] for r in rows) == 81),
+                ("Castle View had 14 rooms and 28 people",
+                 lambda rows, c: ("Castle View", 14, 28) in rows)],
     ),
     dict(
-        id=6, ledger="Q1332", concept="NAMESAKE", tier="2 - More from windows",
-        title="Customers who share their name with another",
+        id=5, ledger="Q1346", concept="LEAD", tier="2 - Nights and dates",
+        title="How far ahead each channel books",
         prompt=(
-            "Some customers have exactly the same name as another"
-            " customer, anywhere in the company. For each depot, by"
-            " name: how many of its customers have such a namesake. A"
-            " window COUNT partitioned by name puts the size of each"
-            " name's group on every row, without collapsing the"
-            " rows.\n\n"
-            "Return: depot, customers"
+            "For each booking channel: its bookings, and the average"
+            " number of days between the DAY the booking was made and"
+            " the day of check-in, to one decimal place. Leave out"
+            " cancelled bookings. booked_at is a timestamp with a time"
+            " of day and check_in is a plain date: cut the timestamp"
+            " down to its date before subtracting.\n\n"
+            "Return: channel, bookings, avg_lead_days"
         ),
-        solution=("SELECT d.name, COUNT(*) FROM (SELECT depot_id, COUNT(*) OVER (PARTITION BY name) AS same_name"
-                  " FROM customers) x JOIN depots d ON d.depot_id = x.depot_id WHERE x.same_name > 1 GROUP BY d.name"),
-        trap_sql=("SELECT d.name, COUNT(*) FROM (SELECT depot_id, COUNT(*) OVER (PARTITION BY name, depot_id) AS same_name"
-                  " FROM customers) x JOIN depots d ON d.depot_id = x.depot_id WHERE x.same_name > 1 GROUP BY d.name"),
-        note="GROUP BY name HAVING COUNT(*) > 1 finds the shared names"
-             " and loses the customers; COUNT(*) OVER (PARTITION BY"
-             " name) keeps every customer's row and writes the count"
-             " beside it, so the row can still be filtered and then"
-             " grouped by something else. The trap adds depot_id to the"
-             " partition and so counts only namesakes at the SAME"
-             " depot, twenty customers where there are 235. The window"
-             " runs before the outer WHERE, which is why it sits in a"
-             " subquery.",
-        claims=[("ten depots, 235 customers with a namesake",
-                 lambda rows, c: len(rows) == 10 and sum(r[1] for r in rows) == 235),
-                ("Harbour Point has the most, 32",
-                 lambda rows, c: max(rows, key=lambda r: r[1]) == ("Harbour Point", 32))],
-    ),
-    # ====================================== 3 Positions, years and thresholds
-    dict(
-        id=7, ledger="Q1333", concept="OFFSET", tier="3 - Positions, years and thresholds",
-        title="Fourth, fifth and sixth place",
-        prompt=(
-            "Rank the couriers by parcels delivered, most first. Return"
-            " the three in 4th, 5th and 6th place. No two of the top"
-            " ten are tied. LIMIT has a partner that skips rows"
-            " first.\n\n"
-            "Return: courier, deliveries"
-        ),
-        solution=("SELECT c.name, COUNT(*) AS n FROM parcels p JOIN couriers c ON c.courier_id = p.courier_id"
-                  " GROUP BY c.courier_id ORDER BY n DESC, c.courier_id LIMIT 3 OFFSET 3"),
-        trap_sql=("SELECT c.name, COUNT(*) AS n FROM parcels p JOIN couriers c ON c.courier_id = p.courier_id"
-                  " GROUP BY c.courier_id ORDER BY n DESC, c.courier_id LIMIT 3 OFFSET 4"),
-        note="OFFSET is how many rows to skip, not where to start: to"
-             " begin at 4th place you skip 3. The trap skips four and"
-             " returns 5th to 7th, the off-by-one every paging query"
-             " is one keystroke from. LIMIT 3 OFFSET 3 can also be"
-             " written LIMIT 3, 3 -- offset first, which is the wrong"
-             " way round often enough to avoid. Without an ORDER BY"
-             " that leaves no ties, which rows are 'the fourth to"
-             " sixth' is not defined at all.",
-        claims=[("Samir Chowdhury, Tamsin Achebe and Samir Lindqvist",
-                 lambda rows, c: sorted(rows, key=lambda r: -r[1]) == [("Samir Chowdhury", 643), ("Tamsin Achebe", 620), ("Samir Lindqvist", 578)])],
+        solution=("SELECT channel, COUNT(*), ROUND(AVG(julianday(check_in) - julianday(date(booked_at))), 1)"
+                  " FROM bookings WHERE status <> 'cancelled' GROUP BY channel"),
+        trap_sql=("SELECT channel, COUNT(*), ROUND(AVG(julianday(check_in) - julianday(booked_at)), 1)"
+                  " FROM bookings WHERE status <> 'cancelled' GROUP BY channel"),
+        note="julianday of a timestamp includes the time as a fraction"
+             " of a day, and a plain date counts as midnight. Subtract"
+             " without date(), the trap, and a room taken at the desk"
+             " at four in the afternoon was booked 'minus 0.7 days'"
+             " ahead of its own check-in; every channel's average is"
+             " short by the same half-day or so. date() cuts both to"
+             " whole days. Agents book three months ahead, the web"
+             " under two, and a walk-in by definition not at all.",
+        claims=[("four channels, walk-ins exactly 0.0 days ahead",
+                 lambda rows, c: len(rows) == 4 and ("walk_in", 1563, 0.0) in rows),
+                ("agents book 96.3 days ahead on average",
+                 lambda rows, c: ("agent", 3134, 96.3) in rows)],
     ),
     dict(
-        id=8, ledger="Q1334", concept="YEARS", tier="3 - Positions, years and thresholds",
-        title="Completed years of service",
+        id=6, ledger="Q1347", concept="OVERLAP", tier="2 - Nights and dates",
+        title="Cancelled nights that were sold again",
         prompt=(
-            "For couriers still employed: their COMPLETED years of"
-            " service on 2026-06-30, counted the way a birthday is --"
-            " a year counts only once its anniversary has come -- and"
-            " how many couriers have each number. Subtracting the"
-            " years is one too many for anyone whose anniversary falls"
-            " later in the year; comparing the 'MM-DD' parts as text"
-            " says who.\n\n"
-            "Return: years, couriers"
+            "When a booking is cancelled the room may be let to someone"
+            " else for some or all of the same nights. For each hotel,"
+            " by name: how many CANCELLED bookings had at least one of"
+            " their nights taken by another booking of the same room"
+            " that was not cancelled. Two date ranges overlap when each"
+            " starts before the other ends; EXISTS asks whether such a"
+            " booking is there.\n\n"
+            "Return: hotel, relet"
         ),
-        solution=("SELECT 2026 - CAST(strftime('%Y', hired_on) AS INTEGER) - ('06-30' < strftime('%m-%d', hired_on)) AS years,"
-                  " COUNT(*) FROM couriers WHERE left_on IS NULL GROUP BY years"),
-        trap_sql=("SELECT 2026 - CAST(strftime('%Y', hired_on) AS INTEGER) AS years,"
-                  " COUNT(*) FROM couriers WHERE left_on IS NULL GROUP BY years"),
-        note="A comparison is 1 or 0 in SQLite, so subtracting ('06-30'"
-             " < the hiring MM-DD) takes one year off exactly those"
-             " whose anniversary is still to come. The trap is the"
-             " plain difference of the years: someone hired in"
-             " November 2025 has 'one year' of service after seven"
-             " months, and nobody has zero. Dividing a difference in"
-             " days by 365 is nearly right and goes wrong around leap"
-             " years; this is the same calculation as an age from a"
-             " date of birth.",
-        claims=[("nine different lengths of service, four couriers under a year",
-                 lambda rows, c: len(rows) == 9 and (0, 4) in rows),
-                ("nine couriers have three years",
-                 lambda rows, c: (3, 9) in rows and sum(r[1] for r in rows) == 45)],
+        solution=("SELECT h.name, COUNT(*) FROM bookings a JOIN rooms r ON r.room_id = a.room_id"
+                  " JOIN hotels h ON h.hotel_id = r.hotel_id WHERE a.status = 'cancelled' AND EXISTS"
+                  " (SELECT 1 FROM bookings b WHERE b.room_id = a.room_id AND b.status <> 'cancelled'"
+                  " AND b.check_in < a.check_out AND a.check_in < b.check_out) GROUP BY h.hotel_id"),
+        trap_sql=("SELECT h.name, COUNT(*) FROM bookings a JOIN rooms r ON r.room_id = a.room_id"
+                  " JOIN hotels h ON h.hotel_id = r.hotel_id WHERE a.status = 'cancelled' AND EXISTS"
+                  " (SELECT 1 FROM bookings b WHERE b.room_id = a.room_id AND b.status <> 'cancelled'"
+                  " AND b.check_in = a.check_in) GROUP BY h.hotel_id"),
+        note="Two ranges overlap when a starts before b ends AND b"
+             " starts before a ends -- two comparisons that cover every"
+             " case: one inside the other, either end sticking out, or"
+             " identical. Strict < is right because check_out is the"
+             " morning of departure: one guest leaving on the day the"
+             " next arrives is not a collision. The trap looks only"
+             " for a new booking starting on the same day and misses"
+             " every replacement that began later in the freed"
+             " nights, about a quarter of them.",
+        claims=[("eight hotels, 888 cancelled bookings re-let",
+                 lambda rows, c: len(rows) == 8 and sum(r[1] for r in rows) == 888),
+                ("197 of them at Castle View",
+                 lambda rows, c: ("Castle View", 197) in rows)],
+    ),
+    # ====================================================== 3 Money and scores
+    dict(
+        id=7, ledger="Q1348", concept="SIGNS", tier="3 - Money and scores",
+        title="Money taken and money given back",
+        prompt=(
+            "A payment with a negative amount is a refund. For each"
+            " payment method: the money TAKEN (the positive amounts"
+            " added up) and the money REFUNDED, as a positive number of"
+            " cents -- 0, not NULL, where there were no refunds. Two"
+            " conditional sums in one pass.\n\n"
+            "Return: method, taken_cents, refunded_cents"
+        ),
+        solution=("SELECT method, SUM(CASE WHEN amount_cents > 0 THEN amount_cents ELSE 0 END),"
+                  " SUM(CASE WHEN amount_cents < 0 THEN -amount_cents ELSE 0 END) FROM payments GROUP BY method"),
+        trap_sql=("SELECT method, SUM(amount_cents),"
+                  " SUM(CASE WHEN amount_cents < 0 THEN -amount_cents ELSE 0 END) FROM payments GROUP BY method"),
+        note="A CASE inside SUM decides, row by row, what each payment"
+             " contributes: its amount to one column, its amount with"
+             " the sign turned round to the other, and 0 otherwise."
+             " The ELSE 0 is what makes cash's refund column 0 and not"
+             " NULL. A plain SUM(amount_cents), the trap, is the NET:"
+             " refunds already taken off, so the card total is 7.3"
+             " million cents short of what was actually taken. Both"
+             " numbers are true; they answer different questions.",
+        claims=[("three methods, card took 416,072,170 and refunded 7,349,450",
+                 lambda rows, c: len(rows) == 3 and ("card", 416072170, 7349450) in rows),
+                ("cash was never refunded",
+                 lambda rows, c: ("cash", 72842210, 0) in rows)],
     ),
     dict(
-        id=9, ledger="Q1335", concept="ATLEAST", tier="3 - Positions, years and thresholds",
-        title="How many customers reach each level",
+        id=8, ledger="Q1349", concept="EXTRAS", tier="3 - Money and scores",
+        title="What a stay spends on extras",
         prompt=(
-            "How many customers have sent AT LEAST 10 parcels? At"
-            " least 15, 20, 25, 30, 100? One row per level; a customer"
-            " with 40 parcels is counted at five of them. Walk-ins are"
-            " left out. A join does not have to be on equality: put"
-            " the six levels in an inline table and join on >=.\n\n"
-            "Return: at_least, customers"
+            "For each hotel, by name: its stays (status 'stayed') and"
+            " the average a stay spent on extras -- the charges table --"
+            " in whole cents, rounded. Many stays have no charges at"
+            " all, and they count as stays that spent 0. Add the"
+            " charges up per booking first, then attach that to every"
+            " stay with the join that keeps the ones with nothing.\n\n"
+            "Return: hotel, stays, avg_extras_cents"
         ),
-        solution=("WITH levels(at_least) AS (VALUES (10), (15), (20), (25), (30), (100)),"
-                  " sent AS (SELECT customer_id, COUNT(*) AS n FROM parcels WHERE customer_id IS NOT NULL GROUP BY customer_id)"
-                  " SELECT l.at_least, COUNT(*) FROM levels l JOIN sent s ON s.n >= l.at_least GROUP BY l.at_least"),
-        trap_sql=("SELECT CASE WHEN n >= 100 THEN 100 WHEN n >= 30 THEN 30 WHEN n >= 25 THEN 25"
-                  " WHEN n >= 20 THEN 20 WHEN n >= 15 THEN 15 ELSE 10 END AS at_least, COUNT(*)"
-                  " FROM (SELECT customer_id, COUNT(*) AS n FROM parcels WHERE customer_id IS NOT NULL GROUP BY customer_id)"
-                  " WHERE n >= 10 GROUP BY at_least"),
-        note="An ON clause is any condition, and with >= one customer"
-             " row matches EVERY level it reaches -- which is what 'at"
-             " least' means, and what a join on equality could never"
-             " do. A CASE, the trap, puts each customer in a single"
-             " band, the highest one, so its counts are 'between this"
-             " level and the next': 70 at level 10 where 613 customers"
-             " have sent ten or more. The counts can only fall as the"
-             " level rises; that is a quick check on any such table.",
-        claims=[("six levels, 613 customers at ten or more",
-                 lambda rows, c: len(rows) == 6 and (10, 613) in rows),
-                ("25 customers at a hundred or more, and the counts never rise",
-                 lambda rows, c: (100, 25) in rows and [r[1] for r in sorted(rows)] == sorted((r[1] for r in rows), reverse=True))],
+        solution=("SELECT h.name, COUNT(*), CAST(ROUND(AVG(COALESCE(x.cents, 0))) AS INTEGER) FROM bookings b"
+                  " JOIN rooms r ON r.room_id = b.room_id JOIN hotels h ON h.hotel_id = r.hotel_id"
+                  " LEFT JOIN (SELECT booking_id, SUM(amount_cents) AS cents FROM charges GROUP BY booking_id) x"
+                  " ON x.booking_id = b.booking_id WHERE b.status = 'stayed' GROUP BY h.hotel_id"),
+        trap_sql=("SELECT h.name, COUNT(*), CAST(ROUND(AVG(x.cents)) AS INTEGER) FROM bookings b"
+                  " JOIN rooms r ON r.room_id = b.room_id JOIN hotels h ON h.hotel_id = r.hotel_id"
+                  " LEFT JOIN (SELECT booking_id, SUM(amount_cents) AS cents FROM charges GROUP BY booking_id) x"
+                  " ON x.booking_id = b.booking_id WHERE b.status = 'stayed' GROUP BY h.hotel_id"),
+        note="The subquery is one row per booking that HAS charges; the"
+             " LEFT JOIN gives every other stay a NULL. AVG skips"
+             " NULLs, so without COALESCE, the trap, the average is"
+             " over the stays that spent something and comes out a"
+             " tenth too high -- 'what a spending guest spends' passed"
+             " off as 'what a guest spends'. COALESCE(x, 0) turns the"
+             " missing into the zero it means here. Summing in a"
+             " subquery first also keeps the stay count from being"
+             " multiplied by the number of charges.",
+        claims=[("eight hotels, Spa Gardens 2,946 stays averaging 13,968 cents",
+                 lambda rows, c: len(rows) == 8 and ("Spa Gardens", 2946, 13968) in rows),
+                ("Fellfoot Inn the least, 7,065",
+                 lambda rows, c: min(rows, key=lambda r: r[2]) == ("Fellfoot Inn", 533, 7065))],
+    ),
+    dict(
+        id=9, ledger="Q1350", concept="REVIEWED", tier="3 - Money and scores",
+        title="How many stays are reviewed, and how well",
+        prompt=(
+            "A stay can be reviewed once it is over. For each hotel, by"
+            " name, taking the stays (status 'stayed') that had checked"
+            " out by 2026-06-30: how many stays, how many of them have"
+            " a review, and the average score to two decimal places."
+            " Keep the unreviewed stays in the count: COUNT(*) and"
+            " COUNT(a column) differ exactly where that column is"
+            " NULL.\n\n"
+            "Return: hotel, stays, reviews, avg_score"
+        ),
+        solution=("SELECT h.name, COUNT(*), COUNT(v.review_id), ROUND(AVG(v.score), 2) FROM bookings b"
+                  " JOIN rooms r ON r.room_id = b.room_id JOIN hotels h ON h.hotel_id = r.hotel_id"
+                  " LEFT JOIN reviews v ON v.booking_id = b.booking_id"
+                  " WHERE b.status = 'stayed' AND b.check_out <= '2026-06-30' GROUP BY h.hotel_id"),
+        trap_sql=("SELECT h.name, COUNT(*), COUNT(v.review_id), ROUND(AVG(v.score), 2) FROM bookings b"
+                  " JOIN rooms r ON r.room_id = b.room_id JOIN hotels h ON h.hotel_id = r.hotel_id"
+                  " JOIN reviews v ON v.booking_id = b.booking_id"
+                  " WHERE b.status = 'stayed' AND b.check_out <= '2026-06-30' GROUP BY h.hotel_id"),
+        note="After the LEFT JOIN an unreviewed stay has NULL in every"
+             " review column. COUNT(*) counts it, COUNT(v.review_id)"
+             " does not, and AVG(v.score) leaves it out -- which is"
+             " right this time: a stay with no review has no score,"
+             " not a score of 0. The inner join of the trap keeps only"
+             " reviewed stays, so its first two columns are equal and"
+             " every hotel appears to be reviewed by all its guests."
+             " About one stay in four is.",
+        claims=[("eight hotels, Spa Gardens 752 reviews of 2,932 stays at 4.6",
+                 lambda rows, c: len(rows) == 8 and ("Spa Gardens", 2932, 752, 4.6) in rows),
+                ("Fellfoot Inn scores lowest, 3.2",
+                 lambda rows, c: min(rows, key=lambda r: r[3])[0] == "Fellfoot Inn")],
     ),
     # ======================================================== 4 Changing rows
     dict(
-        id=10, ledger="Q1336", concept="LOOKUP", tier="4 - Changing rows",
+        id=10, ledger="Q1351", concept="GALA", tier="4 - Changing rows",
         kind="script",
-        title="Two new starters at Hillcrest",
+        title="The gala dinner goes on every bill",
         prompt=(
-            "Two couriers start at the Hillcrest depot on 2026-07-01:"
-            " Ada Whitlock on a bike and Tom Reyes in a van. Add them"
-            " in ONE INSERT with two rows. The depot is known by its"
-            " name, so its id is looked up, not typed: a subquery in"
-            " brackets can stand wherever a value can.\n\n"
-            "Checked: name, depot name, vehicle, hiring and leaving"
-            " dates of every courier hired from July 2026 on"
+            "On 2026-06-30 Spa Gardens held a gala dinner, and every"
+            " booking in the house that NIGHT is charged for it: one"
+            " 'restaurant' charge dated 2026-06-30 of 2,500 cents for"
+            " each person in the booking, adults and children alike."
+            " Status 'stayed'; guests who left that morning were not at"
+            " dinner. One INSERT ... SELECT, with the amount worked out"
+            " in the SELECT.\n\n"
+            "Checked: the restaurant charges dated 2026-06-30, how many"
+            " and their cents"
         ),
-        solution=("INSERT INTO couriers (name, depot_id, vehicle, hired_on) VALUES\n"
-                  "  ('Ada Whitlock', (SELECT depot_id FROM depots WHERE name = 'Hillcrest'), 'bike', '2026-07-01'),\n"
-                  "  ('Tom Reyes',    (SELECT depot_id FROM depots WHERE name = 'Hillcrest'), 'van',  '2026-07-01');"),
-        trap_sql=("INSERT INTO couriers (name, depot_id, vehicle, hired_on)\n"
-                  "SELECT 'Ada Whitlock', depot_id, 'bike', '2026-07-01' FROM depots\n"
-                  "UNION ALL\n"
-                  "SELECT 'Tom Reyes', depot_id, 'van', '2026-07-01' FROM depots;"),
-        probe_sql=("SELECT c.name, d.name, c.vehicle, c.hired_on, c.left_on FROM couriers c"
-                   " JOIN depots d ON d.depot_id = c.depot_id WHERE c.hired_on >= '2026-07-01'"),
-        note="VALUES takes several rows separated by commas, and any"
-             " value in a row can be a scalar subquery -- one that"
-             " returns one column of one row -- in its own brackets."
-             " Looking the id up by name keeps the statement true if"
-             " the ids are ever different, on a test copy for example."
-             " The trap reads depots with no WHERE and hires the pair"
-             " at all ten depots. If the name matched nothing the"
-             " subquery would give NULL, and the NOT NULL on depot_id"
-             " would refuse the row: a loud failure, the good kind.",
-        claims=[("two new couriers, both at Hillcrest, neither with a leaving date",
-                 lambda rows, c: sorted(rows) == [("Ada Whitlock", "Hillcrest", "bike", "2026-07-01", None),
-                                                  ("Tom Reyes", "Hillcrest", "van", "2026-07-01", None)])],
+        solution=("INSERT INTO charges (booking_id, kind, amount_cents, charged_on)\n"
+                  "SELECT b.booking_id, 'restaurant', 2500 * (b.adults + b.children), '2026-06-30'\n"
+                  "FROM bookings b\n"
+                  "JOIN rooms r ON r.room_id = b.room_id\n"
+                  "JOIN hotels h ON h.hotel_id = r.hotel_id\n"
+                  "WHERE h.name = 'Spa Gardens' AND b.status = 'stayed'\n"
+                  "  AND b.check_in <= '2026-06-30' AND b.check_out > '2026-06-30';"),
+        trap_sql=("INSERT INTO charges (booking_id, kind, amount_cents, charged_on)\n"
+                  "SELECT b.booking_id, 'restaurant', 2500 * (b.adults + b.children), '2026-06-30'\n"
+                  "FROM bookings b\n"
+                  "WHERE b.status = 'stayed'\n"
+                  "  AND b.check_in <= '2026-06-30' AND b.check_out > '2026-06-30';"),
+        probe_sql=("SELECT COUNT(*), SUM(amount_cents) FROM charges"
+                   " WHERE kind = 'restaurant' AND charged_on = '2026-06-30'"),
+        note="INSERT ... SELECT writes one row for each row its SELECT"
+             " returns, so the WHERE of the SELECT is the whole"
+             " decision about who is charged, and any expression can"
+             " sit in its list: here a price times a head count, beside"
+             " two literals. The trap has the right night and no hotel,"
+             " and bills the dinner to all 82 bookings in the house"
+             " across the group. Run the SELECT on its own first; it"
+             " shows exactly the rows the INSERT will add.",
+        claims=[("14 bookings and 29 people charged: 29 restaurant charges that day now",
+                 lambda rows, c: rows == [(15 + 14, 87900 + 29 * 2500)])],
     ),
     dict(
-        id=11, ledger="Q1337", concept="SETSUB", tier="4 - Changing rows",
+        id=11, ledger="Q1352", concept="PROMOTE", tier="4 - Changing rows",
         kind="script",
-        title="Bays to match the people",
+        title="A hundred nights makes you gold",
         prompt=(
-            "The bays are re-planned: every depot still open is to have"
-            " FOUR bays for each courier currently working there, no"
-            " more and no fewer. The closed depot keeps what it has."
-            " One UPDATE; the SET holds a subquery that counts the"
-            " couriers of the depot being updated.\n\n"
-            "Checked: every depot's name and bays"
+            "Every guest who has STAYED a hundred nights or more in"
+            " total becomes a gold member, whatever their tier was."
+            " Only nights of bookings with status 'stayed' count. One"
+            " UPDATE; the guests are named by a subquery that groups"
+            " the bookings and keeps the groups that reach the"
+            " total.\n\n"
+            "Checked: how many guests there are in each tier, NULL"
+            " included"
         ),
-        solution=("UPDATE depots\n"
-                  "SET bays = 4 * (SELECT COUNT(*) FROM couriers c\n"
-                  "                WHERE c.depot_id = depots.depot_id AND c.left_on IS NULL)\n"
-                  "WHERE closed_on IS NULL;"),
-        trap_sql=("UPDATE depots\n"
-                  "SET bays = 4 * (SELECT COUNT(*) FROM couriers c WHERE c.left_on IS NULL)\n"
-                  "WHERE closed_on IS NULL;"),
-        probe_sql="SELECT name, bays FROM depots",
-        note="A subquery in SET runs once for each row being updated,"
-             " and it is correlated when it mentions that row:"
-             " depots.depot_id inside the subquery is the depot"
-             " currently being changed. Leave that condition out, the"
-             " trap, and the subquery is the same number for every"
-             " row -- all 45 current couriers -- and every open depot"
-             " gets 180 bays. The table being updated cannot be given"
-             " an alias in SQLite's UPDATE, so its own name is used to"
-             " point at it.",
-        claims=[("Central Hub down to eight bays, Moorside and Millbank on 24",
-                 lambda rows, c: ("Central Hub", 8) in rows and ("Moorside", 24) in rows and ("Millbank", 24) in rows),
-                ("Old Foundry, closed, still has twelve",
-                 lambda rows, c: ("Old Foundry", 12) in rows and len(rows) == 10)],
+        solution=("UPDATE guests SET tier = 'gold'\n"
+                  "WHERE guest_id IN (\n"
+                  "  SELECT guest_id FROM bookings WHERE status = 'stayed'\n"
+                  "  GROUP BY guest_id\n"
+                  "  HAVING SUM(julianday(check_out) - julianday(check_in)) >= 100);"),
+        trap_sql=("UPDATE guests SET tier = 'gold'\n"
+                  "WHERE guest_id IN (\n"
+                  "  SELECT guest_id FROM bookings\n"
+                  "  GROUP BY guest_id\n"
+                  "  HAVING SUM(julianday(check_out) - julianday(check_in)) >= 100);"),
+        probe_sql="SELECT tier, COUNT(*) FROM guests GROUP BY tier",
+        note="The subquery is a query in its own right: group the stays"
+             " by guest, add up each one's nights, and let HAVING keep"
+             " the guests whose total reaches 100. WHERE filters rows"
+             " before grouping -- the status -- and HAVING filters"
+             " groups after it. The trap drops the WHERE and counts"
+             " nights that were cancelled, never turned up for, or"
+             " have not happened yet, promoting 124 guests instead of"
+             " 31. One of the 32 who qualify was gold already.",
+        claims=[("31 promoted: 128 gold, 261 silver, 1,211 with no tier",
+                 lambda rows, c: sorted(rows, key=str) == sorted([("gold", 128), ("silver", 261), (None, 1211)], key=str))],
     ),
     dict(
-        id=12, ledger="Q1338", concept="NEITHER", tier="4 - Changing rows",
+        id=12, ledger="Q1353", concept="PURGE", tier="4 - Changing rows",
         kind="script",
-        title="Old trails, thinned to their two ends",
+        title="Old names that never became guests",
         prompt=(
-            "Trails of old parcels are thinned to save space. For every"
-            " parcel DELIVERED before 2025-04-01, delete the scans that"
-            " are neither its 'collected' scan nor its 'delivered'"
-            " scan. Every other parcel keeps its whole trail. Take care"
-            " how 'neither ... nor' is written: NOT IN says it"
-            " safely.\n\n"
-            "Checked: scans left, for each status"
+            "The books are being tidied. Delete every guest who joined"
+            " BEFORE 2023-01-01 and has never made a booking of any"
+            " kind. Guests with bookings, and anyone who joined later,"
+            " stay. A DELETE whose WHERE has a date test and a NOT"
+            " EXISTS that looks at the guest being considered.\n\n"
+            "Checked: guests left, the earliest joined_on among them,"
+            " and how many have no email"
         ),
-        solution=("DELETE FROM scans\n"
-                  "WHERE status NOT IN ('collected', 'delivered')\n"
-                  "  AND parcel_id IN (SELECT parcel_id FROM parcels WHERE delivered_at < '2025-04-01');"),
-        trap_sql=("DELETE FROM scans\n"
-                  "WHERE (status <> 'collected' OR status <> 'delivered')\n"
-                  "  AND parcel_id IN (SELECT parcel_id FROM parcels WHERE delivered_at < '2025-04-01');"),
-        probe_sql="SELECT status, COUNT(*) FROM scans GROUP BY status",
-        note="'Neither A nor B' is NOT A AND NOT B, which is what NOT"
-             " IN (A, B) means. Written with OR, the trap, it is true"
-             " of every row there is: a 'collected' scan is not"
-             " 'delivered', so it passes, and the trails lose their"
-             " ends as well, 14,417 scans gone instead of 8,251. In a"
-             " SELECT that mistake shows; in a DELETE it does not, so"
-             " run the WHERE as a SELECT COUNT(*) first. The 3,083"
-             " parcels keep exactly two scans each.",
-        claims=[("8,251 scans deleted: every 'collected' and 'delivered' still there",
-                 lambda rows, c: ("collected", 24000) in rows and ("delivered", 23729) in rows
-                 and sum(r[1] for r in rows) == 112378 - 8251)],
+        solution=("DELETE FROM guests\n"
+                  "WHERE joined_on < '2023-01-01'\n"
+                  "  AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.guest_id = guests.guest_id);"),
+        trap_sql=("DELETE FROM guests\n"
+                  "WHERE NOT EXISTS (SELECT 1 FROM bookings b WHERE b.guest_id = guests.guest_id);"),
+        probe_sql="SELECT COUNT(*), MIN(joined_on), SUM(email IS NULL) FROM guests",
+        note="NOT EXISTS is true for a guest when the subquery finds no"
+             " booking with their id; the reference to guests.guest_id"
+             " inside it is what ties the subquery to the row being"
+             " tested. The trap leaves out the date and deletes all 96"
+             " who never booked, 62 of them recent sign-ups who may"
+             " yet. Had the DELETE reached a guest WITH bookings, the"
+             " foreign key would have refused the whole statement --"
+             " the constraint is a safety net, not a substitute for"
+             " the WHERE.",
+        claims=[("34 deleted: 1,566 guests left",
+                 lambda rows, c: rows[0][0] == 1566)],
     ),
     # =========================================================== 5 Procedures
     dict(
-        id=13, ledger="Q1339", concept="REBUILD", tier="5 - Procedures",
+        id=13, ledger="Q1354", concept="CANCEL", tier="5 - Procedures",
         kind="script",
-        title="A new rule for a table that already exists",
+        title="A cancellation, and the deposit back",
         prompt=(
-            "New rule: an invoice cannot be paid before it was issued."
-            " SQLite's ALTER TABLE cannot add a CHECK to an existing"
-            " table, so the table is rebuilt, in one transaction, by"
-            " the standard procedure: create invoices_new with"
-            " everything invoices has PLUS the new CHECK; copy every"
-            " row across; drop invoices; rename invoices_new to"
-            " invoices. The present definition is in schema.sql -- start"
-            " from it, so that no existing rule is lost. The question"
-            " then tries three inserts: one paid before it was issued,"
-            " one that is fine, and one repeating a customer and period"
-            " already there.\n\n"
-            "Checked: invoices in the table, how many are for 2026-06,"
-            " and the cents added up"
+            "Booking 13638 is for a week in August 2026 and one payment"
+            " has been made against it, the deposit. The guest cancels"
+            " at 2026-07-01 09:00. In ONE transaction: mark the booking"
+            " cancelled with that time -- the table's CHECK wants the"
+            " status and cancelled_at to change together -- and record"
+            " the refund: a payment for the same booking by the same"
+            " method, at 2026-07-01 09:05, for the deposit's amount"
+            " made NEGATIVE. Read the amount and method from the"
+            " deposit; do not type them. The question then issues a"
+            " ROLLBACK: committed work survives it.\n\n"
+            "Checked: the booking's status and cancelled_at, its"
+            " payments and what they add up to, and the refunds in the"
+            " whole table"
         ),
         solution=("BEGIN;\n"
-                  "CREATE TABLE invoices_new (\n"
-                  "  invoice_id   INTEGER PRIMARY KEY,\n"
-                  "  customer_id  INTEGER NOT NULL REFERENCES customers(customer_id),\n"
-                  "  period       TEXT    NOT NULL,\n"
-                  "  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),\n"
-                  "  issued_on    TEXT    NOT NULL,\n"
-                  "  paid_on      TEXT,\n"
-                  "  method       TEXT    CHECK (method IN ('card', 'transfer')),\n"
-                  "  UNIQUE (customer_id, period),\n"
-                  "  CHECK ((paid_on IS NULL) = (method IS NULL)),\n"
-                  "  CHECK (paid_on >= issued_on)\n"
-                  ");\n"
-                  "INSERT INTO invoices_new SELECT * FROM invoices;\n"
-                  "DROP TABLE invoices;\n"
-                  "ALTER TABLE invoices_new RENAME TO invoices;\n"
-                  "CREATE INDEX idx_invoices_customer ON invoices(customer_id);\n"
+                  "UPDATE bookings SET status = 'cancelled', cancelled_at = '2026-07-01 09:00'\n"
+                  "WHERE booking_id = 13638;\n"
+                  "INSERT INTO payments (booking_id, paid_at, amount_cents, method)\n"
+                  "SELECT booking_id, '2026-07-01 09:05', -amount_cents, method\n"
+                  "FROM payments WHERE booking_id = 13638;\n"
                   "COMMIT;"),
         trap_sql=("BEGIN;\n"
-                  "CREATE TABLE invoices_new (\n"
-                  "  invoice_id   INTEGER PRIMARY KEY,\n"
-                  "  customer_id  INTEGER NOT NULL REFERENCES customers(customer_id),\n"
-                  "  period       TEXT    NOT NULL,\n"
-                  "  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),\n"
-                  "  issued_on    TEXT    NOT NULL,\n"
-                  "  paid_on      TEXT,\n"
-                  "  method       TEXT    CHECK (method IN ('card', 'transfer')),\n"
-                  "  CHECK ((paid_on IS NULL) = (method IS NULL)),\n"
-                  "  CHECK (paid_on >= issued_on)\n"
-                  ");\n"
-                  "INSERT INTO invoices_new SELECT * FROM invoices;\n"
-                  "DROP TABLE invoices;\n"
-                  "ALTER TABLE invoices_new RENAME TO invoices;\n"
-                  "COMMIT;"),
-        driver_sql=("INSERT INTO invoices (customer_id, period, amount_cents, issued_on, paid_on, method)"
-                    " VALUES (8, '2026-06', 1500, '2026-07-01', '2026-06-28', 'card');\n"
-                    "INSERT INTO invoices (customer_id, period, amount_cents, issued_on, paid_on, method)"
-                    " VALUES (12, '2026-06', 2400, '2026-07-01', '2026-07-03', 'transfer');\n"
-                    "INSERT INTO invoices (customer_id, period, amount_cents, issued_on, paid_on, method)"
-                    " VALUES (4, '2026-05', 100, '2026-06-01', NULL, NULL);"),
-        probe_sql="SELECT COUNT(*), SUM(period = '2026-06'), SUM(amount_cents) FROM invoices",
-        note="Create, copy, drop, rename is how SQLite changes anything"
-             " ALTER TABLE cannot, and the transaction means nobody"
-             " ever sees the moment with no invoices table. The risk"
-             " is in the retyping: the trap adds the new CHECK and"
-             " drops the UNIQUE (customer_id, period) on the way, and"
-             " the third insert bills customer 4 twice for May. An"
-             " unpaid invoice passes the new CHECK without an IS NULL"
-             " test, because a CHECK only fails when its condition is"
-             " false, and NULL >= anything is not false. Indexes go"
-             " with the old table and have to be created again.",
-        claims=[("one of the three inserts got in: 2,299 invoices, one for June",
-                 lambda rows, c: rows == [(2299, 1, 7462080 + 2400)])],
-    ),
-    dict(
-        id=14, ledger="Q1340", concept="LASTID", tier="5 - Procedures",
-        kind="script",
-        title="Riverside opens, with staff and customers",
-        prompt=(
-            "A new depot, Riverside, opens in the east region on"
-            " 2026-07-01 with 12 bays. In ONE transaction: add the"
-            " depot; move the lorry drivers of Docklands (depot 5) to"
-            " it; move to it every Docklands customer whose"
-            " postcode_area begins LE. The new depot's id is whatever"
-            " the table gives it -- do not assume a number:"
-            " last_insert_rowid() reports the id of the row an INSERT"
-            " has just made. The question then issues a ROLLBACK:"
-            " committed work survives it.\n\n"
-            "Checked: for Docklands and Riverside: region, bays,"
-            " couriers listed, customers listed"
-        ),
-        solution=("BEGIN;\n"
-                  "INSERT INTO depots (name, region, bays, opened_on) VALUES ('Riverside', 'east', 12, '2026-07-01');\n"
-                  "UPDATE couriers SET depot_id = last_insert_rowid() WHERE depot_id = 5 AND vehicle = 'lorry';\n"
-                  "UPDATE customers SET depot_id = last_insert_rowid() WHERE depot_id = 5 AND postcode_area LIKE 'LE%';\n"
-                  "COMMIT;"),
-        trap_sql=("BEGIN;\n"
-                  "INSERT INTO depots (name, region, bays, opened_on) VALUES ('Riverside', 'east', 12, '2026-07-01');\n"
-                  "UPDATE couriers SET depot_id = last_insert_rowid() WHERE depot_id = 5 AND vehicle = 'lorry';\n"
-                  "UPDATE customers SET depot_id = last_insert_rowid() WHERE postcode_area LIKE 'LE%';\n"
+                  "UPDATE bookings SET status = 'cancelled', cancelled_at = '2026-07-01 09:00'\n"
+                  "WHERE booking_id = 13638;\n"
+                  "INSERT INTO payments (booking_id, paid_at, amount_cents, method)\n"
+                  "SELECT booking_id, '2026-07-01 09:05', amount_cents, method\n"
+                  "FROM payments WHERE booking_id = 13638;\n"
                   "COMMIT;"),
         driver_sql="ROLLBACK;",
-        probe_sql=("SELECT d.name, d.region, d.bays,"
-                   " (SELECT COUNT(*) FROM couriers c WHERE c.depot_id = d.depot_id),"
-                   " (SELECT COUNT(*) FROM customers c WHERE c.depot_id = d.depot_id)"
-                   " FROM depots d WHERE d.name IN ('Docklands', 'Riverside')"),
-        note="last_insert_rowid() is the key the most recent INSERT on"
-             " this connection produced, and it is the link between"
-             " the steps of a procedure that creates a parent and then"
-             " points children at it. Only an INSERT changes it, so"
-             " both UPDATEs can use it. The steps have to come in this"
-             " order: until the depot exists the foreign key will not"
-             " accept its id. The trap drops 'depot_id = 5' from the"
-             " last step and moves every LE customer in the company,"
-             " 126 of them, to a depot with two lorries.",
-        claims=[("Riverside: east, 12 bays, two couriers, sixteen customers",
-                 lambda rows, c: ("Riverside", "east", 12, 2, 16) in rows),
-                ("Docklands keeps three couriers and 53 customers",
-                 lambda rows, c: ("Docklands", "east", 30, 3, 53) in rows)],
+        probe_sql=("SELECT b.status, b.cancelled_at,"
+                   " (SELECT COUNT(*) FROM payments p WHERE p.booking_id = b.booking_id),"
+                   " (SELECT SUM(p.amount_cents) FROM payments p WHERE p.booking_id = b.booking_id),"
+                   " (SELECT COUNT(*) FROM payments WHERE amount_cents < 0)"
+                   " FROM bookings b WHERE b.booking_id = 13638"),
+        note="A cancellation is two facts in two tables, and the"
+             " transaction is what stops the world seeing one without"
+             " the other: a cancelled booking still holding a deposit,"
+             " or a refund for a booking that is still live. The"
+             " refund is not an edit to the deposit; money that moved"
+             " is recorded as a new row with the opposite sign, so the"
+             " two add up to nothing and the history stays. The trap"
+             " copies the deposit without the minus and charges the"
+             " guest twice for a stay they cancelled.",
+        claims=[("cancelled, two payments adding up to nothing, 979 refunds now",
+                 lambda rows, c: rows == [("cancelled", "2026-07-01 09:00", 2, 0, 979)])],
     ),
     dict(
-        id=15, ledger="Q1341", concept="CASCADE", tier="5 - Procedures",
+        id=14, ledger="Q1355", concept="MOVE", tier="5 - Procedures",
         kind="script",
-        title="A parcel that takes its trail with it",
+        title="A guest who changed rooms mid-stay",
         prompt=(
-            "Deleting a parcel is refused while it has scans: the"
-            " foreign key protects the trail. Store the procedure that"
-            " makes it possible. Create a table removed with parcel_id"
-            " as its primary key and a required whole number"
-            " scans_removed, and a BEFORE DELETE trigger on parcels"
-            " whose body does two things for the parcel about to go:"
-            " records in removed how many scans it has, and deletes"
-            " those scans. The question then deletes parcels 40 and"
-            " 122.\n\n"
-            "Checked: each row of removed, with the parcels and scans"
-            " left in the database"
+            "Booking 11988 records guest 441 in room 155 at Lakeside"
+            " Lodge from 2026-03-06 to 2026-03-13. In fact the guest"
+            " moved to room 159 on 2026-03-10 and spent the last three"
+            " nights there. Put the records right in one transaction,"
+            " as two bookings: 11988 ends on the 10th, and a NEW"
+            " booking for room 159 runs from the 10th to the ORIGINAL"
+            " check-out, with every other column copied from 11988."
+            " Think about which of the two steps must read the row"
+            " before the other changes it.\n\n"
+            "Checked: guest 441's bookings that begin from 6 to 12"
+            " March 2026: room, check-in, check-out, rate and status"
         ),
-        solution=("CREATE TABLE removed (\n"
-                  "  parcel_id     INTEGER PRIMARY KEY,\n"
-                  "  scans_removed INTEGER NOT NULL\n"
-                  ");\n"
-                  "CREATE TRIGGER clear_trail BEFORE DELETE ON parcels\n"
+        solution=("BEGIN;\n"
+                  "INSERT INTO bookings (guest_id, room_id, booked_at, check_in, check_out,\n"
+                  "                      adults, children, channel, rate_cents, status)\n"
+                  "SELECT guest_id, 159, booked_at, '2026-03-10', check_out,\n"
+                  "       adults, children, channel, rate_cents, status\n"
+                  "FROM bookings WHERE booking_id = 11988;\n"
+                  "UPDATE bookings SET check_out = '2026-03-10' WHERE booking_id = 11988;\n"
+                  "COMMIT;"),
+        trap_sql=("BEGIN;\n"
+                  "UPDATE bookings SET check_out = '2026-03-10' WHERE booking_id = 11988;\n"
+                  "INSERT INTO bookings (guest_id, room_id, booked_at, check_in, check_out,\n"
+                  "                      adults, children, channel, rate_cents, status)\n"
+                  "SELECT guest_id, 159, booked_at, '2026-03-10', '2026-03-12',\n"
+                  "       adults, children, channel, rate_cents, status\n"
+                  "FROM bookings WHERE booking_id = 11988;\n"
+                  "COMMIT;"),
+        probe_sql=("SELECT room_id, check_in, check_out, rate_cents, status FROM bookings"
+                   " WHERE guest_id = 441 AND check_in >= '2026-03-06' AND check_in <= '2026-03-12'"),
+        note="The new booking's check-out is the old one's, and that"
+             " value exists in only one place. Copy first, then"
+             " shorten: once the UPDATE has run, 11988 says the 10th"
+             " and the original date is gone -- an INSERT ... SELECT"
+             " after it would copy the 10th as both ends, and the"
+             " CHECK (check_out > check_in) would refuse it. The trap"
+             " shortens first and then has to type the date from"
+             " memory, a night short. Seven nights before, four and"
+             " three after: a split should never change the total.",
+        claims=[("room 155 to the 10th, room 159 from the 10th to the 13th",
+                 lambda rows, c: sorted(rows) == [(155, "2026-03-06", "2026-03-10", 8650, "stayed"),
+                                                  (159, "2026-03-10", "2026-03-13", 8650, "stayed")])],
+    ),
+    dict(
+        id=15, ledger="Q1356", concept="GUARD", tier="5 - Procedures",
+        kind="script",
+        title="No room is sold twice",
+        prompt=(
+            "Nothing in the schema stops two bookings for the same room"
+            " on the same night. Store the check as a trigger: BEFORE"
+            " INSERT on bookings, when the new booking is not itself"
+            " cancelled and another booking for that room, also not"
+            " cancelled, overlaps its dates, the insert is refused with"
+            " RAISE(ABORT, ...). A guest may arrive on the day another"
+            " leaves; cancelled bookings block nothing. The question"
+            " then tries three bookings for July and August 2026: one"
+            " that collides, one that fits exactly between two others,"
+            " and one over nights that only a cancelled booking"
+            " held.\n\n"
+            "Checked: room and dates of the bookings made after the"
+            " data ends"
+        ),
+        solution=("CREATE TRIGGER no_double_booking BEFORE INSERT ON bookings\n"
+                  "WHEN NEW.status <> 'cancelled' AND EXISTS (\n"
+                  "  SELECT 1 FROM bookings b\n"
+                  "  WHERE b.room_id = NEW.room_id AND b.status <> 'cancelled'\n"
+                  "    AND b.check_in < NEW.check_out AND NEW.check_in < b.check_out)\n"
                   "BEGIN\n"
-                  "  INSERT INTO removed (parcel_id, scans_removed)\n"
-                  "  SELECT OLD.parcel_id, COUNT(*) FROM scans WHERE parcel_id = OLD.parcel_id;\n"
-                  "  DELETE FROM scans WHERE parcel_id = OLD.parcel_id;\n"
+                  "  SELECT RAISE(ABORT, 'room already booked for those nights');\n"
                   "END;"),
-        trap_sql=("CREATE TABLE removed (\n"
-                  "  parcel_id     INTEGER PRIMARY KEY,\n"
-                  "  scans_removed INTEGER NOT NULL\n"
-                  ");\n"
-                  "CREATE TRIGGER clear_trail BEFORE DELETE ON parcels\n"
+        trap_sql=("CREATE TRIGGER no_double_booking BEFORE INSERT ON bookings\n"
+                  "WHEN EXISTS (\n"
+                  "  SELECT 1 FROM bookings b\n"
+                  "  WHERE b.room_id = NEW.room_id\n"
+                  "    AND b.check_in < NEW.check_out AND NEW.check_in < b.check_out)\n"
                   "BEGIN\n"
-                  "  DELETE FROM scans WHERE parcel_id = OLD.parcel_id;\n"
-                  "  INSERT INTO removed (parcel_id, scans_removed)\n"
-                  "  SELECT OLD.parcel_id, COUNT(*) FROM scans WHERE parcel_id = OLD.parcel_id;\n"
+                  "  SELECT RAISE(ABORT, 'room already booked for those nights');\n"
                   "END;"),
-        driver_sql="DELETE FROM parcels WHERE parcel_id IN (40, 122);",
-        probe_sql=("SELECT r.parcel_id, r.scans_removed, (SELECT COUNT(*) FROM parcels),"
-                   " (SELECT COUNT(*) FROM scans) FROM removed r"),
-        note="A trigger body is a small procedure: its statements run"
-             " in the order written, once for each row the DELETE"
-             " removes, with OLD holding that row. Count first, then"
-             " delete -- the trap has them the other way round and"
-             " carefully records that each parcel had 0 scans. With"
-             " the scans gone the foreign key has nothing to object"
-             " to, and the DELETE that fired the trigger goes ahead."
-             " This is ON DELETE CASCADE written by hand, which is how"
-             " you get it on a table whose foreign key was declared"
-             " without one.",
-        claims=[("parcel 40 had five scans and 122 three; eight scans gone with them",
-                 lambda rows, c: sorted(rows) == [(40, 5, 23998, 112370), (122, 3, 23998, 112370)])],
+        driver_sql=("INSERT INTO bookings (guest_id, room_id, booked_at, check_in, check_out, adults, children, channel, rate_cents, status)"
+                    " VALUES (1, 15, '2026-07-01 10:00', '2026-08-09', '2026-08-11', 1, 0, 'phone', 7400, 'booked');\n"
+                    "INSERT INTO bookings (guest_id, room_id, booked_at, check_in, check_out, adults, children, channel, rate_cents, status)"
+                    " VALUES (2, 15, '2026-07-01 10:05', '2026-08-05', '2026-08-09', 1, 0, 'phone', 7400, 'booked');\n"
+                    "INSERT INTO bookings (guest_id, room_id, booked_at, check_in, check_out, adults, children, channel, rate_cents, status)"
+                    " VALUES (3, 26, '2026-07-01 10:10', '2026-07-10', '2026-07-11', 2, 0, 'phone', 9000, 'booked');"),
+        probe_sql="SELECT room_id, check_in, check_out FROM bookings WHERE booked_at >= '2026-07-01'",
+        note="A trigger's WHEN clause is a condition on the incoming"
+             " row, NEW, and may hold a subquery; RAISE(ABORT) inside"
+             " the body cancels the statement that fired it. The"
+             " overlap test is the usual pair of strict comparisons,"
+             " so the booking that starts the day another ends gets"
+             " in. The trap forgets that a cancelled booking holds no"
+             " room and turns away the third guest from an empty one."
+             " A CHECK cannot do this job: it sees one row, and a"
+             " double booking is a fact about two.",
+        claims=[("two of the three got in: the exact fit and the room freed by a cancellation",
+                 lambda rows, c: sorted(rows) == [(15, "2026-08-05", "2026-08-09"), (26, "2026-07-10", "2026-07-11")])],
     ),
 ]
 

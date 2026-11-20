@@ -27,23 +27,25 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the eighth set on the parcel-courier
-scheme (6 tables, SEED 1241). **Fifteen SQL** at two tools per question,
-with the tiers named by task -- text, matched and built; more from
-windows; positions, years and thresholds; changing rows; procedures -- on
-tools the first seven courier sets left out: LIKE's one-character
-wildcard, GLOB with a character class, printf zero-padding, a window MAX
-whose frame stops before the current row, LAG with an offset, COUNT(*)
-OVER a partition, LIMIT with OFFSET, completed years by anniversary
-arithmetic, a join on >=. Prompts name the tool but do not write the
-statement. **Six writable**. Three change rows in one statement: a
-two-row INSERT whose foreign key is looked up, an UPDATE with a
-correlated subquery in its SET, a DELETE that says 'neither' with NOT
-IN. Three are procedures, scripts of several steps: a table rebuilt to
-add a CHECK, a depot opened and staffed through last_insert_rowid(), and
-a BEFORE DELETE trigger that records a parcel's trail and clears it.
-**Fifteen Python** at the easy level of the last ten sets: everyday tasks
-over plain lists and strings in the courier's terms, no maths, no dicts.
+Thirty questions in two tracks, the first set on a NEW schema: a small
+group of hotels (7 tables, SEED 1356) replacing the parcel courier.
+**Fifteen SQL** at two tools per question, with the tiers named by task
+-- finding your way around; nights and dates; money and scores; changing
+rows; procedures. Because the tables are new the tools are the central
+ones, asked where a hotel makes them matter: a join with GROUP BY, a LEFT
+JOIN that keeps the unmatched, nights by subtracting dates, a half-open
+range for one night, date() on a timestamp, the overlap of two ranges,
+conditional sums by sign, a LEFT JOIN to an aggregate, COUNT(column)
+beside COUNT(*). Prompts name the tool but do not write the statement.
+**Six writable**. Three change rows in one statement: an INSERT ...
+SELECT charging everyone in the house, an UPDATE fed by GROUP BY ...
+HAVING, a DELETE with NOT EXISTS and a date. Three are procedures,
+scripts of several steps: a booking cancelled and refunded in one
+transaction, a stay split in two when the guest moved room, and a BEFORE
+INSERT trigger that refuses a double booking. **Fifteen Python** at the
+easy level of the last eleven sets: everyday tasks over plain lists and
+strings, now in the hotel's terms, no maths, no dicts, and the first
+with dates handled by the datetime module.
 
 ### The writable stage
 
@@ -53,49 +55,49 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 10 | `INSERT INTO couriers (...) VALUES ('...', (SELECT depot_id FROM depots WHERE name = ...), ...), (...)` | the couriers hired from July 2026 |
-| 11 | `UPDATE depots SET bays = 4 * (SELECT COUNT(*) FROM couriers c WHERE c.depot_id = depots.depot_id AND ...) WHERE closed_on IS NULL` | every depot's bays |
-| 12 | `DELETE FROM scans WHERE status NOT IN (...) AND parcel_id IN (SELECT ... WHERE delivered_at < ...)` | scans left per status |
-| 13 | `BEGIN; CREATE TABLE invoices_new (...); INSERT INTO invoices_new SELECT * FROM invoices; DROP TABLE invoices; ALTER TABLE invoices_new RENAME TO invoices; COMMIT;` | invoices, June invoices, cents |
-| 14 | `BEGIN; INSERT INTO depots ...; UPDATE couriers SET depot_id = last_insert_rowid() ...; UPDATE customers ...; COMMIT;` | Docklands and Riverside |
-| 15 | `CREATE TABLE removed (...); CREATE TRIGGER ... BEFORE DELETE ON parcels BEGIN INSERT INTO removed SELECT ...; DELETE FROM scans ...; END` | the record, parcels and scans left |
+| 10 | `INSERT INTO charges (...) SELECT booking_id, 'restaurant', 2500 * (adults + children), '...' FROM bookings ... WHERE ...` | restaurant charges on the day: count and cents |
+| 11 | `UPDATE guests SET tier = 'gold' WHERE guest_id IN (SELECT guest_id FROM bookings WHERE ... GROUP BY guest_id HAVING SUM(...) >= 100)` | guests per tier |
+| 12 | `DELETE FROM guests WHERE joined_on < '...' AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.guest_id = guests.guest_id)` | guests left, earliest joined, no email |
+| 13 | `BEGIN; UPDATE bookings SET status = 'cancelled', cancelled_at = '...' ...; INSERT INTO payments ... SELECT ..., -amount_cents, method FROM payments ...; COMMIT;` | the booking, its payments, all refunds |
+| 14 | `BEGIN; INSERT INTO bookings (...) SELECT ... FROM bookings WHERE booking_id = ...; UPDATE bookings SET check_out = '...' ...; COMMIT;` | the guest's two bookings |
+| 15 | `CREATE TRIGGER ... BEFORE INSERT ON bookings WHEN ... EXISTS (overlap) BEGIN SELECT RAISE(ABORT, '...'); END` | the bookings that got in |
 
-13, 14 and 15 carry a `driver_sql`, run after your script: three inserts
-of which two must be refused, a ROLLBACK, which undoes anything not
-committed, and a DELETE of two parcels, which fires the trigger.
+13 and 15 carry a `driver_sql`, run after your script: a ROLLBACK, which
+undoes anything not committed, and three bookings of which one must be
+refused.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1327 | LIKE1 one-character wildcard | First names of exactly four letters | ex 1 | 1 - Text, matched and built |
-| Q1328 | GLOB character class | Postcode areas that end in two digits | ex 2 | 1 - Text, matched and built |
-| Q1329 | PAD printf zero-padding, joined by concatenation | A reference number for the reminder letters | ex 3 | 1 - Text, matched and built |
-| Q1330 | RECORD window MAX to 1 PRECEDING | The months that set a record | ex 4 | 2 - More from windows |
-| Q1331 | YOY LAG with an offset of 12 | This month against the same month last year | ex 5 | 2 - More from windows |
-| Q1332 | NAMESAKE COUNT OVER a partition | Customers who share their name with another | ex 6 | 2 - More from windows |
-| Q1333 | OFFSET LIMIT with OFFSET | Fourth, fifth and sixth place | ex 7 | 3 - Positions, years and thresholds |
-| Q1334 | YEARS completed years by anniversary | Completed years of service | ex 8 | 3 - Positions, years and thresholds |
-| Q1335 | ATLEAST join on >= to an inline table | How many customers reach each level | ex 9 | 3 - Positions, years and thresholds |
-| Q1336 | LOOKUP multi-row VALUES with a scalar subquery | Two new starters at Hillcrest **(script)** | ex 10 | 4 - Changing rows |
-| Q1337 | SETSUB correlated subquery in SET | Bays to match the people **(script)** | ex 11 | 4 - Changing rows |
-| Q1338 | NEITHER DELETE with NOT IN | Old trails, thinned to their two ends **(script)** | ex 12 | 4 - Changing rows |
-| Q1339 | REBUILD create, copy, drop, rename | A new rule for a table that already exists **(script)** | ex 13 | 5 - Procedures |
-| Q1340 | LASTID last_insert_rowid across steps | Riverside opens, with staff and customers **(script)** | ex 14 | 5 - Procedures |
-| Q1341 | CASCADE BEFORE DELETE trigger | A parcel that takes its trail with it **(script)** | ex 15 | 5 - Procedures |
-| P596 | PY3 compare after tidying | The same code, typed two ways | py 1 | 1 - Text checks and fixes |
-| P597 | PY3 leading number or None | The house number at the start of an address | py 2 | 1 - Text checks and fixes |
-| P598 | PY3 remove a known ending | A company name without its ending | py 3 | 1 - Text checks and fixes |
-| P599 | PY3 mask all but the last four | An account number with its last four showing | py 4 | 1 - Text checks and fixes |
-| P600 | PY3 count a letter in either case | How many times a letter appears | py 5 | 1 - Text checks and fixes |
-| P601 | PY3 safe int with a fallback | A quantity typed into a form | py 6 | 2 - Safe values and labels |
-| P602 | PY3 clamp to a range | A bay number kept within the depot | py 7 | 2 - Safe values and labels |
-| P603 | PY3 thousands separator | A parcel count with commas | py 8 | 2 - Safe values and labels |
-| P604 | PY3 labels from a range | Delivery slots, on the hour | py 9 | 2 - Safe values and labels |
-| P605 | PY3 membership after normalising | Is it the weekend? | py 10 | 2 - Safe values and labels |
-| P606 | PY3 chunks of n | Parcels shelved so many to a shelf | py 11 | 3 - Lists, split and combined |
-| P607 | PY3 split a list in half | One load between two vans | py 12 | 3 - Lists, split and combined |
-| P608 | PY3 insert after a value | An extra stop, straight after another | py 13 | 3 - Lists, split and combined |
-| P609 | PY3 all against an allowed list | Is every status one we know? | py 14 | 3 - Lists, split and combined |
-| P610 | PY3 right-align to the widest | Numbers lined up on the right | py 15 | 3 - Lists, split and combined |
+| Q1342 | ROOMS join with GROUP BY and MIN, MAX | What each hotel has to sell | ex 1 | 1 - Finding your way around |
+| Q1343 | NEVER LEFT JOIN counting the unmatched | Guests on the books who have never booked | ex 2 | 1 - Finding your way around |
+| Q1344 | NIGHTS julianday difference summed | Room-nights sold in 2025 | ex 3 | 1 - Finding your way around |
+| Q1345 | INHOUSE half-open range on a night | Who was in the house on New Year's Eve | ex 4 | 2 - Nights and dates |
+| Q1346 | LEAD date() of a timestamp before subtracting | How far ahead each channel books | ex 5 | 2 - Nights and dates |
+| Q1347 | OVERLAP two ranges inside EXISTS | Cancelled nights that were sold again | ex 6 | 2 - Nights and dates |
+| Q1348 | SIGNS conditional sums by sign | Money taken and money given back | ex 7 | 3 - Money and scores |
+| Q1349 | EXTRAS LEFT JOIN to an aggregate with COALESCE | What a stay spends on extras | ex 8 | 3 - Money and scores |
+| Q1350 | REVIEWED COUNT(column) beside COUNT(*) | How many stays are reviewed, and how well | ex 9 | 3 - Money and scores |
+| Q1351 | GALA INSERT SELECT with a computed amount | The gala dinner goes on every bill **(script)** | ex 10 | 4 - Changing rows |
+| Q1352 | PROMOTE UPDATE from GROUP BY HAVING | A hundred nights makes you gold **(script)** | ex 11 | 4 - Changing rows |
+| Q1353 | PURGE DELETE with NOT EXISTS and a date | Old names that never became guests **(script)** | ex 12 | 4 - Changing rows |
+| Q1354 | CANCEL two tables in one transaction | A cancellation, and the deposit back **(script)** | ex 13 | 5 - Procedures |
+| Q1355 | MOVE split a row, copy before changing | A guest who changed rooms mid-stay **(script)** | ex 14 | 5 - Procedures |
+| Q1356 | GUARD BEFORE INSERT trigger with RAISE | No room is sold twice **(script)** | ex 15 | 5 - Procedures |
+| P611 | PY3 days between two dates | How many nights is the stay? | py 1 | 1 - Dates, with datetime |
+| P612 | PY3 add days to a date | The morning they leave | py 2 | 1 - Dates, with datetime |
+| P613 | PY3 weekday of a date | What day of the week is that? | py 3 | 1 - Dates, with datetime |
+| P614 | PY3 list of dates from a range | Every night of the stay | py 4 | 1 - Dates, with datetime |
+| P615 | PY3 overlap of two ranges | Do the two stays collide? | py 5 | 1 - Dates, with datetime |
+| P616 | PY3 split an amount exactly | A bill split so that it adds up | py 6 | 2 - Guests and bills |
+| P617 | PY3 two counts returned together | Adults and children in the party | py 7 | 2 - Guests and bills |
+| P618 | PY4 first name plus a count | A booking's guests on one line | py 8 | 2 - Guests and bills |
+| P619 | PY4 shape of an email address | Does that look like an email address? | py 9 | 2 - Guests and bills |
+| P620 | PY3 truncate a list with a count | A long guest list, cut short | py 10 | 2 - Guests and bills |
+| P621 | PY3 slice from the end | Which floor is the room on? | py 11 | 3 - Rooms and floors |
+| P622 | PY3 next in a list, stopping at the top | An upgrade, if there is one | py 12 | 3 - Rooms and floors |
+| P623 | PY3 filter by odd or even | The rooms that face the sea | py 13 | 3 - Rooms and floors |
+| P624 | PY3 flatten a list of lists | Every room on every floor | py 14 | 3 - Rooms and floors |
+| P625 | PY3 swap two positions on a copy | Two guests swap rooms | py 15 | 3 - Rooms and floors |
 
 ## Retired
 
@@ -404,6 +406,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1327 | LIKE1 one-character wildcard | First names of exactly four letters | - | retired |
+| Q1328 | GLOB character class | Postcode areas that end in two digits | - | retired |
+| Q1329 | PAD printf zero-padding, joined by concatenation | A reference number for the reminder letters | - | retired |
+| Q1330 | RECORD window MAX to 1 PRECEDING | The months that set a record | - | retired |
+| Q1331 | YOY LAG with an offset of 12 | This month against the same month last year | - | retired |
+| Q1332 | NAMESAKE COUNT OVER a partition | Customers who share their name with another | - | retired |
+| Q1333 | OFFSET LIMIT with OFFSET | Fourth, fifth and sixth place | - | retired |
+| Q1334 | YEARS completed years by anniversary | Completed years of service | - | retired |
+| Q1335 | ATLEAST join on >= to an inline table | How many customers reach each level | - | retired |
+| Q1336 | LOOKUP multi-row VALUES with a scalar subquery | Two new starters at Hillcrest **(script)** | - | retired |
+| Q1337 | SETSUB correlated subquery in SET | Bays to match the people **(script)** | - | retired |
+| Q1338 | NEITHER DELETE with NOT IN | Old trails, thinned to their two ends **(script)** | - | retired |
+| Q1339 | REBUILD create, copy, drop, rename | A new rule for a table that already exists **(script)** | - | retired |
+| Q1340 | LASTID last_insert_rowid across steps | Riverside opens, with staff and customers **(script)** | - | retired |
+| Q1341 | CASCADE BEFORE DELETE trigger | A parcel that takes its trail with it **(script)** | - | retired |
+| P596 | PY3 compare after tidying | The same code, typed two ways | - | retired |
+| P597 | PY3 leading number or None | The house number at the start of an address | - | retired |
+| P598 | PY3 remove a known ending | A company name without its ending | - | retired |
+| P599 | PY3 mask all but the last four | An account number with its last four showing | - | retired |
+| P600 | PY3 count a letter in either case | How many times a letter appears | - | retired |
+| P601 | PY3 safe int with a fallback | A quantity typed into a form | - | retired |
+| P602 | PY3 clamp to a range | A bay number kept within the depot | - | retired |
+| P603 | PY3 thousands separator | A parcel count with commas | - | retired |
+| P604 | PY3 labels from a range | Delivery slots, on the hour | - | retired |
+| P605 | PY3 membership after normalising | Is it the weekend? | - | retired |
+| P606 | PY3 chunks of n | Parcels shelved so many to a shelf | - | retired |
+| P607 | PY3 split a list in half | One load between two vans | - | retired |
+| P608 | PY3 insert after a value | An extra stop, straight after another | - | retired |
+| P609 | PY3 all against an allowed list | Is every status one we know? | - | retired |
+| P610 | PY3 right-align to the widest | Numbers lined up on the right | - | retired |
 | Q1312 | FULL OUTER JOIN of two aggregates | Hires and leavers, depot by depot | - | retired |
 | Q1313 | FANOUT aggregate before joining | Postage and invoices, side by side | - | retired |
 | Q1314 | LATEST correlated ORDER BY LIMIT 1 | Each depot's newest courier | - | retired |
@@ -2789,7 +2821,7 @@ they still count as asked.
   range expanded, pairs unzipped into two lists, two lists merged without
   repeats, a value removed everywhere, every nth item by a stepped
   slice.
-- **Q1327-Q1341 and P596-P610** current set, the eighth on the
+- **Q1327-Q1341 and P596-P610** retired set, the eighth and last on the
   parcel-courier scheme (SEED 1241), nine reading and six writable,
   prompts naming the tool but not the statement. SQL, two tools per
   question in task-named tiers, on tools the first seven courier sets left
@@ -2818,3 +2850,36 @@ they still count as asked.
   from a range, a weekend test after normalising; chunks of n, a list
   halved with the extra to the front, an insert after a value, all()
   against an allowed list, numbers right-aligned to the widest.
+- **Q1342-Q1356 and P611-P625** current set, on a NEW schema: a small
+  group of hotels (7 tables, SEED 1356) replacing the parcel courier after
+  eight sets. Eight hotels in four towns, one that closes and one that
+  opens during the data; rooms with a list price; guests with a NULL tier
+  and a NULL email; bookings as half-open date ranges with a status
+  (booked, stayed, cancelled, no_show), an agreed rate and a channel;
+  charges for extras; payments in which a negative amount is a refund;
+  reviews, at most one per booking. Cancelled bookings keep their dates and
+  some of their nights are sold again, so two bookings for a room may
+  overlap but never two live ones. Nine reading and six writable, prompts
+  naming the tool but not the statement. SQL, the central tools asked on
+  new tables: rooms and list prices per hotel, guests who never booked by
+  LEFT JOIN, room-nights by julianday, the house on New Year's Eve by
+  check_in <= d AND check_out > d, lead time per channel with date() on
+  the timestamp, cancelled bookings re-let by an overlap inside EXISTS,
+  takings and refunds by CASE in SUM, average extras with COALESCE on a
+  LEFT JOIN to an aggregate, reviews per stay by COUNT(column). Changing
+  rows: a gala dinner charged per head to every booking in the house by
+  INSERT ... SELECT, guests with a hundred nights made gold by an UPDATE
+  fed from GROUP BY ... HAVING, never-booked guests from before 2023
+  deleted by NOT EXISTS. Procedures: booking 13638 cancelled and its
+  deposit refunded as a negative payment in one transaction, proved by a
+  ROLLBACK; booking 11988 split at a room move, the new row copied before
+  the old one is shortened; and a BEFORE INSERT trigger with RAISE(ABORT)
+  that refuses a booking overlapping a live one, tested by three inserts.
+  Python, everyday tasks in the hotel's terms, with datetime for the
+  first time: nights between two dates, a date so many nights on, the
+  weekday by a list lookup, every night of a stay, two ranges colliding;
+  a bill split to the cent, adults and children counted, guests on one
+  line, the shape of an email address, a list cut short with a count;
+  the floor from a room number by a slice from the end, the next type up
+  stopping at the top, odd-numbered rooms, a list of lists flattened by
+  extend, two positions swapped by a paired assignment.
