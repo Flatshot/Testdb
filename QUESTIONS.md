@@ -27,25 +27,27 @@ same kind of input with the same shape of answer is a duplicate.
 
 ## Live set
 
-Thirty questions in two tracks, the first set on a NEW schema: a small
-group of hotels (7 tables, SEED 1356) replacing the parcel courier.
-**Fifteen SQL** at two tools per question, with the tiers named by task
--- finding your way around; nights and dates; money and scores; changing
-rows; procedures. Because the tables are new the tools are the central
-ones, asked where a hotel makes them matter: a join with GROUP BY, a LEFT
-JOIN that keeps the unmatched, nights by subtracting dates, a half-open
-range for one night, date() on a timestamp, the overlap of two ranges,
-conditional sums by sign, a LEFT JOIN to an aggregate, COUNT(column)
-beside COUNT(*). Prompts name the tool but do not write the statement.
-**Six writable**. Three change rows in one statement: an INSERT ...
-SELECT charging everyone in the house, an UPDATE fed by GROUP BY ...
-HAVING, a DELETE with NOT EXISTS and a date. Three are procedures,
-scripts of several steps: a booking cancelled and refunded in one
-transaction, a stay split in two when the guest moved room, and a BEFORE
-INSERT trigger that refuses a double booking. **Fifteen Python** at the
-easy level of the last eleven sets: everyday tasks over plain lists and
-strings, now in the hotel's terms, no maths, no dicts, and the first
-with dates handled by the datetime module.
+Thirty questions in two tracks, the second set on the hotel schema (7
+tables, SEED 1356). **Fifteen SQL** at two tools per question, with the
+tiers named by task -- rooms and what they cost; guests over time; money
+in and out; changing rows; procedures. Ten use a tool the hotel tables
+have not met: RANK per partition, an outer join with its conditions in
+the ON, LAG, a CTE grouped twice, two child tables summed before they are
+joined, a running total over a grouped query, an upsert, a DELETE by
+ROW_NUMBER, a merge in foreign-key order, and a log table with its AFTER
+UPDATE trigger. Five bring back what the first set found hard, in a new
+task: the overlap of two ranges under NOT EXISTS, EXISTS beside NOT
+EXISTS, a sum of amounts worked out row by row, a correlated subquery
+feeding an UPDATE, and a balance computed inside an INSERT. Prompts name
+the tool but do not write the statement. **Six writable**. Three change
+rows in one statement: an upsert of two reviews, an UPDATE whose new
+value is a correlated subquery, a DELETE that keeps the latest review per
+guest and hotel. Three are procedures, scripts of several steps: two
+guest records merged in one transaction, an early departure shortened
+and then settled, and a rate log filled by a trigger. **Fifteen Python**
+at the easy level of the last twelve sets: everyday tasks over plain
+lists and strings in the hotel's terms, no maths, no dicts, and no
+datetime this time.
 
 ### The writable stage
 
@@ -55,49 +57,49 @@ never the copy that Check answer grades.
 
 | # | Construct | What the probe reads |
 |---|---|---|
-| 10 | `INSERT INTO charges (...) SELECT booking_id, 'restaurant', 2500 * (adults + children), '...' FROM bookings ... WHERE ...` | restaurant charges on the day: count and cents |
-| 11 | `UPDATE guests SET tier = 'gold' WHERE guest_id IN (SELECT guest_id FROM bookings WHERE ... GROUP BY guest_id HAVING SUM(...) >= 100)` | guests per tier |
-| 12 | `DELETE FROM guests WHERE joined_on < '...' AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.guest_id = guests.guest_id)` | guests left, earliest joined, no email |
-| 13 | `BEGIN; UPDATE bookings SET status = 'cancelled', cancelled_at = '...' ...; INSERT INTO payments ... SELECT ..., -amount_cents, method FROM payments ...; COMMIT;` | the booking, its payments, all refunds |
-| 14 | `BEGIN; INSERT INTO bookings (...) SELECT ... FROM bookings WHERE booking_id = ...; UPDATE bookings SET check_out = '...' ...; COMMIT;` | the guest's two bookings |
-| 15 | `CREATE TRIGGER ... BEFORE INSERT ON bookings WHEN ... EXISTS (overlap) BEGIN SELECT RAISE(ABORT, '...'); END` | the bookings that got in |
+| 10 | `INSERT INTO reviews (...) VALUES (...), (...) ON CONFLICT (booking_id) DO UPDATE SET score = excluded.score, ...` | the two bookings' reviews with ids, and the review count |
+| 11 | `UPDATE rooms SET rack_cents = (SELECT ROUND(AVG(b.rate_cents)) FROM bookings b WHERE b.room_id = rooms.room_id AND ...) WHERE hotel_id = 5 AND EXISTS (...)` | rooms, total, lowest, highest and distinct prices, Spa Gardens and the rest |
+| 12 | `DELETE FROM reviews WHERE review_id IN (SELECT review_id FROM (SELECT ..., ROW_NUMBER() OVER (PARTITION BY guest, hotel ORDER BY posted_on DESC, review_id DESC) AS n ...) WHERE n > 1)` | reviews left: count, scores, ids, earliest |
+| 13 | `BEGIN; UPDATE guests SET email = (SELECT email FROM guests WHERE guest_id = ...) ...; UPDATE bookings SET guest_id = ...; DELETE FROM guests ...; COMMIT;` | the kept guest, both booking counts, guests of that name |
+| 14 | `BEGIN; UPDATE bookings SET check_out = '...' ...; INSERT INTO payments (...) SELECT ..., nights * rate + charges - paid, 'card' FROM bookings ...; COMMIT;` | the check-out, payments and their sum |
+| 15 | `CREATE TABLE rate_log (...); CREATE TRIGGER ... AFTER UPDATE OF rack_cents ON rooms WHEN OLD.rack_cents <> NEW.rack_cents BEGIN INSERT INTO rate_log ...; END` | the rows of rate_log |
 
 13 and 15 carry a `driver_sql`, run after your script: a ROLLBACK, which
-undoes anything not committed, and three bookings of which one must be
-refused.
+undoes anything not committed, and three updates of which only some
+change a price.
 
 | ID | Concept | Question | In GUI | Stage |
 |----|---------|----------|--------|-------|
-| Q1342 | ROOMS join with GROUP BY and MIN, MAX | What each hotel has to sell | ex 1 | 1 - Finding your way around |
-| Q1343 | NEVER LEFT JOIN counting the unmatched | Guests on the books who have never booked | ex 2 | 1 - Finding your way around |
-| Q1344 | NIGHTS julianday difference summed | Room-nights sold in 2025 | ex 3 | 1 - Finding your way around |
-| Q1345 | INHOUSE half-open range on a night | Who was in the house on New Year's Eve | ex 4 | 2 - Nights and dates |
-| Q1346 | LEAD date() of a timestamp before subtracting | How far ahead each channel books | ex 5 | 2 - Nights and dates |
-| Q1347 | OVERLAP two ranges inside EXISTS | Cancelled nights that were sold again | ex 6 | 2 - Nights and dates |
-| Q1348 | SIGNS conditional sums by sign | Money taken and money given back | ex 7 | 3 - Money and scores |
-| Q1349 | EXTRAS LEFT JOIN to an aggregate with COALESCE | What a stay spends on extras | ex 8 | 3 - Money and scores |
-| Q1350 | REVIEWED COUNT(column) beside COUNT(*) | How many stays are reviewed, and how well | ex 9 | 3 - Money and scores |
-| Q1351 | GALA INSERT SELECT with a computed amount | The gala dinner goes on every bill **(script)** | ex 10 | 4 - Changing rows |
-| Q1352 | PROMOTE UPDATE from GROUP BY HAVING | A hundred nights makes you gold **(script)** | ex 11 | 4 - Changing rows |
-| Q1353 | PURGE DELETE with NOT EXISTS and a date | Old names that never became guests **(script)** | ex 12 | 4 - Changing rows |
-| Q1354 | CANCEL two tables in one transaction | A cancellation, and the deposit back **(script)** | ex 13 | 5 - Procedures |
-| Q1355 | MOVE split a row, copy before changing | A guest who changed rooms mid-stay **(script)** | ex 14 | 5 - Procedures |
-| Q1356 | GUARD BEFORE INSERT trigger with RAISE | No room is sold twice **(script)** | ex 15 | 5 - Procedures |
-| P611 | PY3 days between two dates | How many nights is the stay? | py 1 | 1 - Dates, with datetime |
-| P612 | PY3 add days to a date | The morning they leave | py 2 | 1 - Dates, with datetime |
-| P613 | PY3 weekday of a date | What day of the week is that? | py 3 | 1 - Dates, with datetime |
-| P614 | PY3 list of dates from a range | Every night of the stay | py 4 | 1 - Dates, with datetime |
-| P615 | PY3 overlap of two ranges | Do the two stays collide? | py 5 | 1 - Dates, with datetime |
-| P616 | PY3 split an amount exactly | A bill split so that it adds up | py 6 | 2 - Guests and bills |
-| P617 | PY3 two counts returned together | Adults and children in the party | py 7 | 2 - Guests and bills |
-| P618 | PY4 first name plus a count | A booking's guests on one line | py 8 | 2 - Guests and bills |
-| P619 | PY4 shape of an email address | Does that look like an email address? | py 9 | 2 - Guests and bills |
-| P620 | PY3 truncate a list with a count | A long guest list, cut short | py 10 | 2 - Guests and bills |
-| P621 | PY3 slice from the end | Which floor is the room on? | py 11 | 3 - Rooms and floors |
-| P622 | PY3 next in a list, stopping at the top | An upgrade, if there is one | py 12 | 3 - Rooms and floors |
-| P623 | PY3 filter by odd or even | The rooms that face the sea | py 13 | 3 - Rooms and floors |
-| P624 | PY3 flatten a list of lists | Every room on every floor | py 14 | 3 - Rooms and floors |
-| P625 | PY3 swap two positions on a copy | Two guests swap rooms | py 15 | 3 - Rooms and floors |
+| Q1357 | DEAREST RANK per partition, filtered outside | The two dearest rooms in each hotel | ex 1 | 1 - Rooms and what they cost |
+| Q1358 | FREE NOT EXISTS over an overlap | Rooms free for four nights in July | ex 2 | 1 - Rooms and what they cost |
+| Q1359 | WEEK outer join with its conditions in ON | Every room at Fellfoot Inn, busy or not | ex 3 | 1 - Rooms and what they cost |
+| Q1360 | GAP LAG over an ordered window | How long between one stay and the next | ex 4 | 2 - Guests over time |
+| Q1361 | BANDS CTE grouped, then grouped again | Once, a few times, or a regular | ex 5 | 2 - Guests over time |
+| Q1362 | LAPSED EXISTS beside NOT EXISTS | Came in 2025 and have not been back | ex 6 | 2 - Guests over time |
+| Q1363 | DISCOUNT SUM of a product worked out per row | What each channel gives away | ex 7 | 3 - Money in and out |
+| Q1364 | TWOSUMS two child tables summed before joining | Extras and payments, side by side | ex 8 | 3 - Money in and out |
+| Q1365 | RUNNING window SUM over a grouped query | The year's takings as they mounted up | ex 9 | 3 - Money in and out |
+| Q1366 | REPOST upsert with ON CONFLICT DO UPDATE | A review posted, or posted again **(script)** | ex 10 | 4 - Changing rows |
+| Q1367 | REPRICE UPDATE SET from a correlated subquery | List prices reset to what guests paid **(script)** | ex 11 | 4 - Changing rows |
+| Q1368 | LATEST DELETE by ROW_NUMBER per group | One review per guest per hotel **(script)** | ex 12 | 4 - Changing rows |
+| Q1369 | MERGE three steps in foreign-key order | One guest, entered twice **(script)** | ex 13 | 5 - Procedures |
+| Q1370 | EARLY change first, then insert from it | Leaving early, and settling up **(script)** | ex 14 | 5 - Procedures |
+| Q1371 | RATELOG log table and AFTER UPDATE trigger with WHEN | Who changed that price? **(script)** | ex 15 | 5 - Procedures |
+| P626 | PY4 running total as a list | The bill as it mounts up | py 1 | 1 - Bills and counting |
+| P627 | PY3 divmod into a pair | Weeks and odd nights | py 2 | 1 - Bills and counting |
+| P628 | PY3 round up with floor division | How many rooms does the party need? | py 3 | 1 - Bills and counting |
+| P629 | PY3 every nth free by floor division | Every seventh night is free | py 4 | 1 - Bills and counting |
+| P630 | PY4 count while a running total fits | How many nights can they afford? | py 5 | 1 - Bills and counting |
+| P631 | PY3 partition at the first separator | A request and its detail | py 6 | 2 - Names and notes |
+| P632 | PY3 or as a fallback for an empty value | Dear whoever you are | py 7 | 2 - Names and notes |
+| P633 | PY3 capitalise each word of a name | A name typed in a hurry | py 8 | 2 - Names and notes |
+| P634 | PY3 money text to whole cents | Money as text, cents as a number | py 9 | 2 - Names and notes |
+| P635 | PY3 join numbers after str | The rooms on one line | py 10 | 2 - Names and notes |
+| P636 | PY4 every position of a value | Which rooms are free? | py 11 | 3 - Rooms and rotas |
+| P637 | PY3 rotate a list, wrapping round | The rota moves on | py 12 | 3 - Rooms and rotas |
+| P638 | PY4 nested loops building labels | Every door in the building | py 13 | 3 - Rooms and rotas |
+| P639 | PY3 reverse into a new list | Starting from the far end | py 14 | 3 - Rooms and rotas |
+| P640 | PY4 sum from pairs with a filter | One guest's nights, added up | py 15 | 3 - Rooms and rotas |
 
 ## Retired
 
@@ -406,6 +408,36 @@ they still count as asked.
 | Q729 | VIEW views | Stop, do not delete **(script)** | - | retired |
 | Q730 | IDX partial index | One open admission per patient **(script)** | - | retired |
 | Q731 | TMP temp tables | Scratch space that leaves no trace **(script)** | - | retired |
+| Q1342 | ROOMS join with GROUP BY and MIN, MAX | What each hotel has to sell | - | retired |
+| Q1343 | NEVER LEFT JOIN counting the unmatched | Guests on the books who have never booked | - | retired |
+| Q1344 | NIGHTS julianday difference summed | Room-nights sold in 2025 | - | retired |
+| Q1345 | INHOUSE half-open range on a night | Who was in the house on New Year's Eve | - | retired |
+| Q1346 | LEAD date() of a timestamp before subtracting | How far ahead each channel books | - | retired |
+| Q1347 | OVERLAP two ranges inside EXISTS | Cancelled nights that were sold again | - | retired |
+| Q1348 | SIGNS conditional sums by sign | Money taken and money given back | - | retired |
+| Q1349 | EXTRAS LEFT JOIN to an aggregate with COALESCE | What a stay spends on extras | - | retired |
+| Q1350 | REVIEWED COUNT(column) beside COUNT(*) | How many stays are reviewed, and how well | - | retired |
+| Q1351 | GALA INSERT SELECT with a computed amount | The gala dinner goes on every bill **(script)** | - | retired |
+| Q1352 | PROMOTE UPDATE from GROUP BY HAVING | A hundred nights makes you gold **(script)** | - | retired |
+| Q1353 | PURGE DELETE with NOT EXISTS and a date | Old names that never became guests **(script)** | - | retired |
+| Q1354 | CANCEL two tables in one transaction | A cancellation, and the deposit back **(script)** | - | retired |
+| Q1355 | MOVE split a row, copy before changing | A guest who changed rooms mid-stay **(script)** | - | retired |
+| Q1356 | GUARD BEFORE INSERT trigger with RAISE | No room is sold twice **(script)** | - | retired |
+| P611 | PY3 days between two dates | How many nights is the stay? | - | retired |
+| P612 | PY3 add days to a date | The morning they leave | - | retired |
+| P613 | PY3 weekday of a date | What day of the week is that? | - | retired |
+| P614 | PY3 list of dates from a range | Every night of the stay | - | retired |
+| P615 | PY3 overlap of two ranges | Do the two stays collide? | - | retired |
+| P616 | PY3 split an amount exactly | A bill split so that it adds up | - | retired |
+| P617 | PY3 two counts returned together | Adults and children in the party | - | retired |
+| P618 | PY4 first name plus a count | A booking's guests on one line | - | retired |
+| P619 | PY4 shape of an email address | Does that look like an email address? | - | retired |
+| P620 | PY3 truncate a list with a count | A long guest list, cut short | - | retired |
+| P621 | PY3 slice from the end | Which floor is the room on? | - | retired |
+| P622 | PY3 next in a list, stopping at the top | An upgrade, if there is one | - | retired |
+| P623 | PY3 filter by odd or even | The rooms that face the sea | - | retired |
+| P624 | PY3 flatten a list of lists | Every room on every floor | - | retired |
+| P625 | PY3 swap two positions on a copy | Two guests swap rooms | - | retired |
 | Q1327 | LIKE1 one-character wildcard | First names of exactly four letters | - | retired |
 | Q1328 | GLOB character class | Postcode areas that end in two digits | - | retired |
 | Q1329 | PAD printf zero-padding, joined by concatenation | A reference number for the reminder letters | - | retired |
@@ -2850,7 +2882,7 @@ they still count as asked.
   from a range, a weekend test after normalising; chunks of n, a list
   halved with the extra to the front, an insert after a value, all()
   against an allowed list, numbers right-aligned to the widest.
-- **Q1342-Q1356 and P611-P625** current set, on a NEW schema: a small
+- **Q1342-Q1356 and P611-P625** retired set, on a NEW schema: a small
   group of hotels (7 tables, SEED 1356) replacing the parcel courier after
   eight sets. Eight hotels in four towns, one that closes and one that
   opens during the data; rooms with a list price; guests with a NULL tier
@@ -2883,3 +2915,30 @@ they still count as asked.
   the floor from a room number by a slice from the end, the next type up
   stopping at the top, odd-numbered rooms, a list of lists flattened by
   extend, two positions swapped by a paired assignment.
+- **Q1357-Q1371 and P626-P640** current set, the second on the hotel
+  schema. Ten SQL questions on tools new to these tables and five that
+  return to what the first set found hard. Reading: the two dearest rooms
+  of each hotel by RANK with ties sharing a place, rooms free for
+  2026-07-10 to 07-14 by NOT EXISTS over an overlap, every room at
+  Fellfoot Inn with its stays in a week by a LEFT JOIN whose conditions
+  sit in the ON, the days between guest 306's stays by LAG, guests banded
+  by number of stays with a CTE grouped twice, guests who stayed in 2025
+  and have no live booking since by EXISTS and NOT EXISTS, discounts per
+  channel as SUM of gap times nights, extras and payments per hotel
+  without the fan-out of joining both, monthly takings for 2025 with a
+  running total by SUM(SUM()) OVER. Changing rows: two reviews upserted
+  with ON CONFLICT (booking_id) DO UPDATE, Spa Gardens' list prices reset
+  to each room's own average rate by a correlated subquery, all but the
+  latest review per guest and hotel deleted by ROW_NUMBER. Procedures:
+  guests 1218 and 1425 merged in the order foreign keys allow, proved by
+  a ROLLBACK; booking 15170 shortened and then settled by a payment
+  computed in the INSERT; and a rate_log table filled by an AFTER UPDATE
+  OF trigger with a WHEN clause, tested by three updates. Python,
+  everyday tasks in the hotel's terms: a running bill, weeks and nights
+  by divmod, rooms needed by rounding up, every seventh night free, a
+  budget counted night by night; a request split by partition, a
+  greeting with or as a fallback, a name capitalised word by word, money
+  text to cents without float, numbers joined after str; every position
+  of a value by enumerate, a rota rotated with a remainder, door numbers
+  by nested loops, a list reversed into a new one, pairs unpacked and
+  summed.
