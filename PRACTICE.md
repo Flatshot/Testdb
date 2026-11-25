@@ -1,20 +1,25 @@
 # SQL and Python practice exercises
 
-Thirty questions in two tabs. **Fifteen SQL** on the hotel schema, the third set
-on it: ten questions use a tool these tables have not met -- a window aggregate,
-a recursive CTE, string functions, a self-join, COUNT(DISTINCT), strftime, UNION
-ALL, CASE inside an UPDATE, UPDATE ... FROM, a view, CREATE TABLE ... AS SELECT
--- and five return to what the second set found hard: what a window is
-partitioned by, where an outer join's conditions go, a total over a grouped
-query, the fan-out of two child tables, and the upsert. Two tools per question,
-with the tiers named by task. Nine read the data and **six change it**: three
-single statements and three procedures of several steps. The prompts name the
-tool but do not write the statement. **Fifteen Python** at the easy level of the
-last thirteen sets: everyday tasks over plain lists and strings in the hotel's
-terms, with no maths, no dicts and nothing to import.
+Thirty questions in two tabs. **Fifteen SQL** on the hotel schema, the fourth
+set on it. Ten questions go back to what the third set found hard, each in a new
+task: a table joined to itself, a test on a whole group in HAVING, a DELETE
+aimed at the table the rows are really in, a view that later statements read,
+and carrying every condition a task states into the statement, down to the exact
+value. Five use a tool these tables have not met: a row value, INTERSECT and
+EXCEPT, a window frame, ALTER TABLE ... ADD COLUMN, and a unique index. Two
+tools per question, with the tiers named by task. Nine read the data and **six
+change it**: three single statements and three procedures of several steps. The
+prompts name the tool but do not write the statement. **Fifteen Python** at the
+easy level of the last fourteen sets: everyday tasks over plain lists and
+strings in the hotel's terms, with no maths, no dicts and nothing to import.
 
-**The database is the one the last two sets used.** If the app offers to re-seed
-when it starts, accept; from a terminal it is `python seed.py`.
+**The database is the one the last three sets used.** If the app offers to
+re-seed when it starts, accept; from a terminal it is `python seed.py`.
+
+**The four statuses of a booking are 'booked', 'stayed', 'cancelled' and
+'no_show'**, and there are no others: a booking not yet arrived is 'booked', and
+one that was slept in is 'stayed', whether the guest has left or is still in the
+house.
 
 | Stage | SQL questions |
 |---|---|
@@ -26,9 +31,9 @@ when it starts, accept; from a terminal it is `python seed.py`.
 
 | Stage | Python questions |
 |---|---|
-| 1 - Numbers at the desk | 1-5 |
-| 2 - Words and names | 6-10 |
-| 3 - Lists on the board | 11-15 |
+| 1 - Times and numbers | 1-5 |
+| 2 - Text as it is typed | 6-10 |
+| 3 - Lists and registers | 11-15 |
 
 ## The schema
 
@@ -77,12 +82,11 @@ is in `schema.sql`.
 
 ## The writable stage
 
-Questions 10 to 15 change the data. 10 to 12 are one statement each: two UPDATEs
-and a DELETE. 13 to 15 are **procedures**. SQLite has no CREATE PROCEDURE,
-variables, loops or TRY/CATCH; what it has instead is the transaction, whose
-steps all happen or none do, the view, which is a query stored under a name, and
-the trigger body, which is stored in the database and runs when something calls
-it.
+Questions 10 to 15 change the data. 10 to 12 are one statement each: a DELETE
+and two UPDATEs. 13 to 15 are **procedures**. SQLite has no CREATE PROCEDURE,
+variables, loops or TRY/CATCH; what it has instead is a script whose steps
+depend on each other, the view, which is a query stored under a name, and the
+index, which is a rule stored in the database and enforced from then on.
 
 **How they run.** Press Run and your script executes, statement by statement, in
 a private in-memory copy of the database. Nothing you write can reach the real
@@ -96,76 +100,83 @@ Check always grades a fresh copy, so nothing you ran earlier can affect the
 grade.
 
 **Start each statement on a new line.** The script is split where a line ends a
-complete statement, so `BEGIN;` and `COMMIT;` get lines of their own. A
-statement may run over several lines, and a CREATE TRIGGER, with the semicolons
-inside its body, is kept whole.
+complete statement. A statement may run over several lines.
 
-**Transactions.** `BEGIN;` opens one and `COMMIT;` makes everything since
-permanent. The sandbox does not commit for you. After a script that creates a
-view, a table or a trigger, a second Run fails because the first one's is still
-there: press Reset. The same goes for a script that stopped half-way with its
-transaction open.
+**Run it twice and it fails.** After a script that adds a column, creates a view
+or creates an index, a second Run stops because the first one's is still there:
+press Reset. A statement that breaks a CHECK or a foreign key stops the script
+at that statement, and whatever ran before it has already happened.
 
-**Driver statements.** Question 14 issues a `ROLLBACK` *after* your script:
-committed work stands, and a transaction left open is undone, tables and all.
-Question 15 inserts four charges: 1,850 and 6,000 cents for booking 15170, which
-has extras already, and 1,400 and 900 for booking 14148, which has none, so the
-trigger meets both of its cases. Questions 10 to 13 are graded on what your
-script leaves behind.
+**Before a DELETE or an UPDATE, run its WHERE as a SELECT COUNT(*).** The
+figures to expect are in the list below: 34 charges in question 10, 176 guests
+in question 11, 46 bookings in question 12.
+
+**Driver statements.** Question 15 runs six statements *after* your script.
+Three guests are inserted: one with an email another guest has, one with no
+email, one with a new email. Then, for room 170 on 2026-07-19, which has a live
+booking already: a second live booking, a cancelled booking, and an UPDATE that
+tries to turn the cancelled one back into a live one. The first, fourth and
+sixth must be refused. Questions 10 to 14 are graded on what your script leaves
+behind.
 
 | # | Construct |
 |---|---|
-| 10 | `UPDATE rooms SET rack_cents = rack_cents + CASE kind WHEN '...' THEN ... WHEN '...' THEN ... ELSE ... END WHERE hotel_id = 8` |
-| 11 | `UPDATE bookings SET rate_cents = r.rack_cents FROM rooms r WHERE r.room_id = bookings.room_id AND r.hotel_id = 6 AND bookings.status = '...' AND bookings.rate_cents > r.rack_cents` |
-| 12 | `DELETE FROM payments WHERE booking_id IN (SELECT booking_id FROM payments GROUP BY booking_id HAVING SUM(amount_cents) = 0)` |
-| 13 | `CREATE VIEW bills AS SELECT b.booking_id, b.check_out, nights * b.rate_cents AS room_cents, COALESCE((SELECT SUM ... charges), 0) AS extras_cents, COALESCE((SELECT SUM ... payments), 0) AS paid_cents FROM bookings b WHERE ...; INSERT INTO payments (...) SELECT booking_id, '...', room_cents + extras_cents - paid_cents, 'card' FROM bills WHERE ...` |
-| 14 | `BEGIN; CREATE TABLE old_bookings AS SELECT b.* FROM bookings b JOIN rooms r ... WHERE ...; CREATE TABLE old_payments AS SELECT * FROM payments WHERE booking_id IN (SELECT booking_id FROM old_bookings); DELETE FROM payments WHERE ...; DELETE FROM bookings WHERE ...; COMMIT;` |
-| 15 | `CREATE TABLE extras_totals (booking_id INTEGER PRIMARY KEY, total_cents INTEGER NOT NULL); INSERT INTO extras_totals SELECT booking_id, SUM(amount_cents) FROM charges GROUP BY booking_id; CREATE TRIGGER ... AFTER INSERT ON charges BEGIN INSERT INTO extras_totals ... VALUES (NEW.booking_id, NEW.amount_cents) ON CONFLICT (booking_id) DO UPDATE SET total_cents = total_cents + excluded.total_cents; END` |
+| 10 | `DELETE FROM charges WHERE kind = '...' AND charged_on >= '...' AND booking_id IN (SELECT b.booking_id FROM bookings b JOIN guests g ON ... JOIN rooms r ON ... WHERE g.tier = '...' AND r.hotel_id = 5)` |
+| 11 | `UPDATE guests SET tier = 'silver' WHERE tier IS NULL AND guest_id IN (SELECT b.guest_id FROM bookings b JOIN rooms r ON ... WHERE b.status = '...' GROUP BY b.guest_id HAVING COUNT(DISTINCT r.hotel_id) >= 7)` |
+| 12 | `UPDATE bookings SET status = 'cancelled', cancelled_at = '...' WHERE status = '...' AND check_in < '...' AND check_out > '...' AND room_id IN (SELECT room_id FROM rooms WHERE hotel_id = 7)` |
+| 13 | `ALTER TABLE guests ADD COLUMN last_stay TEXT; UPDATE guests SET last_stay = (SELECT MAX(b.check_out) FROM bookings b WHERE b.guest_id = guests.guest_id AND ...); UPDATE guests SET email = NULL WHERE last_stay < '...' OR last_stay IS NULL` |
+| 14 | `CREATE VIEW hotel_scores AS SELECT r.hotel_id, COUNT(*) AS reviews, AVG(v.score) AS avg_score FROM reviews v JOIN bookings b ON ... JOIN rooms r ON ... GROUP BY r.hotel_id; UPDATE hotels SET stars = stars + 1 WHERE stars < 5 AND hotel_id IN (SELECT hotel_id FROM hotel_scores WHERE ...); UPDATE hotels SET stars = stars - 1 WHERE stars > 2 AND hotel_id IN (SELECT hotel_id FROM hotel_scores WHERE ...)` |
+| 15 | `UPDATE guests SET email = NULL WHERE EXISTS (SELECT 1 FROM guests o WHERE o.email = guests.email AND o.guest_id < guests.guest_id); CREATE UNIQUE INDEX ... ON guests (email); CREATE UNIQUE INDEX ... ON bookings (room_id, check_in) WHERE status IN ('...', '...')` |
 
 ## Things the data does on purpose
 
-- **8 hotels in four towns, with 176 rooms between them.** Abbey Steps, hotel 4,
-  closed on 2026-03-01: it sold seven rooms on its last night, 28 February, and
-  none after, the zeros question 3 has to keep. Fellfoot Inn, hotel 8, opened on
-  2025-09-01 with 14 rooms.
-- **Each hotel has its own level of prices.** The average list price runs from
-  5,821 cents at Fellfoot Inn to 14,382 at Spa Gardens. Fourteen rooms cost more
-  than one and a quarter times their own hotel's average; measured against the
-  whole group's average it would be 43, 32 of them at Spa Gardens, question 1.
-- **1,501 guests have stayed, at 6,728 pairs of guest and hotel.** 34 times a
-  guest began two stays at one hotel on the same day, which is why question 2
-  names booking_id as the tiebreak.
-- **279 of the 1,600 guests gave no email.** The other 1,321 use four domains,
-  question 4.
-- **Booking ids do not run in date order.** 332 times a guest checked out of one
-  stay and into another on the same day; three of those were the same room,
-  question 5, and in all three the later stay has the lower booking_id.
-- **71 guests have stayed at all eight hotels**, the keenest in eleven stays.
-  560 guests have eight stays or more, the number question 6 gives if stays are
-  counted in place of hotels.
-- **9,191 stays began in 2025**, most on a Friday or a Saturday, question 7.
-  Their room revenue was 275,230,200 cents, 48.9 per cent of it booked on the
-  web, question 8.
-- **No two charges are alike in every column, but many look alike without their
-  date.** Booking 15410 has three breakfasts at 1,200 cents and three nights'
-  parking at 1,000; its bill has twelve lines and plain UNION leaves eight,
-  question 9.
-- **A rate is not always the list price, in either direction.** 149 of Station
-  House's 206 bookings not yet arrived were agreed above it, by 121,100 cents in
-  all, and 51 below it, question 11.
-- **Refunds are negative payments, and all 978 of them belong to cancelled
-  bookings**, each cancelling one deposit exactly. Another 258 cancelled
-  bookings kept their deposit, 2,315,000 cents between them, question 12.
-- **82 stays are in the house when the data ends and 79 of them owe money**,
-  4,009,680 cents in all. 886 stays that have already left also owe something,
-  question 13.
-- **Abbey Steps has 61 cancelled bookings and 14 no-shows**, with 101 payments
-  worth 121,600 cents. A booking that never became a stay has no charges and no
-  review, so payments are the only child rows in the way, question 14.
-- **1,471 of the 13,625 stays have no charge at all.** Booking 14148 is one;
-  booking 15170 has 40,900 cents of extras, question 15.
+- **8 hotels in four towns, with 176 rooms between them.** Many rooms are alike:
+  84 pairs share a hotel, a kind, a floor and a list price, 27 of them at
+  Lakeside Lodge, and a self-join that does not order the pair finds 168,
+  question 1.
+- **February is quiet.** Eleven rooms had fewer than two stays arriving in
+  February 2026, and one of them, 312 at Spa Gardens, had none, the zero
+  question 2 has to show as 0.
+- **A room's top rate is often an ordinary rate somewhere else.** Fellfoot Inn's
+  fourteen rooms reached their best price on 25 stays; 129 stays there were at a
+  rate that is the record for one room or another, question 3.
+- **39 times a guest held two bookings for the same arrival day, cancelled one
+  and stayed in the other.** In 24 of them the stay was the cheaper of the two.
+  Five more cancelled bookings share a guest and a day with a booking that was
+  itself cancelled or has not arrived, question 4.
+- **Only 37 guests have kept to one hotel, and only five of those have stayed
+  three times or more.** 1,635 pairs of guest and hotel have three stays or
+  more, which is what question 5 counts if it is grouped by both.
+- **286 guests have stayed at both Keswick hotels, 37 of them never at Spa
+  Gardens.** 223 have stayed at one or the other and never at Spa Gardens,
+  question 6.
+- **Charges exist only on stays.** Sixteen stays ran up extras of more than
+  twice the cost of the room; only three did it with a single charge, question
+  7.
+- **Eighteen months of stays, January 2025 to June 2026**, with room revenue
+  from 14,211,150 cents in February 2025 to 33,071,850 in July 2025, question 8.
+  2026 is ahead of 2025 in every month from January to May and 15 stays behind
+  in June, question 9.
+- **Gold members at Spa Gardens have 129 parking charges, 34 of them dated
+  2026**, 61,200 cents, question 10.
+- **225 guests have stayed at seven or more different hotels.** 176 are in no
+  tier, 37 are silver already and 12 are gold, question 11.
+- **Lakeside Lodge has 280 bookings not yet arrived. 46 of them include a night
+  between 3 and 16 August 2026**: 38 arrive in that fortnight and eight arrive
+  before it and are still there. Five more check out on the 3rd and two check in
+  on the 17th, and are not affected, question 12.
+- **99 of the 1,600 guests have never stayed, 82 of them with an email.**
+  Another 145 guests with an email last left before 2026, question 13.
+- **Average review scores run from 3.202 at Fellfoot Inn to 4.6 at Spa
+  Gardens.** Castle View has 4.115 from 723 reviews and Lakeside Lodge 4.193
+  from 513; The Old Mill's 3.777 and Station House's 3.753 are below 3.78 and
+  Harbour Lights' 3.794 is not, question 14.
+- **One email address is on two guests**, 870 and 1502, both called Ottilie
+  Bianchi. 279 guests have no email. No room has two live bookings arriving on
+  the same day, but 655 times a room and a day are shared by two bookings of
+  which at least one is cancelled or a no-show, question 15.
 - **The data ends at 2026-06-30 23:59**, so a booking with status 'booked' is
-  always in the future and a payment at 23:30 that night is the last of the day.
+  always in the future, the latest of them arriving in February 2027.
 
 ## How the Python questions are graded
 
@@ -173,16 +184,17 @@ Every question in this set is a **function**: the editor defines a function with
 the name the question gives, Run calls it once for each test input and shows
 every call and its result in the output pane, and Check compares each result
 with the reference function's. Values are compared, not their printed form --
-but the type counts: a tuple is not a list, 2.0 is not 2, and the string 'yes'
-is not True. A function that prints its answer instead of returning it returns
-None, and None matches nothing. The inputs are everyday values in the hotel's
-terms: whole numbers of nights, hours and cents for questions 1 to 5, text as
-guests and agents type it for 6 to 10, lists of names, rooms and log entries for
-11 to 15. Each prompt shows one or two example calls with their answers, and Run
+but the type counts: a tuple is not a list, 8500.0 is not 8500, and the string
+'yes' is not True. A function that prints its answer instead of returning it
+returns None, and None matches nothing. The inputs are everyday values in the
+hotel's terms: clock times, cents and meter readings for questions 1 to 5, text
+as guests and staff type it for 6 to 10, lists of names, scores and rooms for 11
+to 15. Each prompt shows one or two example calls with their answers, and Run
 adds a few more, including the empty list or the edge the question warns about.
 
-**Nothing needs importing in this set.** Question 4 returns None for an empty
-list, and question 15 returns a list of lists.
+**Nothing needs importing in this set.** Question 4 returns None when nothing
+passes, question 14 is given a list of lists, and questions 8 and 13 return True
+or False, not 1 or 0.
 
 Your code runs in a separate interpreter with a five-second limit, so a loop
 that never ends is stopped and reported, not fatal. It cannot see the database,
@@ -193,462 +205,468 @@ of the line above.
 
 ## 1 - Hotels and their rooms (3)
 
-An average written beside every row by a window with a partition and no order, a
-numbering that restarts for every pair of guest and hotel, and a list of dates
-made by a recursive CTE so that an outer join has something to start from.
+A table joined to itself with each pair listed once, an outer join whose count
+is tested in HAVING, and a row value: two columns compared at once with a
+subquery that returns two.
 
-1. **Rooms priced well above their own hotel** (Q1372)
+1. **Rooms that can stand in for each other** (Q1387)
 
-   Each hotel has its own level of prices: a dear room at Fellfoot Inn costs
-   less than a cheap one at Spa Gardens. List the rooms whose list price
-   (rack_cents) is more than one and a quarter times the average list price of
-   THEIR OWN hotel, with the hotel's name and that average beside them. A window
-   aggregate: an average with OVER and a partition, but no ORDER BY, gives every
-   row its group's figure without collapsing the rows. As with any window, the
-   test on it goes in an outer query. The average is compared to two decimal
-   places.
+   When a room is out of order the desk moves its guest to one exactly like it.
+   List every pair of interchangeable rooms: two different rooms in the same
+   hotel, of the same kind, on the same floor, with the same list price
+   (rack_cents). A self-join again: rooms joined to itself under two aliases.
+   Last time the dates said which copy played which part. Here nothing does, and
+   a plain 'not the same room' lists every pair twice, once each way round. Each
+   pair must appear once, the room with the lower room_id first.
 
-   *Return: hotel, room_no, rack_cents, hotel_avg*
+   *Return: hotel, first_room, second_room, rack_cents -- the hotel's name and the two room_no values*
 
-2. **How each hotel's guests first found it** (Q1373)
+2. **Rooms February nearly forgot** (Q1388)
 
-   A guest's first stay at a hotel says how that hotel won them. Take stays only
-   (status 'stayed'). For each guest and each hotel, find the first stay that
-   guest made AT THAT HOTEL: the earliest check_in, and the lower booking_id if
-   two begin on the same day. Then count those first stays by hotel name and
-   channel. A numbering window function, whose numbering restarts for every pair
-   of guest and hotel -- not for every guest, and not for every hotel.
+   February is the quiet month. Which rooms, in any hotel, had fewer than two
+   stays (status 'stayed') ARRIVING in February 2026 -- check_in from 2026-02-01
+   up to but not including 2026-03-01? A room with no such stay at all belongs
+   in the answer, with 0. Two things met before, now together: an outer join
+   from the rooms, with the conditions on the booking written where an empty
+   room survives them, and a test on the group's count, which belongs in HAVING.
+   Mind what you count: one of the two ways of counting gives an empty room 1.
 
-   *Return: hotel, channel, first_stays*
+   *Return: hotel, room_no, stays -- hotel is its name*
 
-3. **Abbey Steps, night by night, to the end** (Q1374)
+3. **The best price each room ever fetched** (Q1389)
 
-   Abbey Steps is hotel 4 and closed on 2026-03-01. For each of the ten nights
-   from 2026-02-23 to 2026-03-04: how many of its rooms were occupied by a stay
-   (status 'stayed')? A guest is in the house on night d when check_in <= d <
-   check_out. Every one of the ten nights must have a row, the empty ones with
-   0. No table holds one row per date, so make one: a recursive CTE (WITH
-   RECURSIVE) begins with a first row and keeps adding a day to the row before
-   until a stop date. Then an outer join from the nights to the bookings -- and
-   remember where the conditions on the booking have to be written for an empty
-   night to survive them.
+   For each room at Fellfoot Inn (hotel 8), find the stay or stays (status
+   'stayed') that paid the highest rate_cents that room has ever been let for. A
+   room whose top rate was paid more than once has a row for each of those
+   stays. A grouped query gives each room its top rate. The bookings wanted are
+   those that match it on BOTH things at once, the room and the rate. A row
+   value -- two columns in brackets -- can be compared with a subquery that
+   returns two columns.
 
-   *Return: night, rooms_sold*
+   *Return: room_no, booking_id, check_in, rate_cents*
 
 ## 2 - Guests (3)
 
-instr and substr to take a text apart, the bookings table joined to itself under
-two names, and COUNT(DISTINCT) in a HAVING for the guests who have been
-everywhere.
+The self-join again with a status for each alias, two tests on one group in a
+single HAVING, and INTERSECT and EXCEPT to compare whole lists.
 
-4. **Where the guests' email lives** (Q1375)
+4. **Two bookings held, one let go** (Q1390)
 
-   The part of an email address after the @ is its domain. For each domain: how
-   many guests use it, and how many of those are in the loyalty scheme (tier is
-   not NULL). Guests with no email are left out altogether, not shown as a group
-   of their own. Two string functions: one finds the position of a character
-   inside a text, the other takes the part of a text from a given position on.
+   Some guests hold two bookings for the same arrival day and let one of them
+   go. Find every pair of bookings by the same guest with the same check_in in
+   which one was cancelled (status 'cancelled') and the other became a stay
+   (status 'stayed'). The self-join once more: bookings under two aliases, and
+   this time it is the status that gives each copy its part, so every pair comes
+   out once. Put the nightly rate of the booking that was dropped beside the
+   rate of the one that was kept.
 
-   *Return: domain, guests, members*
+   *Return: guest_id, check_in, cancelled_booking, stay_booking, cancelled_rate, stay_rate*
 
-5. **A stay extended by booking again** (Q1376)
+5. **Guests who never try anywhere else** (Q1391)
 
-   When a guest extends a stay the desk sometimes enters a second booking
-   instead of changing the first: the same guest, in the same room, checking in
-   on the very day the first booking checks out. Find those pairs, both bookings
-   being stays (status 'stayed'). A self-join: the bookings table joined to
-   itself under two aliases, one playing the earlier stay and one the later.
-   Booking ids do not run in date order, so let the dates decide which is which.
+   Most guests move round the group. Which guests have stayed (status 'stayed')
+   at least three times and always at the SAME hotel? Two tests on one group,
+   both in the same HAVING: one on how many stays the guest has, one on how many
+   DIFFERENT hotels they were at. The group is the guest, not the guest and the
+   hotel. Give the hotel's name as well; in a group with only one hotel in it,
+   MIN or MAX of the name is that hotel.
 
-   *Return: guest_id, room_id, first_booking, second_booking, check_in, check_out -- the check_in of the earlier booking and the check_out of the later*
+   *Return: guest_id, name, hotel, stays -- name is the guest's, hotel is the hotel's name*
 
-6. **Guests who have tried every hotel** (Q1377)
+6. **Both Keswick hotels, never Spa Gardens** (Q1392)
 
-   Which guests have stayed (status 'stayed') at every hotel the group has ever
-   had, Abbey Steps included? Give each with their total number of stays. Do not
-   type the number of hotels: compare the count of DIFFERENT hotels a guest has
-   stayed at with a subquery that counts the hotels table. The test is on a
-   group, so it belongs in HAVING.
+   Keswick has two hotels, Lakeside Lodge (hotel 7) and Fellfoot Inn (hotel 8).
+   Which guests have stayed (status 'stayed') at BOTH of them and have never
+   stayed at Spa Gardens (hotel 5)? UNION ALL stacked one list on another; its
+   relatives compare lists. INTERSECT keeps what is in both of two lists, and
+   EXCEPT takes one list away from another. Three lists of guest_ids, one for
+   each hotel, with those two words between them.
 
-   *Return: guest_id, name, stays*
+   *Return: guest_id*
 
 ## 3 - Money and time (3)
 
-strftime to fold a year of dates into seven weekdays, a window with empty
-brackets for each group's share of the whole, and UNION ALL to stack three
-tables into one bill.
+A sum that has to be tested in HAVING because no single row can answer, a window
+frame for a moving average, and a CTE joined to itself to set one year beside
+another.
 
-7. **Which day of the week guests arrive** (Q1378)
+7. **Stays where the extras outran the room** (Q1393)
 
-   For stays (status 'stayed') that began in 2025: group them by the day of the
-   week of check_in, and give the number of arrivals and the average length of
-   stay in nights. strftime turns a date into text in a format you choose, and
-   one of its codes is the day of the week as a digit, '0' for Sunday to '6' for
-   Saturday. Return the digit as strftime gives it, which is text. The average
-   is compared to two decimal places.
+   Now and then a guest takes a cheap room and lives well. Find the bookings
+   whose extras -- ALL their charges added together -- come to more than twice
+   the cost of the room, which is nights times rate_cents. Charges exist only on
+   stays, so no status test is needed. The test is on a booking's charges taken
+   together, a whole group of rows, so it cannot be a WHERE on one charge:
+   group, and test the sum in HAVING.
 
-   *Return: weekday, arrivals, avg_nights*
+   *Return: booking_id, room_cents, extras_cents*
 
-8. **Each channel's share of the room revenue** (Q1379)
+8. **A three-month moving average of room revenue** (Q1394)
 
-   For stays (status 'stayed') that began in 2025, room revenue is nights times
-   rate_cents. For each channel: its room revenue, and that revenue as a
-   percentage of all four channels together, rounded to one decimal place. The
-   total has to appear on every row beside the group's own figure. A window with
-   empty brackets, OVER (), spans the whole result, and it can be laid over a
-   grouped query as the running total was last time.
+   Room revenue is nights times rate_cents, for stays (status 'stayed'). Give it
+   for each month of check_in, written 'YYYY-MM', for all eighteen months of
+   data. Beside it put the average of that month and the two months before it, a
+   three-month moving average, which smooths the seasons out. The first month
+   has nothing before it and averages itself alone; the second averages two. A
+   window frame: after the window's ORDER BY, a ROWS BETWEEN clause says how far
+   back from the current row the window reaches. It is laid over a grouped
+   query, as the running total was. The average is compared to two decimal
+   places.
 
-   *Return: channel, room_cents, pct*
+   *Return: month, room_cents, avg3*
 
-9. **The bill for booking 15410, line by line** (Q1380)
+9. **This year against last, month by month** (Q1395)
 
-   Print the bill for booking 15410, three nights at Station House. One line for
-   the room: the item 'room' and nights times rate_cents as the amount. One line
-   for EVERY charge, the item being its kind. One line for EVERY payment, the
-   item 'paid' and the amount made NEGATIVE, so that a settled bill adds up to
-   nothing. Three SELECTs stacked into one result. There are two words for
-   stacking, and one of them quietly throws away lines that look alike: this
-   guest had breakfast three times.
+   Is 2026 ahead of 2025? Count the stays (status 'stayed') by the year and the
+   month of check_in, once, in a CTE. Then join that CTE to ITSELF: one alias
+   plays 2025 and the other 2026, matched month to month, for January to June,
+   the six months 2026 has. A named query can be joined to itself exactly as a
+   table can. Give the month as strftime writes it, two characters of text, and
+   the change as 2026 minus 2025.
 
-   *Return: item, cents*
+   *Return: month, stays_2025, stays_2026, change*
 
 ## 4 - Changing rows (3)
 
-Writable, one statement each: an UPDATE whose amount is chosen by CASE, an
-UPDATE that joins a second table with FROM, and a DELETE that removes whole
-groups picked by HAVING.
+Writable, one statement each: a DELETE from a child table chosen by facts three
+tables away, an UPDATE fed by GROUP BY and HAVING that must leave some rows
+alone, and an UPDATE of two columns with four conditions to carry.
 
-10. **Fellfoot Inn puts its prices up, by kind of room** (Q1381)
+10. **Gold members park free at Spa Gardens** (Q1396)
 
-    Fellfoot Inn (hotel 8) raises its list prices: singles by 250 cents, twins
-    by 400, and every other kind of room by 600. In ONE UPDATE statement. A CASE
-    expression can stand wherever a value can, including on the right of SET,
-    and its ELSE takes care of 'every other'. No other hotel's prices change.
+    Spa Gardens (hotel 5) has decided that gold members park free, back-dated to
+    the start of 2026. Delete every charge of kind 'parking' with a charged_on
+    of 2026-01-01 or later that sits on a booking at Spa Gardens made by a guest
+    whose tier is 'gold'. The rows to go are charges and nothing else: the
+    bookings, the guests and all their other charges stay. But the facts that
+    pick them out are three tables away -- the tier is on the guest and the
+    hotel is on the room -- so they are reached through a subquery on
+    booking_id. One statement.
 
-    *Checked: rooms and total list price by kind, for Fellfoot Inn and for the other hotels together*
+    *Checked: charges, split by Spa Gardens or not, gold or not, and kind: how many, their total, and how many are dated 2026*
 
-11. **Nobody pays over the list price at Station House** (Q1382)
+11. **Seven hotels makes you silver** (Q1397)
 
-    Station House (hotel 6) has promised that no future guest will pay more than
-    the list price. For its bookings not yet arrived (status 'booked') whose
-    rate_cents is above the rack_cents of the room booked, bring the rate down
-    to that list price. Rates already at or below it stay as they are, and so
-    does every other hotel. The new value lives in another table: UPDATE ...
-    FROM joins that table into the UPDATE, so that SET can use its columns
-    directly. It does with a join what the correlated subquery did last time.
+    The loyalty scheme gets a new way in: a guest who has stayed (status
+    'stayed') at seven or more DIFFERENT hotels becomes 'silver'. It applies
+    only to guests who are in no tier yet (tier is NULL). Nobody who is already
+    silver or gold is touched, least of all moved down. Find the guests with
+    GROUP BY and HAVING, as a list of guest_ids, and let one UPDATE of the
+    guests table use the list.
 
-    *Checked: for Station House and for the other hotels together, by status: bookings, the total of their rates, and how many are above the list price*
+    *Checked: for each tier, the number of guests and the sum of their guest_ids*
 
-12. **Deposits paid and refunded in full** (Q1383)
+12. **Lakeside Lodge shuts for a fortnight** (Q1398)
 
-    When a booking is cancelled in good time its deposit is refunded, and its
-    two payments -- one positive, one negative -- add up to nothing. The
-    accountant wants those rows gone: delete every payment that belongs to a
-    booking whose payments sum to exactly zero. A booking whose payments do not
-    cancel out keeps all of them, and that includes the cancelled bookings where
-    the deposit was kept. The test is on a whole group of rows, so find the
-    booking_ids with GROUP BY and HAVING and let the DELETE take every row that
-    carries one of them. One statement.
+    Lakeside Lodge (hotel 7) closes for repairs. Nobody can sleep there on the
+    nights of 2026-08-03 to 2026-08-16, and it reopens on the 17th. Cancel every
+    booking not yet arrived (status 'booked') at that hotel that includes any of
+    those nights: set its status to 'cancelled' and its cancelled_at to exactly
+    '2026-06-30 12:00'. A stay is a half-open range, so a guest who checks OUT
+    on 3 August, or checks IN on 17 August, is not affected -- and one who
+    arrives on 1 August and leaves on the 5th is. The table has a CHECK that a
+    booking is cancelled exactly when cancelled_at is filled in, so both columns
+    change in the one UPDATE. Count the conditions in this paragraph before you
+    run it.
 
-    *Checked: by booking status: payment rows left, bookings with a payment left, the total left, and refunds left*
+    *Checked: for Lakeside Lodge and for the other hotels together, by status: bookings, how many have a cancelled_at, and how many were cancelled at '2026-06-30 12:00'*
 
 ## 5 - Procedures (3)
 
-Writable questions of several steps. SQLite has no CREATE PROCEDURE: a view
-stores a query for later statements to read, a transaction makes steps stand or
-fall together, and a trigger body is a procedure the database runs for you.
+Writable questions of several steps, each step needing the one before. SQLite
+has no CREATE PROCEDURE: a column is added and then filled, a view stores a
+query for later statements to read, and a unique index is a rule the database
+enforces by itself.
 
-13. **A view of every bill, and a night audit that reads it** (Q1384)
+13. **A column for the last stay, and a shorter mailing list** (Q1399)
 
-    Two steps. First create a VIEW called bills, with one row for each stay
-    (status 'stayed') and exactly these columns: booking_id, check_out,
-    room_cents (nights times rate_cents), extras_cents (the sum of its charges,
-    0 if it has none) and paid_cents (the sum of its payments, 0 if none). A
-    view is a SELECT stored under a name and read like a table. A stay has many
-    charges and many payments: beware the fan-out that counts each once for
-    every row of the other. Then use the view. For every stay still in the house
-    when the data ends (check_out after '2026-06-30') that owes money, INSERT
-    one payment of exactly what it owes, by 'card', paid_at '2026-06-30 23:30'.
-    What a stay owes is room plus extras less paid.
+    Three steps, each needing the one before. The guests table is to remember
+    when each guest last stayed. Add a column called last_stay to guests with
+    ALTER TABLE ... ADD COLUMN; it will hold a date as text, and it starts out
+    NULL in every row. Fill it: for each guest, the latest check_out among their
+    stays (status 'stayed'), left NULL for a guest who has never stayed. Then
+    use it. The mailing list is to drop everyone who has not stayed since the
+    start of 2026: set email to NULL for every guest whose last_stay is before
+    '2026-01-01', AND for every guest who has never stayed at all. Remember what
+    a comparison with NULL gives.
 
-    *Checked: the view's rows and its three totals; payments made at 23:30; stays in the house still owing; stays owing anywhere*
+    *Checked: guests; how many have a last_stay, the earliest and the latest; how many still have an email; and how many of those have no stay in 2026*
 
-14. **Abbey Steps' dead bookings leave the live tables** (Q1385)
+14. **Stars that follow the reviews** (Q1400)
 
-    Abbey Steps (hotel 4) has closed, and its bookings that never became stays
-    -- status 'cancelled' or 'no_show' -- are to move out of the live tables,
-    and their payments with them. In ONE transaction: create a table
-    old_bookings holding those booking rows, all columns; create a table
-    old_payments holding every payment of those bookings, all columns; then
-    delete the same rows from payments and from bookings. CREATE TABLE ... AS
-    SELECT makes a table out of a query's result. Two orders matter. A row has
-    to be copied before it is deleted. And foreign keys are enforced, so a
-    booking that still has payments cannot be deleted. The question then issues
-    a ROLLBACK: committed work survives it.
+    The group will let its guests decide the stars. First create a VIEW called
+    hotel_scores with one row for each hotel and exactly these columns:
+    hotel_id, reviews (how many reviews its stays have had) and avg_score (their
+    average score). A review knows its booking, a booking its room, and a room
+    its hotel. Then two UPDATEs of the hotels table, each reading the view. A
+    hotel GAINS a star if its avg_score is 4.1 or more, AND it has at least 600
+    reviews, AND it has fewer than 5 stars. A hotel LOSES a star if its
+    avg_score is below 3.78 AND it has more than 2 stars. A CHECK keeps stars
+    between 2 and 5, and one row that breaks it stops the whole statement. Five
+    conditions; each is in the statement or it is not.
 
-    *Checked: rows in old_bookings; rows and total in old_payments; rows left in bookings; rows and total left in payments*
+    *Checked: each hotel's stars, with its reviews and avg_score (to three decimal places) from the view*
 
-15. **A total of extras that keeps itself up to date** (Q1386)
+15. **Two rules the database keeps by itself** (Q1401)
 
-    The bar wants each booking's extras total without adding up its charges
-    every time. Three steps. Create a table extras_totals with booking_id as its
-    PRIMARY KEY and total_cents. Fill it from the charges already there, one row
-    for each booking that has any. Then create a trigger that fires AFTER INSERT
-    ON charges and keeps the table right: a booking already in it has the new
-    amount added to its total, and a booking not yet in it gets a row. That is
-    the upsert of the last set, written inside a trigger body, where NEW is the
-    row just inserted. The question then inserts four charges: two for booking
-    15170, which has 40,900 cents of extras already, and two for booking 14148,
-    which has none.
+    Three steps. Rule one: no two guests share an email. One address is on two
+    guests today, so first set email to NULL on every guest for whom ANOTHER
+    guest exists with the same email and a lower guest_id -- a row compared with
+    the rest of its own table, the self-join's idea inside an UPDATE. Then
+    CREATE UNIQUE INDEX on the email column of guests; NULLs never count as
+    equal, so guests with no email do not collide. Rule two: a room cannot have
+    two LIVE bookings (status 'booked' or 'stayed') arriving on the same day.
+    Cancelled bookings and no-shows often share a room and a day with a live
+    one, so this unique index, on room_id and check_in together, needs a WHERE
+    of its own: a partial index. The question then runs six statements, three of
+    which the rules must refuse.
 
-    *Checked: the number of rows in extras_totals and their grand total; the rows for bookings 15170 and 14148*
+    *Checked: guests, emails and different emails; the test guests who got in; room 170's bookings for 2026-07-19 by status*
 
 # Python
 
-## 1 - Numbers at the desk (5)
+## 1 - Times and numbers (5)
 
-An f-string with a decision in it, a format spec for commas and padding, if /
-elif / else with the boundaries on the right side, index with max, and a loop
-that answers False early and True only at the end.
+split and int on a clock time, a percentage kept in whole numbers, range
+counting down, a loop that returns at the first hit, and a loop over positions
+that must start at 1.
 
-1. **One night or two nights** (P641)
+1. **Half past two, in minutes** (P656)
 
-   A confirmation says how long the stay is. Write a function `nights_label(n)`
-   that returns the number followed by the word 'night' when n is exactly 1 and
-   'nights' for any other number, 0 included. An f-string puts the number into
-   the text.
-
-   ```
-   nights_label(1) -> '1 night'
-   nights_label(3) -> '3 nights'
-   ```
-
-   *Return: a string.*
-
-2. **Cents as a number, money as text** (P642)
-
-   Last time money text became cents; now the other way. Write a function
-   `format_cents(cents)` that takes a whole number of cents, never negative, and
-   returns it as text: the dollars with a comma between each group of three
-   digits, a point, and always two digits of cents. // and % split the number in
-   two. Inside an f-string's braces a format spec after a colon does the rest: a
-   comma asks for thousands separators, and 02d pads a number to two digits with
-   a zero. No floats.
+   Times are easier to compare as one number. Write a function
+   `to_minutes(clock)` that takes a time written as hours, a colon and minutes,
+   and returns the number of minutes since midnight. split cuts the text at the
+   colon; the two pieces are still text, and int turns each into a number,
+   leading zero or not.
 
    ```
-   format_cents(123450) -> '1,234.50'
-   format_cents(5) -> '0.05'
-   ```
-
-   *Return: a string.*
-
-3. **What a late check-out costs** (P643)
-
-   Guests should be out by eleven. Up to and including 1 hour late costs
-   nothing. More than 1 hour and up to and including 4 hours costs half the
-   nightly rate. More than 4 hours costs the whole rate. Write a function
-   `late_charge(hours, rate)` that returns the charge in cents; hours is a whole
-   number and rate is in cents, and half of it is rate // 2. An if, an elif and
-   an else -- and mind which side of each line 1 and 4 fall.
-
-   ```
-   late_charge(1, 9000) -> 0
-   late_charge(4, 9000) -> 4500
-   late_charge(5, 9000) -> 9000
+   to_minutes('14:30') -> 870
+   to_minutes('00:05') -> 5
    ```
 
    *Return: an int.*
 
-4. **Which stay was the longest?** (P644)
+2. **Fifteen per cent off** (P657)
 
-   A guest's stays are listed in order, as numbers of nights. Write a function
-   `longest_stay(nights)` that returns the POSITION of the longest one, counting
-   from 0; the first of them if several are equally long; and None when the list
-   is empty. max finds the largest value and a list's index method finds where a
-   value first appears.
+   A rate in cents is reduced by a whole-number percentage. Write a function
+   `discounted(cents, percent)` that returns the reduced price in whole cents,
+   any fraction of a cent dropped. percent runs from 0 to 100. What is left
+   after 15 per cent off is 85 per cent: multiply by that first, then divide by
+   100 with the operator that keeps the answer a whole number.
 
    ```
-   longest_stay([2, 5, 3]) -> 1
-   longest_stay([4, 7, 7, 1]) -> 1
+   discounted(10000, 15) -> 8500
+   discounted(333, 50) -> 166
+   ```
+
+   *Return: an int.*
+
+3. **Three nights left, two, one** (P658)
+
+   The lobby screen counts a guest's stay down. Write a function
+   `nights_left(n)` that returns a list of the whole numbers from n down to 1.
+   With n of 0 the list is empty. range can count backwards if its third
+   argument is negative; it still stops BEFORE its second argument, so think
+   about what that has to be.
+
+   ```
+   nights_left(3) -> [3, 2, 1]
+   nights_left(0) -> []
+   ```
+
+   *Return: a list of ints.*
+
+4. **The first charge over the limit** (P659)
+
+   The night auditor reads down a bill looking for the first charge that needs a
+   manager's signature. Write a function `first_over(amounts, limit)` that
+   returns the FIRST amount in the list that is greater than limit, or None if
+   no amount is. An amount equal to the limit is not over it. A return inside a
+   loop ends the function there and then.
+
+   ```
+   first_over([1200, 4500, 800, 9000], 4000) -> 4500
+   first_over([1200, 800], 4000) -> None
    ```
 
    *Return: an int, or None.*
 
-5. **Has everyone settled up?** (P645)
+5. **What the meter says each morning** (P660)
 
-   Before a coach party leaves, the desk checks the balance on every room, in
-   cents. Write a function `all_settled(balances)` that returns True when every
-   balance is 0 and False when any is not. With no rooms at all there is nothing
-   outstanding: True. One unsettled room is enough to answer False, but True can
-   only be said after the last one has been looked at.
+   The laundry's water meter is read every morning and only ever goes up. Write
+   a function `daily_use(readings)` that returns a list of how much was used
+   between each reading and the next: each reading less the one before it. Four
+   readings give three differences; one reading, or none, gives an empty list.
+   Walk the positions with range -- and choose where to start.
 
    ```
-   all_settled([0, 0, 0]) -> True
-   all_settled([0, 250, 0]) -> False
+   daily_use([100, 130, 135, 180]) -> [30, 5, 45]
+   daily_use([50]) -> []
+   ```
+
+   *Return: a list of ints.*
+
+## 2 - Text as it is typed (5)
+
+split and join as a pair, a slice that leaves room for its dots, any against
+all, range's missing far end, and a rule about the last two that needs its small
+cases.
+
+6. **One space between words, none at the ends** (P661)
+
+   Notes typed in a hurry have spaces everywhere. Write a function
+   `tidy_spaces(text)` that returns the text with exactly one space between
+   words and none at either end. A text of nothing but spaces becomes ''. split
+   with no argument cuts at any run of spaces, however long, and join puts the
+   pieces back with whatever you choose between them.
+
+   ```
+   tidy_spaces('  late   check-out  please ') -> 'late check-out please'
+   tidy_spaces('   ') -> ''
+   ```
+
+   *Return: a string.*
+
+7. **A name that fits on the label** (P662)
+
+   A label printer has room for `width` characters. Write a function
+   `fit_label(text, width)`: a text that fits is returned as it is; a longer one
+   is cut short and ends in three full stops, and the result -- dots included --
+   is exactly width characters long. width is never less than 3. len measures a
+   string and a slice takes the front of it.
+
+   ```
+   fit_label('Lakeside Lodge', 10) -> 'Lakesid...'
+   fit_label('Spa', 10) -> 'Spa'
+   ```
+
+   *Return: a string.*
+
+8. **Is there a number in it?** (P663)
+
+   A form rejects an address line with no number anywhere in it. Write a
+   function `has_digit(text)` that returns True if at least one character of the
+   text is a digit, and False otherwise, the empty text included. A for loop
+   over a string hands over one character at a time, and a string has a method
+   that says whether it is made of digits.
+
+   ```
+   has_digit('Room 12 please') -> True
+   has_digit('no number here') -> False
    ```
 
    *Return: a bool.*
 
-## 2 - Words and names (5)
+9. **Rooms 101 to 105** (P664)
 
-split and strip round a comma, a string built up letter by letter, a slice with
-upper and zfill, in after strip and lower, and whole words compared one at a
-time.
-
-6. **Surname first, turned round** (P646)
-
-   The agent's list gives names surname first, with a comma: 'Lovelace, Ada'.
-   Write a function `swap_name(listed)` that returns the first name, one space,
-   and the surname. There is always exactly one comma, but the spaces round it
-   and at the ends are as the agent happened to type them. split cuts a string
-   at a separator, and strip removes spaces from both ends.
+   Housekeeping's job sheet says '101-105', meaning every room from 101 to 105,
+   BOTH ends included. Write a function `room_range(text)` that returns those
+   room numbers as a list of ints. The first number is never larger than the
+   second; there may be spaces round the hyphen, which int ignores. split, int,
+   and range -- remembering where range stops.
 
    ```
-   swap_name('Lovelace, Ada') -> 'Ada Lovelace'
-   swap_name('Hopper,Grace') -> 'Grace Hopper'
+   room_range('101-105') -> [101, 102, 103, 104, 105]
+   room_range('204-204') -> [204]
    ```
 
-   *Return: a string.*
+   *Return: a list of ints.*
 
-7. **Initials for the luggage tag** (P647)
+10. **Ada, Hugo and Mei** (P665)
 
-   A luggage tag carries initials. Write a function `initials(name)` that
-   returns the first letter of each word of the name, as a capital, each
-   followed by a full stop. The name may have any number of words, extra spaces,
-   or be empty, which gives ''. split with no argument cuts at any run of
-   spaces, and word[0] is a word's first letter.
-
-   ```
-   initials('ada mary lovelace') -> 'A.M.L.'
-   initials('cher') -> 'C.'
-   ```
-
-   *Return: a string.*
-
-8. **The code on a key card** (P648)
-
-   Each key card is printed with a code: the first three letters of the hotel's
-   name in capitals, a hyphen, and the room number written with three digits,
-   zeros in front if it needs them. Write a function `key_code(hotel, room)`,
-   where hotel is the name and room is a whole number from 1 to 999. A slice
-   takes the first three letters; the number has to become text before it can be
-   padded, and strings have a method that fills with zeros on the left.
-
-   ```
-   key_code('Fellfoot Inn', 7) -> 'FEL-007'
-   key_code('Spa Gardens', 312) -> 'SPA-312'
-   ```
-
-   *Return: a string.*
-
-9. **Did the guest say yes?** (P649)
-
-   The kiosk asks 'Breakfast? (y/n)' and guests type what they like. Write a
-   function `said_yes(answer)` that returns True when the answer is 'y' or 'yes'
-   -- in any mixture of capitals, with or without spaces at the ends -- and
-   False for anything else at all, 'yes please' included. Tidy the text first;
-   then `in` tests whether a value is one of several.
-
-   ```
-   said_yes(' Y ') -> True
-   said_yes('no') -> False
-   ```
-
-   *Return: a bool.*
-
-10. **How often does the note say it?** (P650)
-
-    Housekeeping scans booking notes for a word. Write a function
-    `count_word(note, word)` that returns how many times the word appears in the
-    note as a WHOLE word. Capitals do not matter, and a full stop, comma,
-    exclamation mark or question mark stuck to the end of a word is not part of
-    it. 'bedroom' is not 'bed'. Split the note into words and compare each one;
-    strip can be told which characters to remove.
+    A welcome card lists the party the way a person would write it. Write a
+    function `name_list(names)` that joins the names with a comma and a space,
+    except that the last two are joined by the word 'and' with a space each
+    side. One name is returned by itself, and an empty list gives ''. names[:-1]
+    is every name but the last and names[-1] is the last.
 
     ```
-    count_word('Extra bed please. Bed by the window, not the bedroom door!', 'bed') -> 2
-    count_word('quiet room', 'bed') -> 0
+    name_list(['Ada', 'Hugo', 'Mei']) -> 'Ada, Hugo and Mei'
+    name_list(['Ada', 'Hugo']) -> 'Ada and Hugo'
+    name_list(['Ada']) -> 'Ada'
+    ```
+
+    *Return: a string.*
+
+## 3 - Lists and registers (5)
+
+index with a guard, sorted with a direction, neighbours compared, one column
+taken from a list of rows, and a loop that carries two counts.
+
+11. **Where am I in the queue?** (P666)
+
+    Guests wait for a taxi in the order of a list. Write a function
+    `queue_place(queue, name)` that returns the guest's place counted the way
+    people count -- 1 for the front -- and 0 if the name is not in the queue. If
+    the name is there twice, the first one counts. A list's index method finds a
+    value's position, counted from 0, and raises an error when the value is
+    missing, so ask with `in` first.
+
+    ```
+    queue_place(['Ada', 'Hugo', 'Mei'], 'Hugo') -> 2
+    queue_place(['Ada', 'Hugo', 'Mei'], 'Zeno') -> 0
     ```
 
     *Return: an int.*
 
-## 3 - Lists on the board (5)
+12. **The three best scores** (P667)
 
-A slice from the end and its one bad value, not in to filter, a list that
-remembers what it has seen, zip to walk two lists together, and range with a
-step.
-
-11. **The last few lines of the log** (P651)
-
-    The night porter wants the end of the door log. Write a function
-    `last_entries(log, n)` that returns a new list of the last n entries, in
-    their original order. If the log has fewer than n, return them all; if n is
-    0, return an empty list. n is never negative. A slice with a negative start
-    counts from the end -- but try it with 0 before you trust it.
+    A hotel wants its three best review scores for the poster. Write a function
+    `top_three(scores)` that returns a NEW list of the three highest scores, the
+    highest first. With fewer than three scores it returns them all, still
+    highest first. Equal scores each count. sorted returns a new sorted list and
+    can be told to sort downwards; a slice takes the front.
 
     ```
-    last_entries(['in 101', 'out 204', 'in 305', 'out 101'], 2) -> ['in 305', 'out 101']
-    last_entries(['in 101'], 5) -> ['in 101']
-    ```
-
-    *Return: a list of strings.*
-
-12. **The rooms nobody has taken** (P652)
-
-    One list holds a floor's rooms and another the rooms already taken. Write a
-    function `still_free(rooms, taken)` that returns a NEW list of the rooms
-    that are not in taken, in the order they had in rooms. `not in` tests
-    whether a value is missing from a list. Build the answer up; do not take
-    things out of a list you are walking through.
-
-    ```
-    still_free([101, 102, 103, 104], [102, 103]) -> [101, 104]
+    top_three([3, 5, 1, 4, 2]) -> [5, 4, 3]
+    top_three([2]) -> [2]
     ```
 
     *Return: a list of ints.*
 
-13. **A guest list with nobody on it twice** (P653)
+13. **Is the list in order?** (P668)
 
-    The dinner list was written as guests rang down, and some rang twice. Write
-    a function `no_repeats(names)` that returns a new list with each name once,
-    in the order of its FIRST appearance. Keep a list of the names already seen
-    and add a name only when it is not there yet.
+    The cleaning round should run through the rooms in rising order. Write a
+    function `in_order(rooms)` that returns True when no room number is lower
+    than the one before it, and False as soon as one is. Two equal numbers in a
+    row are in order. An empty list and a list of one are in order too. Compare
+    each item with its neighbour.
 
     ```
-    no_repeats(['Mei', 'Ada', 'Mei', 'Hugo', 'Ada']) -> ['Mei', 'Ada', 'Hugo']
+    in_order([101, 102, 205]) -> True
+    in_order([101, 205, 102]) -> False
+    ```
+
+    *Return: a bool.*
+
+14. **Just the names from the register** (P669)
+
+    The register is a list of rows, and each row is a small list: a name, a room
+    and a number of nights. Write a function `names_only(register)` that returns
+    a list of just the names, one for each row, in order, repeats and all. The
+    loop hands over one ROW at a time; the name is the first thing in it.
+
+    ```
+    names_only([['Ada', 101, 2], ['Hugo', 204, 1]]) -> ['Ada', 'Hugo']
+    names_only([]) -> []
     ```
 
     *Return: a list of strings.*
 
-14. **Who is in which room?** (P654)
+15. **The longest run of nights let** (P670)
 
-    Two lists run side by side: guests' names, and the rooms given out in the
-    same order. Write a function `pair_up(names, rooms)` that returns a list of
-    lines, each a name, a colon and a space, and the room. If one list is longer
-    than the other, stop when the shorter runs out. zip walks two lists together
-    and hands over one item from each on every turn.
-
-    ```
-    pair_up(['Ada', 'Hugo'], [101, 204]) -> ['Ada: 101', 'Hugo: 204']
-    pair_up(['Ada', 'Hugo', 'Mei'], [101, 204]) -> ['Ada: 101', 'Hugo: 204']
-    ```
-
-    *Return: a list of strings.*
-
-15. **A party seated at tables** (P655)
-
-    The restaurant seats a party in the order of the list, filling one table
-    before starting the next. Write a function `tables_of(guests, size)` that
-    returns a list of lists: each inner list one table of `size` guests, except
-    that the last table takes whoever is left and may be smaller. Nobody is left
-    standing, and an empty party needs no tables. range can count in steps, and
-    a slice that runs past the end simply stops there.
+    A room's month is a list with a 1 for each night it was let and a 0 for each
+    night it stood empty. Write a function `longest_run(nights)` that returns
+    the length of the longest unbroken run of 1s, and 0 if there is none. Carry
+    two numbers through the loop: the length of the run you are in, and the best
+    seen so far. A 0 ends a run -- and so does the end of the list.
 
     ```
-    tables_of(['Ada', 'Hugo', 'Mei', 'Zeno', 'Li'], 2) -> [['Ada', 'Hugo'], ['Mei', 'Zeno'], ['Li']]
+    longest_run([1, 1, 0, 1, 1, 1, 0]) -> 3
+    longest_run([0, 1, 1]) -> 2
     ```
 
-    *Return: a list of lists of strings.*
+    *Return: an int.*
 
 ## The one concept with no question here
 
@@ -659,7 +677,7 @@ for portability, and reach for a CTE when you want a real column to filter on.
 ---
 
 Every question is recorded in [QUESTIONS.md](QUESTIONS.md), along with the
-2,011 retired ones.
+2,041 retired ones.
 
 Stuck? Ask and I'll walk through the approach rather than hand over the
 answer -- unless you want the answer, in which case say so.
